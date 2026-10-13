@@ -504,7 +504,7 @@ async function finalizeUpload(ctx: Context, board: StoredBoard, uploadId: string
       actualBytes += thumbnail.byteLength;
       await reuseImmutable(thumbnailPath, () => bucket().file(thumbnailPath).save(thumbnail, { resumable: false, preconditionOpts: { ifGenerationMatch: 0 }, metadata: { contentType: 'image/webp', cacheControl: 'private,max-age=300', metadata: { sourceGeneration } } }));
     }
-    await reuseImmutable(path, () => immutableSource.copy(bucket().file(path), { preconditionOpts: { ifGenerationMatch: 0 }, cacheControl: 'private,max-age=300', metadata: { sourceGeneration, firebaseStorageDownloadTokens: null } }));
+    await reuseImmutable(path, () => immutableSource.copy(bucket().file(path), { preconditionOpts: { ifGenerationMatch: 0 }, contentType: value.contentType, cacheControl: 'private,max-age=300', metadata: { sourceGeneration, firebaseStorageDownloadTokens: null } }));
     const stored = await db().runTransaction(async tx => {
       const [snapshot, quota, freshDoc] = await Promise.all([tx.get(ref), tx.get(quotaRef(board.ownerUid)), tx.get(boardRef(board.id))]);
       if (snapshot.data()?.lease !== lease || snapshot.data()?.status !== 'processing') throw new ApiError(409, '파일 처리 상태가 바뀌었어요. 다시 확인해 주세요.');
