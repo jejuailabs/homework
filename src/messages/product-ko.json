@@ -62,6 +62,8 @@
     "emptyStudentsTitle": "아직 등록된 학생이 없어요",
     "emptyStudentsBody": "번호와 이름을 붙여 넣어 우리 반 학생을 등록하세요.",
     "selectAssignment": "과제를 선택해 주세요",
+    "listFirstHint": "과제를 선택하면 제출 현황이 열려요",
+    "backToList": "숙제 목록으로",
     "reviewBoard": "한 명씩 확인하기",
     "filterLabel": "제출 상태별 보기",
     "noFilterResults": "이 상태에 해당하는 학생이 없어요.",

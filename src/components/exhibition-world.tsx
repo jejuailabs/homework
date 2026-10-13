@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronLeft, ChevronRight, DoorOpen, Images, Move, RotateCcw, Sparkles, X } from "lucide-react";
 import type * as Three from "three";
 import { exhibitionRoomDimensions, exhibitionWallSlots, WORLD_WING_CAPACITY } from "@/lib/exhibition-world-layout";
+import { createExhibitionLabelCanvas } from "@/lib/exhibition-label";
 import "@/styles/exhibition-world.css";
 
 export type WorldBuilding = { id: string; name: string };
@@ -40,7 +41,6 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
   const english = locale.startsWith("en");
   const rootRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
-  const labelsRef = useRef<HTMLDivElement>(null);
   const callbacks = useRef(props);
   const pausedRef = useRef(paused);
   const controlsRef = useRef<Controls | null>(null);
@@ -71,9 +71,8 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
   useEffect(() => {
     const host = hostRef.current;
-    const labels = labelsRef.current;
     const root = rootRef.current;
-    if (!host || !labels || !root) return;
+    if (!host || !root) return;
     let disposed = false;
     let cleanup: (() => void) | undefined;
     setStatus("loading");
@@ -83,7 +82,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
     async function createWorld() {
       const T = await import("three");
-      if (disposed || !host || !labels || !root) return;
+      if (disposed || !host || !root) return;
       const geometries = new Set<Three.BufferGeometry>();
       const materials = new Set<Three.Material>();
       const textures = new Set<Three.Texture>();
@@ -112,7 +111,6 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       canvas.tabIndex = 0;
       host.appendChild(canvas);
       const clickable: Three.Object3D[] = [];
-      const hotspots: { element: HTMLButtonElement; point: Three.Vector3; nearOnly: boolean }[] = [];
       const raycaster = new T.Raycaster();
       const pointer = new T.Vector2();
       const keys = new Set<string>();
@@ -194,16 +192,8 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       function cylinder(parent: Three.Object3D, r1: number, r2: number, h: number, material: Three.Material) {
         return mesh(geo(new T.CylinderGeometry(r1, r2, h, 20)), material, parent);
       }
-      function textPlane(parent: Three.Object3D, text: string, w: number, h: number, color = "#655643", bg?: string, size = 38) {
-        const surface = document.createElement("canvas");
-        surface.width = Math.min(1024, Math.max(256, Math.ceil(w * 140))); surface.height = Math.max(96, Math.ceil(h * 140));
-        const c = surface.getContext("2d");
-        if (c) {
-          if (bg) { c.fillStyle = bg; c.fillRect(0, 0, surface.width, surface.height); }
-          c.fillStyle = color; c.textAlign = "center"; c.textBaseline = "middle";
-          c.font = `700 ${size}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-          c.fillText(text, surface.width / 2, surface.height / 2, surface.width - 22);
-        }
+      function textPlane(parent: Three.Object3D, text: string, w: number, h: number, color = "#655643", bg?: string, size = 38, maxLines = 1) {
+        const surface = createExhibitionLabelCanvas(text, w, h, { color, background: bg, fontSize: size, maxLines });
         const texture = new T.CanvasTexture(surface); texture.colorSpace = T.SRGBColorSpace; textures.add(texture);
         const plane = mesh(geo(new T.PlaneGeometry(w, h)), mat(new T.MeshBasicMaterial({ map: texture, transparent: !bg, depthWrite: !!bg, toneMapped: false })), parent);
         plane.castShadow = false;
@@ -225,14 +215,6 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
           else callbacks.current.onExit();
           transitioning = false; setEntering(false);
         }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 190);
-      }
-      function hotspot(point: Three.Vector3, title: string, subtitle: string, action: Action, nearOnly = false) {
-        const element = document.createElement("button"); element.type = "button";
-        element.className = `ex-world-hotspot${nearOnly ? " ex-world-hotspot--art" : ""}`;
-        const name = document.createElement("strong"); name.textContent = title;
-        const hint = document.createElement("span"); hint.textContent = subtitle;
-        element.append(name, hint); element.addEventListener("click", () => invoke(action));
-        labels!.appendChild(element); hotspots.push({ element, point, nearOnly });
       }
       function plant(x: number, z: number, scale = 1, parent: Three.Object3D = scene) {
         const group = new T.Group(); group.position.set(x, 0, z); group.scale.setScalar(scale); parent.add(group);
@@ -347,7 +329,6 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const sign = rounded(group, 3.5, 0.64, 0.13, white, 0.18); sign.position.set(0, 3.57, 2.29);
         textPlane(group, building.name, 3.22, 0.5).position.set(0, 3.57, 2.42);
         addAction(group, { kind: "building", id: building.id });
-        hotspot(new T.Vector3(x, 0.55, z + 3.28), building.name, english ? "Enter classroom →" : "우리 반 들어가기 →", { kind: "building", id: building.id });
         obstacles.push({ x, z, halfX: 4.42, halfZ: 2.3 });
       }
 
@@ -365,12 +346,10 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         else if (room.theme === "ocean") { ball(mini, 0, 0, 0, 0.8, 0.46, 0.2, white); const fin = mesh(geo(new T.ConeGeometry(0.45, 0.5, 3)), white, mini); fin.rotation.z = Math.PI / 2; fin.position.x = -0.7; ball(mini, 0.36, 0.12, 0.2, 0.065, 0.065, 0.04, deepMint); }
         else if (room.theme === "sky") { ball(mini, 0, 0, 0, 0.95, 0.4, 0.18, white); ball(mini, 0, 0.35, 0, 0.48, 0.48, 0.18, white); }
         else { const miniCat = character("cat", 0.7); miniCat.group.position.y = -0.55; mini.add(miniCat.group); }
-        textPlane(group, room.title, 1.5, 0.66, "#49695d", undefined, 32).position.set(0.39, 0.2, 0.205);
+        textPlane(group, room.title, 1.5, 0.66, "#49695d", undefined, 32, 2).position.set(0.39, 0.2, 0.205);
         textPlane(group, english ? `${room.artworkCount ?? 0} artworks · ENTER` : `${room.artworkCount ?? 0}개의 작품 · 입장`, 1.66, 0.3, "#49695d", undefined, 21).position.set(0.35, -0.34, 0.21);
         ball(group, 0, 0.75, 0.19, 0.075, 0.075, 0.07, coral);
         addAction(group, { kind: "room", id: room.id });
-        const point = new T.Vector3(0, -0.9, 0.3); group.localToWorld(point);
-        hotspot(point, room.title, english ? "Open exhibition →" : "전시실 들어가기 →", { kind: "room", id: room.id });
       }
 
       const textureJobs: { artwork: WorldArtwork; picture: Three.Mesh<Three.PlaneGeometry, Three.MeshBasicMaterial>; placeholder: Three.Object3D; w: number; h: number }[] = [];
@@ -378,15 +357,13 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const group = new T.Group(); group.position.set(slot.x, slot.y, slot.z); group.rotation.y = slot.rotationY; scene.add(group);
         rounded(group, 2.65, 1.87, 0.15, index % 4 === 0 ? coral : index % 4 === 1 ? mint : wood, 0.09);
         const mount = box(group, 0, 0, 0.096, 2.44, 1.66, 0.035, white); mount.castShadow = false;
-        const placeholder = textPlane(group, artwork.title, 2.22, 0.68, "#9e998b", "#fffdf5", 29); placeholder.position.z = 0.123;
+        const placeholder = textPlane(group, artwork.title, 2.22, 0.68, "#9e998b", "#fffdf5", 29, 2); placeholder.position.z = 0.123;
         const picture = new T.Mesh(geo(new T.PlaneGeometry(1, 1)), mat(new T.MeshBasicMaterial({ color: "#ffffff", toneMapped: false })));
         picture.position.z = 0.137; picture.visible = false; group.add(picture);
         textureJobs.push({ artwork, picture, placeholder, w: 2.29, h: 1.53 });
         const plaque = rounded(group, 2.25, 0.27, 0.035, white, 0.07); plaque.position.set(0, -1.1, 0.01);
         textPlane(group, `${wing * WORLD_WING_CAPACITY + index + 1}. ${artwork.title}${artwork.studentName ? ` · ${artwork.studentName}` : ""}`, 2.1, 0.25, "#655643", undefined, 21).position.set(0, -1.1, 0.09);
         addAction(group, { kind: "artwork", id: artwork.id });
-        const point = new T.Vector3(0, -1.37, 0.3); group.localToWorld(point);
-        hotspot(point, artwork.title, english ? "Take a closer look" : "작품 자세히 보기", { kind: "artwork", id: artwork.id }, true);
       }
 
       if (stage === "campus") {
@@ -479,16 +456,6 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       function canStand(x: number, z: number) {
         return !obstacles.some(o => Math.abs(x - o.x) < o.halfX + 0.26 && Math.abs(z - o.z) < o.halfZ + 0.26);
       }
-      function projectLabels() {
-        const point = new T.Vector3();
-        for (const marker of hotspots) {
-          point.copy(marker.point).project(camera);
-          const distance = marker.point.distanceTo(player);
-          const visible = point.z > -1 && point.z < 1 && Math.abs(point.x) < 0.94 && Math.abs(point.y) < 0.8 && (!marker.nearOnly || distance < 5.2);
-          marker.element.hidden = !visible;
-          if (visible) marker.element.style.transform = `translate(${(point.x + 1) * width / 2}px, ${(1 - point.y) * height / 2}px) translate(-50%, -50%)`;
-        }
-      }
       function draw(now: number) {
         frame = 0;
         if (!active()) { lastTime = 0; return; }
@@ -509,7 +476,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
           cat.feet.forEach((foot, i) => { foot.position.y = 0.13 + Math.max(0, Math.sin(gait + i * Math.PI)) * 0.11; });
           cat.body.position.y = 0.61 + Math.sin(gait * 2) * 0.015;
         } else { cat.feet.forEach(foot => { foot.position.y = 0.13; }); cat.body.position.y = 0.61; }
-        updateCamera(); renderer.render(scene, camera); projectLabels();
+        updateCamera(); renderer.render(scene, camera);
         if (now - lastPositionStamp > 100 || !moving) {
           root!.dataset.playerPosition = `${player.x.toFixed(3)},${player.z.toFixed(3)}`;
           root!.dataset.cameraPosition = camera.position.toArray().map(value => value.toFixed(3)).join(",");
@@ -616,7 +583,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         if (frame) cancelAnimationFrame(frame);
         if (transitionTimer) clearTimeout(transitionTimer);
         resize.disconnect(); intersection.disconnect(); events.forEach(remove => remove());
-        controlsRef.current = null; hotspots.forEach(marker => marker.element.remove());
+        controlsRef.current = null;
         textures.forEach(texture => texture.dispose()); materials.forEach(material => material.dispose()); geometries.forEach(geometry => geometry.dispose());
         renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
       };
@@ -640,7 +607,6 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
   return <section ref={rootRef} className={`ex-world ex-world--${stage}${paused ? " ex-world--paused" : ""}`} data-world-stage={stage} data-world-status={status} data-visible-artwork-count={data.artworks.length} data-loaded-artwork-count={loadedArtworkIds.length} data-loaded-artwork-ids={loadedArtworkIds.join(",")} data-total-artwork-count={artworks.length} data-world-wing={wing + 1} aria-label={title}>
     <div ref={hostRef} className="ex-world-viewport" />
-    <div ref={labelsRef} className="ex-world-labels" aria-label={english ? "Places to explore" : "들어갈 수 있는 공간"} />
     <div className="ex-world-topbar">
       {stage === "campus" ? <span className="ex-world-back" /> : <button type="button" className="ex-world-pill ex-world-back" onClick={props.onExit} aria-label={english ? "Back" : "뒤로"}><ArrowLeft size={17} /><span>{stage === "gallery" ? (english ? "Classroom" : "교실로") : (english ? "Schoolyard" : "학교 앞으로")}</span></button>}
       <div className="ex-world-title"><span><Sparkles size={13} />{stage === "campus" ? "OUR LITTLE SCHOOL" : stage === "classroom" ? "OUR CLASSROOM" : "LITTLE ART GALLERY"}</span><strong>{title}</strong></div>

@@ -167,7 +167,9 @@ async function assignments(request: Request) {
     if (classId) await managedClass(ctx, classId);
     const collection = db().collection('assignments');
     const query = classId ? collection.where('classId', '==', classId) : collection.where('ownerUid', '==', ctx.uid);
-    return json({ assignments: sorted((await query.limit(200).get()).docs.map(mappedAssignment)) });
+    const summary = new URL(request.url).searchParams.get('summary') === '1';
+    const list = summary ? query.select('classId', 'title', 'submissionType', 'dueAt', 'targetCount', 'submittedCount', 'reviewedCount', 'createdAt') : query;
+    return json({ assignments: sorted((await list.limit(200).get()).docs.map(mappedAssignment)) });
   }
   const input = await body(request);
   const submissionType = requiredSubmissionType(input.submissionType);

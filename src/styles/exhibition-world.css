@@ -18,36 +18,8 @@
 .ex-world button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .ex-world button:focus-visible, .ex-world canvas:focus-visible { outline: 3px solid #547f73; outline-offset: 3px; }
 .ex-world button:disabled { opacity: .38; cursor: default; }
-.ex-world-viewport, .ex-world-labels { position: absolute; inset: 0; }
+.ex-world-viewport { position: absolute; inset: 0; }
 .ex-world-viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-.ex-world-labels { z-index: 2; pointer-events: none; overflow: hidden; }
-.ex-world-hotspot {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  max-width: 205px;
-  min-width: 104px;
-  padding: 9px 15px 8px;
-  pointer-events: auto;
-  border: 2px solid #fffef6;
-  border-bottom: 4px solid #c8d4b9;
-  border-radius: 17px;
-  background: #fffaf3f5;
-  box-shadow: 0 4px 12px #5545271c;
-  text-align: center;
-  backdrop-filter: blur(7px);
-  transition: background .15s, border-color .15s;
-}
-.ex-world-hotspot[hidden] { display: none; }
-.ex-world-hotspot strong { overflow: hidden; max-width: 170px; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 800; line-height: 1.25; }
-.ex-world-hotspot span { font-size: 10px; color: #78927b; font-weight: 600; }
-.ex-world-hotspot:hover { background: #fff8dc; border-color: #fffef6 #fffef6 #c9b17c; }
-.ex-world-hotspot--art { padding: 7px 11px; border-radius: 12px; max-width: 170px; }
-.ex-world-hotspot--art strong { font-size: 11px; max-width: 140px; }
 .ex-world-topbar {
   position: absolute;
   top: 18px;
@@ -217,8 +189,7 @@
 .ex-world-index-empty { padding: 35px 20px; text-align: center; font-size: 12px; color: #87927b; }
 .ex-world-fallback-note { margin: 12px 16px 4px; color: #89927d; font-size: 12px; line-height: 1.8; }
 .ex-world-image-note { position: absolute; z-index: 4; left: 50%; top: 83px; transform: translateX(-50%); max-width: 90%; padding: 7px 12px; border-radius: 12px; background: #fff7ddec; font-size: 11px; text-align: center; color: #93826c; }
-.ex-world--paused .ex-world-labels, .ex-world--paused .ex-world-movement { pointer-events: none; }
-.ex-world--paused .ex-world-hotspot { pointer-events: none; }
+.ex-world--paused .ex-world-movement { pointer-events: none; }
 
 @media (max-width: 760px) {
   .ex-world { height: 650px; min-height: 500px; border-radius: 21px; }
@@ -227,9 +198,6 @@
   .ex-world-title { min-width: 100px; max-width: 260px; padding: 10px 14px 11px; margin-top: -15px; }
   .ex-world-title > span { font-size: 6px; letter-spacing: .8px; }
   .ex-world-title > strong { font-size: 15px; }
-  .ex-world-hotspot { min-width: 80px; max-width: 148px; padding: 7px 9px; border-radius: 13px; }
-  .ex-world-hotspot strong { max-width: 120px; font-size: 11px; }
-  .ex-world-hotspot span { font-size: 8px; }
   .ex-world-bottom-hint { left: 140px; right: 14px; bottom: 76px; max-width: none; padding: 9px 11px; border-radius: 17px; }
   .ex-world-guide-face { display: none; }
   .ex-world-bottom-hint p { font-size: 11px; }
@@ -245,8 +213,6 @@
   .ex-world-title > span { display: none; }
   .ex-world-topbar .ex-world-pill { font-size: 10px !important; }
   .ex-world-index { top: 102px; bottom: 155px; right: 12px; width: calc(100% - 24px); }
-  .ex-world-hotspot--art { max-width: 130px; }
-  .ex-world-hotspot--art strong { max-width: 110px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ex-world *, .ex-world *::before, .ex-world *::after { animation: none !important; transition: none !important; }

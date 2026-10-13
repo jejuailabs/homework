@@ -62,6 +62,8 @@
     "emptyStudentsTitle": "No students yet",
     "emptyStudentsBody": "Paste student numbers and names to add your class.",
     "selectAssignment": "Choose an assignment",
+    "listFirstHint": "Choose homework to see submissions",
+    "backToList": "Back to homework list",
     "reviewBoard": "Check in with everyone",
     "filterLabel": "Filter by submission status",
     "noFilterResults": "No students with this status.",
