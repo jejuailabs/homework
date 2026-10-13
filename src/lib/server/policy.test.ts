@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { canDisableUser, canManageClass, canUseUpload, nextReview, uploadPolicy, validStudentSession } from './policy';
+import { acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes } from '../assignment-submission';
+import { ApiError, canDisableUser, canManageClass, canUseUpload, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
 
 test('teacher and platform administrator class access always requires ownership', () => {
   for (const role of ['teacher', 'admin', 'superadmin'] as const) {
@@ -24,6 +25,64 @@ test('upload policy rejects executable types, fake sizes, and oversize files', (
   assert.throws(() => uploadPolicy('image/png', -1));
   assert.throws(() => uploadPolicy('image/png', Number.NaN));
   assert.throws(() => uploadPolicy('application/pdf', 100 * 1024 * 1024 + 1));
+});
+
+test('new assignments require an explicit format while old assignments stay compatible', () => {
+  for (const type of ['text', 'image', 'video'] as const) {
+    assert.equal(requiredSubmissionType(type), type);
+    assert.equal(assignmentSubmissionType(type), type);
+  }
+  for (const value of [undefined, null, '', 'legacy', 'pdf', 'IMAGE', {}, 0]) {
+    assert.equal(assignmentSubmissionType(value), 'legacy');
+    assert.throws(() => requiredSubmissionType(value), (error: unknown) => error instanceof ApiError && error.status === 400 && error.code === 'SUBMISSION_TYPE');
+  }
+});
+
+test('text assignments require writing and reject attachments, even with a caption', () => {
+  assert.doesNotThrow(() => submissionContentPolicy('text', '오늘 배운 내용을 적었어요.', 0));
+  for (const [answer, files] of [['', 0], [' \n ', 0], ['답이 있어도 파일은 안 돼요.', 1], ['', 1]] as const) {
+    assert.throws(() => submissionContentPolicy('text', answer, files), (error: unknown) => error instanceof ApiError && error.code === 'SUBMISSION_CONTENT');
+  }
+  for (const mime of [...imageSubmissionMimeTypes, ...videoSubmissionMimeTypes, 'application/pdf']) {
+    assert.equal(acceptsSubmissionFile('text', mime), false);
+    assert.throws(() => uploadPolicy(mime, 100, 'text'), (error: unknown) => error instanceof ApiError && error.code === 'SUBMISSION_FILE_TYPE');
+  }
+});
+
+test('image and video assignments require their media and permit an optional caption', () => {
+  for (const type of ['image', 'video'] as const) {
+    assert.throws(() => submissionContentPolicy(type, '', 0));
+    assert.throws(() => submissionContentPolicy(type, '설명만 적었어요.', 0));
+    assert.doesNotThrow(() => submissionContentPolicy(type, '', 1));
+    assert.doesNotThrow(() => submissionContentPolicy(type, '짧은 설명이에요.', 10));
+  }
+  for (const mime of imageSubmissionMimeTypes) {
+    assert.equal(acceptsSubmissionFile('image', mime), true);
+    assert.doesNotThrow(() => uploadPolicy(mime, 100, 'image'));
+    assert.throws(() => uploadPolicy(mime, 100, 'video'));
+  }
+  for (const mime of videoSubmissionMimeTypes) {
+    assert.equal(acceptsSubmissionFile('video', mime), true);
+    assert.doesNotThrow(() => uploadPolicy(mime, 100, 'video'));
+    assert.throws(() => uploadPolicy(mime, 100, 'image'));
+  }
+  for (const type of ['image', 'video'] as const) {
+    assert.equal(acceptsSubmissionFile(type, 'application/pdf'), false);
+    assert.throws(() => uploadPolicy('application/pdf', 100, type));
+    assert.throws(() => uploadPolicy('application/octet-stream', 100, type));
+  }
+});
+
+test('legacy assignments keep text, images, PDF, and videos without accepting empty submissions', () => {
+  assert.doesNotThrow(() => submissionContentPolicy('legacy', '기존 글쓰기 숙제', 0));
+  assert.doesNotThrow(() => submissionContentPolicy('legacy', '', 1));
+  assert.throws(() => submissionContentPolicy('legacy', '  ', 0));
+  for (const mime of [...imageSubmissionMimeTypes, ...videoSubmissionMimeTypes, 'application/pdf']) {
+    assert.equal(acceptsSubmissionFile('legacy', mime), true);
+    assert.doesNotThrow(() => uploadPolicy(mime, 100, 'legacy'));
+  }
+  assert.equal(acceptsSubmissionFile('legacy', undefined), false);
+  assert.equal(acceptsSubmissionFile('legacy', 'text/html'), false);
 });
 test('account suspension preserves self and higher privilege accounts', () => {
   assert.equal(canDisableUser('teacher', 'a', 'b', 'student'), false);

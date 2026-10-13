@@ -58,7 +58,7 @@
     "emptyClassTitle": "우리 반을 먼저 만들어 볼까요?",
     "emptyClassBody": "학급을 만들고 학생을 등록하면 바로 숙제를 나눌 수 있어요.",
     "emptyAssignmentsTitle": "첫 번째 과제를 기다리고 있어요",
-    "emptyAssignmentsBody": "제목과 할 일을 적어 주세요. 학생들에게 바로 표시됩니다.",
+    "emptyAssignmentsBody": "제목과 제출 방식을 정해 주세요. 학생들에게 바로 표시됩니다.",
     "emptyStudentsTitle": "아직 등록된 학생이 없어요",
     "emptyStudentsBody": "번호와 이름을 붙여 넣어 우리 반 학생을 등록하세요.",
     "selectAssignment": "과제를 선택해 주세요",
@@ -127,7 +127,11 @@
     "newStudentsNote": "새로 등록한 학생은 이후에 나누는 과제부터 참여해요.",
     "fileReadError": "파일을 읽지 못했어요. 다시 골라 주세요.",
     "rosterBatchLimit": "학생은 한 번에 100명까지 등록할 수 있어요. 나누어 등록해 주세요.",
-    "rosterClassLimit": "한 학급에는 300명까지 등록할 수 있어요."
+    "rosterClassLimit": "한 학급에는 300명까지 등록할 수 있어요.",
+    "submissionTypeLabel": "제출 방식",
+    "submissionTypeHint": "아이들이 숙제를 제출할 방식을 하나 골라 주세요.",
+    "submissionTypeRequired": "텍스트·이미지·영상 중 제출 방식을 골라 주세요.",
+    "videoPreviewUnavailable": "영상이 재생되지 않으면 아래 파일을 열어 확인해 주세요."
   },
   "student": {
     "greeting": "{name}의 몽글한 하루",
@@ -183,6 +187,32 @@
     "uploadLimits": "사진·PDF 100MB, 영상 250MB까지 · 한 번에 10개",
     "emptyFile": "내용이 없는 파일이에요. 다른 파일을 골라 주세요.",
     "uploadRetry": "첨부파일을 다시 올려야 해요. 고른 파일은 그대로 있으니 다시 보내 주세요.",
-    "uploadIncomplete": "파일을 확인하고 있어요. 잠시 뒤 다시 보내 주세요."
+    "uploadIncomplete": "파일을 확인하고 있어요. 잠시 뒤 다시 보내 주세요.",
+    "answerLabel": "나의 답",
+    "answerPlaceholder": "여기에 숙제의 답을 적어 봐요.",
+    "imageHeading": "숙제 사진을 올려요",
+    "videoHeading": "숙제 영상을 올려요",
+    "chooseImages": "사진 고르기",
+    "chooseVideos": "영상 고르기",
+    "recordVideo": "영상 찍기",
+    "captionLabel": "선생님께 한마디 (선택)",
+    "captionPlaceholder": "사진이나 영상에 대해 하고 싶은 말을 적어도 좋아요.",
+    "requiredText": "숙제의 답을 글로 적어 주세요.",
+    "requiredImage": "숙제 사진을 한 장 이상 골라 주세요.",
+    "requiredVideo": "숙제 영상을 한 개 이상 골라 주세요.",
+    "wrongSubmissionType": "선생님이 정한 제출 방식에 맞는 파일을 골라 주세요.",
+    "videoPreviewUnavailable": "영상이 재생되지 않으면 파일을 열어 확인해 주세요.",
+    "typeLabel": "제출 방식",
+    "imageUploadLimits": "사진 한 장 100MB까지 · 한 번에 10장",
+    "videoUploadLimits": "영상 한 개 250MB까지 · 한 번에 10개"
+  },
+  "submissionTypes": {
+    "text": "텍스트 작성",
+    "image": "이미지 업로드",
+    "video": "영상 업로드",
+    "legacy": "자유 제출",
+    "textHint": "글로 답을 적어요",
+    "imageHint": "사진이나 그림을 올려요",
+    "videoHint": "촬영한 영상을 올려요"
   }
 }

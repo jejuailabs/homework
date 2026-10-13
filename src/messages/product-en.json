@@ -58,7 +58,7 @@
     "emptyClassTitle": "Let’s make a home for your class",
     "emptyClassBody": "Create your class and add students to share the first assignment.",
     "emptyAssignmentsTitle": "Ready for your first assignment",
-    "emptyAssignmentsBody": "Add a title and instructions. Your students will see it right away.",
+    "emptyAssignmentsBody": "Add a title and choose a submission type. Students will see it right away.",
     "emptyStudentsTitle": "No students yet",
     "emptyStudentsBody": "Paste student numbers and names to add your class.",
     "selectAssignment": "Choose an assignment",
@@ -127,7 +127,11 @@
     "newStudentsNote": "New students will join assignments shared after they are added.",
     "fileReadError": "Could not read that file. Please choose it again.",
     "rosterBatchLimit": "Add up to 100 students at a time. Please split this list into smaller groups.",
-    "rosterClassLimit": "A class can have up to 300 students."
+    "rosterClassLimit": "A class can have up to 300 students.",
+    "submissionTypeLabel": "Submission type",
+    "submissionTypeHint": "Choose how students should submit this assignment.",
+    "submissionTypeRequired": "Choose text, images, or videos for this assignment.",
+    "videoPreviewUnavailable": "If the video does not play, open the file below to view it."
   },
   "student": {
     "greeting": "A little day for {name}",
@@ -183,6 +187,32 @@
     "uploadLimits": "Photos and PDFs up to 100 MB; videos up to 250 MB · 10 files at a time",
     "emptyFile": "This file is empty. Please choose another file.",
     "uploadRetry": "Your files need to be uploaded again. They are still selected, so try sending once more.",
-    "uploadIncomplete": "Your files are still being checked. Please try sending again in a moment."
+    "uploadIncomplete": "Your files are still being checked. Please try sending again in a moment.",
+    "answerLabel": "My answer",
+    "answerPlaceholder": "Write your answer here.",
+    "imageHeading": "Show your homework in photos",
+    "videoHeading": "Show your homework in a video",
+    "chooseImages": "Choose photos",
+    "chooseVideos": "Choose videos",
+    "recordVideo": "Record a video",
+    "captionLabel": "A note for my teacher (optional)",
+    "captionPlaceholder": "Add a note about your photo or video if you like.",
+    "requiredText": "Write your answer before sending.",
+    "requiredImage": "Choose at least one homework photo.",
+    "requiredVideo": "Choose at least one homework video.",
+    "wrongSubmissionType": "Choose a file that matches the submission type your teacher selected.",
+    "videoPreviewUnavailable": "If the video does not play, open the file to view it.",
+    "typeLabel": "Submission type",
+    "imageUploadLimits": "Up to 100 MB per image · 10 images at a time",
+    "videoUploadLimits": "Up to 250 MB per video · 10 videos at a time"
+  },
+  "submissionTypes": {
+    "text": "Write an answer",
+    "image": "Upload images",
+    "video": "Upload videos",
+    "legacy": "Flexible submission",
+    "textHint": "Write your answer",
+    "imageHint": "Send photos or drawings",
+    "videoHint": "Send a video you made"
   }
 }

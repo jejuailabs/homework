@@ -2,15 +2,17 @@ import 'server-only';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { assignmentSubmissionType } from '../assignment-submission';
 import { auth, bucket, db } from './admin';
 import { getAiOperations } from './ai';
 import { assertOrigin, contextForUid, cookieName, getContext, requireStudent, requireTeacher, type Context } from './auth';
-import { ApiError, canDisableUser, canManageClass, canUseUpload, characters, id, isAdmin, nextReview, text, uploadPolicy } from './policy';
+import { ApiError, canDisableUser, canManageClass, canUseUpload, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const mapped = (snap: FirebaseFirestore.DocumentSnapshot) => ({ id: snap.id, ...snap.data() }) as Data;
+const mappedAssignment = (snap: FirebaseFirestore.DocumentSnapshot) => ({ ...mapped(snap), submissionType: assignmentSubmissionType(snap.data()?.submissionType) }) as Data;
 const sorted = (items: Data[]) => items.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
 async function body(request: Request): Promise<Data> {
   const value = await request.json().catch(() => { throw new ApiError(400, '입력 내용을 다시 확인해 주세요.'); });
@@ -28,7 +30,7 @@ async function assignmentForStudent(ctx: Context, assignmentId: string) {
   const doc = await db().doc(`assignments/${id(assignmentId)}`).get();
   const value = doc.data();
   if (!doc.exists || value?.classId !== ctx.classId || !value?.targetStudentIds?.includes(ctx.studentId)) throw new ApiError(404, '배부된 과제를 찾을 수 없어요.', 'NOT_FOUND');
-  return mapped(doc);
+  return mappedAssignment(doc);
 }
 async function studentProfile(ctx: Context) {
   const [student, cls] = await Promise.all([db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get()]);
@@ -165,16 +167,17 @@ async function assignments(request: Request) {
     if (classId) await managedClass(ctx, classId);
     const collection = db().collection('assignments');
     const query = classId ? collection.where('classId', '==', classId) : collection.where('ownerUid', '==', ctx.uid);
-    return json({ assignments: sorted((await query.limit(200).get()).docs.map(mapped)) });
+    return json({ assignments: sorted((await query.limit(200).get()).docs.map(mappedAssignment)) });
   }
   const input = await body(request);
+  const submissionType = requiredSubmissionType(input.submissionType);
   const classId = id(input.classId);
   const cls = await managedClass(ctx, classId);
   const roster = await db().collection(`classes/${classId}/students`).get();
   const targetStudentIds = roster.docs.filter(doc => !doc.data().disabled).map(doc => doc.id);
   if (!targetStudentIds.length) throw new ApiError(400, '학생을 먼저 추가해 주세요.');
   const dueAt = input.dueAt ? new Date(input.dueAt).toISOString() : null;
-  const value = { classId, className: cls.name, ownerUid: cls.ownerUid, title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), dueAt, targetStudentIds, targetCount: targetStudentIds.length, submittedCount: 0, reviewedCount: 0, createdAt: now() };
+  const value = { classId, className: cls.name, ownerUid: cls.ownerUid, title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), submissionType, dueAt, targetStudentIds, targetCount: targetStudentIds.length, submittedCount: 0, reviewedCount: 0, createdAt: now() };
   const ref = await db().collection('assignments').add(value);
   return json({ assignment: { id: ref.id, ...value } }, 201);
 }
@@ -182,7 +185,7 @@ async function assignmentDetail(request: Request, assignmentId: string) {
   const ctx = await requireTeacher(request);
   const snap = await db().doc(`assignments/${id(assignmentId)}`).get();
   if (!snap.exists) throw new ApiError(404, '과제를 찾을 수 없어요.', 'NOT_FOUND');
-  const assignment = mapped(snap);
+  const assignment = mappedAssignment(snap);
   await managedClass(ctx, assignment.classId);
   const [roster, submissions] = await Promise.all([db().collection(`classes/${assignment.classId}/students`).get(), db().collection('submissions').where('assignmentId', '==', assignmentId).get()]);
   return json({ assignment, students: roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id)).map(publicStudent).sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
@@ -191,7 +194,7 @@ async function home(request: Request) {
   const ctx = await requireStudent(request);
   const [profile, tasks, submitted] = await Promise.all([studentProfile(ctx), db().collection('assignments').where('classId', '==', ctx.classId).limit(200).get(), db().collection('submissions').where('studentId', '==', ctx.studentId).limit(200).get()]);
   const byAssignment = new Map(submitted.docs.map(doc => [doc.data().assignmentId, mapped(doc)]));
-  const assignments = await Promise.all(sorted(tasks.docs.map(mapped).filter(task => task.targetStudentIds.includes(ctx.studentId))).map(async task => {
+  const assignments = await Promise.all(sorted(tasks.docs.map(mappedAssignment).filter(task => task.targetStudentIds.includes(ctx.studentId))).map(async task => {
     const submission = byAssignment.get(task.id);
     const { targetStudentIds: _targets, ownerUid: _owner, ...visibleTask } = task;
     return { ...visibleTask, status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission) : null };
@@ -209,8 +212,8 @@ async function initUpload(request: Request) {
   const ctx = await requireStudent(request);
   const input = await body(request);
   const assignmentId = id(input.assignmentId);
-  await assignmentForStudent(ctx, assignmentId);
-  const { contentType, size } = uploadPolicy(input.contentType, input.size);
+  const assignment = await assignmentForStudent(ctx, assignmentId);
+  const { contentType, size } = uploadPolicy(input.contentType, input.size, assignment.submissionType);
   const uploadId = randomUUID();
   const path = `uploads/${ctx.uid}/${uploadId}/file`;
   await db().doc(`uploads/${uploadId}`).create({ userUid: ctx.uid, studentId: ctx.studentId, classId: ctx.classId, assignmentId, path, fileName: text(input.fileName, '파일 이름', 255), contentType, size, status: 'pending', createdAt: now(), expiresAt: Timestamp.fromMillis(Date.now() + 3_600_000) });
@@ -220,19 +223,24 @@ async function finalize(request: Request) {
   const ctx = await requireStudent(request);
   const input = await body(request);
   const assignmentId = id(input.assignmentId);
-  await assignmentForStudent(ctx, assignmentId);
+  const assignment = await assignmentForStudent(ctx, assignmentId);
   const answer = text(input.text, '내용', 10000, true);
   if (!Array.isArray(input.uploadIds) || input.uploadIds.length > 10 || new Set(input.uploadIds).size !== input.uploadIds.length) throw new ApiError(400, '첨부파일은 최대 10개까지 제출할 수 있어요.');
   const uploadIds = input.uploadIds.map((value: unknown) => id(value));
-  if (!answer && !uploadIds.length) throw new ApiError(400, '내용을 적거나 사진을 첨부해 주세요.');
+  submissionContentPolicy(assignment.submissionType, answer, uploadIds.length);
   const fingerprint = hash(JSON.stringify({ answer, uploadIds }));
   const ref = db().doc(`submissions/${assignmentId}_${ctx.studentId}`);
   const previous = await ref.get();
-  if (previous.data()?.fingerprint === fingerprint) return json({ submission: mapped(previous) });
+  // A revision is a new attempt even when a student sends the same text.
+  // Submitted/done content still returns the existing attempt on retries.
+  if (previous.data()?.fingerprint === fingerprint && previous.data()?.status !== 'revision') return json({ submission: mapped(previous) });
   const uploadDocs = await Promise.all(uploadIds.map((uploadId: string) => db().doc(`uploads/${uploadId}`).get()));
   const uploads = await Promise.all(uploadDocs.map(async doc => {
     const value = doc.data();
     if (!canUseUpload(ctx.uid, assignmentId, value) || !value || value.expiresAt.toMillis() < Date.now()) throw new ApiError(400, '첨부파일을 다시 올려 주세요.', 'UPLOAD_INVALID');
+    // Recheck the manifest here as well as at init: clients cannot bypass the
+    // teacher's answer format by submitting an existing pending upload ID.
+    uploadPolicy(value.contentType, value.size, assignment.submissionType);
     const [metadata] = await bucket().file(value.path).getMetadata().catch(() => { throw new ApiError(409, '아직 파일 전송 중이에요. 잠시 뒤 다시 제출해 주세요.', 'UPLOAD_INCOMPLETE'); });
     if (Number(metadata.size) !== value.size || metadata.contentType !== value.contentType) throw new ApiError(400, '파일 정보가 달라요. 다시 올려 주세요.', 'UPLOAD_MISMATCH');
     return { id: doc.id, path: value.path, fileName: value.fileName, contentType: value.contentType, size: value.size };
@@ -242,7 +250,7 @@ async function finalize(request: Request) {
   const result = await db().runTransaction(async tx => {
     const [oldDoc, ...freshUploads] = await Promise.all([tx.get(ref), ...uploadDocs.map(doc => tx.get(doc.ref))]);
     const old = oldDoc.data();
-    if (old?.fingerprint === fingerprint) return mapped(oldDoc);
+    if (old?.fingerprint === fingerprint && old?.status !== 'revision') return mapped(oldDoc);
     if (freshUploads.some(doc => doc.data()?.status !== 'pending')) throw new ApiError(409, '이미 사용된 첨부파일이에요.', 'UPLOAD_USED');
     const submission = { id: ref.id, assignmentId, classId: ctx.classId, studentId: ctx.studentId, studentName: profile.name, text: answer, uploads, attemptId, attemptNumber: (old?.attemptNumber ?? 0) + 1, status: 'submitted', feedback: '', submittedAt: now(), reviewedAt: null, fingerprint, rewardGranted: !!old?.rewardGranted };
     tx.set(ref, submission);

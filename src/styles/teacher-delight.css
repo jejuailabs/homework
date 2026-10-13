@@ -116,3 +116,26 @@
 .ws-teacher .ws-filter-tabs>button[aria-pressed=true] .td-filter-count{background:var(--surface);color:var(--accent)}
 @media(max-width:760px){.ws-teacher .td-workspace-heading h1{font-size:23px}.ws-teacher .ws-assignment-panel .ws-panel-title{padding:12px 15px 8px}.ws-teacher .ws-assignment-list{padding-bottom:9px}.ws-teacher .ws-assignment-item{padding:10px 12px}.ws-teacher .ws-add-assignment{padding:9px}}
 @media(max-width:480px){.ws-teacher .td-workspace-heading{gap:6px;margin-bottom:7px}.ws-teacher .td-workspace-heading>div{gap:8px}.ws-teacher .td-workspace-heading h1{font-size:22px}.ws-teacher .td-workspace-heading>img{width:42px;height:42px}.ws-teacher .td-workspace-hint{font-size:10px;padding-left:8px}.ws-teacher .ws-class-toolbar{margin:0 0 13px}.ws-teacher .ws-filter-tabs{gap:5px;padding:12px 0}.ws-teacher .ws-filter-tabs>button{gap:5px;padding:7px 8px}.ws-teacher .td-filter-count{min-width:18px;height:18px;font-size:10px}.ws-teacher .ws-review-panel{padding:16px 13px}}
+.ws-teacher .td-submission-field{min-width:0;margin:0 0 20px;padding:0;border:0}
+.ws-teacher .td-submission-field legend{font-size:13px;font-weight:700;color:var(--text);padding:0}
+.ws-teacher .td-submission-field>p{font-size:12px;line-height:1.6;color:var(--muted);margin:6px 0 11px}
+.ws-teacher .td-submission-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ws-teacher .td-submission-text{--submission-color:var(--play-sky,#dceffa)}
+.ws-teacher .td-submission-image{--submission-color:var(--play-peach,#ffe4d8)}
+.ws-teacher .td-submission-video{--submission-color:var(--play-lilac,#ece3f8)}
+.ws-teacher .td-submission-legacy{--submission-color:var(--surface-alt)}
+.ws-teacher .td-submission-option{position:relative;display:flex;align-items:flex-start;flex-direction:column;gap:5px;margin:0;padding:14px 11px;border:2px solid transparent;border-radius:17px;background:color-mix(in srgb,var(--submission-color) 55%,var(--surface));cursor:pointer;transition:border-color .15s,background .15s;min-width:0}
+.ws-teacher .td-submission-option:hover{background:var(--submission-color)}
+.ws-teacher .td-submission-option:has(input:checked){border-color:var(--accent);background:var(--submission-color);box-shadow:0 3px 0 color-mix(in srgb,var(--accent) 15%,transparent)}
+.ws-teacher .td-submission-option:has(input:focus-visible){outline:3px solid var(--accent);outline-offset:3px}
+.ws-teacher .td-submission-option input{position:absolute;right:10px;top:12px;accent-color:var(--accent);width:16px;height:16px;cursor:pointer}
+.ws-teacher .td-submission-option-icon{display:grid;place-items:center;width:39px;height:39px;border-radius:12px;background:color-mix(in srgb,var(--surface) 78%,transparent);color:var(--text);margin-bottom:4px;transform:rotate(-4deg)}
+.ws-teacher .td-submission-option strong{font-size:13px;color:var(--text);line-height:1.5;overflow-wrap:anywhere}
+.ws-teacher .td-submission-option small{font-size:11px;color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
+.ws-teacher .td-submission-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;line-height:1.5;font-weight:600;color:var(--text);background:var(--submission-color);padding:3px 7px;border-radius:8px;max-width:100%;vertical-align:middle}
+.ws-teacher .td-submission-badge svg{flex:none}
+.ws-teacher .ws-assignment-item .td-submission-badge{font-size:10px;margin:5px 0 2px;padding:2px 5px}
+.ws-teacher .ws-review-heading .td-submission-badge{margin:7px 0 2px}
+.ws-teacher .ws-drawer-student .td-submission-badge{margin:5px 7px 5px 0}
+.ws-teacher .td-review-video{width:100%;max-height:370px;border-radius:14px;background:#18221f}
+@media(max-width:440px){.ws-teacher .td-submission-options{grid-template-columns:1fr;gap:8px}.ws-teacher .td-submission-option{display:grid;grid-template-columns:36px minmax(0,1fr);column-gap:10px;row-gap:2px;padding:10px 32px 10px 10px}.ws-teacher .td-submission-option-icon{grid-row:span 2;width:34px;height:34px;margin:0;align-self:center}.ws-teacher .td-submission-option input{top:50%;transform:translateY(-50%)}.ws-teacher .td-submission-option strong{font-size:12px}}
