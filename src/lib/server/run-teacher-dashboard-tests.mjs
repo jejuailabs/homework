@@ -9,3 +9,6 @@ const submissionUrl = moduleUrl(compile('../assignment-submission.ts'));
 const policyUrl = moduleUrl(compile('./policy.ts').replace("'../characters'", JSON.stringify(characterUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl)));
 const dashboardUrl = moduleUrl(compile('./teacher-dashboard-policy.ts').replace("'./policy'", JSON.stringify(policyUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl)));
 await import(moduleUrl(compile('./teacher-dashboard-policy.test.ts').replace("'./teacher-dashboard-policy'", JSON.stringify(dashboardUrl))));
+const periodUrl = moduleUrl(compile('../teacher-dashboard-period.ts'));
+const detailsUrl = moduleUrl(compile('./teacher-dashboard-details-policy.ts').replace("'../characters'", JSON.stringify(characterUrl)).replace("'../teacher-dashboard-period'", JSON.stringify(periodUrl)).replace("'./policy'", JSON.stringify(policyUrl)).replace("'./teacher-dashboard-policy'", JSON.stringify(dashboardUrl)));
+await import(moduleUrl(compile('./teacher-dashboard-details-policy.test.ts').replace("'./teacher-dashboard-details-policy'", JSON.stringify(detailsUrl))));

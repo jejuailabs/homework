@@ -1,5 +1,19 @@
 import type { AssignmentSubmissionType } from './assignment-submission';
 import type { ExhibitionStatus } from './exhibition-types';
+import type { Character } from './characters';
+
+export type DashboardSubmissionStatus = 'pending' | 'submitted' | 'done' | 'revision';
+export type DashboardDetailKind = 'students' | 'assignments' | 'rooms' | DashboardSubmissionStatus;
+export type DashboardStudentSummary = {id: string; name: string | null; number: number | null; character: Character};
+export type DashboardSubmissionSummary = {
+  id: string; assignmentId: string; assignmentTitle: string; dueAt: string | null;
+  student: DashboardStudentSummary; status: DashboardSubmissionStatus;
+  submittedAt: string | null; reviewedAt: string | null; overdue: boolean;
+};
+export type TeacherDashboardDetailsResponse = {
+  students: DashboardStudentSummary[]; submissions: DashboardSubmissionSummary[];
+  total: number; unavailableCount: number; nextOffset: number | null; generatedAt: string;
+};
 
 export type TeacherDashboardClass = {
   id: string; name: string; grade: string; year: number; studentCount: number;

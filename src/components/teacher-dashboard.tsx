@@ -4,9 +4,10 @@ import Link from "next/link";
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {useLocale, useTranslations} from "next-intl";
 import {ArrowRight, BookOpen, CalendarDays, CheckCheck, ChevronRight, ClipboardCheck, Clock3, Flower2, Heart, House, Images, LoaderCircle, PanelsTopLeft, Plus, RefreshCw, School, ShieldCheck, Sparkles, Star, Users} from "lucide-react";
-import type {TeacherDashboardData} from "@/lib/teacher-dashboard-types";
+import type {DashboardDetailKind, TeacherDashboardData} from "@/lib/teacher-dashboard-types";
 import {assignmentInPeriod, schoolYearAt, type DashboardPeriod} from "@/lib/teacher-dashboard-period";
 import BoardDashboardSummary from './board-dashboard-summary';
+import TeacherDashboardDetails from './teacher-dashboard-details';
 
 function homeworkHref(classId?: string, assignmentId?: string, status?: string, action?: string) {
   const query = new URLSearchParams();
@@ -28,6 +29,7 @@ export default function TeacherDashboard() {
   const [period, setPeriod] = useState<DashboardPeriod>("all");
   const [year, setYear] = useState(() => schoolYearAt(Date.now()));
   const [queueExpanded, setQueueExpanded] = useState(false);
+  const [detailKind, setDetailKind] = useState<DashboardDetailKind | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,15 +96,15 @@ export default function TeacherDashboard() {
       </div>
       {error && <div className="ws-alert" role="alert"><span>{t("refreshError")}</span><button onClick={() => void load()}>{t("retry")}</button></div>}
       <div className="thd-metrics">
-        <div className="thd-metric thd-sky"><span><Users size={18}/>{t("students")}</span><strong>{studentCount.toLocaleString(locale)}</strong><small>{classroom?.name || t("createClass")}</small></div>
-        <div className="thd-metric thd-yellow"><span><BookOpen size={18}/>{t("assignments")}</span><strong>{assignments.length.toLocaleString(locale)}</strong><small>{t("selectedPeriod")}</small></div>
-        <a className="thd-metric thd-peach" href="#dashboard-review"><span><Clock3 size={18}/>{t("toReview")}</span><strong>{totals.submitted.toLocaleString(locale)}</strong><small>{t("submissionCount")}<ArrowRight size={15}/></small></a>
-        <div className="thd-metric thd-mint"><span><CheckCheck size={18}/>{t("reviewed")}</span><strong>{totals.done.toLocaleString(locale)}</strong><small>{t("submissionCount")}</small></div>
-        <div className="thd-metric thd-pink"><span><ClipboardCheck size={18}/>{t("notSubmitted")}</span><strong>{totals.pending.toLocaleString(locale)}</strong><small>{t("overdue", {count: totals.overdue})}</small></div>
-        <div className="thd-metric thd-lilac"><span><Images size={18}/>{t("rooms")}</span><strong>{exhibitions.length.toLocaleString(locale)}</strong><small>{t("artworkCount", {count: exhibitions.reduce((sum, room) => sum + room.artworkCount, 0)})}</small></div>
+        <button type="button" className="thd-metric thd-sky" aria-haspopup="dialog" onClick={() => setDetailKind('students')}><span><Users size={18}/>{t("students")}</span><strong>{studentCount.toLocaleString(locale)}</strong><small>{classroom?.name || t("createClass")}<ArrowRight size={15}/></small></button>
+        <button type="button" className="thd-metric thd-yellow" aria-haspopup="dialog" onClick={() => setDetailKind('assignments')}><span><BookOpen size={18}/>{t("assignments")}</span><strong>{assignments.length.toLocaleString(locale)}</strong><small>{t("selectedPeriod")}<ArrowRight size={15}/></small></button>
+        <button type="button" className="thd-metric thd-peach" aria-haspopup="dialog" onClick={() => setDetailKind('submitted')}><span><Clock3 size={18}/>{t("toReview")}</span><strong>{totals.submitted.toLocaleString(locale)}</strong><small>{t("submissionCount")}<ArrowRight size={15}/></small></button>
+        <button type="button" className="thd-metric thd-mint" aria-haspopup="dialog" onClick={() => setDetailKind('done')}><span><CheckCheck size={18}/>{t("reviewed")}</span><strong>{totals.done.toLocaleString(locale)}</strong><small>{t("submissionCount")}<ArrowRight size={15}/></small></button>
+        <button type="button" className="thd-metric thd-pink" aria-haspopup="dialog" onClick={() => setDetailKind('pending')}><span><ClipboardCheck size={18}/>{t("notSubmitted")}</span><strong>{totals.pending.toLocaleString(locale)}</strong><small>{t("overdue", {count: totals.overdue})}<ArrowRight size={15}/></small></button>
+        <button type="button" className="thd-metric thd-lilac" aria-haspopup="dialog" onClick={() => setDetailKind('rooms')}><span><Images size={18}/>{t("rooms")}</span><strong>{exhibitions.length.toLocaleString(locale)}</strong><small>{t("artworkCount", {count: exhibitions.reduce((sum, room) => sum + room.artworkCount, 0)})}<ArrowRight size={15}/></small></button>
       </div>
       {period !== "all" && <p className="thd-calendar-note">{t("calendarPreset")}</p>}
-      <p className="thd-scope-note">{t("scopeHint")}<span>{t("revisionCount", {count: totals.revision})}</span></p>
+      <p className="thd-scope-note">{t("scopeHint")}<button type="button" aria-haspopup="dialog" onClick={() => setDetailKind('revision')}>{t("revisionCount", {count: totals.revision})}<ArrowRight size={13}/></button></p>
     </section>
 
       <section className="thd-panel thd-review" id="dashboard-review" aria-labelledby="dashboard-review-title">
@@ -116,5 +118,6 @@ export default function TeacherDashboard() {
       {exhibitions.length ? <div className="thd-room-grid">{exhibitions.slice(0, 4).map((room, index) => <Link className={`thd-room ${["thd-peach", "thd-lilac", "thd-sky", "thd-yellow"][index % 4]}`} href={`/teacher/exhibitions?exhibition=${encodeURIComponent(room.id)}`} key={room.id}><div className="thd-room-top"><span className="thd-room-frame"><Images size={25}/></span><span className={`thd-room-status thd-room-${room.status}`}>{t(["draft", "open", "closed"].includes(room.status) ? `roomStatus.${room.status}` : "roomStatus.draft")}</span></div><small>{room.className}</small><h3>{room.title}</h3><span className="thd-room-bottom">{t("roomWorks", {total: room.artworkCount, approved: room.approvedCount})}<ArrowRight size={17}/></span></Link>)}</div> : <div className="thd-gallery-empty"><img src="/characters/otter-moa.webp" alt=""/><div><h3>{t("galleryEmpty")}</h3><p>{t("galleryEmptyHint")}</p><Link className="thd-text-link" href={exhibitionHref}>{t("startExhibition")}<ArrowRight size={15}/></Link></div></div>}
     </section>
     <p className="thd-footer"><Heart size={13}/>{t("footer")}<span>{t("updated", {time: new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul"}).format(new Date(data.generatedAt))})}</span>{["admin", "superadmin"].includes(data.viewer.role) && <Link className="thd-text-link" href="/admin"><ShieldCheck size={14}/>{t("admin")}</Link>}</p>
+    {detailKind && <TeacherDashboardDetails key={`${detailKind}:${classId}:${period}:${year}`} kind={detailKind} classId={classId} className={classroom?.name || ''} period={period} year={year} assignments={assignments} exhibitions={exhibitions} onClose={() => setDetailKind(null)}/>}
   </div>;
 }

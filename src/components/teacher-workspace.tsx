@@ -38,13 +38,13 @@ function SubmissionTypeBadge({value}: {value?: AssignmentSubmissionType}) {
   return <span className={`td-submission-badge td-submission-${type}`}><Icon size={13} aria-hidden="true"/>{t(type)}</span>;
 }
 
-type WorkspaceEntry = {classId?: string; assignmentId?: string; status?: Status | "all"; action?: "class" | "assignment" | "roster"};
+type WorkspaceEntry = {classId?: string; assignmentId?: string; studentId?: string; status?: Status | "all"; action?: "class" | "assignment" | "roster"};
 
 export default function TeacherWorkspaceEntry() {
   const params = useSearchParams();
   const validId = (value: string | null) => value && /^[A-Za-z0-9_-]{1,200}$/.test(value) ? value : undefined;
   const status = params.get("status"), action = params.get("action");
-  return <TeacherWorkspace key={params.toString()} entry={{classId: validId(params.get("classId")), assignmentId: validId(params.get("assignmentId")), status: ["all", "pending", "submitted", "done", "revision"].includes(status || "") ? status as WorkspaceEntry["status"] : undefined, action: ["class", "assignment", "roster"].includes(action || "") ? action as WorkspaceEntry["action"] : undefined}}/>;
+  return <TeacherWorkspace key={params.toString()} entry={{classId: validId(params.get("classId")), assignmentId: validId(params.get("assignmentId")), studentId: validId(params.get("studentId")), status: ["all", "pending", "submitted", "done", "revision"].includes(status || "") ? status as WorkspaceEntry["status"] : undefined, action: ["class", "assignment", "roster"].includes(action || "") ? action as WorkspaceEntry["action"] : undefined}}/>;
 }
 
 function TeacherWorkspace({entry}: {entry: WorkspaceEntry}) {
@@ -79,6 +79,7 @@ function TeacherWorkspace({entry}: {entry: WorkspaceEntry}) {
   const entryActionApplied = useRef(false);
   const entryAssignmentApplied = useRef(false);
   const entryFilterApplied = useRef(false);
+  const entryStudentApplied = useRef(false);
   const filterAssignmentId = useRef("");
   const rosterRequest = useRef<AbortController | null>(null);
   useEffect(() => () => rosterRequest.current?.abort(), []);
@@ -116,9 +117,14 @@ function TeacherWorkspace({entry}: {entry: WorkspaceEntry}) {
       setDetail(result); setError("");
       setAssignments(previous => previous.some(task => task.id === result.assignment.id) ? previous : [result.assignment, ...previous]);
       if (!entryFilterApplied.current && (!entry.assignmentId || entry.assignmentId === selectedId)) {entryFilterApplied.current = true; setFilter(entry.status || "all");}
+      if (!entryStudentApplied.current && entry.assignmentId === selectedId && entry.classId === classId && entry.studentId) {
+        entryStudentApplied.current = true;
+        const student = result.students.find(value => value.id === entry.studentId && (!result.assignment.targetStudentIds || result.assignment.targetStudentIds.includes(value.id)));
+        if (student) {setReviewStudent(student); setFeedback(result.submissions.find(value => value.studentId === student.id)?.feedback || ""); setFormError(""); setStaleReview(false);}
+      }
     }).catch(cause => {if (cause.name !== "AbortError") setError(t("common.networkError"));}).finally(() => {if (!controller.signal.aborted) setLoadingDetail(false);});
     return () => controller.abort();
-  }, [selectedId, loadingList, classId, t, entry.assignmentId, entry.status]);
+  }, [selectedId, loadingList, classId, t, entry.assignmentId, entry.status, entry.classId, entry.studentId]);
   useEffect(() => {
     if (!entry.action || entryActionApplied.current || loading || loadingList || error || (classId && loadedClassId !== classId)) return;
     entryActionApplied.current = true;
