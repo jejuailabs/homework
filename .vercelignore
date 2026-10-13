@@ -1,0 +1,11 @@
+.env*
+.qa/
+design-assets/
+node_modules/
+.git/
+*firebase-adminsdk*.json
+*.md
+scripts/
+firestore.*
+storage.rules
+firebase.json

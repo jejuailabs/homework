@@ -1,0 +1,38 @@
+{
+  "style": "Use case: stylized-concept. Asset: transparent mascot cutout for an elementary homework web app. The attached tall reference image is STYLE AND CUTENESS REFERENCE ONLY. Create one ORIGINAL animal matching its visual appeal: a flat 2D pastel doodle, an almost single mochi-shaped plump body with the face directly on it, very tiny widely spaced dot eyes and tiny understated mouth, short barely-there paws, very subtly uneven thin warm taupe hand-drawn contour, flat muted pale colors with faint paper-grain inside the shape, small pale blush. Slightly clueless innocent expression, quiet understated kawaii charm. NOT 3D, NOT glossy, NOT clay, NOT plush, NOT realistic fur, NOT a big-head small-body doll. Extremely simple silhouette, readable at 48px. Entire body centered facing front, squat width roughly equal to height except ears, square composition with 14% padding. No backdrop, genuine transparent alpha, no white rectangular background, no scenery, no ground shadow, no border, no sticker white halo, no text, no watermark. No bag, no costume, no homework props yet. Shared family line thickness and small facial features; keep simple like the reference but do not copy its exact animals.",
+  "reference": "C:/Users/na/AppData/Local/Temp/codex-clipboard-071e6e56-e24b-4d39-af6b-4e0fdf0e667d.png",
+  "specs": [
+    {
+      "id": "cat",
+      "name": "모찌",
+      "file": "cat-mochi-v2",
+      "subject": "A softly squashed ivory CAT blob with tiny triangular ears, two very short whisker strokes, tiny curled tail peeking at its right, one pale peach patch at an ear. Small content cat-mouth, paws tucked into its sides."
+    },
+    {
+      "id": "dog",
+      "name": "두부",
+      "file": "dog-dubu-v2",
+      "subject": "A pale buttery cream PUPPY blob with short floppy biscuit colored ears, tiny bean nose above a minimal smile, tiny stubby tail at one side. Very round short body, relaxed almost sleepy dot eyes, small round front paws."
+    },
+    {
+      "id": "hamster",
+      "name": "콩이",
+      "file": "hamster-kong-v2",
+      "subject": "A pale apricot HAMSTER blob, tiny circular ears, ivory lower belly, enormous softly rounded cheeks but tiny dot eyes and tiny mouth, very short forepaws held near cheeks. Entire character nearly circular and happily clueless."
+    },
+    {
+      "id": "alpaca",
+      "name": "구름",
+      "file": "alpaca-cloud-v2",
+      "subject": "An ivory baby ALPACA doodle, very compact cloud-shaped wool body, short neck, two little upright ears and a softly protruding muzzle, small taupe dot eyes, a few sparse softly scalloped wool contours. Two stubby front legs. Clearly an alpaca but squat mochi proportions."
+    },
+    {
+      "id": "rabbit",
+      "name": "토리",
+      "file": "rabbit-tori-v2",
+      "subject": "A very pale lavender-gray RABBIT blob with two short thick upright ears and pale blush inner ears, a tiny cotton tail peeking at one side, round belly and minuscule paws. A barely visible little dot mouth and simple black-brown dot eyes."
+    }
+  ],
+  "generationMode": "built-in image_gen",
+  "referenceRole": "style and cuteness reference; original five animal characters"
+}

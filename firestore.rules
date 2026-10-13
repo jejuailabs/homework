@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Preserve the pre-existing book application in this shared Firebase project.
+    match /bookData/{docId} { allow read, write: if request.auth != null; }
+    // All application access goes through authenticated, authorized server APIs.
+    // Admin SDK bypasses these rules: server ownership checks remain mandatory.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

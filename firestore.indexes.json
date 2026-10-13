@@ -1,0 +1,11 @@
+{
+  "indexes": [
+    { "collectionGroup": "uploads", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "size", "order": "ASCENDING" }
+    ] }
+  ],
+  "fieldOverrides": [
+    { "collectionGroup": "rateLimits", "fieldPath": "expiresAt", "ttl": true, "indexes": [] }
+  ]
+}

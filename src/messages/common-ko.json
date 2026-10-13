@@ -1,0 +1,89 @@
+{
+  "brand": "모두의 숙제",
+  "tagline": "작은 도전, 함께 자라는 하루",
+  "teacher": "선생님",
+  "student": "학생",
+  "admin": "운영자 어드민",
+  "tools": "AI 도구함",
+  "home": "홈",
+  "signOut": "로그아웃",
+  "settings": "화면 설정",
+  "language": "언어",
+  "appearance": "화면 밝기",
+  "light": "라이트",
+  "dark": "다크",
+  "system": "기기 설정 따르기",
+  "palette": "테마 색상",
+  "mint": "민트",
+  "coral": "코랄",
+  "sky": "하늘",
+  "lavender": "라벤더",
+  "apricot": "살구",
+  "rose": "로즈",
+  "loading": "잠시만 기다려 주세요",
+  "retry": "다시 시도",
+  "back": "돌아가기",
+  "close": "닫기",
+  "loginNeeded": "로그인이 필요해요",
+  "forbidden": "이 화면에 접근할 권한이 없습니다.",
+  "saved": "저장했어요",
+  "skip": "본문으로 이동",
+  "loginTeacher": "선생님 · 운영자 로그인",
+  "loginStudent": "학생 입장",
+  "google": "Google로 시작하기",
+  "code": "나의 입장 코드",
+  "enter": "우리 반 들어가기",
+  "codeHint": "선생님이 나눠 주신 개인 코드를 입력해 주세요.",
+  "loginTitle": "오늘도, 함께 해볼까?",
+  "loginIntro": "숙제는 가볍게. 작은 도전은 즐겁게.\n나만의 동물 친구와 하루하루 자라요.",
+  "easy": "사진 찍고, 제출하면 끝!",
+  "easyDesc": "오늘 할 숙제를 찾고 선생님 답장을 받아요.",
+  "teacherHint": "과제 만들기부터 확인까지 한곳에서.",
+  "adminHint": "운영자 권한이 있는 계정은 어드민으로 이동합니다.",
+  "loginError": "로그인을 완료하지 못했어요. 팝업 허용과 계정 설정을 확인해 주세요.",
+  "codeError": "입장 코드를 확인하고 다시 입력해 주세요.",
+  "networkError": "연결을 확인하고 다시 시도해 주세요.",
+  "welcome": "반가워요",
+  "dashboard": "대시보드",
+  "refresh": "새로고침",
+  "development": "서비스 초기 버전",
+  "sessionExpired": "안전한 사용을 위해 다시 로그인해 주세요.",
+  "systemDark": "기기 설정 · 다크",
+  "systemLight": "기기 설정 · 라이트",
+  "appearanceToggle": "현재 {current}. {next} 화면으로 바꾸기",
+  "localeKorean": "한국어",
+  "localeEnglish": "English",
+  "toolbox": {
+    "kicker": "선생님의 수업 도우미",
+    "title": "선생님 AI 도구함",
+    "description": "수업 준비부터 학급 소통까지, 선생님의 반복 업무를 가볍게.",
+    "note": "AI 제공사 연결을 준비하고 있어요. 아래 도구의 자동 생성은 아직 사용할 수 없습니다. 과제 만들기와 숙제 검사는 지금 사용할 수 있어요.",
+    "badge": "연결 준비 중",
+    "items": {
+      "resource": {
+        "title": "자료로 수업 준비",
+        "description": "PDF에서 과제·카드뉴스·퀴즈를 함께 준비해요."
+      },
+      "adapt": {
+        "title": "쉽게 다르게 설명하기",
+        "description": "학년에 맞는 쉬운 설명과 수준별 자료를 준비해요."
+      },
+      "feedback": {
+        "title": "검사 기준과 피드백",
+        "description": "답안의 근거와 함께 피드백 초안을 만들어요."
+      },
+      "notice": {
+        "title": "가정통신문 쓰기",
+        "description": "일정과 준비물을 넣어 안내문을 준비해요."
+      },
+      "conference": {
+        "title": "상담 기록 정리",
+        "description": "선택한 학습 기록으로 상담을 준비해요."
+      },
+      "notes": {
+        "title": "문서와 회의 메모 정리",
+        "description": "긴 문서에서 결정 사항과 할 일을 정리해요."
+      }
+    }
+  }
+}

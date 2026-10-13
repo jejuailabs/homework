@@ -1,0 +1,89 @@
+{
+  "brand": "Homework Friends",
+  "tagline": "Small steps, growing together",
+  "teacher": "Teacher",
+  "student": "Student",
+  "admin": "Platform admin",
+  "tools": "AI toolbox",
+  "home": "Home",
+  "signOut": "Sign out",
+  "settings": "Display settings",
+  "language": "Language",
+  "appearance": "Appearance",
+  "light": "Light",
+  "dark": "Dark",
+  "system": "Use device setting",
+  "palette": "Color theme",
+  "mint": "Mint",
+  "coral": "Coral",
+  "sky": "Sky",
+  "lavender": "Lavender",
+  "apricot": "Apricot",
+  "rose": "Rose",
+  "loading": "Just a moment",
+  "retry": "Try again",
+  "back": "Go back",
+  "close": "Close",
+  "loginNeeded": "Please sign in",
+  "forbidden": "You do not have access to this page.",
+  "saved": "Saved",
+  "skip": "Skip to content",
+  "loginTeacher": "Teacher · Admin",
+  "loginStudent": "Student",
+  "google": "Continue with Google",
+  "code": "My entry code",
+  "enter": "Enter my classroom",
+  "codeHint": "Enter the personal code your teacher gave you.",
+  "loginTitle": "Ready for a little adventure?",
+  "loginIntro": "A little homework. A happy little moment.\nGrow every day with your animal friend.",
+  "easy": "Take a photo. Hand it in. Done!",
+  "easyDesc": "Find today's tasks and read your teacher's feedback.",
+  "teacherHint": "Create, collect and review — all in one place.",
+  "adminHint": "Accounts with administrator access open the admin console.",
+  "loginError": "Sign-in did not finish. Please check popup permissions and your account settings.",
+  "codeError": "Please check your entry code and try again.",
+  "networkError": "Check your connection and try again.",
+  "welcome": "Welcome",
+  "dashboard": "Dashboard",
+  "refresh": "Refresh",
+  "development": "Early release",
+  "sessionExpired": "Please sign in again to continue securely.",
+  "systemDark": "Device setting · Dark",
+  "systemLight": "Device setting · Light",
+  "appearanceToggle": "Currently {current}. Switch to {next} appearance",
+  "localeKorean": "한국어",
+  "localeEnglish": "English",
+  "toolbox": {
+    "kicker": "TEACHER TOOLBOX",
+    "title": "Teacher AI toolbox",
+    "description": "A little help with lesson preparation and classroom communication.",
+    "note": "The AI provider is not connected yet, so automatic generation is unavailable. You can already create assignments and review student work.",
+    "badge": "Not connected",
+    "items": {
+      "resource": {
+        "title": "Prepare from a resource",
+        "description": "Create assignment, card and quiz drafts from a PDF."
+      },
+      "adapt": {
+        "title": "Explain it differently",
+        "description": "Adapt explanations and resources for your students."
+      },
+      "feedback": {
+        "title": "Rubrics and feedback",
+        "description": "Draft feedback connected to the student’s work."
+      },
+      "notice": {
+        "title": "Write a family notice",
+        "description": "Prepare a notice from dates and materials."
+      },
+      "conference": {
+        "title": "Prepare for a conference",
+        "description": "Summarize selected learning records."
+      },
+      "notes": {
+        "title": "Summarize documents and notes",
+        "description": "Find decisions and action items in your notes."
+      }
+    }
+  }
+}
