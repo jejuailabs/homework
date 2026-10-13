@@ -38,6 +38,8 @@ export type ExhibitionListResponse = {
   exhibitions: Exhibition[]; classes?: ExhibitionClass[]; profile?: ExhibitionProfile;
   /** Bootstrap responses include the class used for the returned first page. */
   selectedClassId?: string | null;
+  /** Role of the session verified by the list API, independent of the URL. */
+  viewerRole: 'teacher' | 'student';
   /** Listing is intentionally bounded; old exhibitions are kept in storage. */
   limit: number; hasMore: boolean; nextCursor: string | null; storageUsage?: ExhibitionStorageUsage;
 };

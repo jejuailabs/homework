@@ -2,6 +2,7 @@
 
 import {useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
 import dynamic from "next/dynamic";
+import {useRouter} from "next/navigation";
 
 import {useLocale, useTranslations} from "next-intl";
 import {uploadBytesResumable, ref as storageRef} from "firebase/storage";
@@ -17,10 +18,14 @@ function RoomThemeIcon({theme, size = 16}: {theme?: Exhibition["theme"]; size?: 
 type Role = "teacher" | "student";
 type QueuedPhoto = {id: string; file: File; preview: string; title: string; description: string; studentId: string; uploadId?: string};
 
+class ExhibitionRequestError extends Error {
+  constructor(code: string, readonly status: number) {super(code);}
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {...init, cache: "no-store", headers: {"Content-Type": "application/json", ...init?.headers}});
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.code || "REQUEST_FAILED");
+  if (!response.ok) throw new ExhibitionRequestError(body.code || "REQUEST_FAILED", response.status);
   return body as T;
 }
 
@@ -44,8 +49,10 @@ function GalleryBuilding() {
 }
 
 export default function ExhibitionWorkspace({role}: {role: Role}) {
-  const t = useTranslations("exhibition"), locale = useLocale(), teacher = role === "teacher";
+  const t = useTranslations("exhibition"), common = useTranslations("common"), locale = useLocale(), router = useRouter(), teacher = role === "teacher";
   const [home, setHome] = useState<ExhibitionListResponse | null>(null);
+  const [forbidden, setForbidden] = useState(false);
+  const authorized = home !== null && !forbidden;
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<ExhibitionDetailResponse | null>(null);
   const [loading, setLoading] = useState(true), [detailLoading, setDetailLoading] = useState(false);
@@ -61,6 +68,19 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   const activeId = useRef("");
   const activeBuilding = useRef(""), nextCursor = useRef<string | null>(null);
   const listRequest = useRef(0), homeRequest = useRef(0), pageBusy = useRef(false);
+  const loadErrorText = useRef(t("error"));
+  // Preference hydration can replace the translator; it must not restart data reads.
+  useEffect(() => {loadErrorText.current = t("error");}, [t]);
+  const handleAccessError = useCallback((cause: unknown) => {
+    if (!(cause instanceof ExhibitionRequestError) || ![401, 403].includes(cause.status)) return false;
+    // Invalidate pending reads so a late response cannot restore a denied view.
+    listRequest.current++; homeRequest.current++; activeId.current = ""; pageBusy.current = false;
+    setHome(null); setDetail(null); setRooms([]); setModal(null); setArtworkId(null);
+    setLoading(false); setDetailLoading(false); setRoomsLoading(false); setMoreLoading(false);
+    if (cause.status === 401) router.replace("/");
+    else setForbidden(true);
+    return true;
+  }, [router]);
   const loadRooms = useCallback(async (classId: string, append = false) => {
     if (teacher && !classId || append && (!nextCursor.current || pageBusy.current)) return;
     const cursor = append ? nextCursor.current : null;
@@ -74,13 +94,14 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     try {
       const data = await request<ExhibitionListResponse>(`/api/exhibitions${query.size ? `?${query}` : ""}`);
       if (sequence !== listRequest.current || teacher && classId !== activeBuilding.current) return;
+      if (data.viewerRole !== role) throw new ExhibitionRequestError("FORBIDDEN", 403);
       setRooms(previous => append ? [...new Map([...previous, ...data.exhibitions].map(show => [show.id, show])).values()] : data.exhibitions);
       setHasMoreRooms(data.hasMore && !!data.nextCursor); nextCursor.current = data.nextCursor || null;
       setHome(previous => previous ? {...previous, classes: data.classes || previous.classes, profile: data.profile || previous.profile, storageUsage: data.storageUsage || previous.storageUsage} : data);
       setError("");
-    } catch {if (sequence === listRequest.current && (!teacher || classId === activeBuilding.current)) setError(t("error"));}
+    } catch (cause) {if (sequence === listRequest.current && (!teacher || classId === activeBuilding.current) && !handleAccessError(cause)) setError(loadErrorText.current);}
     finally {if (sequence === listRequest.current) {setRoomsLoading(false); setMoreLoading(false); pageBusy.current = false;}}
-  }, [teacher, t]);
+  }, [teacher, role, handleAccessError]);
   const loadHome = useCallback(async () => {
     const sequence = ++homeRequest.current;
     const roomSequence = ++listRequest.current;
@@ -90,16 +111,21 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     try {
       const data = await request<ExhibitionListResponse>(`/api/exhibitions?${query}`);
       if (sequence !== homeRequest.current || roomSequence !== listRequest.current) return;
-      setHome(data); setError("");
+      if (data.viewerRole !== role) throw new ExhibitionRequestError("FORBIDDEN", 403);
+      setHome(data); setForbidden(false); setError("");
       const classId = teacher ? data.selectedClassId || "" : "";
       activeBuilding.current = classId; setBuildingId(classId);
       setRooms(data.exhibitions); setHasMoreRooms(data.hasMore && !!data.nextCursor); nextCursor.current = data.nextCursor || null;
-    } catch {if (sequence === homeRequest.current && roomSequence === listRequest.current) setError(t("error"));}
+    } catch (cause) {
+      if (sequence === homeRequest.current && roomSequence === listRequest.current) {
+        if (!handleAccessError(cause)) setError(loadErrorText.current);
+      }
+    }
     finally {
       if (sequence === homeRequest.current) setLoading(false);
       if (roomSequence === listRequest.current) {setRoomsLoading(false); pageBusy.current = false;}
     }
-  }, [teacher, t]);
+  }, [teacher, role, handleAccessError]);
   const selectBuilding = (id: string) => {activeBuilding.current = id; setBuildingId(id); void loadRooms(id);};
   const loadDetail = useCallback(async (id: string, showLoading = false) => {
     if (!id) return;
@@ -107,23 +133,23 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     try {
       const data = await request<ExhibitionDetailResponse>(`/api/exhibitions/${id}`);
       if (activeId.current === id) {setDetail(data); activeBuilding.current = data.exhibition.classId; setBuildingId(data.exhibition.classId); setError("");}
-    } catch {if (activeId.current === id) setError(t("error"));}
+    } catch (cause) {if (activeId.current === id && !handleAccessError(cause)) setError(loadErrorText.current);}
     finally {if (activeId.current === id) setDetailLoading(false);}
-  }, [t]);
+  }, [handleAccessError]);
   useEffect(() => {void loadHome();}, [loadHome]);
   useEffect(() => {
     const sync = (refreshRooms: boolean) => {const id = new URL(window.location.href).searchParams.get("exhibition") || ""; activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); if (refreshRooms && !id && (activeBuilding.current || !teacher)) void loadRooms(activeBuilding.current);};
     const onPopState = () => sync(true);
     sync(false); window.addEventListener("popstate", onPopState); return () => window.removeEventListener("popstate", onPopState);
   }, [loadRooms, teacher]);
-  useEffect(() => {if (selectedId) void loadDetail(selectedId, true);}, [selectedId, loadDetail]);
+  useEffect(() => {if (selectedId && authorized) void loadDetail(selectedId, true);}, [selectedId, loadDetail, authorized]);
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || !authorized) return;
     const refresh = () => {if (document.visibilityState === "visible") void loadDetail(selectedId);};
     const timer = window.setInterval(refresh, 10 * 60 * 1000);
     document.addEventListener("visibilitychange", refresh);
     return () => {window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh);};
-  }, [selectedId, loadDetail]);
+  }, [selectedId, loadDetail, authorized]);
 
   const selectShow = (id: string) => {
     activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); setError(""); setNotice(""); setView("grid"); setFilter("all");
@@ -150,6 +176,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   }, [artworks, approved.length, detail?.students]);
 
   if (loading) return <div className="ex-loading" role="status"><img src="/characters/otter-moa.webp" alt=""/><LoaderCircle className="spin" size={24}/><p>{t("loading")}</p></div>;
+  if (forbidden) return <div className="ex-empty"><LockKeyhole size={38}/><p role="alert">{common("forbidden")}</p><button className="ex-button" onClick={() => router.replace("/")}>{common("back")}</button></div>;
   if (!home) return <div className="ex-empty"><Palette size={38}/><p role="alert">{error}</p><button className="ex-button" onClick={() => void loadHome()}><RefreshCw size={17}/>{t("retry")}</button></div>;
 
   return <div className="ex-workspace">

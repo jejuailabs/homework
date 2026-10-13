@@ -215,7 +215,7 @@ ESLint 기반 `lint` 명령은 초기 범위에 포함하지 않습니다. 명�
 
 운영 메타데이터와 응답 헤더로 Vercel Functions `icn1`, Firestore `asia-northeast3`, Storage `ASIA-NORTHEAST3`를 확인했습니다. 모두 서울이며 이번 변경에서 리전·DB·권한 규칙은 변경하지 않습니다. 기존 화면은 `/api/me` → 전체 전시 목록 → 학급별 전시 목록을 순차 호출했고, 빈 전시의 API 응답 시간 합계가 첫 측정 2,979ms, 이후 1,940ms·2,034ms였습니다. 이는 브라우저 렌더링 시간을 포함하지 않은 API 측정입니다.
 
-목록과 학급 정보를 한 번에 받도록 바꾸어 최초 호출을 인증 1회+전시 초기 조회 1회로 줄였고, 독립 DB 읽기는 병렬화했습니다. 새로고침 때는 목록 영역만 로딩합니다. 105개 전시실의 페이지 이어보기·학급 구분·학생 열람 범위·권한 차단 등 에뮬레이터 API 검사 11개와 프로덕션 빌드 브라우저 검사 5개가 통과했습니다. 실제 운영 측정과 로컬 검증 기록은 Git에서 제외되는 `.qa/loading-audit-results.json`, `.qa/loading-bootstrap-api-results.json`, `.qa/loading-bootstrap-browser-results.json`에 보관합니다.
+인증된 전시 API 응답에 학급·전시 목록과 검증된 사용자 역할을 함께 담아 최초 호출을 **1회**로 줄였습니다. 전시 페이지는 별도 `/api/me` 요청 없이 이 응답의 역할을 확인하고, 비로그인·만료는 로그인 화면으로, 정지·역할 불일치는 접근 거부 화면으로 전환합니다. 모든 API의 기존 서버 인증·정지·권한 검사는 유지하며, 독립 DB 읽기는 병렬화했습니다. 새로고침 때는 목록 영역만 로딩합니다. 105개 전시실의 페이지 이어보기·학급 구분·학생 열람 범위·권한 차단과 프로덕션 빌드 브라우저 요청 수를 검증합니다. 실제 운영 측정과 로컬 검증 기록은 Git에서 제외되는 `.qa/loading-audit-results.json`, `.qa/loading-audit-final-results.json`, `.qa/loading-bootstrap-api-results.json`, `.qa/loading-bootstrap-browser-results.json`에 보관합니다.
 
 ## AI 서버 설정과 범위
 

@@ -104,7 +104,7 @@ async function list(ctx: Context, request: Request) {
       readPage(ctx.classId),
       db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get(),
     ]);
-    return json({ ...page, selectedClassId: ctx.classId, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '' } });
+    return json({ ...page, viewerRole: 'student', selectedClassId: ctx.classId, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '' } });
   }
   const readTeacherPage = async () => {
     const classQuery = db().collection('classes').where('ownerUid', '==', ctx.uid).limit(100);
@@ -127,7 +127,7 @@ async function list(ctx: Context, request: Request) {
     return { page, classes, selectedClassId: selectedClass ?? null };
   };
   const [{ page, classes, selectedClassId }, quota] = await Promise.all([readTeacherPage(), quotaRef(ctx.uid).get()]);
-  return json({ ...page, selectedClassId, classes: classes.docs.map(doc => ({ id: doc.id, name: doc.data().name, grade: String(doc.data().grade ?? '').trim() || doc.data().name, studentCount: doc.data().studentCount ?? 0, year: doc.data().year })), storageUsage: storageValue(quota.data()) });
+  return json({ ...page, viewerRole: 'teacher', selectedClassId, classes: classes.docs.map(doc => ({ id: doc.id, name: doc.data().name, grade: String(doc.data().grade ?? '').trim() || doc.data().name, studentCount: doc.data().studentCount ?? 0, year: doc.data().year })), storageUsage: storageValue(quota.data()) });
 }
 async function create(ctx: Context, request: Request) {
   if (ctx.role === 'student') throw new ApiError(403, '선생님만 전시회를 만들 수 있어요.', 'FORBIDDEN');
