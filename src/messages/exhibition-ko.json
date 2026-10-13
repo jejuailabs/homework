@@ -182,5 +182,17 @@
   "uploadProcessingRetry": "사진을 처리하고 있어요. 잠시 후 다시 올리기를 눌러 주세요.",
   "roomFull": "이 전시실의 작품 공간이 가득 찼어요. 새 전시실에 사진을 올려 주세요.",
   "uploadRateLimit": "사진을 많이 올렸어요. 잠시 쉬었다가 다시 올려 주세요.",
-  "uploadExpiredRetry": "업로드 시간이 지났어요. 다시 올리기를 누르면 새로 전송해요."
+  "uploadExpiredRetry": "업로드 시간이 지났어요. 다시 올리기를 누르면 새로 전송해요.",
+  "visit": {
+    "manageTitle": "전시실 관리",
+    "manage": "전시실 관리",
+    "list": "목록으로 보기",
+    "returnVisit": "전시관으로 돌아가기",
+    "campus": "우리 반 전시마을",
+    "classroom": "교실로",
+    "expand": "전시실 크게 보기",
+    "restore": "전시실 크기 줄이기",
+    "campusHint": "우리 반 건물의 문을 눌러 들어가요. 모아가 기다리고 있어요!",
+    "classroomHint": "벽에 붙은 전시 포스터를 누르면 그 주제의 전시실이 열려요."
+  }
 }

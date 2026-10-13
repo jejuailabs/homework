@@ -7,6 +7,9 @@ const characterUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../ch
 const rosterUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../roster.ts')).toString('base64');
 const rosterTest = compile('../roster.test.ts').replace("'./roster'", JSON.stringify(rosterUrl));
 await import('data:text/javascript;base64,' + Buffer.from(rosterTest).toString('base64'));
+const worldLayoutUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../exhibition-world-layout.ts')).toString('base64');
+const worldLayoutTest = compile('../exhibition-world-layout.test.ts').replace("'./exhibition-world-layout'", JSON.stringify(worldLayoutUrl));
+await import('data:text/javascript;base64,' + Buffer.from(worldLayoutTest).toString('base64'));
 const policyUrl = 'data:text/javascript;base64,' + Buffer.from(compile('./policy.ts').replace("'../characters'", JSON.stringify(characterUrl))).toString('base64');
 const testCode = compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policyUrl));
 await import('data:text/javascript;base64,' + Buffer.from(testCode).toString('base64'));

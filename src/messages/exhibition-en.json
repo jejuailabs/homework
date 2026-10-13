@@ -182,5 +182,17 @@
   "uploadProcessingRetry": "Your photo is being processed. Please wait a moment, then try uploading again.",
   "roomFull": "This room is full. Please add your photos to a new gallery room.",
   "uploadRateLimit": "You have uploaded lots of photos. Please wait a little before trying again.",
-  "uploadExpiredRetry": "This upload has expired. Select upload again to send your photos afresh."
+  "uploadExpiredRetry": "This upload has expired. Select upload again to send your photos afresh.",
+  "visit": {
+    "manageTitle": "Manage exhibitions",
+    "manage": "Manage exhibitions",
+    "list": "List view",
+    "returnVisit": "Return to gallery",
+    "campus": "Our class gallery village",
+    "classroom": "Back to class",
+    "expand": "Expand gallery",
+    "restore": "Restore gallery size",
+    "campusHint": "Choose your class building and step inside. Moa is waiting for you!",
+    "classroomHint": "Choose an exhibition poster on the wall to enter its gallery."
+  }
 }

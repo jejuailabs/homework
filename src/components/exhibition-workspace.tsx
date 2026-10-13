@@ -6,11 +6,12 @@ import {useRouter} from "next/navigation";
 
 import {useLocale, useTranslations} from "next-intl";
 import {uploadBytesResumable, ref as storageRef} from "firebase/storage";
-import {ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ChevronDown, Clock3, Cloud, Flower2, Heart, ImagePlus, Images, LayoutGrid, Leaf, LoaderCircle, LockKeyhole, Mail, Palette, Plus, RefreshCw, Send, Settings2, Sparkles, Stamp, Trash2, Upload, Users, Waves, X} from "lucide-react";
+import {ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ChevronDown, Clock3, Cloud, DoorOpen, Flower2, Heart, ImagePlus, Images, LayoutGrid, Leaf, LoaderCircle, LockKeyhole, Mail, Maximize2, Minimize2, Palette, Plus, RefreshCw, Send, Settings2, Sparkles, Stamp, Trash2, Upload, Users, Waves, X} from "lucide-react";
 import {storage} from "@/lib/firebase-client";
 import type {ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionClass, ExhibitionComment, ExhibitionDetailResponse, ExhibitionListResponse, ExhibitionStatus, ExhibitionStudent} from "@/lib/exhibition-types";
+import "@/styles/exhibition-visit.css";
 
-const ExhibitionScene = dynamic(() => import("./exhibition-scene"), {ssr: false, loading: () => <div className="ex-scene-loading" role="status"><LoaderCircle className="spin" size={28}/></div>});
+const ExhibitionWorld = dynamic(() => import("./exhibition-world"), {ssr: false, loading: () => <div className="ex-world-loading" role="status"><img src="/characters/otter-moa.webp" alt=""/><LoaderCircle className="spin" size={28}/></div>});
 const imageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const reactionIcons = {colors: Palette, idea: Sparkles, story: Heart};
 const roomThemeIcons = {cozy: Palette, forest: Leaf, sky: Cloud, ocean: Waves};
@@ -29,9 +30,19 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
+function restoreDialogFocus(previous: HTMLElement | null) {
+  const target = previous?.isConnected ? previous : document.querySelector<HTMLElement>(".ex-visit-dialog[open] .ex-world canvas") || document.querySelector<HTMLElement>(".ex-world--classroom canvas") || document.querySelector<HTMLElement>(".ex-visit-breadcrumb button");
+  target?.focus({preventScroll: true});
+}
+
 function Dialog({title, children, onClose, busy = false, wide = false}: {title: string; children: ReactNode; onClose: () => void; busy?: boolean; wide?: boolean}) {
   const t = useTranslations("exhibition"), id = useId(), dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {dialog.current?.showModal();}, []);
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const node = dialog.current;
+    node?.showModal();
+    return () => {node?.close(); restoreDialogFocus(previousFocus);};
+  }, []);
   return <dialog ref={dialog} className={`ex-dialog ${wide ? "ex-dialog-wide" : ""}`} aria-labelledby={id} onCancel={event => {event.preventDefault(); if (!busy) onClose();}}>
     <header className="ex-dialog-head"><h2 id={id}>{title}</h2><button className="ex-icon-btn" onClick={onClose} disabled={busy} aria-label={t("close")}><X size={21}/></button></header>{children}
   </dialog>;
@@ -44,8 +55,22 @@ function ArtworkImage({artwork, full = false}: {artwork: ExhibitionArtwork; full
   return failed || !url ? <span className="ex-image-fallback"><Images size={32}/><small>{t("fileUnavailable")}</small></span> : <img src={url} alt={artwork.title} loading={full ? "eager" : "lazy"} onError={() => setFailed(true)}/>;
 }
 
-function GalleryBuilding() {
-  return <div className="ex-building" aria-hidden="true"><span className="ex-building-cloud"/><span className="ex-building-cloud second"/><span className="ex-building-sun"/><div className="ex-building-ground"/><div className="ex-building-house"><div className="ex-building-roof"/><div className="ex-building-sign"><Palette size={17}/><span>ART</span></div><span className="ex-building-window left"/><span className="ex-building-window right"/><span className="ex-building-door"/></div><span className="ex-building-tree left"/><span className="ex-building-tree right"/><Flower2 className="ex-building-flower" size={29}/></div>;
+function VisitDialog({title, className, count, actions, children, onClose}: {title: string; className: string; count: number; actions?: ReactNode; children: ReactNode; onClose: () => void}) {
+  const t = useTranslations("exhibition"), id = useId(), dialog = useRef<HTMLDialogElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const node = dialog.current;
+    document.body.style.overflow = "hidden";
+    node?.showModal();
+    return () => {node?.close(); document.body.style.overflow = previous; restoreDialogFocus(previousFocus);};
+  }, []);
+  return <dialog ref={dialog} className={`ex-visit-dialog ${expanded ? "is-expanded" : ""}`} aria-labelledby={id} onCancel={event => {event.preventDefault(); onClose();}}>
+    <header className="ex-visit-head"><button className="ex-button" onClick={onClose}><ArrowLeft size={17}/><span>{className || t("visit.classroom")}</span></button><div className="ex-visit-title"><h2 id={id}><Flower2 size={22}/>{title}</h2><span>{t("artworkCount", {count})}</span></div><div className="ex-visit-controls"><button className="ex-icon-btn" onClick={() => setExpanded(value => !value)} aria-label={t(expanded ? "visit.restore" : "visit.expand")}>{expanded ? <Minimize2 size={20}/> : <Maximize2 size={20}/>}</button><button className="ex-icon-btn" onClick={onClose} aria-label={t("close")}><X size={22}/></button></div></header>
+    {actions && <div className="ex-visit-actions">{actions}</div>}
+    <div className="ex-visit-content">{children}</div>
+  </dialog>;
 }
 
 export default function ExhibitionWorkspace({role}: {role: Role}) {
@@ -60,8 +85,9 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   const [modal, setModal] = useState<"create" | "upload" | "settings" | "building" | null>(null);
   const [artworkId, setArtworkId] = useState<string | null>(null);
   const [filter, setFilter] = useState<ArtworkStatus | "all">("all");
-  const [view, setView] = useState<"grid" | "room">("grid");
-  const [showBuilding, setShowBuilding] = useState(false), [buildingId, setBuildingId] = useState("");
+  const [manage, setManage] = useState(false);
+  const [place, setPlace] = useState<"campus" | "classroom">("campus");
+  const [buildingId, setBuildingId] = useState("");
   const [rooms, setRooms] = useState<Exhibition[]>([]), [roomsLoading, setRoomsLoading] = useState(false), [moreLoading, setMoreLoading] = useState(false);
   const [hasMoreRooms, setHasMoreRooms] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -75,7 +101,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     if (!(cause instanceof ExhibitionRequestError) || ![401, 403].includes(cause.status)) return false;
     // Invalidate pending reads so a late response cannot restore a denied view.
     listRequest.current++; homeRequest.current++; activeId.current = ""; pageBusy.current = false;
-    setHome(null); setDetail(null); setRooms([]); setModal(null); setArtworkId(null);
+    setHome(null); setDetail(null); setRooms([]); setModal(null); setArtworkId(null); setSelectedId("");
     setLoading(false); setDetailLoading(false); setRoomsLoading(false); setMoreLoading(false);
     if (cause.status === 401) router.replace("/");
     else setForbidden(true);
@@ -87,7 +113,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     const sequence = ++listRequest.current;
     pageBusy.current = true;
     if (append) setMoreLoading(true);
-    else {setRoomsLoading(true); setMoreLoading(false); setRooms([]); setHasMoreRooms(false); nextCursor.current = null;}
+    else {setRoomsLoading(true); setMoreLoading(false); setHasMoreRooms(false); nextCursor.current = null;}
     const query = new URLSearchParams();
     if (teacher) query.set("classId", classId);
     if (cursor) query.set("cursor", cursor);
@@ -113,7 +139,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
       if (sequence !== homeRequest.current || roomSequence !== listRequest.current) return;
       if (data.viewerRole !== role) throw new ExhibitionRequestError("FORBIDDEN", 403);
       setHome(data); setForbidden(false); setError("");
-      const classId = teacher ? data.selectedClassId || "" : "";
+      const classId = data.selectedClassId || data.profile?.classId || "";
       activeBuilding.current = classId; setBuildingId(classId);
       setRooms(data.exhibitions); setHasMoreRooms(data.hasMore && !!data.nextCursor); nextCursor.current = data.nextCursor || null;
     } catch (cause) {
@@ -126,13 +152,14 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
       if (roomSequence === listRequest.current) {setRoomsLoading(false); pageBusy.current = false;}
     }
   }, [teacher, role, handleAccessError]);
-  const selectBuilding = (id: string) => {activeBuilding.current = id; setBuildingId(id); void loadRooms(id);};
+  const selectBuilding = (id: string) => {const changed = activeBuilding.current !== id; activeBuilding.current = id; setBuildingId(id); if (changed) {setRooms([]); void loadRooms(id);}};
+  const enterBuilding = (id: string) => {selectBuilding(id); setPlace("classroom");};
   const loadDetail = useCallback(async (id: string, showLoading = false) => {
     if (!id) return;
     if (showLoading) setDetailLoading(true);
     try {
       const data = await request<ExhibitionDetailResponse>(`/api/exhibitions/${id}`);
-      if (activeId.current === id) {setDetail(data); activeBuilding.current = data.exhibition.classId; setBuildingId(data.exhibition.classId); setError("");}
+      if (activeId.current === id) {setDetail(data); activeBuilding.current = data.exhibition.classId; setBuildingId(data.exhibition.classId); setPlace("classroom"); setError("");}
     } catch (cause) {if (activeId.current === id && !handleAccessError(cause)) setError(loadErrorText.current);}
     finally {if (activeId.current === id) setDetailLoading(false);}
   }, [handleAccessError]);
@@ -152,7 +179,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   }, [selectedId, loadDetail, authorized]);
 
   const selectShow = (id: string) => {
-    activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); setError(""); setNotice(""); setView("grid"); setFilter("all");
+    activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); setError(""); setNotice(""); setFilter("all"); setPlace("classroom");
     const url = new URL(window.location.href); if (id) url.searchParams.set("exhibition", id); else url.searchParams.delete("exhibition"); window.history.pushState({}, "", url);
     window.scrollTo({top: 0, behavior: "smooth"});
     if (!id) void loadRooms(activeBuilding.current);
@@ -166,10 +193,13 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   };
   const currentBuilding = home?.classes?.find(item => item.id === buildingId) || home?.classes?.[0];
   const visibleShows = rooms.filter(show => !teacher || !currentBuilding || show.classId === currentBuilding.id);
+  const worldRooms = visibleShows.map(show => ({...show, artworkCount: show.approvedCount}));
   const artworks = detail?.artworks || [];
   const approved = artworks.filter(artwork => artwork.status === "approved");
   const filtered = artworks.filter(artwork => filter === "all" || artwork.status === filter);
   const selectedArtwork = artworks.find(artwork => artwork.id === artworkId);
+  const worldBuildings = teacher ? home?.classes || [] : home?.profile ? [{id: home.profile.classId, name: home.profile.className}] : [];
+  const worldBuildingName = currentBuilding?.name || home?.profile?.className || "";
   const stats = useMemo(() => {
     const submitted = new Set(artworks.map(artwork => artwork.studentId).filter(Boolean));
     return {galleryTotal: artworks.length, linkedArtists: submitted.size, submitted: submitted.size, missing: (detail?.students || []).filter(student => !submitted.has(student.id)).length, pending: artworks.filter(artwork => artwork.status === "pending").length, approved: approved.length};
@@ -182,8 +212,16 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   return <div className="ex-workspace">
     {error && <div className="ex-alert" role="alert"><span>{error}</span><button onClick={() => void (selectedId ? loadDetail(selectedId, true) : loadHome())}>{t("retry")}</button></div>}
     {notice && <div className="ex-notice" role="status"><CheckCircle2 size={18}/><span>{notice}</span><button className="ex-icon-btn" onClick={() => setNotice("")} aria-label={t("close")}><X size={16}/></button></div>}
-    {!selectedId ? <>
-      <section className="ex-hero"><div className="ex-hero-copy"><span className="ex-eyebrow"><Flower2 size={16}/>{t("eyebrow")}</span><h1>{t("title")}</h1><p>{t(teacher ? "teacherSubtitle" : "subtitle")}</p><div className="ex-hero-actions">{teacher && (home.classes?.length ? <button className="ex-button ex-primary" onClick={() => setModal("create")}><Plus size={20}/>{t("create")}</button> : <button className="ex-button ex-primary" onClick={() => setModal("building")}><Users size={19}/>{t("createBuilding")}</button>)}<span className="ex-private"><LockKeyhole size={13}/>{t("private")}</span></div></div><div className={`ex-hero-illustration ${showBuilding ? "ex-building-live" : ""}`}>{showBuilding ? <ExhibitionScene mode="building" buildingName={currentBuilding?.name || home.profile?.className} artworks={[]} onSelect={() => {}} locale={locale}/> : <GalleryBuilding/>}<button className="ex-building-toggle" onClick={() => setShowBuilding(value => !value)} aria-pressed={showBuilding}>{t(showBuilding ? "buildingClose" : "buildingOpen")}</button><img className="ex-hero-moa" src="/characters/otter-moa.webp" alt={t("characterAlt")}/><span className="ex-moa-bubble">{t("moaHello")}</span></div></section>
+    <div className="ex-experience-heading"><div><span className="ex-eyebrow"><Flower2 size={15}/>{t("eyebrow")}</span><h1>{t(manage ? "visit.manageTitle" : "title")}</h1></div><div className="ex-experience-actions"><button className="ex-button" aria-pressed={manage} onClick={() => setManage(value => !value)}>{manage ? <DoorOpen size={18}/> : <LayoutGrid size={18}/>} {t(manage ? "visit.returnVisit" : teacher ? "visit.manage" : "visit.list")}</button>{teacher && <button className="ex-button ex-primary" onClick={() => setModal(selectedId && detail ? "upload" : home.classes?.length ? "create" : "building")}>{selectedId && detail ? <ImagePlus size={18}/> : <Plus size={18}/>} {t(selectedId && detail ? "upload" : home.classes?.length ? "create" : "createBuilding")}</button>}</div></div>
+    {!manage && <>
+      <div className="ex-visit-breadcrumb"><button onClick={() => setPlace("campus")} aria-current={place === "campus" ? "page" : undefined}>{t("visit.campus")}</button>{place === "classroom" && <><ChevronDown size={13}/><span>{worldBuildingName}</span></>}<span className="ex-private"><LockKeyhole size={13}/>{t("private")}</span></div>
+      <ExhibitionWorld stage={place} buildings={worldBuildings} buildingName={worldBuildingName} rooms={worldRooms} artworks={[]} locale={locale} paused={!!selectedId || !!modal} onEnterBuilding={enterBuilding} onEnterRoom={selectShow} onSelectArtwork={setArtworkId} onExit={() => setPlace("campus")}/>
+      <div className="ex-visit-caption"><img src="/characters/otter-moa.webp" alt=""/><p>{t(place === "campus" ? "visit.campusHint" : "visit.classroomHint")}</p>{teacher && place === "campus" && <button className="ex-button" onClick={() => setModal("building")}><Plus size={16}/>{t("createBuilding")}</button>}<button className="ex-icon-btn" onClick={() => void loadHome()} aria-label={t("refresh")}><RefreshCw size={18}/></button></div>
+      {place === "classroom" && roomsLoading && <p role="status" className="ex-visit-list-status"><LoaderCircle className="spin" size={18}/>{t("loadingRooms")}</p>}
+      {place === "classroom" && !roomsLoading && !visibleShows.length && <div className="ex-visit-empty"><p>{t(teacher ? "emptyTeacher" : "emptyStudent")}</p>{teacher && <button className="ex-button ex-primary" onClick={() => setModal("create")}><Plus size={17}/>{t("create")}</button>}</div>}
+      {place === "classroom" && hasMoreRooms && <div className="ex-more-rooms"><button className="ex-button" disabled={roomsLoading || moreLoading} onClick={() => void loadRooms(activeBuilding.current, true)}><ChevronDown size={17}/>{t(moreLoading ? "loadingMore" : "loadMoreRooms")}</button></div>}
+    </>}
+    {manage && (!selectedId ? <>
       {teacher && !!home.classes?.length && <section className="ex-buildings"><div className="ex-buildings-heading"><h2>{t("ourBuildings")}</h2><button className="ex-text-button" onClick={() => setModal("building")}><Plus size={14}/>{t("createBuilding")}</button></div><div className="ex-building-list">{home.classes.map(item => <button key={item.id} aria-pressed={currentBuilding?.id === item.id} onClick={() => selectBuilding(item.id)}><span className="ex-building-glyph"><Images size={23}/></span><span><small>{t("yearLabel", {year: item.year || new Date().getFullYear()})}{/^[0-9]+$/.test(item.grade) ? ` · ${t("gradeLabel", {grade: item.grade})}` : ""}</small><strong>{item.name}</strong><em>{t("viewRooms")}</em></span>{currentBuilding?.id === item.id && <CheckCircle2 size={16}/>}</button>)}</div></section>}
       <div className="ex-section-heading"><div><span className="ex-eyebrow">{teacher && currentBuilding ? currentBuilding.name : t("exhibitionCount", {count: visibleShows.length})}</span><h2>{t("exhibitions")}</h2></div><div className="ex-heading-actions">{teacher && !!home.classes?.length && <button className="ex-button" onClick={() => setModal("create")}><Plus size={16}/>{t("create")}</button>}<button className="ex-icon-btn" onClick={() => void loadHome()} aria-label={t("refresh")}><RefreshCw size={19}/></button></div></div>
       {roomsLoading ? <div className="ex-list-loading" role="status"><LoaderCircle size={22} className="spin"/><p>{t("loadingRooms")}</p></div> : !visibleShows.length ? <section className="ex-empty ex-home-empty"><div className="ex-empty-frame"><Images size={36}/><Flower2 size={20}/></div><h3>{t("emptyTitle")}</h3><p>{t(teacher ? home.classes?.length ? "emptyTeacher" : "noClasses" : "emptyStudent")}</p>{teacher && home.classes?.length ? <button className="ex-button" onClick={() => setModal("create")}><Plus size={18}/>{t("create")}</button> : null}</section> : <div className="ex-show-grid">{visibleShows.map((show, index) => <button className={`ex-show-card ex-show-theme-${show.theme || "cozy"}`} key={show.id} onClick={() => selectShow(show.id)}><div className="ex-show-cover"><div className="ex-card-mini-frame"><RoomThemeIcon theme={show.theme} size={31}/><span/><span/></div><Flower2 className="ex-cover-flower" size={30}/><span className={`ex-status ex-status-${show.status}`}>{t(show.status)}</span><img src={`/characters/${index % 3 === 0 ? "otter-moa" : index % 3 === 1 ? "cat-mochi" : "hamster-kong"}.webp`} alt=""/></div><div className="ex-show-copy"><div className="ex-show-labels"><span className="ex-show-class"><Users size={13}/>{show.className}</span><span className="ex-show-theme-label"><RoomThemeIcon theme={show.theme} size={12}/>{t(`themes.${show.theme || "cozy"}`)}</span></div><h3>{show.title}</h3><p>{show.description || t("subtitle")}</p><div className="ex-show-bottom"><span>{t("artworkCount", {count: show.approvedCount})}</span><strong>{t(teacher && show.status === "draft" ? "prepare" : "view")}<ArrowRight size={16}/></strong></div></div></button>)}</div>}
@@ -196,13 +234,16 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
         {detail.exhibition.status !== "open" && <div className="ex-status-note"><img src="/characters/otter-moa.webp" alt=""/><p>{t(detail.exhibition.status === "draft" ? "draftHint" : "closedHint")}</p>{teacher && <button className="ex-button ex-primary" disabled={busy} onClick={() => void changeStatus("open")}>{busy ? <LoaderCircle className="spin" size={17}/> : <Sparkles size={17}/>} {t(detail.exhibition.status === "draft" ? "openAction" : "reopenAction")}</button>}</div>}
         {teacher && <section className="ex-studio"><div className="ex-studio-title"><div><span className="ex-eyebrow">{t("preparationHint")}</span><h2>{t("preparation")}</h2></div><img src="/characters/otter-moa.webp" alt=""/></div><div className="ex-stats">{(["galleryTotal", "linkedArtists", "approved"] as const).map((key, index) => <div className={`ex-stat ex-stat-${key}`} key={key}><span>{index === 0 ? <Images size={16}/> : index === 1 ? <Clock3 size={16}/> : index === 2 ? <Palette size={16}/> : <CheckCircle2 size={16}/>} {t(key)}</span><strong>{stats[key]}</strong></div>)}</div>{!!detail.students?.length && <details className="ex-roster"><summary>{t("roster")}<span>{t("receivedCount", {count: stats.submitted})}</span><ChevronDown size={16}/></summary><div className="ex-roster-grid">{detail.students?.map(student => {const own = artworks.filter(artwork => artwork.studentId === student.id); const status = own.some(artwork => artwork.status === "approved") ? "approved" : own.some(artwork => artwork.status === "pending") ? "pending" : own.length ? "revision" : "missing"; return <div className={`ex-roster-student ex-roster-${status}`} key={student.id} aria-label={t("rosterStatus", {name: student.name, status: t(status)})}><span>{student.number}</span><strong>{student.name}</strong><small>{t(status)}</small></div>;})}</div></details>}</section>}
         {!teacher && detail.passport && <section className="ex-passport"><div className="ex-passport-copy"><Stamp size={23}/><div><h2>{t("passport")}</h2><p>{t("passportHint")}</p></div></div><div className="ex-stamps">{(["artist", "thoughtfulComment"] as const).map(key => <div className={`ex-stamp ${detail.passport?.[key] ? "earned" : ""}`} key={key} title={t(detail.passport?.[key] ? "stampEarned" : "stampWaiting")}><Flower2 size={26}/><span>{t(key === "artist" ? "artistStamp" : "commentStamp")}</span>{detail.passport?.[key] && <Check size={12}/>}</div>)}</div></section>}
-        <section className="ex-art-section"><div className="ex-section-heading"><div><span className="ex-eyebrow">{t("artworkCount", {count: approved.length})}</span><h2>{t("artworks")}</h2></div><div className="ex-view-switch" aria-label={t("artworks")}><button aria-pressed={view === "grid"} onClick={() => setView("grid")}><LayoutGrid size={17}/>{t("grid")}</button><button aria-pressed={view === "room"} onClick={() => setView("room")}><Images size={17}/>{t("room")}</button></div></div>
-          {view === "grid" && <>{teacher && <div className="ex-filters">{(["all", "pending", "approved", "revision"] as const).map(status => <button key={status} aria-pressed={filter === status} onClick={() => setFilter(status)}>{t(status)}<span>{status === "all" ? artworks.length : artworks.filter(artwork => artwork.status === status).length}</span></button>)}</div>}{!filtered.length ? <div className="ex-empty"><div className="ex-empty-frame"><Images size={36}/></div><h3>{t(artworks.length ? "noMatchingArtworks" : "noArtworks")}</h3>{!artworks.length && <p>{t("noArtworksHint")}</p>}</div> : <div className="ex-art-grid">{filtered.map(artwork => <button className="ex-art-card" key={artwork.id} onClick={() => setArtworkId(artwork.id)}><div className="ex-art-frame"><ArtworkImage artwork={artwork}/>{artwork.status !== "approved" && <span className={`ex-status ex-status-${artwork.status}`}>{t(artwork.status)}</span>}</div><div className="ex-art-caption"><h3>{artwork.title}</h3><span>{artwork.studentName || t("unnamedArtist")}</span>{!teacher && artwork.studentId === home.profile?.id && <small>{t("ownWorks")}</small>}</div></button>)}</div>}</>}
-          {view === "room" && <div className="ex-room-wrap"><p className="ex-room-hint"><Sparkles size={16}/>{t(approved.length ? "roomHint" : "roomEmpty")}</p><ExhibitionScene artworks={approved.map(artwork => ({id: artwork.id, title: artwork.title, url: artwork.url, thumbnailUrl: artwork.thumbnailUrl}))} onSelect={setArtworkId} locale={locale} theme={detail.exhibition.theme}/></div>}
+        <section className="ex-art-section"><div className="ex-section-heading"><div><span className="ex-eyebrow">{t("artworkCount", {count: approved.length})}</span><h2>{t("artworks")}</h2></div><div className="ex-view-switch" aria-label={t("artworks")}><button aria-pressed={true}><LayoutGrid size={17}/>{t("grid")}</button><button onClick={() => setManage(false)}><Images size={17}/>{t("room")}</button></div></div>
+          {<>{teacher && <div className="ex-filters">{(["all", "pending", "approved", "revision"] as const).map(status => <button key={status} aria-pressed={filter === status} onClick={() => setFilter(status)}>{t(status)}<span>{status === "all" ? artworks.length : artworks.filter(artwork => artwork.status === status).length}</span></button>)}</div>}{!filtered.length ? <div className="ex-empty"><div className="ex-empty-frame"><Images size={36}/></div><h3>{t(artworks.length ? "noMatchingArtworks" : "noArtworks")}</h3>{!artworks.length && <p>{t("noArtworksHint")}</p>}</div> : <div className="ex-art-grid">{filtered.map(artwork => <button className="ex-art-card" key={artwork.id} onClick={() => setArtworkId(artwork.id)}><div className="ex-art-frame"><ArtworkImage artwork={artwork}/>{artwork.status !== "approved" && <span className={`ex-status ex-status-${artwork.status}`}>{t(artwork.status)}</span>}</div><div className="ex-art-caption"><h3>{artwork.title}</h3><span>{artwork.studentName || t("unnamedArtist")}</span>{!teacher && artwork.studentId === home.profile?.id && <small>{t("ownWorks")}</small>}</div></button>)}</div>}</>}
         </section><div className="ex-footer-note"><Heart size={15}/>{t("noRanking")}</div>
       </>}
-    </>}
-    {modal === "building" && <BuildingForm onClose={() => setModal(null)} onSaved={async id => {activeBuilding.current = id; setBuildingId(id); await loadHome(); setModal("create");}}/>}
+    </>)}
+    {!manage && selectedId && <VisitDialog title={detail?.exhibition.title || t("loading")} className={detail?.exhibition.className || worldBuildingName} count={approved.length} onClose={() => selectShow("")} actions={teacher && detail ? <><span className={`ex-status ex-status-${detail.exhibition.status}`}>{t(detail.exhibition.status)}</span><button className="ex-button ex-primary" onClick={() => setModal("upload")} disabled={artworks.length >= detail.artworkLimit}><ImagePlus size={17}/>{t("upload")}</button><button className="ex-button" onClick={() => setModal("settings")}><Settings2 size={17}/>{t("settings")}</button>{detail.exhibition.status !== "open" && <button className="ex-button" onClick={() => void changeStatus("open")} disabled={busy}><Sparkles size={16}/>{t("openAction")}</button>}</> : undefined}>
+      {error && <div className="ex-alert" role="alert"><span>{error}</span><button onClick={() => void loadDetail(selectedId, true)}>{t("retry")}</button></div>}
+      {detail ? <ExhibitionWorld stage="gallery" buildings={worldBuildings} buildingName={detail.exhibition.className} roomTitle={detail.exhibition.title} theme={detail.exhibition.theme} rooms={worldRooms} artworks={approved} locale={locale} paused={!!modal || !!artworkId} onEnterBuilding={enterBuilding} onEnterRoom={selectShow} onSelectArtwork={setArtworkId} onExit={() => selectShow("")}/> : <div className="ex-world-loading" role="status"><img src="/characters/otter-moa.webp" alt=""/><LoaderCircle className="spin" size={24}/><p>{t("loading")}</p></div>}
+    </VisitDialog>}
+    {modal === "building" && <BuildingForm onClose={() => setModal(null)} onSaved={async id => {activeBuilding.current = id; setBuildingId(id); setPlace("classroom"); await loadHome(); setModal("create");}}/>}
     {modal === "create" && <ExhibitionForm classes={home.classes || []} initialClassId={currentBuilding?.id} onClose={() => setModal(null)} onSaved={async show => {setModal(null); await loadHome(); selectShow(show.id); setNotice(t("created"));}}/>}
     {modal === "settings" && detail && <ExhibitionForm classes={home.classes || []} exhibition={detail.exhibition} onClose={() => setModal(null)} onSaved={async () => {setModal(null); await refreshShow(); setNotice(t("saved"));}}/>}
     {modal === "upload" && detail && <UploadDialog storageUsage={home.storageUsage} teacher={teacher} exhibitionId={detail.exhibition.id} students={detail.students || []} onClose={() => {setModal(null); void refreshShow();}} onSaved={async () => {setModal(null); await refreshShow(); setNotice(t(teacher ? "teacherUploadSuccess" : "uploadSuccess"));}}/>}
