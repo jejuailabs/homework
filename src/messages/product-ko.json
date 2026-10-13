@@ -126,6 +126,7 @@
     "resetCode": "입장 코드 재발급",
     "resetCodeConfirm": "{name} 학생의 입장 코드를 바꿀까요? 이전 코드와 로그인은 사용할 수 없게 됩니다.",
     "rosterFirst": "학생을 먼저 등록하면 과제를 나눌 수 있어요.",
+    "classRosterLink": "우리 반에서 학생 등록",
     "newStudentsNote": "새로 등록한 학생은 이후에 나누는 과제부터 참여해요.",
     "fileReadError": "파일을 읽지 못했어요. 다시 골라 주세요.",
     "rosterBatchLimit": "학생은 한 번에 100명까지 등록할 수 있어요. 나누어 등록해 주세요.",

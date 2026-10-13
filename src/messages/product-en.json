@@ -126,6 +126,7 @@
     "resetCode": "Reset entry code",
     "resetCodeConfirm": "Reset the entry code for {name}? Their old code and current sign-in will stop working.",
     "rosterFirst": "Add students before sharing an assignment.",
+    "classRosterLink": "Add students in class overview",
     "newStudentsNote": "New students will join assignments shared after they are added.",
     "fileReadError": "Could not read that file. Please choose it again.",
     "rosterBatchLimit": "Add up to 100 students at a time. Please split this list into smaller groups.",

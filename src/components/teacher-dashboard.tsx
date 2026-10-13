@@ -41,7 +41,17 @@ export default function TeacherDashboard() {
     } catch {setError(true);}
     finally {setLoading(false);}
   }, []);
-  useEffect(() => {void load();}, [load]);
+  useEffect(() => {
+    const query = new URL(window.location.href).searchParams, linkedClass = query.get('classId');
+    if (linkedClass && /^[A-Za-z0-9_-]{1,200}$/.test(linkedClass)) setSelectedClassId(linkedClass);
+    if (query.get('view') === 'students') setDetailKind('students');
+    void load();
+  }, [load]);
+  function closeDetails() {
+    setDetailKind(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('view') === 'students') {url.searchParams.delete('view'); window.history.replaceState(window.history.state, '', url);}
+  }
 
   // The dashboard always describes one class, including its very first render.
   // The API orders the newest school year first; existing older classes remain accessible.
@@ -68,7 +78,7 @@ export default function TeacherDashboard() {
         <div className="thd-welcome-actions">
           {classroom ? <>
             <a className="ws-button ws-button-primary" href="#dashboard-overview"><ClipboardCheck size={18}/>{t("overview")}</a>
-            <Link className="ws-button ws-button-light" href={homeworkHref(classId, undefined, undefined, "roster")}><Users size={18}/>{t("manageStudents")}</Link>
+            <button className="ws-button ws-button-light" type="button" aria-haspopup="dialog" onClick={() => setDetailKind('students')}><Users size={18}/>{t("manageStudents")}</button>
             <button className="ws-button ws-button-light" type="button" aria-expanded={classInfoOpen} aria-controls="dashboard-class-info" onClick={() => setClassInfoOpen(value => !value)}><School size={18}/>{t("classInfo")}</button>
           </> : <Link className="ws-button ws-button-primary" href={homeworkHref(undefined, undefined, undefined, "class")}><Plus size={18}/>{t("createClass")}</Link>}
         </div>
@@ -118,6 +128,6 @@ export default function TeacherDashboard() {
       {exhibitions.length ? <div className="thd-room-grid">{exhibitions.slice(0, 4).map((room, index) => <Link className={`thd-room ${["thd-peach", "thd-lilac", "thd-sky", "thd-yellow"][index % 4]}`} href={`/teacher/exhibitions?exhibition=${encodeURIComponent(room.id)}`} key={room.id}><div className="thd-room-top"><span className="thd-room-frame"><Images size={25}/></span><span className={`thd-room-status thd-room-${room.status}`}>{t(["draft", "open", "closed"].includes(room.status) ? `roomStatus.${room.status}` : "roomStatus.draft")}</span></div><small>{room.className}</small><h3>{room.title}</h3><span className="thd-room-bottom">{t("roomWorks", {total: room.artworkCount, approved: room.approvedCount})}<ArrowRight size={17}/></span></Link>)}</div> : <div className="thd-gallery-empty"><img src="/characters/otter-moa.webp" alt=""/><div><h3>{t("galleryEmpty")}</h3><p>{t("galleryEmptyHint")}</p><Link className="thd-text-link" href={exhibitionHref}>{t("startExhibition")}<ArrowRight size={15}/></Link></div></div>}
     </section>
     <p className="thd-footer"><Heart size={13}/>{t("footer")}<span>{t("updated", {time: new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {hour: "2-digit", minute: "2-digit", timeZone: "Asia/Seoul"}).format(new Date(data.generatedAt))})}</span>{["admin", "superadmin"].includes(data.viewer.role) && <Link className="thd-text-link" href="/admin"><ShieldCheck size={14}/>{t("admin")}</Link>}</p>
-    {detailKind && <TeacherDashboardDetails key={`${detailKind}:${classId}:${period}:${year}`} kind={detailKind} classId={classId} className={classroom?.name || ''} period={period} year={year} assignments={assignments} exhibitions={exhibitions} onClose={() => setDetailKind(null)}/>}
+    {detailKind && <TeacherDashboardDetails key={`${detailKind}:${classId}:${period}:${year}`} kind={detailKind} classId={classId} className={classroom?.name || ''} period={period} year={year} assignments={assignments} exhibitions={exhibitions} onClose={closeDetails} onRosterChanged={() => void load()}/>}
   </div>;
 }
