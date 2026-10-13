@@ -193,6 +193,8 @@ ESLint 기반 `lint` 명령은 초기 범위에 포함하지 않습니다. 명�
 
 2026-10-13 참여보드 검증: 전체 단위 테스트 72개, TypeScript 검사와 프로덕션 빌드 통과. 격리된 Firebase 에뮬레이터의 실제 API 검사 7개 그룹과 API를 모의한 브라우저 상호작용 검사 17개 그룹을 각각 통과했습니다. 권한·익명·승인/공개·마감, 중복/동시 요청, 파일 확정, 초안, 투표·반응, 드래그, 9개 배치, 수정 복원, 100개 이후 페이지 보존, 실제 포인터 그림→PNG 첨부, 320px 영문 다크모드를 포함합니다. 페이지 런타임 오류는 0건입니다. 에뮬레이터가 V4 PUT 전송을 지원하지 않아 운영 저장소 전송 검증은 별도로 수행합니다. 새 인덱스 2개의 READY와 기존 앱 주소에 대한 PUT CORS를 확인했습니다.
 
+운영 검증까지 완료했습니다. 참여보드 전용 인덱스 2개를 실제 생성·READY 확인했고, 원본 확정 복사에서 MIME을 유지하도록 보완했습니다. 정식 사이트의 전용 QA 학급에서 실제 서명 PUT·CORS, 원본/썸네일 이미지 응답, 텍스트/이미지 게시 저장, 중복 요청 방지와 정확한 테스트 자료 정리까지 5개 그룹을 통과했습니다. 기존 실제 학급·학생 기록은 사용하지 않았으며 `.qa/participation-production-smoke-results.json`의 `cleanupComplete`는 true입니다. 배포 주소는 `https://homework-ixmvjdiip-jejuai.vercel.app`, 사용자 진입 주소는 [참여보드](https://homework-indol-gamma.vercel.app/teacher/boards)입니다. 공유 링크는 해당 학급 로그인을 요구합니다.
+
 사용자 지정 대상은 GitHub `jejuailabs/homework`, Vercel 계정 `jejuailabs@gmail.com`입니다. 저장소 연결과 실제 배포 상태는 별도로 확인해야 합니다.
 
 배포 전에 다음을 확인합니다.
