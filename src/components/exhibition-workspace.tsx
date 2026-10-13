@@ -83,17 +83,23 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   }, [teacher, t]);
   const loadHome = useCallback(async () => {
     const sequence = ++homeRequest.current;
+    const roomSequence = ++listRequest.current;
+    pageBusy.current = true; setRoomsLoading(true); setMoreLoading(false);
+    const query = new URLSearchParams({bootstrap: "1"});
+    if (teacher && activeBuilding.current) query.set("classId", activeBuilding.current);
     try {
-      const data = await request<ExhibitionListResponse>("/api/exhibitions");
-      if (sequence !== homeRequest.current) return;
+      const data = await request<ExhibitionListResponse>(`/api/exhibitions?${query}`);
+      if (sequence !== homeRequest.current || roomSequence !== listRequest.current) return;
       setHome(data); setError("");
-      const classId = teacher ? data.classes?.find(item => item.id === activeBuilding.current)?.id || data.classes?.[0]?.id || "" : "";
+      const classId = teacher ? data.selectedClassId || "" : "";
       activeBuilding.current = classId; setBuildingId(classId);
-      if (!teacher || classId) await loadRooms(classId);
-      else {listRequest.current++; setRooms([]); setHasMoreRooms(false); nextCursor.current = null; setRoomsLoading(false); setMoreLoading(false); pageBusy.current = false;}
-    } catch {if (sequence === homeRequest.current) setError(t("error"));}
-    finally {if (sequence === homeRequest.current) setLoading(false);}
-  }, [teacher, loadRooms, t]);
+      setRooms(data.exhibitions); setHasMoreRooms(data.hasMore && !!data.nextCursor); nextCursor.current = data.nextCursor || null;
+    } catch {if (sequence === homeRequest.current && roomSequence === listRequest.current) setError(t("error"));}
+    finally {
+      if (sequence === homeRequest.current) setLoading(false);
+      if (roomSequence === listRequest.current) {setRoomsLoading(false); pageBusy.current = false;}
+    }
+  }, [teacher, t]);
   const selectBuilding = (id: string) => {activeBuilding.current = id; setBuildingId(id); void loadRooms(id);};
   const loadDetail = useCallback(async (id: string, showLoading = false) => {
     if (!id) return;
@@ -106,8 +112,9 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   }, [t]);
   useEffect(() => {void loadHome();}, [loadHome]);
   useEffect(() => {
-    const sync = () => {const id = new URL(window.location.href).searchParams.get("exhibition") || ""; activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); if (!id && (activeBuilding.current || !teacher)) void loadRooms(activeBuilding.current);};
-    sync(); window.addEventListener("popstate", sync); return () => window.removeEventListener("popstate", sync);
+    const sync = (refreshRooms: boolean) => {const id = new URL(window.location.href).searchParams.get("exhibition") || ""; activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); if (refreshRooms && !id && (activeBuilding.current || !teacher)) void loadRooms(activeBuilding.current);};
+    const onPopState = () => sync(true);
+    sync(false); window.addEventListener("popstate", onPopState); return () => window.removeEventListener("popstate", onPopState);
   }, [loadRooms, teacher]);
   useEffect(() => {if (selectedId) void loadDetail(selectedId, true);}, [selectedId, loadDetail]);
   useEffect(() => {

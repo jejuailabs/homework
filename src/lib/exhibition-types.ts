@@ -36,6 +36,8 @@ export type ExhibitionPassport = {
 export type ExhibitionStorageUsage = { usedBytes: number; reservedBytes: number; limitBytes: number };
 export type ExhibitionListResponse = {
   exhibitions: Exhibition[]; classes?: ExhibitionClass[]; profile?: ExhibitionProfile;
+  /** Bootstrap responses include the class used for the returned first page. */
+  selectedClassId?: string | null;
   /** Listing is intentionally bounded; old exhibitions are kept in storage. */
   limit: number; hasMore: boolean; nextCursor: string | null; storageUsage?: ExhibitionStorageUsage;
 };

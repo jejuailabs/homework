@@ -81,33 +81,53 @@ async function signedArtwork(ctx: Context, exhibition: Exhibition, value: Data, 
 async function list(ctx: Context, request: Request) {
   const student = ctx.role === 'student';
   const params = new URL(request.url).searchParams;
+  const bootstrap = params.get('bootstrap') === '1';
   const selectedClass = params.has('classId') ? id(params.get('classId')) : undefined;
   if (student && selectedClass && selectedClass !== ctx.classId) throw new ApiError(403, '우리 반 전시만 볼 수 있어요.', 'FORBIDDEN');
-  const classId = student ? ctx.classId : selectedClass;
-  if (!student && classId) {
-    const cls = await db().doc(`classes/${classId}`).get();
-    if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 건물을 볼 권한이 없어요.', 'FORBIDDEN');
-  }
-  const scope = hash(`${ctx.uid}:${classId ?? 'all'}:${student ? 'student' : 'teacher'}`);
-  const cursor = exhibitionCursor(params.get('cursor'), scope);
-  let query = db().collection('exhibitions').where(classId ? 'classId' : 'ownerUid', '==', classId ?? ctx.uid);
-  if (student) query = query.where('status', 'in', ['open', 'closed']);
-  query = query.orderBy('createdAt', 'desc').orderBy(FieldPath.documentId(), 'desc');
-  if (cursor) query = query.startAfter(cursor.createdAt, cursor.id);
-  const result = await query.limit(EXHIBITION_LIST_LIMIT + 1).get();
-  const exhibitions = result.docs.map(asExhibition).filter(value => canViewExhibition(ctx, value))
-    .slice(0, EXHIBITION_LIST_LIMIT);
-  const hasMore = result.size > EXHIBITION_LIST_LIMIT;
-  const last = exhibitions.at(-1);
-  const nextCursor = hasMore && last ? encodeExhibitionCursor(scope, last) : null;
+  const readPage = async (classId?: string) => {
+    const scope = hash(`${ctx.uid}:${classId ?? 'all'}:${student ? 'student' : 'teacher'}`);
+    const cursor = exhibitionCursor(params.get('cursor'), scope);
+    if (bootstrap && !student && !classId) return { exhibitions: [], limit: EXHIBITION_LIST_LIMIT, hasMore: false, nextCursor: null };
+    let query = db().collection('exhibitions').where(classId ? 'classId' : 'ownerUid', '==', classId ?? ctx.uid);
+    if (student) query = query.where('status', 'in', ['open', 'closed']);
+    query = query.orderBy('createdAt', 'desc').orderBy(FieldPath.documentId(), 'desc');
+    if (cursor) query = query.startAfter(cursor.createdAt, cursor.id);
+    const result = await query.limit(EXHIBITION_LIST_LIMIT + 1).get();
+    const exhibitions = result.docs.map(asExhibition).filter(value => canViewExhibition(ctx, value))
+      .slice(0, EXHIBITION_LIST_LIMIT);
+    const hasMore = result.size > EXHIBITION_LIST_LIMIT;
+    const last = exhibitions.at(-1);
+    return { exhibitions, limit: EXHIBITION_LIST_LIMIT, hasMore, nextCursor: hasMore && last ? encodeExhibitionCursor(scope, last) : null };
+  };
   if (student) {
-    const [profile, cls] = await Promise.all([
+    const [page, profile, cls] = await Promise.all([
+      readPage(ctx.classId),
       db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get(),
     ]);
-    return json({ exhibitions, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '' }, limit: EXHIBITION_LIST_LIMIT, hasMore, nextCursor });
+    return json({ ...page, selectedClassId: ctx.classId, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '' } });
   }
-  const classes = await db().collection('classes').where('ownerUid', '==', ctx.uid).limit(100).get();
-  return json({ exhibitions, classes: classes.docs.map(doc => ({ id: doc.id, name: doc.data().name, grade: String(doc.data().grade ?? '').trim() || doc.data().name, studentCount: doc.data().studentCount ?? 0, year: doc.data().year })), limit: EXHIBITION_LIST_LIMIT, hasMore, nextCursor, storageUsage: storageValue((await quotaRef(ctx.uid).get()).data()) });
+  const readTeacherPage = async () => {
+    const classQuery = db().collection('classes').where('ownerUid', '==', ctx.uid).limit(100);
+    if (bootstrap && !selectedClass) {
+      // The selected building comes from this teacher's fresh owner-scoped list.
+      const classes = await classQuery.get();
+      const classId = classes.docs[0]?.id;
+      return { page: await readPage(classId), classes, selectedClassId: classId ?? null };
+    }
+    const [page, classes] = await Promise.all([
+      (async () => {
+        if (selectedClass) {
+          const cls = await db().doc(`classes/${selectedClass}`).get();
+          if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 건물을 볼 권한이 없어요.', 'FORBIDDEN');
+        }
+        return readPage(selectedClass);
+      })(),
+      classQuery.get(),
+    ]);
+    return { page, classes, selectedClassId: selectedClass ?? null };
+  };
+  const [{ page, classes, selectedClassId }, quota] = await Promise.all([readTeacherPage(), quotaRef(ctx.uid).get()]);
+  return json({ ...page, selectedClassId, classes: classes.docs.map(doc => ({ id: doc.id, name: doc.data().name, grade: String(doc.data().grade ?? '').trim() || doc.data().name, studentCount: doc.data().studentCount ?? 0, year: doc.data().year })), storageUsage: storageValue(quota.data()) });
 }
 async function create(ctx: Context, request: Request) {
   if (ctx.role === 'student') throw new ApiError(403, '선생님만 전시회를 만들 수 있어요.', 'FORBIDDEN');
