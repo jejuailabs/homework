@@ -1,0 +1,12 @@
+[
+  {
+    "origin": [
+      "https://homework-indol-gamma.vercel.app",
+      "https://homework-jejuai.vercel.app",
+      "https://homework-git-main-jejuai.vercel.app"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": ["Content-Type", "Content-Length"],
+    "maxAgeSeconds": 3600
+  }
+]

@@ -106,7 +106,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       renderer.toneMapping = T.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.13;
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = T.PCFSoftShadowMap;
+      renderer.shadowMap.type = T.PCFShadowMap;
       const canvas = renderer.domElement;
       canvas.setAttribute("aria-label", english ? "Walk through the exhibition. Drag to look, arrow keys to walk." : "전시 공간. 화면을 끌어 둘러보고 방향키로 걸어보세요.");
       canvas.tabIndex = 0;
