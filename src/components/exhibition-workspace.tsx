@@ -93,6 +93,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   const [busy, setBusy] = useState(false);
   const activeId = useRef("");
   const activeBuilding = useRef(""), nextCursor = useRef<string | null>(null);
+  const initialClassLink = useRef<string | null>(null);
   const listRequest = useRef(0), homeRequest = useRef(0), pageBusy = useRef(false);
   const loadErrorText = useRef(t("error"));
   // Preference hydration can replace the translator; it must not restart data reads.
@@ -133,9 +134,25 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     const roomSequence = ++listRequest.current;
     pageBusy.current = true; setRoomsLoading(true); setMoreLoading(false);
     const query = new URLSearchParams({bootstrap: "1"});
-    if (teacher && activeBuilding.current) query.set("classId", activeBuilding.current);
+    if (initialClassLink.current === null) {
+      const linkedClass = teacher ? new URL(window.location.href).searchParams.get("classId") || "" : "";
+      initialClassLink.current = /^[A-Za-z0-9_-]{1,200}$/.test(linkedClass) ? linkedClass : "";
+    }
+    const requestedClass = teacher ? activeBuilding.current || initialClassLink.current : "";
+    if (requestedClass) query.set("classId", requestedClass);
     try {
-      const data = await request<ExhibitionListResponse>(`/api/exhibitions?${query}`);
+      let data: ExhibitionListResponse;
+      try {
+        data = await request<ExhibitionListResponse>(`/api/exhibitions?${query}`);
+      } catch (cause) {
+        // A stale or foreign dashboard link must not lock a teacher out of their own campus.
+        // The fallback still uses the server's owner-scoped bootstrap; auth errors are not retried.
+        if (!requestedClass || activeBuilding.current || !(cause instanceof ExhibitionRequestError) || ![403, 404].includes(cause.status)) throw cause;
+        if (sequence !== homeRequest.current || roomSequence !== listRequest.current) return;
+        initialClassLink.current = "";
+        query.delete("classId");
+        data = await request<ExhibitionListResponse>(`/api/exhibitions?${query}`);
+      }
       if (sequence !== homeRequest.current || roomSequence !== listRequest.current) return;
       if (data.viewerRole !== role) throw new ExhibitionRequestError("FORBIDDEN", 403);
       setHome(data); setForbidden(false); setError("");
