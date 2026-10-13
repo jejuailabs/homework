@@ -41,7 +41,7 @@
   "easy": "Take a photo. Hand it in. Done!",
   "easyDesc": "Find today's tasks and read your teacher's feedback.",
   "teacherHint": "Create, collect and review — all in one place.",
-  "adminHint": "Accounts with administrator access open the admin console.",
+  "adminHint": "Sign in to your dashboard. Accounts with admin access also see the admin console link.",
   "loginError": "Sign-in did not finish. Please check popup permissions and your account settings.",
   "codeError": "Please check your entry code and try again.",
   "networkError": "Check your connection and try again.",

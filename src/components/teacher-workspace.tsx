@@ -2,6 +2,7 @@
 
 import {useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
 import {useLocale, useTranslations} from "next-intl";
+import {useSearchParams} from "next/navigation";
 import {ArrowDownToLine, ArrowRight, BookOpen, CheckCircle2, ChevronRight, Clock3, FileText, Flower2, Heart, ImagePlus, LoaderCircle, MessageCircleHeart, Paperclip, Plus, RefreshCw, Send, Star, Upload, Users, Video, X} from "lucide-react";
 
 import {characterFiles as friendFiles, type Character} from "@/lib/characters";
@@ -37,7 +38,16 @@ function SubmissionTypeBadge({value}: {value?: AssignmentSubmissionType}) {
   return <span className={`td-submission-badge td-submission-${type}`}><Icon size={13} aria-hidden="true"/>{t(type)}</span>;
 }
 
-export default function TeacherWorkspace() {
+type WorkspaceEntry = {classId?: string; assignmentId?: string; status?: Status | "all"; action?: "class" | "assignment" | "roster"};
+
+export default function TeacherWorkspaceEntry() {
+  const params = useSearchParams();
+  const validId = (value: string | null) => value && /^[A-Za-z0-9_-]{1,200}$/.test(value) ? value : undefined;
+  const status = params.get("status"), action = params.get("action");
+  return <TeacherWorkspace key={params.toString()} entry={{classId: validId(params.get("classId")), assignmentId: validId(params.get("assignmentId")), status: ["all", "pending", "submitted", "done", "revision"].includes(status || "") ? status as WorkspaceEntry["status"] : undefined, action: ["class", "assignment", "roster"].includes(action || "") ? action as WorkspaceEntry["action"] : undefined}}/>;
+}
+
+function TeacherWorkspace({entry}: {entry: WorkspaceEntry}) {
   const t = useTranslations("product");
   const common = useTranslations("common");
   const locale = useLocale();
@@ -49,6 +59,7 @@ export default function TeacherWorkspace() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingList, setLoadingList] = useState(false);
+  const [loadedClassId, setLoadedClassId] = useState("");
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [filter, setFilter] = useState<Status | "all">("all");
@@ -63,33 +74,53 @@ export default function TeacherWorkspace() {
   const [staleReview, setStaleReview] = useState(false);
   const [notice, setNotice] = useState("");
   const csvInput = useRef<HTMLInputElement>(null);
+  const entryActionApplied = useRef(false);
+  const entryFilterApplied = useRef(false);
+  const filterAssignmentId = useRef("");
 
   const loadClasses = useCallback(async () => {
-    try {const result = await request<{classes: Classroom[]}>("/api/classes"); setClasses(result.classes); setClassId(previous => previous || result.classes[0]?.id || ""); setError("");}
+    try {const result = await request<{classes: Classroom[]}>("/api/classes"); setClasses(result.classes); setClassId(previous => result.classes.some(value => value.id === previous) ? previous : result.classes.find(value => value.id === entry.classId)?.id || result.classes[0]?.id || ""); setError("");}
     catch {setError(t("common.networkError"));} finally {setLoading(false);}
-  }, [t]);
+  }, [t, entry.classId]);
   useEffect(() => {void loadClasses();}, [loadClasses]);
   useEffect(() => {
     if (!classId) return;
     const controller = new AbortController();
-    setLoadingList(true); setDetail(null); setFilter("all");
+    setLoadingList(true); setDetail(null);
     Promise.all([
       request<{assignments: Assignment[]}>(`/api/assignments?classId=${encodeURIComponent(classId)}`, {signal: controller.signal}),
       request<{students: Student[]}>(`/api/classes/${encodeURIComponent(classId)}/students`, {signal: controller.signal})
-    ]).then(([tasks, rosterResult]) => {
+    ]).then(async ([tasks, rosterResult]) => {
+      // A dashboard link may target an older assignment beyond the first list page.
+      if (entry.assignmentId && entry.classId === classId && !tasks.assignments.some(task => task.id === entry.assignmentId)) {
+        try {
+          const target = await request<Detail>(`/api/assignments/${encodeURIComponent(entry.assignmentId)}`, {signal: controller.signal});
+          if (target.assignment.classId === classId) tasks.assignments = [target.assignment, ...tasks.assignments];
+        } catch (cause) {if (cause instanceof Error && cause.name === "AbortError") return;}
+      }
+      if (controller.signal.aborted) return;
       setAssignments(tasks.assignments); setStudents(rosterResult.students);
-      setSelectedId(previous => tasks.assignments.some(assignment => assignment.id === previous) ? previous : tasks.assignments[0]?.id || "");
+      setLoadedClassId(classId);
+      setSelectedId(previous => tasks.assignments.some(assignment => assignment.id === previous) ? previous : tasks.assignments.find(assignment => assignment.id === entry.assignmentId)?.id || tasks.assignments[0]?.id || "");
       setError("");
     }).catch(cause => {if (cause.name !== "AbortError") setError(t("common.networkError"));}).finally(() => {if (!controller.signal.aborted) setLoadingList(false);});
     return () => controller.abort();
-  }, [classId, refresh, t]);
+  }, [classId, refresh, t, entry.assignmentId, entry.classId]);
   useEffect(() => {
     if (!selectedId || loadingList) return;
     const controller = new AbortController();
-    setLoadingDetail(true); setDetail(null); setFilter("all");
-    request<Detail>(`/api/assignments/${encodeURIComponent(selectedId)}`, {signal: controller.signal}).then(result => {setDetail(result); setError("");}).catch(cause => {if (cause.name !== "AbortError") setError(t("common.networkError"));}).finally(() => {if (!controller.signal.aborted) setLoadingDetail(false);});
+    setLoadingDetail(true); setDetail(null);
+    if (filterAssignmentId.current !== selectedId) {filterAssignmentId.current = selectedId; setFilter("all");}
+    request<Detail>(`/api/assignments/${encodeURIComponent(selectedId)}`, {signal: controller.signal}).then(result => {setDetail(result); setError(""); if (!entryFilterApplied.current && (!entry.assignmentId || entry.assignmentId === selectedId)) {entryFilterApplied.current = true; setFilter(entry.status || "all");}}).catch(cause => {if (cause.name !== "AbortError") setError(t("common.networkError"));}).finally(() => {if (!controller.signal.aborted) setLoadingDetail(false);});
     return () => controller.abort();
-  }, [selectedId, loadingList, refresh, t]);
+  }, [selectedId, loadingList, refresh, t, entry.assignmentId, entry.status]);
+  useEffect(() => {
+    if (!entry.action || entryActionApplied.current || loading || loadingList || error || (classId && loadedClassId !== classId)) return;
+    entryActionApplied.current = true;
+    if (!classId || entry.action === "class") setModal("class");
+    else if (entry.action === "assignment" && !students.length) {setNotice(t("teacher.rosterFirst")); setModal("roster");}
+    else setModal(entry.action);
+  }, [entry.action, loading, loadingList, error, classId, loadedClassId, students.length, t]);
 
   const submissionByStudent = useMemo(() => new Map(detail?.submissions.map(submission => [submission.studentId, submission]) || []), [detail]);
   const assignedStudents = useMemo(() => detail?.assignment.targetStudentIds ? detail.students.filter(student => detail.assignment.targetStudentIds?.includes(student.id)) : detail?.students || [], [detail]);

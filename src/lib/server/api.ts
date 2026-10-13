@@ -99,7 +99,7 @@ async function session(request: Request) {
 async function classes(request: Request) {
   const ctx = await requireTeacher(request);
   if (request.method === 'GET') {
-    const query = db().collection('classes').where('ownerUid', '==', ctx.uid).limit(100);
+    const query = db().collection('classes').where('ownerUid', '==', ctx.uid);
     return json({ classes: sorted((await query.get()).docs.map(mapped)) });
   }
   const input = await body(request);

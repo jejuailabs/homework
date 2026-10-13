@@ -16,3 +16,7 @@ const testCode = compile('./policy.test.ts').replace("'./policy'", JSON.stringif
 await import('data:text/javascript;base64,' + Buffer.from(testCode).toString('base64'));
 await import('./run-ai-tests.mjs');
 await import('./run-exhibition-tests.mjs');
+await import('./run-teacher-dashboard-tests.mjs');
+const dashboardPeriodUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../teacher-dashboard-period.ts')).toString('base64');
+const dashboardPeriodTest = compile('../teacher-dashboard-period.test.ts').replace("'./teacher-dashboard-period'", JSON.stringify(dashboardPeriodUrl));
+await import('data:text/javascript;base64,' + Buffer.from(dashboardPeriodTest).toString('base64'));

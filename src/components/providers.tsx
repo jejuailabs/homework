@@ -9,6 +9,8 @@ import productKo from '@/messages/product-ko.json';
 import productEn from '@/messages/product-en.json';
 import exhibitionKo from '@/messages/exhibition-ko.json';
 import exhibitionEn from '@/messages/exhibition-en.json';
+import dashboardKo from '@/messages/dashboard-ko.json';
+import dashboardEn from '@/messages/dashboard-en.json';
 
 export type Locale = 'ko' | 'en';
 export type Palette = 'mint' | 'coral' | 'sky' | 'lavender' | 'apricot' | 'rose';
@@ -39,6 +41,6 @@ export default function Providers({children}:{children:ReactNode}) {
     return ()=>media.removeEventListener('change',apply);
   },[prefs,ready]);
   return <PreferencesContext.Provider value={{...prefs,setPreference:(value)=>setPrefs(p=>({...p,...value}))}}>
-    <NextIntlClientProvider locale={prefs.locale} timeZone="Asia/Seoul" messages={{common:prefs.locale==='ko'?commonKo:commonEn,admin:prefs.locale==='ko'?adminKo:adminEn,product:prefs.locale==='ko'?productKo:productEn,exhibition:prefs.locale==='ko'?exhibitionKo:exhibitionEn}}>{children}</NextIntlClientProvider>
+    <NextIntlClientProvider locale={prefs.locale} timeZone="Asia/Seoul" messages={{common:prefs.locale==='ko'?commonKo:commonEn,admin:prefs.locale==='ko'?adminKo:adminEn,product:prefs.locale==='ko'?productKo:productEn,exhibition:prefs.locale==='ko'?exhibitionKo:exhibitionEn,dashboard:prefs.locale==='ko'?dashboardKo:dashboardEn}}>{children}</NextIntlClientProvider>
   </PreferencesContext.Provider>;
 }

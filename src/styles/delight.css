@@ -60,6 +60,7 @@ body {
 .nav-pictogram svg { stroke-width: 2; }
 .nav-gallery .nav-pictogram { background: var(--play-pink); transform: rotate(5deg); }
 .nav-tools .nav-pictogram { background: var(--play-lilac); }
+.nav-dashboard .nav-pictogram { background: var(--play-sky); }
 .nav-gallery.active { background: var(--play-pink); color: var(--play-ink); border-color: color-mix(in srgb, var(--play-ink) 16%, transparent); }
 .nav-tools.active { background: var(--play-lilac); color: var(--play-ink); }
 .header-actions .icon-button { border-radius: 50%; }
@@ -145,3 +146,4 @@ body {
 @media(prefers-reduced-motion:reduce) {
   .button.primary:hover, .ws-button-primary:hover, .ex-primary:hover { transform: none; }
 }
+@media(max-width:520px){.top-nav.teacher-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible;gap:3px}.top-nav.teacher-nav a{flex-direction:column;justify-content:center;gap:3px;padding:6px 2px;font-size:10px;min-width:0;text-align:center;white-space:normal;overflow-wrap:anywhere}.top-nav.teacher-nav .nav-pictogram{width:25px;height:25px}}
