@@ -114,6 +114,11 @@
 .ws-student-dialog .sd-submitted-attachment>a>img{display:block;width:100%;max-height:350px;object-fit:contain;background:var(--surface-alt)}
 .ws-student-dialog .sd-submitted-attachment .ws-file-link{margin:0;border:0;border-radius:0}
 .ws-student-dialog .sd-submitted-attachment video{border-radius:0}
+.ws-student-dialog .sd-sent-files{margin:20px 0 24px}
+.ws-student-dialog .sd-submitted-image{display:block;background:var(--surface-alt);text-decoration:none}
+.ws-student-dialog .sd-submitted-image>span{display:flex;align-items:center;justify-content:center;gap:7px;padding:9px 12px;background:var(--play-sky,#dceffa);color:var(--text);font-size:12px;font-weight:700}
+.ws-student-dialog .sd-image-unavailable{display:flex;align-items:center;flex-direction:column;gap:10px;padding:24px 18px;background:var(--surface-alt);text-align:center;color:var(--muted)}
+.ws-student-dialog .sd-image-unavailable p{font-size:12px;line-height:1.7}
 .ws-student-dialog .ws-upload-actions .ws-button>span{min-width:0;overflow-wrap:anywhere}
 .ws-student-dialog .ws-send-button:disabled{opacity:.55;box-shadow:none;cursor:default}
 [data-mode=dark] .ws-student .sd-next-task,[data-mode=dark] .ws-student .ws-task-pending .ws-task-button,[data-mode=dark] .ws-student .ws-task-revision .ws-task-button,[data-mode=dark] .ws-student .ws-friend-check,[data-mode=dark] .ws-student-dialog .ws-send-button{color:var(--surface)}

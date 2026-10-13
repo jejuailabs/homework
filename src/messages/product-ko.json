@@ -173,7 +173,7 @@
     "revisionMessage": "한 번 더 해보면 돼. 내가 곁에 있을게!",
     "teacherSays": "선생님 말씀",
     "submittedText": "내가 보낸 이야기",
-    "submittedFiles": "내가 보낸 자료",
+    "submittedFiles": "내가 보낸 자료 · {count}개",
     "emptySubmission": "사진을 고르거나 이야기를 적어 주세요.",
     "fileTooLarge": "이 파일은 한 번에 보내기 어려워요. 더 작은 파일로 나누어 주세요.",
     "tooManyFiles": "파일은 한 번에 10개까지 골라 주세요.",
@@ -204,7 +204,11 @@
     "videoPreviewUnavailable": "영상이 재생되지 않으면 파일을 열어 확인해 주세요.",
     "typeLabel": "제출 방식",
     "imageUploadLimits": "사진 한 장 100MB까지 · 한 번에 10장",
-    "videoUploadLimits": "영상 한 개 250MB까지 · 한 번에 10개"
+    "videoUploadLimits": "영상 한 개 250MB까지 · 한 번에 10개",
+    "previousFiles": "전에 보낸 자료 · {count}개",
+    "enlargeImage": "사진 크게 보기",
+    "imagePreviewUnavailable": "사진을 표시하지 못했어요. 다시 불러오거나 아래 원본 파일을 열어 주세요.",
+    "reloadImage": "사진 다시 불러오기"
   },
   "submissionTypes": {
     "text": "텍스트 작성",

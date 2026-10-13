@@ -173,7 +173,7 @@
     "revisionMessage": "We can give it another try. I’m here with you!",
     "teacherSays": "A note from my teacher",
     "submittedText": "My little note",
-    "submittedFiles": "The files I sent",
+    "submittedFiles": "My submitted files · {count}",
     "emptySubmission": "Choose a photo or write a little note first.",
     "fileTooLarge": "This file is a little too big to send at once. Please split it into smaller files.",
     "tooManyFiles": "Choose up to 10 files at a time.",
@@ -204,7 +204,11 @@
     "videoPreviewUnavailable": "If the video does not play, open the file to view it.",
     "typeLabel": "Submission type",
     "imageUploadLimits": "Up to 100 MB per image · 10 images at a time",
-    "videoUploadLimits": "Up to 250 MB per video · 10 videos at a time"
+    "videoUploadLimits": "Up to 250 MB per video · 10 videos at a time",
+    "previousFiles": "My previous files · {count}",
+    "enlargeImage": "View full-size photo",
+    "imagePreviewUnavailable": "This photo could not be displayed. Reload it or open the original file below.",
+    "reloadImage": "Reload photo"
   },
   "submissionTypes": {
     "text": "Write an answer",

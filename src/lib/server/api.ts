@@ -233,7 +233,7 @@ async function finalize(request: Request) {
   const previous = await ref.get();
   // A revision is a new attempt even when a student sends the same text.
   // Submitted/done content still returns the existing attempt on retries.
-  if (previous.data()?.fingerprint === fingerprint && previous.data()?.status !== 'revision') return json({ submission: mapped(previous) });
+  if (previous.data()?.fingerprint === fingerprint && previous.data()?.status !== 'revision') return json({ submission: await withFileUrls(mapped(previous)) });
   const uploadDocs = await Promise.all(uploadIds.map((uploadId: string) => db().doc(`uploads/${uploadId}`).get()));
   const uploads = await Promise.all(uploadDocs.map(async doc => {
     const value = doc.data();
@@ -259,7 +259,8 @@ async function finalize(request: Request) {
     tx.update(db().doc(`assignments/${assignmentId}`), { submittedCount: FieldValue.increment(old ? 0 : 1), reviewedCount: FieldValue.increment(old && old.status !== 'submitted' ? -1 : 0) });
     return submission;
   });
-  return json({ submission: result });
+  // The student can reopen the result immediately, before the home refresh.
+  return json({ submission: await withFileUrls(result) });
 }
 async function review(request: Request, assignmentId: string) {
   const ctx = await requireTeacher(request);
