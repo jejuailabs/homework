@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { auth, bucket, db } from './admin';
+import { getAiOperations } from './ai';
 import { assertOrigin, contextForUid, cookieName, getContext, requireStudent, requireTeacher, type Context } from './auth';
 import { ApiError, canDisableUser, canManageClass, canUseUpload, characters, id, isAdmin, nextReview, text, uploadPolicy } from './policy';
 
@@ -329,17 +330,18 @@ async function resetStudentCode(request: Request, classId: string, studentId: st
 }
 async function adminOperations(request: Request) {
   const ctx = await adminContext(request);
-  const [classes, submitted, pending, logs] = await Promise.all([
+  const [classes, submitted, pending, logs, ai] = await Promise.all([
     db().collection('classes').limit(200).get(),
     db().collection('uploads').where('status', '==', 'submitted').aggregate({ fileCount: AggregateField.count(), totalBytes: AggregateField.sum('size') }).get(),
     db().collection('uploads').where('status', '==', 'pending').count().get(),
     db().collection('adminAudit').orderBy('createdAt', 'desc').limit(50).get(),
+    getAiOperations(),
   ]);
   await audit(ctx, 'operations.view');
   return json({
     classes: classes.docs.map(doc => { const value = doc.data(); return { id: doc.id, name: value.name, ownerUid: value.ownerUid, studentCount: value.studentCount ?? 0, year: value.year }; }),
     uploads: { fileCount: submitted.data().fileCount, totalBytes: submitted.data().totalBytes, pendingCount: pending.data().count },
-    ai: { configured: false, jobs: [] },
+    ai,
     audit: logs.docs.map(doc => { const value = doc.data(); return { id: doc.id, action: value.action, actorUid: value.actorUid, ...(value.target ? { targetUid: value.target } : {}), createdAt: value.createdAt }; }),
     health: { firebase: 'connected' },
   });

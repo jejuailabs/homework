@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useTranslations} from 'next-intl';
 import {useEffect,useState,type ReactNode} from 'react';
-import {BookOpen, Globe2, LogOut, Moon, Settings2, ShieldCheck, Sparkles, Sun, X} from 'lucide-react';
+import {BookOpen, Globe2, Images, LogOut, Moon, Settings2, ShieldCheck, Sparkles, Sun, X} from 'lucide-react';
 import {signOut} from 'firebase/auth';
 import {auth} from '@/lib/firebase-client';
 import {usePreferences,type Palette} from './providers';
@@ -23,14 +23,16 @@ export default function AppShell({children}:{children:ReactNode}) {
   const nextAppearance=resolvedAppearance==='dark'?'light':'dark';
   const appearanceLabel=t('appearanceToggle',{current:t(appearance==='system'?(systemDark?'systemDark':'systemLight'):appearance),next:t(nextAppearance)});
   const isLogin=path==='/',isAdmin=path.startsWith('/admin'),isStudent=path.startsWith('/student');
+  const workspacePath=isAdmin?'/admin':isStudent?'/student':'/teacher';
   async function logout(){setBusy(true);try{await fetch('/api/auth/session',{method:'DELETE'});await signOut(auth);router.replace('/');router.refresh();}finally{setBusy(false);}}
   return <>
     <a href="#main" className="skip-link">{t('skip')}</a>
     <header className="app-header"><div className="header-inner">
       <Link href={isLogin?'/':isAdmin?'/admin':isStudent?'/student':'/teacher'} className="brand"><span className="brand-mark"><BookOpen size={22}/></span><span>{t('brand')}<small>{t('tagline')}</small></span></Link>
       {!isLogin && <nav className="top-nav" aria-label={t('home')}>
-        <Link className={!path.includes('tools')?'active':''} href={isAdmin?'/admin':isStudent?'/student':'/teacher'}>{isAdmin?<ShieldCheck size={17}/>:<BookOpen size={17}/>} {isAdmin?t('admin'):isStudent?t('home'):t('dashboard')}</Link>
-        {!isStudent&&!isAdmin&&<Link href="/teacher/tools" className={path.includes('tools')?'active':''}><Sparkles size={17}/>{t('tools')}</Link>}
+        <Link className={`nav-homework ${path===workspacePath?'active':''}`} aria-current={path===workspacePath?'page':undefined} href={workspacePath}><span className="nav-pictogram" aria-hidden="true">{isAdmin?<ShieldCheck size={18}/>:<BookOpen size={18}/>}</span>{isAdmin?t('admin'):t('homework')}</Link>
+        {!isAdmin&&<Link href={`${workspacePath}/exhibitions`} className={`nav-gallery ${path.includes('/exhibitions')?'active':''}`} aria-current={path.includes('/exhibitions')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Images size={18}/></span>{t('exhibitions')}</Link>}
+        {!isStudent&&!isAdmin&&<Link href="/teacher/tools" className={`nav-tools ${path.includes('tools')?'active':''}`} aria-current={path.includes('tools')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Sparkles size={18}/></span>{t('tools')}</Link>}
       </nav>}
       <div className="header-actions">
         <button className="icon-button" aria-label={t('language')} onClick={()=>setPreference({locale:locale==='ko'?'en':'ko'})}><Globe2 size={18}/><span>{locale==='ko'?'KO':'EN'}</span></button>

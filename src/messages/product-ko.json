@@ -30,11 +30,13 @@
     "hamster": "콩이",
     "alpaca": "구름",
     "rabbit": "토리",
+    "otter": "모아",
     "catSpecies": "고양이",
     "dogSpecies": "강아지",
     "hamsterSpecies": "햄스터",
     "alpacaSpecies": "알파카",
-    "rabbitSpecies": "토끼"
+    "rabbitSpecies": "토끼",
+    "otterSpecies": "수달"
   },
   "teacher": {
     "eyebrow": "우리 반, 함께 자라는 하루",

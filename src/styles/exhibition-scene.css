@@ -1,0 +1,33 @@
+.exhibition-scene{overflow:hidden;border:1px solid var(--border);border-radius:26px;background:var(--surface);box-shadow:var(--shadow)}
+.exhibition-scene-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 24px 0;color:var(--muted);font-size:12px}
+.exhibition-scene-badge{display:inline-flex;align-items:center;gap:8px;padding:7px 12px;background:var(--accent-soft);color:var(--accent);border-radius:30px;font-size:12px;font-weight:700}
+.exhibition-scene-badge>span{font-size:19px;line-height:1}
+.exhibition-scene-stage{position:relative;aspect-ratio:1.55;min-height:320px;max-height:620px;background:radial-gradient(ellipse at 50% 65%,var(--room-glow,#eee3d05c) 0%,#f8f2e82f 43%,transparent 73%)}
+.exhibition-scene[data-room-theme=forest]{--room-glow:#dbe8c877}
+.exhibition-scene[data-room-theme=sky]{--room-glow:#d9e8f877}
+.exhibition-scene[data-room-theme=ocean]{--room-glow:#cbe6e177}
+.exhibition-scene-canvas{position:absolute;inset:0;touch-action:pan-y}
+.exhibition-scene-canvas canvas{display:block;width:100%;height:100%;outline:none}
+.exhibition-scene-message{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:35px;text-align:center;color:var(--muted);font-size:13px;background:var(--surface)}
+.exhibition-scene-message>span{display:grid;place-items:center;width:74px;height:74px;border-radius:24px;background:var(--accent-soft);color:var(--accent);font-size:38px;transform:rotate(-5deg)}
+.exhibition-scene-stage.has-fallback{min-height:230px;max-height:280px}
+.exhibition-scene-stage.has-fallback .exhibition-scene-canvas{visibility:hidden}
+.exhibition-scene-caption{display:flex;align-items:center;justify-content:center;gap:22px;padding:0 24px 20px;color:var(--muted);font-size:12px;text-align:center}
+.exhibition-scene-caption p{margin:0}
+.exhibition-scene-pagination{display:flex;align-items:center;gap:11px;white-space:nowrap;color:var(--accent);font-variant-numeric:tabular-nums}
+.exhibition-scene-pagination button{display:grid;place-items:center;min-height:40px;min-width:40px;border:1px solid var(--border);border-radius:13px;background:var(--surface-alt);color:var(--accent);font-size:20px;line-height:1}
+.exhibition-scene-pagination button:disabled{opacity:.3}
+.exhibition-scene-artworks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;list-style:none;margin:0;padding:17px 22px 22px;border-top:1px solid var(--border)}
+.exhibition-scene-artworks li{min-width:0}
+.exhibition-scene-artworks button{display:flex;align-items:center;gap:9px;width:100%;min-height:49px;height:100%;padding:9px 10px;border:1px solid var(--border);border-radius:13px;background:var(--surface);text-align:left;font-size:12px;line-height:1.5}
+.exhibition-scene-artworks button:hover{background:var(--accent-soft);border-color:var(--accent)}
+.exhibition-scene-number{display:grid;place-items:center;flex-shrink:0;width:23px;height:23px;border-radius:8px;background:var(--surface-alt);color:var(--accent);font-size:10px;font-weight:700}
+.exhibition-scene-artworks button>span:nth-child(2){overflow-wrap:anywhere}
+.exhibition-scene-artworks small{display:block;margin-top:3px;font-size:10px;color:var(--muted)}
+.exhibition-scene-artwork-arrow{margin-left:auto;color:var(--accent);font-size:16px}
+.exhibition-scene-building{box-shadow:none;background:transparent;border:0}
+.exhibition-scene-building .exhibition-scene-heading{display:none}
+.exhibition-scene-building .exhibition-scene-stage{aspect-ratio:1.15;min-height:240px;max-height:420px;background:transparent}
+.exhibition-scene-building .exhibition-scene-message{background:transparent}
+[data-mode=dark] .exhibition-scene-stage{background:radial-gradient(ellipse at 50% 62%,#8e82612b 0%,#17221f00 72%)}
+@media(max-width:740px){.exhibition-scene{border-radius:20px}.exhibition-scene-heading{padding:15px 15px 0;font-size:10px}.exhibition-scene-badge{font-size:11px}.exhibition-scene-stage{aspect-ratio:1.13;min-height:270px}.exhibition-scene-caption{padding:0 16px 16px;gap:13px;flex-direction:column;font-size:11px}.exhibition-scene-artworks{grid-template-columns:repeat(2,minmax(0,1fr));padding:14px;gap:7px}.exhibition-scene-artworks button{font-size:11px;min-height:46px}.exhibition-scene-message{padding:24px;font-size:12px}}

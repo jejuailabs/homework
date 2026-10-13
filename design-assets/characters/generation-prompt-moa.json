@@ -1,0 +1,10 @@
+{
+  "name": "모아",
+  "species": "otter",
+  "tool": "built-in image_gen",
+  "date": "2026-10-13",
+  "source": "otter-moa.png",
+  "webAsset": "../../public/characters/otter-moa.webp",
+  "webEncoding": {"width": 512, "height": 512, "quality": 88, "alphaQuality": 100},
+  "prompt": "Use case: illustration-story. Asset type: production transparent PNG mascot for a children's homework and artwork exhibition web app. Input image 1 is the approved exhibition concept; take ONLY the otter character on the right as character identity/design reference. Input image 2 is the existing cat mascot as linework, scale and softness reference. Create a single full-body original baby otter called Moa, centered on a square transparent canvas. Milk-tea brown very round mochi body, cream cheeks and belly, tiny brown dot eyes, tiny w-shaped smile, faint peach cheeks, small ears, short rounded paws, a cute rounded otter tail curved to the side. Mint green little artist beret and a tiny brush held in one paw. Match the warm delicate brown hand-drawn outline and lightly textured pastel picture-book style of the reference cat. Front three-quarter pose, friendly gentle expression. Keep silhouette simple and legible at 64px. Fill 82% canvas with generous transparent padding, all body and brush entirely in frame. Actual alpha transparency, no background, no ground, no scene, no text, no logos, no drop shadow, no extra animals. Preserve the approved otter identity and avoid glossy 3D or realistic fur."
+}

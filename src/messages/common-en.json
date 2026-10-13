@@ -6,6 +6,8 @@
   "admin": "Platform admin",
   "tools": "AI toolbox",
   "home": "Home",
+  "homework": "Homework",
+  "exhibitions": "Exhibitions",
   "signOut": "Sign out",
   "settings": "Display settings",
   "language": "Language",
@@ -56,34 +58,86 @@
   "toolbox": {
     "kicker": "TEACHER TOOLBOX",
     "title": "Teacher AI toolbox",
-    "description": "A little help with lesson preparation and classroom communication.",
-    "note": "The AI provider is not connected yet, so automatic generation is unavailable. You can already create assignments and review student work.",
-    "badge": "Not connected",
+    "description": "Add your material, create a draft, and make it your own.",
+    "chooseTool": "What would help today?",
+    "addSource": "Add your material",
+    "reviewResult": "Review and use",
+    "sourceLabel": "Material or notes",
+    "sourceHint": "10–16,000 characters · Import text from TXT/MD files. For PDFs, copy and paste the sections you need.",
+    "gradeLabel": "Grade or learning level",
+    "optional": "Optional",
+    "gradePlaceholder": "e.g. Grade 3, simple vocabulary",
+    "characterCount": "{count} / {max} characters",
+    "importFile": "Import TXT · MD",
+    "importing": "Importing",
+    "imported": "Imported the text from {name}.",
+    "generate": "Create a draft",
+    "generating": "Creating your draft",
+    "pendingHint": "Reading and organizing your material. Please give it a moment.",
+    "generated": "Your draft is ready. Review it and make any changes you need.",
+    "draft": "AI draft",
+    "staleResult": "Your input changed. This is the previous draft. Create a new draft to use the changes.",
+    "editableResult": "You can edit the content directly here.",
+    "reviewHint": "Check the content and answers, then use your professional judgment.",
+    "copy": "Copy text",
+    "copiedButton": "Copied",
+    "copied": "Copied your edited text.",
+    "copyFallback": "The text is selected. Use your device’s copy command.",
+    "download": "Download TXT",
+    "downloaded": "Requested the text file download.",
+    "model": "Generated with: {model}",
+    "cached": "Draft from an identical request",
+    "emptyTitle": "A little help is on its way",
+    "emptyDescription": "Add your material and select Create a draft. Your result will appear here.",
     "items": {
       "resource": {
         "title": "Prepare from a resource",
-        "description": "Create assignment, card and quiz drafts from a PDF."
+        "description": "Create summary cards and quiz drafts.",
+        "placeholder": "Paste the material for your lesson.\nFor example: an explanation of the water cycle, a reading passage, or a relevant textbook section."
       },
       "adapt": {
         "title": "Explain it differently",
-        "description": "Adapt explanations and resources for your students."
+        "description": "Adapt explanations to learning levels.",
+        "placeholder": "Paste the content you want to simplify or adapt.\nAdd a grade or learning level to help tailor the explanation."
       },
       "feedback": {
         "title": "Rubrics and feedback",
-        "description": "Draft feedback connected to the student’s work."
+        "description": "Start from criteria and student work.",
+        "placeholder": "Include the task, assessment criteria, and student answer.\nFor example: check whether the argument is supported, then suggest one next step."
       },
       "notice": {
         "title": "Write a family notice",
-        "description": "Prepare a notice from dates and materials."
+        "description": "Turn dates and materials into a notice.",
+        "placeholder": "Add the dates, materials, and information to share.\nFor example: field trip on October 20, departure at 9 a.m., bring water and a hat."
       },
       "conference": {
         "title": "Prepare for a conference",
-        "description": "Summarize selected learning records."
+        "description": "Turn learning notes into a draft.",
+        "placeholder": "Add learning observations, strengths, and points to discuss.\nThe draft will focus on facts in your notes."
       },
       "notes": {
-        "title": "Summarize documents and notes",
-        "description": "Find decisions and action items in your notes."
+        "title": "Organize notes",
+        "description": "Review observations and meeting notes.",
+        "placeholder": "Paste your observation records or meeting notes.\nOrganize facts, decisions, next steps, and details to confirm."
       }
+    },
+    "errors": {
+      "sourceTooShort": "Please add at least 10 characters of material.",
+      "sourceTooLong": "You can add up to 16,000 characters. Choose the sections you need.",
+      "fileType": "Choose a TXT or MD text file. For PDFs, copy and paste the content.",
+      "fileRead": "The file could not be read. Check that it uses UTF-8 text or paste its content instead.",
+      "invalidInput": "Use 10–16,000 characters for the material and up to 40 for the learning level.",
+      "notConfigured": "AI setup is not complete yet. Please check with your administrator.",
+      "rateLimit": "There are too many generation requests right now. Please try again later.",
+      "inProgress": "A draft for this request is already being generated. Please try again shortly.",
+      "timeout": "Generation took too long. Try again with a little less material.",
+      "unavailable": "The AI service could not be reached. Please try again shortly.",
+      "invalidResponse": "The draft could not be received in full. Please try again.",
+      "incomplete": "The draft was not completed. Try again with a little less material.",
+      "refused": "A draft could not be made from this content. Please revise it for the lesson.",
+      "sessionExpired": "Your session expired. Please sign in again.",
+      "forbidden": "Please sign in with a teacher account.",
+      "network": "Check your connection and try again. Your input is still here."
     }
   }
 }

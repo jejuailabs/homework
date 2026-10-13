@@ -9,6 +9,30 @@ service firebase.storage {
       let user = firestore.get(/databases/(default)/documents/users/$(uid)).data;
       return user.disabled != true && request.auth.token.authVersion == user.authVersion;
     }
+    function exhibitionUpload(uploadId) {
+      return firestore.get(/databases/(default)/documents/exhibitionUploads/$(uploadId)).data;
+    }
+    function activeExhibitionUser(uid) {
+      let user = firestore.get(/databases/(default)/documents/users/$(uid)).data;
+      return user.get('disabled', false) != true
+        && user.role == 'teacher';
+    }
+    match /exhibition-uploads/{uid}/{uploadId}/original {
+      allow create: if request.auth != null
+        && resource == null
+        && request.auth.uid == uid
+        && activeExhibitionUser(uid)
+        && exhibitionUpload(uploadId).userUid == uid
+        && exhibitionUpload(uploadId).path == 'exhibition-uploads/' + uid + '/' + uploadId + '/original'
+        && exhibitionUpload(uploadId).status == 'pending'
+        && request.time < exhibitionUpload(uploadId).expiresAt
+        && request.resource.size == exhibitionUpload(uploadId).size
+        && request.resource.contentType == exhibitionUpload(uploadId).contentType
+        && request.resource.size > 0
+        && request.resource.size <= 100 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow read, update, delete: if false;
+    }
     match /uploads/{uid}/{uploadId}/file {
       // Only creation is allowed. Completed files cannot be overwritten or deleted by a client.
       allow create: if request.auth != null

@@ -72,5 +72,15 @@
     "userEnable": "Restored account access",
     "studentCodeReset": "Reset student entry code",
     "operationsView": "Viewed service operations"
-  }
+  },
+  "aiReady": "AI connected",
+  "aiConnectedDescription": "Teacher drafting tools are connected. Teachers review generated content before using it.",
+  "aiModel": "Model",
+  "aiToday": "Requests today / daily cap",
+  "aiTeacherDay": "Daily cap per teacher",
+  "aiTeacherMinute": "Minute cap per teacher",
+  "aiReset": "Daily cap resets",
+  "aiCount": "{count} requests",
+  "aiUsageNote": "Counts include failed attempts and exclude cached results. They are not token usage or billing totals. Source material and generated text are not saved in operating logs.",
+  "aiOpenTools": "Open teacher AI tools"
 }

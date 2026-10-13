@@ -1,7 +1,7 @@
 'use client';
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
+import { connectAuthEmulator, getAuth } from 'firebase/auth';
+import { connectStorageEmulator, getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -14,3 +14,9 @@ const firebaseConfig = {
 export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
 export const storage = getStorage(firebaseApp);
+
+// The opt-in local QA environment never connects to a live Firebase project.
+if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_FIREBASE_EMULATORS === 'true') {
+  if (!auth.emulatorConfig) connectAuthEmulator(auth, 'http://127.0.0.1:9099', {disableWarnings: true});
+  connectStorageEmulator(storage, '127.0.0.1', 9199);
+}

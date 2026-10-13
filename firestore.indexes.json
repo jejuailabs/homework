@@ -3,6 +3,24 @@
     { "collectionGroup": "uploads", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "status", "order": "ASCENDING" },
       { "fieldPath": "size", "order": "ASCENDING" }
+    ] },
+    { "collectionGroup": "exhibitions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "ownerUid", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exhibitions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "classId", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exhibitions", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "classId", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "exhibitionUploads", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "ownerUid", "order": "ASCENDING" },
+      { "fieldPath": "status", "order": "ASCENDING" },
+      { "fieldPath": "cleanupAt", "order": "ASCENDING" }
     ] }
   ],
   "fieldOverrides": [

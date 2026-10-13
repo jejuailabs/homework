@@ -30,11 +30,13 @@
     "hamster": "Kong",
     "alpaca": "Cloud",
     "rabbit": "Tori",
+    "otter": "Moa",
     "catSpecies": "Cat",
     "dogSpecies": "Dog",
     "hamsterSpecies": "Hamster",
     "alpacaSpecies": "Alpaca",
-    "rabbitSpecies": "Rabbit"
+    "rabbitSpecies": "Rabbit",
+    "otterSpecies": "Otter"
   },
   "teacher": {
     "eyebrow": "A little growth, together",

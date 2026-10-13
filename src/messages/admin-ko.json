@@ -72,5 +72,15 @@
     "userEnable": "계정 접근 복구",
     "studentCodeReset": "학생 입장 코드 재발급",
     "operationsView": "서비스 운영 정보 조회"
-  }
+  },
+  "aiReady": "AI 연결됨",
+  "aiConnectedDescription": "교사용 AI 초안 도구가 연결되어 있습니다. 생성 결과는 선생님이 검토한 뒤 활용합니다.",
+  "aiModel": "적용 모델",
+  "aiToday": "오늘 전체 요청 / 일일 한도",
+  "aiTeacherDay": "교사 1명당 하루 한도",
+  "aiTeacherMinute": "교사 1명당 1분 한도",
+  "aiReset": "일일 한도 초기화",
+  "aiCount": "{count}회",
+  "aiUsageNote": "요청 수에는 실패한 호출이 포함되며, 캐시 재사용은 제외합니다. 토큰 사용량이나 실제 청구 금액이 아닙니다. 입력 본문과 생성 결과는 운영 기록에 저장하지 않습니다.",
+  "aiOpenTools": "교사용 AI 도구 열기"
 }

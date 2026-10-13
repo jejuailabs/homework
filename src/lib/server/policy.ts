@@ -1,3 +1,4 @@
+export {characters} from '../characters';
 export type Role = 'teacher' | 'student' | 'admin' | 'superadmin';
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code = 'INVALID_REQUEST') { super(message); }
@@ -24,7 +25,6 @@ export function canUseUpload(uid: string, assignmentId: string, record: { userUi
 export function validStudentSession(tokenVersion: unknown, currentVersion: unknown) {
   return typeof tokenVersion === 'number' && Number.isSafeInteger(tokenVersion) && tokenVersion >= 0 && tokenVersion === currentVersion;
 }
-export const characters = ['cat', 'dog', 'hamster', 'alpaca', 'rabbit'] as const;
 const photoTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
 const videoTypes = ['video/mp4', 'video/webm', 'video/quicktime'];
 export function uploadPolicy(contentType: unknown, size: unknown) {
