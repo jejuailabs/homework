@@ -5,8 +5,8 @@
       "https://homework-jejuai.vercel.app",
       "https://homework-git-main-jejuai.vercel.app"
     ],
-    "method": ["GET", "HEAD"],
-    "responseHeader": ["Content-Type", "Content-Length"],
+    "method": ["GET", "HEAD", "PUT"],
+    "responseHeader": ["Content-Type", "Content-Length", "ETag"],
     "maxAgeSeconds": 3600
   }
 ]

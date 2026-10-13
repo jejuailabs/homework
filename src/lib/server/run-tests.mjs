@@ -20,3 +20,7 @@ await import('./run-teacher-dashboard-tests.mjs');
 const dashboardPeriodUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../teacher-dashboard-period.ts')).toString('base64');
 const dashboardPeriodTest = compile('../teacher-dashboard-period.test.ts').replace("'./teacher-dashboard-period'", JSON.stringify(dashboardPeriodUrl));
 await import('data:text/javascript;base64,' + Buffer.from(dashboardPeriodTest).toString('base64'));
+const loginDestinationUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../login-destination.ts')).toString('base64');
+const loginDestinationTest = compile('../login-destination.test.ts').replace("'./login-destination'", JSON.stringify(loginDestinationUrl));
+await import('data:text/javascript;base64,' + Buffer.from(loginDestinationTest).toString('base64'));
+await import('./run-participation-tests.mjs');

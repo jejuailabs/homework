@@ -3,7 +3,7 @@ import Link from 'next/link';
 import {usePathname,useRouter} from 'next/navigation';
 import {useTranslations} from 'next-intl';
 import {useEffect,useState,type ReactNode} from 'react';
-import {BookOpen, Globe2, Images, LayoutDashboard, LogOut, Moon, Settings2, ShieldCheck, Sparkles, Sun, X} from 'lucide-react';
+import {BookOpen, Globe2, Images, LayoutDashboard, LogOut, Moon, PanelsTopLeft, Settings2, ShieldCheck, Sparkles, Sun, X} from 'lucide-react';
 import {signOut} from 'firebase/auth';
 import {auth} from '@/lib/firebase-client';
 import {usePreferences,type Palette} from './providers';
@@ -34,6 +34,7 @@ export default function AppShell({children}:{children:ReactNode}) {
         {!isStudent&&!isAdmin&&<Link href="/teacher" className={`nav-dashboard ${path==='/teacher'?'active':''}`} aria-current={path==='/teacher'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><LayoutDashboard size={18}/></span>{t('dashboard')}</Link>}
         <Link className={`nav-homework ${path===homeworkPath?'active':''}`} aria-current={path===homeworkPath?'page':undefined} href={homeworkPath}><span className="nav-pictogram" aria-hidden="true">{isAdmin?<ShieldCheck size={18}/>:<BookOpen size={18}/>}</span>{isAdmin?t('admin'):t('homework')}</Link>
         {!isAdmin&&<Link href={`${workspacePath}/exhibitions`} className={`nav-gallery ${path.includes('/exhibitions')?'active':''}`} aria-current={path.includes('/exhibitions')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Images size={18}/></span>{t('exhibitions')}</Link>}
+        {!isAdmin&&<Link href={`${workspacePath}/boards`} className={`nav-boards ${path.includes('/boards')?'active':''}`} aria-current={path.includes('/boards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{t('boards')}</Link>}
         {!isStudent&&!isAdmin&&<Link href="/teacher/tools" className={`nav-tools ${path.includes('tools')?'active':''}`} aria-current={path.includes('tools')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Sparkles size={18}/></span>{t('tools')}</Link>}
       </nav>}
       <div className="header-actions">

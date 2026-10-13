@@ -3,9 +3,10 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {useLocale, useTranslations} from "next-intl";
-import {ArrowRight, BookOpen, CalendarDays, CheckCheck, ChevronRight, ClipboardCheck, Clock3, Flower2, Heart, House, Images, LoaderCircle, Plus, RefreshCw, School, ShieldCheck, Sparkles, Star, Users} from "lucide-react";
+import {ArrowRight, BookOpen, CalendarDays, CheckCheck, ChevronRight, ClipboardCheck, Clock3, Flower2, Heart, House, Images, LoaderCircle, PanelsTopLeft, Plus, RefreshCw, School, ShieldCheck, Sparkles, Star, Users} from "lucide-react";
 import type {TeacherDashboardData} from "@/lib/teacher-dashboard-types";
 import {assignmentInPeriod, schoolYearAt, type DashboardPeriod} from "@/lib/teacher-dashboard-period";
+import BoardDashboardSummary from './board-dashboard-summary';
 
 function homeworkHref(classId?: string, assignmentId?: string, status?: string, action?: string) {
   const query = new URLSearchParams();
@@ -64,6 +65,7 @@ export default function TeacherDashboard() {
     <nav className="thd-shortcuts" aria-label={t("shortcuts")}>
       <Link className="thd-shortcut thd-mint" href={homeworkHref(classId)}><span className="thd-icon"><BookOpen size={24}/></span><span><strong>{t("homework")}</strong><small>{t("homeworkHint")}</small></span><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-peach" href="/teacher/exhibitions"><span className="thd-icon"><Images size={24}/></span><span><strong>{t("exhibitions")}</strong><small>{t("exhibitionsHint")}</small></span><img src="/characters/otter-moa.webp" alt=""/><ArrowRight size={20}/></Link>
+      <Link className="thd-shortcut thd-sky" href={`/teacher/boards${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`}><span className="thd-icon"><PanelsTopLeft size={24}/></span><span><strong>{t("boards")}</strong><small>{t("boardsHint")}</small></span><img src="/characters/rabbit-tori.webp" alt=""/><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-lilac" href="/teacher/tools"><span className="thd-icon"><Sparkles size={24}/></span><span><strong>{t("tools")}</strong><small>{t("toolsHint")}</small></span><ArrowRight size={20}/></Link>
     </nav>
 
@@ -108,6 +110,7 @@ export default function TeacherDashboard() {
       </section>
     </div>
 
+    <BoardDashboardSummary classId={classId}/>
     <section className="thd-panel thd-gallery" aria-labelledby="dashboard-gallery-title">
       <div className="thd-section-heading"><div className="thd-heading-label"><span className="thd-small-icon thd-peach"><Images size={21}/></span><div><h2 id="dashboard-gallery-title">{t("galleryTitle")}</h2><p>{t("galleryHint")}</p></div></div><Link className="thd-text-link" href="/teacher/exhibitions">{t("goExhibitions")}<ChevronRight size={15}/></Link></div>
       {exhibitions.length ? <div className="thd-room-grid">{exhibitions.slice(0, 4).map((room, index) => <Link className={`thd-room ${["thd-peach", "thd-lilac", "thd-sky", "thd-yellow"][index % 4]}`} href={`/teacher/exhibitions?exhibition=${encodeURIComponent(room.id)}`} key={room.id}><div className="thd-room-top"><span className="thd-room-frame"><Images size={25}/></span><span className={`thd-room-status thd-room-${room.status}`}>{t(["draft", "open", "closed"].includes(room.status) ? `roomStatus.${room.status}` : "roomStatus.draft")}</span></div><small>{room.className}</small><h3>{room.title}</h3><span className="thd-room-bottom">{t("roomWorks", {total: room.artworkCount, approved: room.approvedCount})}<ArrowRight size={17}/></span></Link>)}</div> : <div className="thd-gallery-empty"><img src="/characters/otter-moa.webp" alt=""/><div><h3>{t("galleryEmpty")}</h3><p>{t("galleryEmptyHint")}</p><Link className="thd-text-link" href="/teacher/exhibitions">{t("startExhibition")}<ArrowRight size={15}/></Link></div></div>}

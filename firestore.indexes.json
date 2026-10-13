@@ -1,5 +1,13 @@
 {
   "indexes": [
+    { "collectionGroup": "participationBoards", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "ownerUid", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ] },
+    { "collectionGroup": "participationBoards", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "classId", "order": "ASCENDING" },
+      { "fieldPath": "createdAt", "order": "DESCENDING" }
+    ] },
     { "collectionGroup": "uploads", "queryScope": "COLLECTION", "fields": [
       { "fieldPath": "status", "order": "ASCENDING" },
       { "fieldPath": "size", "order": "ASCENDING" }

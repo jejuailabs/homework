@@ -9,6 +9,7 @@ import '@/styles/delight.css';
 import '@/styles/teacher-delight.css';
 import '@/styles/student-delight.css';
 import '@/styles/teacher-dashboard.css';
+import '@/styles/participation-integration.css';
 
 export const metadata:Metadata={title:'모두의 숙제 · Homework Friends',description:'동물 친구와 함께하는 쉬운 숙제 제출, 선생님을 위한 과제와 검사 도구.',robots:{index:false,follow:false}};
 const preferenceScript=`try{const p=JSON.parse(localStorage.getItem('homework-preferences')||'{}');document.documentElement.dataset.mode=p.appearance==='dark'||((!p.appearance||p.appearance==='system')&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';if(['mint','coral','sky','lavender','apricot','rose'].includes(p.palette))document.documentElement.dataset.palette=p.palette;}catch(e){}`;
