@@ -1,4 +1,5 @@
 /** Shared API contract: each class is a building, and exhibitions are rooms inside it. */
+import type {ArtworkModuleOptions} from '@/modules/artwork-extensions/types';
 export type ExhibitionStatus = 'draft' | 'open' | 'closed';
 export type ExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean';
 export type ArtworkStatus = 'pending' | 'approved' | 'revision';
@@ -11,6 +12,7 @@ export type Exhibition = {
   grade: string; year: number; theme: ExhibitionTheme;
   ownerUid: string; status: ExhibitionStatus; commentsEnabled: boolean;
   allowStudentUploads?: boolean; publicSharingEnabled?: boolean;
+  artworkModules?: ArtworkModuleOptions;
   artworkCount: number; approvedCount: number; createdAt: string; updatedAt: string;
 };
 export type ExhibitionStudent = {

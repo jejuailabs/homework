@@ -128,6 +128,13 @@ export async function getAiOperations() {
   }};
 }
 
+/** Shared quota/telemetry boundary for independently removable AI feature modules. */
+export async function runMeteredAi<T>(uid:string,tool:string,model:string,fingerprint:string,operation:()=>Promise<T>):Promise<T>{
+ const config=configuration();if(!config.configured)throw new AiError(503,'AI 연결 설정을 확인해 주세요.','AI_NOT_CONFIGURED');
+ const reservation=await reserve(uid,hash(`${uid}:${tool}:${fingerprint}`),{tool},model,config.limits);
+ try{const result=await operation();await finish(reservation,'done');return result;}catch(error){await finish(reservation,'failed',error instanceof ApiError?error.code:'AI_MODULE_FAILED');throw error;}
+}
+
 export async function readArtworkAuthors(uid: string, images: string[]): Promise<string[]> {
   const config = configuration();
   if (!config.configured) throw new AiError(503, '이름 판독을 사용할 수 없어요. 작가명을 직접 입력해 주세요.', 'AI_NOT_CONFIGURED');

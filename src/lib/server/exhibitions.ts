@@ -17,6 +17,8 @@ import {artworkToday, validArtworkDate} from '../exhibition-metadata';
 import {readBoundedJson} from './ai-policy';
 import {readArtworkAuthors} from './ai';
 import {artworkAuthorImages} from './artwork-author-policy';
+import {moduleOptions} from '@/modules/artwork-extensions/types';
+import {effectiveOptions} from '@/modules/artwork-extensions/exhibition-adapter';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -28,7 +30,7 @@ const passportRef = (exhibitionId: string, studentId: string) => exhibitionRef(e
 const quotaRef = (ownerUid: string) => db().doc(`exhibitionStorage/${ownerUid}`);
 const storageValue = (value?: Data): ExhibitionStorageUsage => ({ usedBytes: value?.usedBytes ?? 0, reservedBytes: value?.reservedBytes ?? 0, limitBytes: exhibitionStorageLimit(process.env.EXHIBITION_STORAGE_LIMIT_BYTES) });
 const mapped = (snap: FirebaseFirestore.DocumentSnapshot): Data => ({ ...snap.data(), id: snap.id });
-const asExhibition = (snap: FirebaseFirestore.DocumentSnapshot) => ({ grade: '', year: 0, theme: 'cozy', ...mapped(snap) }) as Exhibition;
+const asExhibition = (snap: FirebaseFirestore.DocumentSnapshot) => ({ grade: '', year: 0, theme: 'cozy', ...mapped(snap), artworkModules:effectiveOptions(snap.data()?.artworkModules) }) as Exhibition;
 const json = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { 'Cache-Control': 'private, no-store' } });
 
 async function body(request: Request): Promise<Data> {
@@ -144,6 +146,7 @@ async function create(ctx: Context, request: Request) {
     classId, className: cls.data()!.name, ownerUid: ctx.uid, status: 'draft', commentsEnabled: true, allowStudentUploads: input.allowStudentUploads === true, publicSharingEnabled: input.publicSharingEnabled === true,
     grade: String(cls.data()!.grade ?? '').trim() || cls.data()!.name, year: cls.data()!.year,
     theme: input.theme === undefined ? 'cozy' : exhibitionTheme(input.theme),
+    artworkModules: moduleOptions(input.artworkModules),
     artworkCount: 0, approvedCount: 0, createdAt: now(), updatedAt: now(),
   };
   const ref = await db().collection('exhibitions').add(value);
@@ -174,6 +177,7 @@ async function edit(ctx: Context, exhibition: Exhibition, request: Request) {
   if ('description' in input) changes.description = text(input.description, '전시 소개', 2000, true);
   if ('status' in input) changes.status = exhibitionStatus(input.status);
   if ('theme' in input) changes.theme = exhibitionTheme(input.theme);
+  if ('artworkModules' in input) {if(!input.artworkModules||typeof input.artworkModules!=='object'||Array.isArray(input.artworkModules))throw new ApiError(400,'작품 기능 설정을 확인해 주세요.');changes.artworkModules=moduleOptions(input.artworkModules);}
   if ('commentsEnabled' in input) {
     if (typeof input.commentsEnabled !== 'boolean') throw new ApiError(400, '감상 허용 설정을 확인해 주세요.');
     changes.commentsEnabled = input.commentsEnabled;
@@ -538,7 +542,7 @@ export async function publicExhibition(request: Request, token: string) {
     const artworks = await Promise.all(works.docs.map(async doc => {const art = doc.data(); const [[url], [thumbnailUrl]] = await Promise.all([bucket().file(art.displayPath).getSignedUrl({action: 'read', expires}), bucket().file(art.thumbnailPath).getSignedUrl({action: 'read', expires})]);return {id: doc.id, title: art.title, artistName: art.artistName || art.studentName || '', artworkDate: art.artworkDate || artworkToday(new Date(art.createdAt)), description: art.description, width: art.width, height: art.height, url, thumbnailUrl};}));
     const fresh = await room.ref.get();
     if (fresh.data()?.publicSharingEnabled !== true || !['open', 'closed'].includes(fresh.data()?.status)) throw new ApiError(404, '공유가 종료됐어요.', 'NOT_FOUND');
-    return json({exhibition: {id: room.id, title: value.title, description: value.description, theme: value.theme, allowStudentUploads: value.allowStudentUploads === true && value.status === 'open'}, artworks});
+    return json({exhibition: {id: room.id, title: value.title, description: value.description, theme: value.theme, allowStudentUploads: value.allowStudentUploads === true && value.status === 'open', artworkModules: {...effectiveOptions(value.artworkModules),voice:{...effectiveOptions(value.artworkModules).voice,enabled:effectiveOptions(value.artworkModules).voice.enabled&&effectiveOptions(value.artworkModules).voice.publicAudio}}}, artworks});
   } catch (error) {return json({error: error instanceof ApiError ? error.message : '전시실을 열지 못했어요.'}, error instanceof ApiError ? error.status : 500);}
 }
 

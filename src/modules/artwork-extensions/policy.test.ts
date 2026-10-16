@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { moduleOptions } from './types';
+import { guestText, guestSticker, guestName } from '../warm-guestbook/policy';
+import { pcmWav, wavDuration, VOICE_RATE } from '../voice-caption/wav';
+test('modules default off; recording and visitor writing are independent switches', () => { const off = moduleOptions(undefined); assert.equal(off.voice.enabled, false); assert.equal(off.guestbook.enabled, false); const on = moduleOptions({ voice: { enabled: true }, guestbook: { enabled: true, visitorStickers: true } }); assert.equal(on.voice.publicAudio, false); assert.equal(on.guestbook.visitorComments, false); assert.equal(on.guestbook.visitorStickers, true); });
+test('guest comments are short single lines without contact details and invisible direction controls', () => { assert.equal(guestText('  색이 참 아름다워요!  '), '색이 참 아름다워요!'); for (const value of ['', 'a'.repeat(121), '이것\n보세요', 'https://example.com', '010-1234-5678', 'test@example.com', 'hello\u202euser'])
+    assert.throws(() => guestText(value)); });
+test('only fixed praise stickers are accepted and visitors cannot claim arbitrary HTML', () => { assert.equal(guestSticker('imagination'), 'imagination'); assert.throws(() => guestSticker('unknown')); assert.equal(guestName(''), '전시를 찾아온 손님'); assert.throws(() => guestName('a'.repeat(21))); });
+test('canonical WAV encodes mono 16kPCM and duration follows actual byte count', () => { const bytes = pcmWav(new Float32Array(VOICE_RATE * 3)); assert.equal(wavDuration(bytes), 3); assert.equal(bytes.length, 96044); });
+test('recording limits reject empty, oversized, compressed, trailing and forged audio lengths', () => { assert.throws(() => wavDuration(pcmWav(new Float32Array(100)))); assert.throws(() => wavDuration(pcmWav(new Float32Array(VOICE_RATE * 61)))); const wav = pcmWav(new Float32Array(VOICE_RATE)), bad = wav.slice(); bad[20] = 3; assert.throws(() => wavDuration(bad)); const appended = new Uint8Array(wav.length + 2); appended.set(wav); assert.throws(() => wavDuration(appended)); const forged = wav.slice(); new DataView(forged.buffer).setUint32(40, 100, true); assert.throws(() => wavDuration(forged)); });
