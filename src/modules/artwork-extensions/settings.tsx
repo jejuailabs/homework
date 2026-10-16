@@ -1,0 +1,13 @@
+'use client';
+import type { ArtworkModuleOptions } from './types';
+export default function ArtworkModuleSettings({ value, onChange, disabled = false, en = false }: {
+    value: ArtworkModuleOptions;
+    onChange: (value: ArtworkModuleOptions) => void;
+    disabled?: boolean;
+    en?: boolean;
+}) {
+    const voice = (key: keyof ArtworkModuleOptions['voice'], checked: boolean) => onChange({ ...value, voice: { ...value.voice, [key]: checked } }), guest = (key: keyof ArtworkModuleOptions['guestbook'], checked: boolean) => onChange({ ...value, guestbook: { ...value.guestbook, [key]: checked } });
+    return <fieldset className="am-settings"><legend>{en ? 'Artwork experiences' : '작품과 함께하는 이야기'}</legend><label className="ex-checkbox"><input type="checkbox" disabled={disabled} checked={value.voice.enabled} onChange={e => voice('enabled', e.target.checked)}/><span>{en ? 'Voice docent & captions' : '아이 목소리 도슨트·음성 캡션'}<small>{en ? 'Record a short story. The teacher approves it before sharing.' : '60초 이내 설명을 녹음하고 캡션을 수정해요. 선생님 승인 후 공개돼요.'}</small></span></label>{value.voice.enabled && <label className="ex-checkbox am-subsetting"><input type="checkbox" disabled={disabled} checked={value.voice.publicAudio} onChange={e => voice('publicAudio', e.target.checked)}/><span>{en ? 'Play approved voices for QR visitors' : 'QR 방문자에게 승인된 음성·캡션도 공개'}<small>{en ? 'Exhibition QR sharing must also be on.' : '전시실 QR 관람 허용도 함께 켜져 있어야 해요.'}</small></span></label>}
+ <label className="ex-checkbox"><input type="checkbox" disabled={disabled} checked={value.guestbook.enabled} onChange={e => guest('enabled', e.target.checked)}/><span>{en ? 'Warm guestbook' : '따뜻한 방명록'}<small>{en ? 'Praise stickers and short reflections, with teacher moderation.' : '응원 스티커와 짧은 감상 한 줄. 자유 감상평은 선생님 승인 후 보여요.'}</small></span></label>{value.guestbook.enabled && <div className="am-subsetting">{(['students', 'visitorStickers', 'visitorComments'] as const).map((key, i) => <label className="ex-checkbox" key={key}><input type="checkbox" checked={value.guestbook[key]} disabled={disabled} onChange={e => guest(key, e.target.checked)}/><span>{(en ? ['Allow class students to participate', 'Allow QR visitors to leave stickers', 'Allow QR visitors to submit a reflection'] : ['우리 반 학생의 참여 허용', 'QR 방문자의 응원 스티커 허용', 'QR 방문자의 감상 한 줄 허용'])[i]}</span></label>)}</div>}
+ </fieldset>;
+}
