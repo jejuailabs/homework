@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { FieldPath, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import sharp, { type Metadata } from 'sharp';
@@ -13,6 +13,10 @@ import {
   exhibitionUploadPolicy, nextPassport, nextReactionCounts, ownsExhibition,
   exhibitionStorageLimit, reserveExhibitionBytes, settleExhibitionBytes, releaseExhibitionBytes, exhibitionCursor, encodeExhibitionCursor, completeExhibitionWrites,
 } from './exhibition-policy';
+import {artworkToday, validArtworkDate} from '../exhibition-metadata';
+import {readBoundedJson} from './ai-policy';
+import {readArtworkAuthors} from './ai';
+import {artworkAuthorImages} from './artwork-author-policy';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -40,7 +44,7 @@ function owner(ctx: Context, exhibition: Exhibition) {
   if (!ownsExhibition(ctx, exhibition)) throw new ApiError(403, '이 전시를 관리할 권한이 없어요.', 'FORBIDDEN');
 }
 function submissionAccess(ctx: Context, exhibition: Exhibition) {
-  if (!canSubmitExhibition(ctx, exhibition)) throw new ApiError(403, '선생님만 작품 사진을 올릴 수 있어요.', 'TEACHER_UPLOAD_ONLY');
+  if (!canSubmitExhibition(ctx, exhibition)) throw new ApiError(403, '이 전시에는 작품을 올릴 수 없어요. 학생 업로드 허용과 전시 상태를 확인해 주세요.', 'EXHIBITION_UPLOAD_DISABLED');
 }
 function participationAccess(ctx: Context, exhibition: Exhibition) {
   if (!canParticipateExhibition(ctx, exhibition)) throw new ApiError(403, '열려 있는 우리 반 전시에만 참여할 수 있어요.', 'EXHIBITION_CLOSED');
@@ -67,7 +71,7 @@ async function signedArtwork(ctx: Context, exhibition: Exhibition, value: Data, 
   ]);
   // Never expose original storage paths, tokenized URLs, uploader UIDs, or private manifests.
   return {
-    id: value.id, exhibitionId: value.exhibitionId, studentId: value.studentId,
+    id: value.id, exhibitionId: value.exhibitionId, studentId: value.studentId, artistName: value.artistName ?? value.studentName ?? '', artworkDate: value.artworkDate ?? artworkToday(new Date(value.createdAt)),
     studentName: value.studentName, studentNumber: value.studentNumber,
     title: value.title, description: value.description, status: value.status,
     feedback: canViewArtworkFeedback(ctx, exhibition, value.studentId) ? value.feedback : '',
@@ -137,7 +141,7 @@ async function create(ctx: Context, request: Request) {
   if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
   const value = {
     title: text(input.title, '전시 이름', 120), description: text(input.description, '전시 소개', 2000, true),
-    classId, className: cls.data()!.name, ownerUid: ctx.uid, status: 'draft', commentsEnabled: true,
+    classId, className: cls.data()!.name, ownerUid: ctx.uid, status: 'draft', commentsEnabled: true, allowStudentUploads: input.allowStudentUploads === true, publicSharingEnabled: input.publicSharingEnabled === true,
     grade: String(cls.data()!.grade ?? '').trim() || cls.data()!.name, year: cls.data()!.year,
     theme: input.theme === undefined ? 'cozy' : exhibitionTheme(input.theme),
     artworkCount: 0, approvedCount: 0, createdAt: now(), updatedAt: now(),
@@ -174,6 +178,7 @@ async function edit(ctx: Context, exhibition: Exhibition, request: Request) {
     if (typeof input.commentsEnabled !== 'boolean') throw new ApiError(400, '감상 허용 설정을 확인해 주세요.');
     changes.commentsEnabled = input.commentsEnabled;
   }
+  for (const key of ['allowStudentUploads', 'publicSharingEnabled'] as const) if (key in input) {if (typeof input[key] !== 'boolean') throw new ApiError(400, '전시 설정을 확인해 주세요.'); changes[key] = input[key];}
   await exhibitionRef(exhibition.id).update(changes);
   return json({ exhibition: { ...exhibition, ...changes } });
 }
@@ -194,7 +199,7 @@ async function cleanupUpload(ownerUid: string, uploadId: string, processingToken
   });
   if (!claimed) return false;
   const paths = [
-    `exhibition-uploads/${ownerUid}/${uploadId}/original`,
+    `exhibition-uploads/${id(claimed.userUid)}/${uploadId}/original`,
     `exhibition-assets/${id(claimed.exhibitionId)}/${uploadId}/display.webp`,
     `exhibition-assets/${id(claimed.exhibitionId)}/${uploadId}/thumbnail.webp`,
   ];
@@ -234,24 +239,24 @@ async function initUpload(ctx: Context, exhibition: Exhibition, request: Request
   const fileName = text(input.fileName, '파일 이름', 255);
   const uploadId = randomUUID();
   const path = `exhibition-uploads/${ctx.uid}/${uploadId}/original`;
-  await cleanupOwnerUploads(ctx.uid);
+  await cleanupOwnerUploads(exhibition.ownerUid);
   const reservedBytes = size + EXHIBITION_DERIVATIVE_RESERVATION;
   const expiresAt = Timestamp.fromMillis(Date.now() + 3_600_000);
   // Bound abandoned upload reservations as well as finalized works.
   const window = Math.floor(Date.now() / 3_600_000);
   const limitRef = db().doc(`rateLimits/${hash(`exhibition-upload:${ctx.uid}:${window}`)}`);
   await db().runTransaction(async tx => {
-    const [counter, fresh, quota] = await Promise.all([tx.get(limitRef), tx.get(exhibitionRef(exhibition.id)), tx.get(quotaRef(ctx.uid))]);
+    const [counter, fresh, quota] = await Promise.all([tx.get(limitRef), tx.get(exhibitionRef(exhibition.id)), tx.get(quotaRef(exhibition.ownerUid))]);
     if (!fresh.exists) throw new ApiError(404, '전시회를 찾을 수 없어요.');
     submissionAccess(ctx, asExhibition(fresh));
     if ((fresh.data()!.artworkCount ?? 0) >= EXHIBITION_ARTWORK_LIMIT) throw new ApiError(409, '전시 한 곳에는 작품 300점까지 담을 수 있어요. 새 전시회를 만들어 주세요.', 'ARTWORK_LIMIT');
-    const limit = 400;
+    const limit = ctx.role === 'student' ? 20 : 400;
     if ((counter.data()?.count ?? 0) >= limit) throw new ApiError(429, '파일을 많이 올렸어요. 잠시 뒤 다시 시도해 주세요.', 'UPLOAD_RATE_LIMIT');
     const usage = reserveExhibitionBytes(storageValue(quota.data()), reservedBytes);
     tx.set(limitRef, { count: (counter.data()?.count ?? 0) + 1, expiresAt: Timestamp.fromMillis(Date.now() + 7_200_000) });
     tx.set(quota.ref, { ...usage, updatedAt: now() });
     tx.create(db().doc(`exhibitionUploads/${uploadId}`), {
-      exhibitionId: exhibition.id, classId: exhibition.classId, userUid: ctx.uid, ownerUid: ctx.uid, path,
+      exhibitionId: exhibition.id, classId: exhibition.classId, userUid: ctx.uid, ownerUid: exhibition.ownerUid, studentId: ctx.studentId ?? null, path,
       fileName, contentType, size, reservedBytes, status: 'pending', createdAt: now(), expiresAt, cleanupAt: expiresAt,
     });
   });
@@ -309,10 +314,14 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
   submissionAccess(ctx, exhibition);
   const input = await body(request);
   const uploadId = id(input.uploadId);
-  const studentId = artworkStudentId(input.studentId);
+  if (ctx.role === 'student' && input.studentId && input.studentId !== ctx.studentId) throw new ApiError(403, '자기 작품만 올릴 수 있어요.', 'FORBIDDEN');
+  const studentId = ctx.role === 'student' ? ctx.studentId! : artworkStudentId(input.studentId);
+  const artworkDate = input.artworkDate === undefined ? artworkToday() : text(input.artworkDate, '날짜', 10);
+  if (!validArtworkDate(artworkDate)) throw new ApiError(400, '날짜를 확인해 주세요.', 'INVALID_DATE');
+  const artistName = ctx.role === 'student' ? '' : text(input.artistName, '작가명', 50, true);
   const title = text(input.title, '작품 제목', 120);
   const description = text(input.description, '작품 설명', 2000, true);
-  const fingerprint = hash(JSON.stringify({ studentId, title, description }));
+  const fingerprint = hash(JSON.stringify({ studentId, title, description, artworkDate, artistName }));
   const uploadRef = db().doc(`exhibitionUploads/${uploadId}`);
   const [uploadDoc, studentDoc] = await Promise.all([uploadRef.get(), studentId ? db().doc(`classes/${exhibition.classId}/students/${studentId}`).get() : null]);
   const upload = uploadDoc.data();
@@ -321,7 +330,7 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
   if (upload.status === 'submitted' && upload.fingerprint === fingerprint) return json({ artwork: await signedArtwork(ctx, exhibition, mapped(await artRef(exhibition.id, uploadId).get())) });
   if (upload.status === 'processing') {
     if ((upload.cleanupAt?.toMillis() ?? 0) <= Date.now()) {
-      await cleanupUpload(ctx.uid, uploadId);
+      await cleanupUpload(upload.ownerUid, uploadId);
       throw new ApiError(409, '사진 처리가 만료되었어요. 다시 올려 주세요.', 'UPLOAD_EXPIRED');
     }
     throw new ApiError(409, '사진을 정리하고 있어요. 잠시 뒤 다시 시도해 주세요.', 'UPLOAD_PROCESSING');
@@ -341,7 +350,7 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
     return true;
   });
   if (acquired === 'expired') {
-    await cleanupUpload(ctx.uid, uploadId);
+    await cleanupUpload(upload.ownerUid, uploadId);
     throw new ApiError(409, '사진 처리가 만료되었어요. 다시 올려 주세요.', 'UPLOAD_EXPIRED');
   }
   if (!acquired) return json({ artwork: await signedArtwork(ctx, exhibition, mapped(await artRef(exhibition.id, uploadId).get())) });
@@ -351,26 +360,26 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
   const passport = studentId ? passportRef(exhibition.id, studentId) : null;
   const result = await db().runTransaction(async tx => {
     const [freshUpload, freshExhibition, previous, freshStudent, previousPassport, quota] = await Promise.all([
-      tx.get(uploadRef), tx.get(exhibitionRef(exhibition.id)), tx.get(ref), studentDoc ? tx.get(studentDoc.ref) : null, passport ? tx.get(passport) : null, tx.get(quotaRef(ctx.uid)),
+      tx.get(uploadRef), tx.get(exhibitionRef(exhibition.id)), tx.get(ref), studentDoc ? tx.get(studentDoc.ref) : null, passport ? tx.get(passport) : null, tx.get(quotaRef(exhibition.ownerUid)),
     ]);
     if (!freshExhibition.exists) throw new ApiError(404, '전시회를 찾을 수 없어요.');
     submissionAccess(ctx, asExhibition(freshExhibition));
     if (previous.exists && freshUpload.data()?.fingerprint === fingerprint && freshUpload.data()?.userUid === ctx.uid) return mapped(previous);
     if (freshUpload.data()?.status !== 'processing' || freshUpload.data()?.processingToken !== processingToken || freshUpload.data()!.cleanupAt.toMillis() <= Date.now()) throw new ApiError(409, '이미 사용되었거나 만료된 사진이에요.', 'UPLOAD_USED');
-    if (studentId && (!freshStudent?.exists || freshStudent.data()?.disabled)) throw new ApiError(400, '학생 정보를 다시 확인해 주세요.', 'STUDENT_INVALID');
+    if (studentId && (!freshStudent?.exists || freshStudent.data()?.disabled || (ctx.role === 'student' && freshStudent.data()?.authUid !== ctx.uid))) throw new ApiError(400, '학생 정보를 다시 확인해 주세요.', 'STUDENT_INVALID');
     if ((freshExhibition.data()!.artworkCount ?? 0) >= EXHIBITION_ARTWORK_LIMIT) throw new ApiError(409, '전시 한 곳에는 작품 300점까지 담을 수 있어요.', 'ARTWORK_LIMIT');
     const value = {
       id: uploadId, exhibitionId: exhibition.id, classId: exhibition.classId, uploaderUid: ctx.uid,
       studentId, studentName: freshStudent?.data()?.name ?? '', studentNumber: freshStudent?.data()?.number ?? 0,
-      title, description, status: 'approved', feedback: '', ...image,
-      createdAt: now(), reviewedAt: now(), commentCount: 0, reactionCounts: { colors: 0, idea: 0, story: 0 },
+      title, description, artworkDate, artistName: ctx.role === 'student' ? freshStudent?.data()?.name ?? '' : artistName || freshStudent?.data()?.name || '', status: ctx.role === 'student' ? 'pending' : 'approved', feedback: '', ...image,
+      createdAt: now(), reviewedAt: ctx.role === 'student' ? null : now(), commentCount: 0, reactionCounts: { colors: 0, idea: 0, story: 0 },
     };
     const usage = settleExhibitionBytes(storageValue(quota.data()), freshUpload.data()!.reservedBytes ?? 0, image.storedBytes);
     tx.create(ref, value);
     tx.set(quota.ref, { ...usage, updatedAt: now() });
     tx.update(uploadRef, { status: 'submitted', artworkId: uploadId, fingerprint, submittedAt: now(), reservedBytes: 0, storedBytes: image.storedBytes, cleanupAt: null });
-    tx.update(exhibitionRef(exhibition.id), { artworkCount: FieldValue.increment(1), approvedCount: FieldValue.increment(1), updatedAt: now() });
-    if (passport) tx.set(passport, { ...nextPassport(previousPassport?.data(), 'artist'), updatedAt: now() });
+    tx.update(exhibitionRef(exhibition.id), { artworkCount: FieldValue.increment(1), approvedCount: FieldValue.increment(ctx.role === 'student' ? 0 : 1), updatedAt: now() });
+    if (passport && ctx.role !== 'student') tx.set(passport, { ...nextPassport(previousPassport?.data(), 'artist'), updatedAt: now() });
     return value;
   });
   return json({ artwork: await signedArtwork(ctx, exhibition, result) }, 201);
@@ -384,7 +393,7 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
     } else {
       // Invalid/transient partial outputs are terminal for this manifest. Cleanup failure
       // leaves its bytes charged and its lease available for a later safe retry.
-      await cleanupUpload(ctx.uid, uploadId, processingToken);
+      await cleanupUpload(upload.ownerUid, uploadId, processingToken);
     }
     throw error;
   }
@@ -398,6 +407,8 @@ async function reviewArtwork(ctx: Context, exhibition: Exhibition, artworkId: st
   if ('feedback' in input) changes.feedback = text(input.feedback, '선생님 한마디', 1000, true);
   if ('title' in input) changes.title = text(input.title, '작품 제목', 120);
   if ('description' in input) changes.description = text(input.description, '작품 설명', 2000, true);
+  if ('artistName' in input) changes.artistName = text(input.artistName, '작가명', 50, true);
+  if ('artworkDate' in input) {const day = text(input.artworkDate, '날짜', 10); if (!validArtworkDate(day)) throw new ApiError(400, '날짜를 확인해 주세요.'); changes.artworkDate = day;}
   if ('studentId' in input) changes.studentId = artworkStudentId(input.studentId);
   if (!Object.keys(changes).length) throw new ApiError(400, '수정할 내용을 입력해 주세요.');
   const ref = artRef(exhibition.id, artworkId);
@@ -502,6 +513,35 @@ async function reaction(ctx: Context, exhibition: Exhibition, artworkId: string,
   return json({ ownReaction: kind, ...(result ? { reactionCounts: result } : {}) });
 }
 
+async function shareExhibition(ctx: Context, exhibition: Exhibition, request: Request) {
+  owner(ctx, exhibition);
+  const ref = db().doc(`exhibitionShares/${exhibition.id}`);
+  const result = await db().runTransaction(async tx => {
+    const cls = await tx.get(exhibitionRef(exhibition.id)), previous = await tx.get(ref);
+    if (!cls.exists || !ownsExhibition(ctx, asExhibition(cls))) throw new ApiError(403, '이 전시를 공유할 권한이 없어요.');
+    let token = previous.data()?.token as string | undefined;
+    if (!token) {token = randomBytes(32).toString('base64url'); tx.create(ref, {token, createdAt: now()}); tx.create(db().doc(`exhibitionShareLinks/${hash(token)}`), {exhibitionId: exhibition.id});}
+    return {path: `/gallery/${token}`, enabled: cls.data()?.publicSharingEnabled === true, status: cls.data()?.status};
+  });
+  return json(result);
+}
+
+export async function publicExhibition(request: Request, token: string) {
+  try {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError(404, '공유된 전시실을 찾을 수 없어요.', 'NOT_FOUND');
+    const link = await db().doc(`exhibitionShareLinks/${hash(token)}`).get();
+    if (!link.exists) throw new ApiError(404, '공유된 전시실을 찾을 수 없어요.', 'NOT_FOUND');
+    const room = await exhibitionRef(link.data()!.exhibitionId).get(), value = room.data();
+    if (!room.exists || value?.publicSharingEnabled !== true || !['open', 'closed'].includes(value.status)) throw new ApiError(404, '전시실이 아직 공개되지 않았거나 공유가 종료됐어요.', 'NOT_FOUND');
+    const works = await room.ref.collection('artworks').where('status', '==', 'approved').limit(EXHIBITION_ARTWORK_LIMIT).get();
+    const expires = Date.now() + 15 * 60_000;
+    const artworks = await Promise.all(works.docs.map(async doc => {const art = doc.data(); const [[url], [thumbnailUrl]] = await Promise.all([bucket().file(art.displayPath).getSignedUrl({action: 'read', expires}), bucket().file(art.thumbnailPath).getSignedUrl({action: 'read', expires})]);return {id: doc.id, title: art.title, artistName: art.artistName || art.studentName || '', artworkDate: art.artworkDate || artworkToday(new Date(art.createdAt)), description: art.description, width: art.width, height: art.height, url, thumbnailUrl};}));
+    const fresh = await room.ref.get();
+    if (fresh.data()?.publicSharingEnabled !== true || !['open', 'closed'].includes(fresh.data()?.status)) throw new ApiError(404, '공유가 종료됐어요.', 'NOT_FOUND');
+    return json({exhibition: {id: room.id, title: value.title, description: value.description, theme: value.theme, allowStudentUploads: value.allowStudentUploads === true && value.status === 'open'}, artworks});
+  } catch (error) {return json({error: error instanceof ApiError ? error.message : '전시실을 열지 못했어요.'}, error instanceof ApiError ? error.status : 500);}
+}
+
 export async function handleExhibitions(request: Request, segments: string[] = []) {
   try {
     if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
@@ -516,6 +556,8 @@ export async function handleExhibitions(request: Request, segments: string[] = [
       const exhibition = await loadExhibition(ctx, exhibitionId);
       if (segments.length === 1 && request.method === 'GET') return await detail(ctx, exhibition);
       if (segments.length === 1 && request.method === 'PATCH') return await edit(ctx, exhibition, request);
+      if (segments.length === 2 && section === 'share' && request.method === 'GET') return await shareExhibition(ctx, exhibition, request);
+      if (segments.length === 2 && section === 'read-authors' && request.method === 'POST') {owner(ctx, exhibition); const input = await readBoundedJson(request, 3_300_000) as {images?: unknown}; return json({names: await readArtworkAuthors(ctx.uid, artworkAuthorImages(input.images))});}
       if (segments.length === 2 && section === 'uploads' && request.method === 'POST') return await initUpload(ctx, exhibition, request);
       if (section === 'artworks') {
         if (segments.length === 2 && request.method === 'POST') return await finalize(ctx, exhibition, request);

@@ -1,0 +1,2 @@
+export type LearningCandidate = {id:string;version:string;title:string;body:string;authorName:string;attachments:{id:string;name:string;contentType:string;url?:string}[]};
+export type ClassPoll = {id:string;classId:string;title:string;status:'open'|'closed';closesAt:string|null;showResults:'live'|'closed';hideNames:boolean;sourceKind:'manual'|'assignment'|'board';candidates:(LearningCandidate&{available:boolean;count?:number})[];totalVotes?:number;ownVote?:string;canManage:boolean;createdAt:string};

@@ -4,14 +4,16 @@ import {Timestamp} from 'firebase-admin/firestore';
 import {db} from './admin';
 import {assertOrigin, requireTeacher} from './auth';
 import {ApiError} from './policy';
+import {citedAiOutput, type AiCitation} from '../ai-citations';
+import {artworkAuthorNames, artworkAuthorRequest} from './artwork-author-policy';
 import {AI_PROMPT_VERSION, AiError, aiWindows, assertAiQuota, buildAiRequest, completedAiText, configuredLimit, providerFailure, readBoundedJson, validateAiInput, type AiInput, type AiLimits} from './ai-policy';
 
 const PROVIDER_TIMEOUT_MS = 45_000;
-const LEASE_MS = 90_000;
+const LEASE_MS = 150_000;
 const CACHE_MS = 10 * 60_000;
 const MAX_CACHE_ENTRIES = 64;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-type Draft = {text: string; model: string; cached: boolean};
+type Draft = {text: string; model: string; cached: boolean; sources?: AiCitation[]};
 const draftCache = new Map<string, {expiresAt: number; draft: Draft}>();
 
 function configuration() {
@@ -20,7 +22,7 @@ function configuration() {
     teacherDaily: configuredLimit(process.env.AI_TEACHER_DAILY_LIMIT, 40, 500),
     globalDaily: configuredLimit(process.env.AI_GLOBAL_DAILY_LIMIT, 400, 10000)
   };
-  return {configured: Boolean(process.env.OPENAI_API_KEY), model: process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna', limits};
+  return {configured: Boolean(process.env.OPENAI_API_KEY?.trim()), model: process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna', limits};
 }
 
 function cacheGet(key: string, now: number): Draft | undefined {
@@ -35,7 +37,7 @@ function cachePut(key: string, draft: Draft) {
 }
 
 // Transactions reserve all scopes together. No source, output or credentials enter these records.
-async function reserve(uid: string, fingerprint: string, input: AiInput, model: string, limits: AiLimits) {
+async function reserve(uid: string, fingerprint: string, input: {tool: string}, model: string, limits: AiLimits) {
   const now = Date.now(), windows = aiWindows(now), actorHash = hash(uid), requestId = randomUUID();
   const lease = db().doc(`rateLimits/ai_lease_${fingerprint}`);
   const quotas = [
@@ -52,6 +54,7 @@ async function reserve(uid: string, fingerprint: string, input: AiInput, model: 
     assertAiQuota(counts, quotas.map(quota => quota.limit), quotas.map(quota => Math.ceil((quota.end - now) / 1000)));
     quotas.forEach((quota, index) => transaction.set(quota.ref, {kind: 'ai-quota', count: counts[index] + 1, expiresAt: Timestamp.fromMillis(quota.end + 2 * 86_400_000)}, {merge: true}));
     transaction.set(lease, {kind: 'ai-lease', requestId, actorHash, tool: input.tool, model, status: 'running', leaseUntil: now + LEASE_MS, createdAt: Timestamp.fromMillis(now), expiresAt: Timestamp.fromMillis(now + CACHE_MS)});
+    transaction.create(db().doc('aiJobs/'+requestId), {actorUid:uid, tool:input.tool, model, status:'running', createdAt:new Date(now).toISOString(), startedAt:now});
   });
   return {lease, requestId};
 }
@@ -62,12 +65,13 @@ async function finish(reservation: Awaited<ReturnType<typeof reserve>>, status: 
       const current = await transaction.get(reservation.lease);
       if (current.data()?.requestId !== reservation.requestId) return;
       transaction.update(reservation.lease, {status, code: code ?? null, leaseUntil: 0, completedAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now() + CACHE_MS)});
+      transaction.set(db().doc('aiJobs/'+reservation.requestId), {status, code:code??null, completedAt:new Date().toISOString()}, {merge:true});
     });
   } catch {console.error('AI request state update failed');}
 }
 
-async function callProvider(input: AiInput, model: string): Promise<string> {
-  const signal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
+async function callProvider(input: AiInput, model: string): Promise<{text:string;sources:AiCitation[]}> {
+  const signal = AbortSignal.timeout(input.tool==='neighborhood'?110_000:PROVIDER_TIMEOUT_MS);
   try {
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST', headers: {'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json'},
@@ -77,7 +81,10 @@ async function callProvider(input: AiInput, model: string): Promise<string> {
     let payload: unknown;
     try {payload = await readBoundedJson(response, 256 * 1024);}
     catch {if (signal.aborted) throw new AiError(504, 'AI 응답이 늦어지고 있어요. 다시 시도해 주세요.', 'AI_TIMEOUT'); throw new AiError(502, 'AI 초안을 확인할 수 없어요. 다시 시도해 주세요.', 'AI_INVALID_RESPONSE');}
-    return completedAiText(payload);
+    const text=completedAiText(payload);
+    const result=input.tool==='neighborhood'?citedAiOutput(payload,text):{text,sources:[]};
+    if(input.tool==='neighborhood'&&!result.sources.length)throw new AiError(502,'출처를 확인하지 못했어요. 지역명을 구체적으로 적고 다시 조사해 주세요.','AI_UNSOURCED');
+    return result;
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (signal.aborted) throw new AiError(504, 'AI 응답이 늦어지고 있어요. 다시 시도해 주세요.', 'AI_TIMEOUT');
@@ -89,14 +96,19 @@ export async function generateAiDraft(request: Request): Promise<Draft> {
   assertOrigin(request);
   const context = await requireTeacher(request);
   const input = validateAiInput(await readBoundedJson(request));
+  return generateTeacherDraft(context.uid,input);
+}
+
+// Internal callers provide server-aggregated facts after their own ownership checks.
+export async function generateTeacherDraft(uid:string, input:AiInput):Promise<Draft> {
   const config = configuration();
   if (!config.configured) throw new AiError(503, 'AI 연결을 준비하고 있어요. 관리자에게 알려 주세요.', 'AI_NOT_CONFIGURED');
-  const fingerprint = hash(JSON.stringify([context.uid, AI_PROMPT_VERSION, config.model, input]));
+  const fingerprint = hash(JSON.stringify([uid, AI_PROMPT_VERSION, config.model, input]));
   const cached = cacheGet(fingerprint, Date.now());
   if (cached) return cached;
-  const reservation = await reserve(context.uid, fingerprint, input, config.model, config.limits);
+  const reservation = await reserve(uid, fingerprint, input, config.model, config.limits);
   try {
-    const draft: Draft = {text: await callProvider(input, config.model), model: config.model, cached: false};
+    const draft: Draft = {...await callProvider(input, config.model), model: config.model, cached: false};
     cachePut(fingerprint, draft);
     await finish(reservation, 'done');
     return draft;
@@ -114,4 +126,20 @@ export async function getAiOperations() {
     teacherDailyLimit: config.limits.teacherDaily, teacherMinuteLimit: config.limits.teacherMinute,
     resetAt: new Date(windows.dayEnd).toISOString(), timeZone: 'Asia/Seoul'
   }};
+}
+
+export async function readArtworkAuthors(uid: string, images: string[]): Promise<string[]> {
+  const config = configuration();
+  if (!config.configured) throw new AiError(503, '이름 판독을 사용할 수 없어요. 작가명을 직접 입력해 주세요.', 'AI_NOT_CONFIGURED');
+  const fingerprint = hash(JSON.stringify([uid, 'artwork-author-v1', config.model, images]));
+  const cached = cacheGet(fingerprint, Date.now());
+  if (cached) return artworkAuthorNames(cached.text, images.length);
+  const reservation = await reserve(uid, fingerprint, {tool: 'artwork-author'}, config.model, config.limits);
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json'}, body: JSON.stringify(artworkAuthorRequest(images, config.model)), signal: AbortSignal.timeout(45000), cache: 'no-store'});
+    if (!response.ok) {await response.body?.cancel(); throw providerFailure(response.status);}
+    const names = artworkAuthorNames(completedAiText(await readBoundedJson(response, 256 * 1024)), images.length);
+    cachePut(fingerprint, {text: JSON.stringify({names}), model: config.model, cached: false});
+    await finish(reservation, 'done'); return names;
+  } catch (error) {await finish(reservation, 'failed', error instanceof ApiError ? error.code : 'AUTHOR_READ_FAILED'); throw error;}
 }

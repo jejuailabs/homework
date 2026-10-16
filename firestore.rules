@@ -3,6 +3,35 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Preserve the pre-existing book application in this shared Firebase project.
     match /bookData/{docId} { allow read, write: if request.auth != null; }
+    match /classCanvases/{canvasId} {
+      function canvas() { return get(/databases/$(database)/documents/classCanvases/$(canvasId)).data; }
+      function permitted(value) {
+        let grant = get(/databases/$(database)/documents/classCanvases/$(canvasId)/readerGrants/$(request.auth.uid)).data;
+        let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        return request.auth != null && user.get('disabled',false) != true && grant.expiresAt > request.time
+          && ((grant.role == 'teacher' && value.ownerUid == request.auth.uid)
+            || (grant.role == 'student' && user.role == 'student' && user.classId == value.classId
+              && value.status != 'archived' && grant.authVersion == user.authVersion
+              && request.auth.token.authVersion == user.authVersion
+              && (value.studentIds.size() == 0 || user.studentId in value.studentIds)
+              && get(/databases/$(database)/documents/classes/$(user.classId)/students/$(user.studentId)).data.authUid == request.auth.uid
+              && get(/databases/$(database)/documents/classes/$(user.classId)/students/$(user.studentId)).data.get('disabled',false) != true));
+      }
+      allow get: if request.auth != null && permitted(resource.data);
+      allow list, write: if false;
+      match /canvasRevisions/{epoch} {
+        allow get: if request.auth != null && permitted(canvas()) && canvas().epoch == epoch;
+        allow list, write: if false;
+        match /canvasChannels/{channel} {
+          allow read: if request.auth != null && permitted(canvas()) && canvas().epoch == epoch;
+          allow write: if false;
+        }
+      }
+      match /canvasPresence/{person} {
+        allow read: if request.auth != null && permitted(canvas());
+        allow write: if false;
+      }
+    }
     // All application access goes through authenticated, authorized server APIs.
     // Admin SDK bypasses these rules: server ownership checks remain mandatory.
     match /{document=**} { allow read, write: if false; }

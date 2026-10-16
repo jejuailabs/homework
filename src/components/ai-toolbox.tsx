@@ -19,10 +19,10 @@ const errorKeys: Record<string, string> = {
   UNAUTHENTICATED: 'sessionExpired', FORBIDDEN: 'forbidden'
 };
 
-export default function AiToolbox() {
+export default function AiToolbox({initialTool = 'resource'}: {initialTool?: Tool}) {
   const t = useTranslations('common.toolbox');
   const locale = useLocale();
-  const [tool, setTool] = useState<Tool>('resource');
+  const [tool, setTool] = useState<Tool>(initialTool);
   const [source, setSource] = useState('');
   const [grade, setGrade] = useState('');
   const [result, setResult] = useState<Result | null>(null);

@@ -1,0 +1,23 @@
+'use client';
+import {useEffect, useState} from 'react';
+import {useLocale} from 'next-intl';
+import QRCode from 'qrcode';
+import {Copy, Download, ExternalLink, LoaderCircle} from 'lucide-react';
+export default function ExhibitionShare({id}: {id: string}) {
+  const en = useLocale() === 'en';
+  const [url,setUrl]=useState(''),[qr,setQr]=useState(''),[enabled,setEnabled]=useState(false),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
+  const ready=enabled&&['open','closed'].includes(status);
+  useEffect(()=>{let active=true;fetch(`/api/exhibitions/${id}/share`,{cache:'no-store'}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error);if(active){setUrl(new URL(data.path,location.origin).href);setEnabled(data.enabled);setStatus(data.status);}}).catch(error=>{if(active)setError(error.message);});return()=>{active=false;};},[id]);
+  useEffect(()=>{let active=true;setQr('');if(ready&&url)QRCode.toDataURL(url,{width:720,margin:2,errorCorrectionLevel:'M'}).then(png=>{if(active)setQr(png);}).catch(()=>{if(active)setError(en?'Could not create the QR.':'QR을 만들지 못했어요. 다시 열어 주세요.');});return()=>{active=false;};},[ready,url,en]);
+  async function update(patch:{publicSharingEnabled:boolean;status?:'open'}) {
+    if(busy)return;setBusy(true);setError('');setNotice('');
+    try{const response=await fetch(`/api/exhibitions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});const data=await response.json();if(!response.ok)throw new Error(data.error);setEnabled(data.exhibition.publicSharingEnabled===true);setStatus(data.exhibition.status);if(patch.status)setNotice(en?'Parents can now view approved works without a code.':'이제 학부모가 코드 없이 승인된 작품을 볼 수 있어요.');}
+    catch(error){setError(error instanceof Error?error.message:en?'Could not update sharing.':'공유 설정을 바꾸지 못했어요.');}finally{setBusy(false);}
+  }
+  return <div className="ex-share-panel"><p>{en?'Parents can view approved works without signing in or entering a code. Students sign in to submit their own work.':'학부모는 로그인·비밀번호·학생 코드 없이 승인된 작품을 관람해요. 학생의 작품 업로드는 학생 로그인이 필요해요.'}</p><label className="ex-checkbox"><input type="checkbox" checked={enabled} onChange={()=>void update({publicSharingEnabled:!enabled})} disabled={!url||busy}/><span>{en?'Allow viewing through this QR link':'QR 링크로 전시 관람 허용'}<small>{en?'Anyone with the link can view approved works and artist captions.':'링크를 받은 사람에게 승인된 작품과 작가명·설명이 보여요.'}</small></span></label>
+    {!status&&!error&&<LoaderCircle className="spin"/>}
+    {status==='draft'&&<div className="ex-status-note"><div><strong>{en?'This exhibition is still being prepared.':'아직 준비 중인 전시실이에요.'}</strong><p>{en?'Open the exhibition to create a working parent QR.':'전시실을 공개하면 학부모가 바로 관람할 수 있는 QR이 만들어져요.'}</p></div><button className="ex-button ex-primary" disabled={busy||!url} onClick={()=>void update({status:'open',publicSharingEnabled:true})}>{busy&&<LoaderCircle size={16} className="spin"/>}{en?'Open exhibition & create QR':'학부모에게 공개하고 QR 만들기'}</button></div>}
+    {status&&status!=='draft'&&!enabled&&<p role="status">{en?'QR viewing is off. Turn it on to share this exhibition.':'QR 관람이 꺼져 있어요. 위의 관람 허용을 켜면 QR을 공유할 수 있어요.'}</p>}
+    {ready&&<>{qr?<img src={qr} alt={en?'Exhibition entry QR':'전시실 입장 QR'} className="ex-share-qr"/>:<LoaderCircle className="spin"/>}<input readOnly aria-label={en?'Exhibition link':'전시실 링크'} value={url}/><div className="ex-form-actions"><button className="ex-button" disabled={!qr||busy} onClick={()=>navigator.clipboard.writeText(url).then(()=>setNotice(en?'Link copied.':'링크를 복사했어요.')).catch(()=>setError(en?'Select and copy the link.':'링크를 선택해서 복사해 주세요.'))}><Copy size={16}/>{en?'Copy link':'링크 복사'}</button>{qr&&<a className="ex-button ex-primary" href={qr} download="our-exhibition-qr.png"><Download size={16}/>{en?'Download QR':'QR 내려받기'}</a>}<a className="ex-button" href={url} target="_blank" rel="noopener noreferrer"><ExternalLink size={16}/>{en?'Parent preview':'학부모 화면 미리보기'}</a></div></>}
+    {notice&&<p role="status">{notice}</p>}{error&&<p role="alert">{error}</p>}</div>;
+}

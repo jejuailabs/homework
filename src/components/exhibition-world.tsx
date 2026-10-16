@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, ChevronLeft, ChevronRight, DoorOpen, Images, Move, RotateCcw, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, DoorOpen, Images, Move, RotateCcw, Sparkles, X } from "lucide-react";
 import type * as Three from "three";
-import { exhibitionRoomDimensions, exhibitionWallSlots, WORLD_WING_CAPACITY } from "@/lib/exhibition-world-layout";
+import { exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY } from "@/lib/exhibition-world-layout";
+import {createArtScreenPainter, type ArtScreenFrame} from '@/lib/exhibition-screen-painter';
+import ExhibitionScreen from './exhibition-screen';
+import WorldJoystick from './world-joystick';
 import { createExhibitionLabelCanvas } from "@/lib/exhibition-label";
 import "@/styles/exhibition-world.css";
 
 export type WorldBuilding = { id: string; name: string };
 export type WorldRoom = { id: string; title: string; description?: string; theme?: string; status?: string; artworkCount?: number };
-export type WorldArtwork = { id: string; title: string; url?: string; thumbnailUrl?: string; studentName?: string; width?: number; height?: number };
+export type WorldArtwork = { id: string; title: string; url?: string; thumbnailUrl?: string; artistName?: string; studentName?: string; width?: number; height?: number };
 export type ExhibitionWorldProps = {
   stage: "campus" | "classroom" | "gallery";
   buildings: WorldBuilding[];
@@ -26,8 +29,8 @@ export type ExhibitionWorldProps = {
   onExit: () => void;
 };
 
-type Action = { kind: "building" | "room" | "artwork" | "exit"; id: string };
-type Controls = { direction: (key: string, active: boolean) => void; reset: () => void; refresh: () => void };
+type Action = { kind: "building" | "room" | "artwork" | "exit" | "screen"; id: string };
+type Controls = { stick: (x: number, y: number) => void; direction: (key: string, active: boolean) => void; reset: () => void; refresh: () => void };
 const PALETTES = {
   cozy: { wall: "#fff7e9", accent: "#bdd8c5", dark: "#6c9d89", coral: "#e99786", sky: "#d9eeec", rug: "#f2cec1" },
   forest: { wall: "#f7f5df", accent: "#b6ce9e", dark: "#70936c", coral: "#e6b487", sky: "#e4efd8", rug: "#cddcb4" },
@@ -44,15 +47,26 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
   const callbacks = useRef(props);
   const pausedRef = useRef(paused);
   const controlsRef = useRef<Controls | null>(null);
+  const screenPainter = useRef<((frame:ArtScreenFrame)=>void)|null>(null), screenFrame = useRef<ArtScreenFrame>({index:0,overview:false});
+  const [screenExpanded,setScreenExpanded] = useState(false), [screenOpenSignal,setScreenOpenSignal] = useState(0);
+  const showScreen = useCallback((frame:ArtScreenFrame)=>{screenFrame.current=frame;screenPainter.current?.(frame);},[]);
   const savedViews = useRef(new Map<string, { x: number; z: number; yaw: number; pitch: number }>());
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   const [indexOpen, setIndexOpen] = useState(false);
+  const moveStick=useCallback((x:number,y:number)=>controlsRef.current?.stick(x,y),[]);
   const [failedImages, setFailedImages] = useState(0);
   const [loadedArtworkIds, setLoadedArtworkIds] = useState<string[]>([]);
   const [entering, setEntering] = useState(false);
   const [wingChoice, setWingChoice] = useState({ key: "", value: 0 });
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const query = matchMedia('(max-width:760px),(max-height:520px) and (pointer:coarse)');
+    const update = () => setCompact(query.matches);
+    update(); query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
   const contextKey = `${stage}:${buildingName || ""}:${roomTitle || ""}`;
-  const capacity = stage === "gallery" ? WORLD_WING_CAPACITY : stage === "campus" ? 3 : 12;
+  const capacity = stage === "gallery" ? WORLD_WING_CAPACITY : stage === "campus" ? (compact ? 1 : 3) : 12;
   const items = stage === "gallery" ? artworks : stage === "campus" ? buildings : rooms;
   const wings = Math.max(1, Math.ceil(items.length / capacity));
   const wing = Math.min(wingChoice.key === contextKey ? wingChoice.value : 0, wings - 1);
@@ -66,7 +80,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
   }, [packedData]);
 
   useEffect(() => { callbacks.current = props; });
-  useEffect(() => { pausedRef.current = paused; controlsRef.current?.refresh(); }, [paused]);
+  useEffect(() => { pausedRef.current = paused || screenExpanded || indexOpen; controlsRef.current?.refresh(); }, [paused,screenExpanded,indexOpen]);
   useEffect(() => { setIndexOpen(false); }, [contextKey]);
 
   useEffect(() => {
@@ -135,7 +149,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       const campusRows = Math.ceil(data.buildings.length / campusColumns);
       const roomDimensions = exhibitionRoomDimensions(data.artworks.length);
       const bounds = stage === "campus"
-        ? { minX: -Math.max(14, campusColumns * 6), maxX: Math.max(14, campusColumns * 6), minZ: -Math.max(13, campusRows * 10), maxZ: 17 }
+        ? { minX: -Math.max(14, campusColumns * 6), maxX: Math.max(14, campusColumns * 6), minZ: -Math.max(13, campusRows * 10), maxZ: 48 }
         : stage === "gallery" ? { minX: -roomDimensions.width / 2 + 0.85, maxX: roomDimensions.width / 2 - 0.85, minZ: -roomDimensions.depth / 2 + 0.85, maxZ: roomDimensions.depth / 2 - 0.85 }
           : { minX: -7.15, maxX: 7.15, minZ: -6.15, maxZ: 6.15 };
       player.x = T.MathUtils.clamp(player.x, bounds.minX, bounds.maxX);
@@ -206,6 +220,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       function addAction(object: Three.Object3D, action: Action) { object.userData.worldAction = action; clickable.push(object); }
       function invoke(action: Action) {
         if (disposed || pausedRef.current || transitioning) return;
+        if (action.kind === "screen") {setScreenOpenSignal(value=>value+1);return;}
         if (action.kind === "artwork") { callbacks.current.onSelectArtwork(action.id); return; }
         transitioning = true; keys.clear(); setEntering(true);
         transitionTimer = setTimeout(() => {
@@ -269,7 +284,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       scene.add(sunlight);
 
       function floorAndWalls() {
-        const w = stage === "gallery" ? roomDimensions.width : 16, depth = stage === "gallery" ? roomDimensions.depth : 14, h = 6.3;
+        const w = stage === "gallery" ? roomDimensions.width : 16, depth = stage === "gallery" ? roomDimensions.depth : 14, h = stage === "gallery" ? 7.2 : 6.3;
         box(scene, 0, -0.1, 0, w, 0.2, depth, matte("#e3c7a5"));
         for (let row = 0; row < Math.ceil(depth / 0.72); row++) {
           const z = -depth / 2 + row * 0.72;
@@ -295,7 +310,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         addAction(doorway, { kind: "exit", id: "exit" });
         const rug = rounded(scene, 4.6, 3.1, 0.03, matte(palette.rug), 0.65); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.025, 2.6);
         // Warm, small string lights sit well above the artwork rows.
-        const points = Array.from({ length: 21 }, (_, i) => new T.Vector3(-w / 2 + 0.5 + i * (w - 1) / 20, 5.82 - Math.sin(i / 20 * Math.PI) * 0.3, -depth / 2 + 0.48));
+        const points = Array.from({ length: 21 }, (_, i) => new T.Vector3(-w / 2 + 0.5 + i * (w - 1) / 20, h - .48 - Math.sin(i / 20 * Math.PI) * 0.3, -depth / 2 + 0.48));
         mesh(geo(new T.TubeGeometry(new T.CatmullRomCurve3(points), 40, 0.016, 5, false)), wood);
         points.filter((_, i) => i % 2 === 0).forEach(point => ball(scene, point.x, point.y - 0.1, point.z, 0.065, 0.09, 0.065, matte("#fff0bf")));
         plant(-w / 2 + 0.65, -depth / 2 + 0.9, 1.3); plant(w / 2 - 0.65, -depth / 2 + 0.9, 1.3);
@@ -309,11 +324,11 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const body = rounded(group, 8.2, 4.7, 4.2, buildingMaterial, 0.65); body.position.y = 2.55;
         const roof = rounded(group, 8.9, 0.74, 4.7, coral, 0.35); roof.position.y = 5.04;
         const top = rounded(group, 6.8, 0.5, 3.9, matte("#efa896"), 0.24); top.position.y = 5.57;
-        const tower = rounded(group, 2.25, 2.15, 1.0, cream, 0.5); tower.position.set(0, 4.7, 2.0);
-        const littleRoof = rounded(group, 2.75, 0.48, 1.5, coral, 0.23); littleRoof.position.set(0, 5.88, 2.0);
-        const clock = mesh(geo(new T.CircleGeometry(0.55, 32)), white, group); clock.position.set(0, 4.98, 2.56);
-        const hand = box(group, 0.07, 5.05, 2.58, 0.06, 0.31, 0.02, wood); hand.rotation.z = -0.55;
-        box(group, -0.08, 4.98, 2.58, 0.26, 0.055, 0.02, wood);
+        const tower = rounded(group, 2.25, 1.5, 1.0, cream, 0.4); tower.position.set(0, 5.25, 2.0);
+        const littleRoof = rounded(group, 2.75, 0.48, 1.5, coral, 0.23); littleRoof.position.set(0, 6.18, 2.0);
+        const clock = mesh(geo(new T.CircleGeometry(0.48, 32)), white, group); clock.position.set(0, 5.25, 2.56);
+        const hand = box(group, 0.07, 5.32, 2.58, 0.06, 0.31, 0.02, wood); hand.rotation.z = -0.55;
+        box(group, -0.08, 5.25, 2.58, 0.26, 0.055, 0.02, wood);
         const door = new T.Group(); door.position.set(0, 1.45, 2.19); group.add(door);
         arch(door, 2.2, 2.85, 0.2, white); arch(door, 1.82, 2.56, 0.22, deepMint).position.z = 0.14;
         ball(door, 0.53, -0.25, 0.29, 0.075, 0.075, 0.075, matte("#e9c992"));
@@ -334,7 +349,10 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
       function poster(room: WorldRoom, index: number) {
         const group = new T.Group();
-        if (index < 6) group.position.set(((index % 3) - 1) * 3.55, index < 3 ? 3.95 : 1.95, -6.82);
+        if (index < 6) {
+          const rowCount = Math.min(3, data.rooms.length - Math.floor(index / 3) * 3);
+          group.position.set(((index % 3) - (rowCount - 1) / 2) * 3.55, index < 3 ? 3.95 : 1.95, -6.82);
+        }
         else { const left = index < 9; group.position.set(left ? -7.83 : 7.83, 3.0, ((index - 6) % 3 - 1) * 3.4); group.rotation.y = left ? Math.PI / 2 : -Math.PI / 2; }
         scene.add(group);
         const color = PALETTES[(room.theme && room.theme in PALETTES ? room.theme : "cozy") as keyof typeof PALETTES];
@@ -352,18 +370,44 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         addAction(group, { kind: "room", id: room.id });
       }
 
-      const textureJobs: { artwork: WorldArtwork; picture: Three.Mesh<Three.PlaneGeometry, Three.MeshBasicMaterial>; placeholder: Three.Object3D; w: number; h: number }[] = [];
+      const textureJobs: { artwork: WorldArtwork; picture: Three.Mesh<Three.PlaneGeometry, Three.MeshBasicMaterial>; placeholder: Three.Object3D; w: number; h: number; resize: (width: number, height: number) => void }[] = [];
       function artworkFrame(artwork: WorldArtwork, index: number, slot: ReturnType<typeof exhibitionWallSlots>[number]) {
         const group = new T.Group(); group.position.set(slot.x, slot.y, slot.z); group.rotation.y = slot.rotationY; scene.add(group);
-        rounded(group, 2.65, 1.87, 0.15, index % 4 === 0 ? coral : index % 4 === 1 ? mint : wood, 0.09);
-        const mount = box(group, 0, 0, 0.096, 2.44, 1.66, 0.035, white); mount.castShadow = false;
-        const placeholder = textPlane(group, artwork.title, 2.22, 0.68, "#9e998b", "#fffdf5", 29, 2); placeholder.position.z = 0.123;
-        const picture = new T.Mesh(geo(new T.PlaneGeometry(1, 1)), mat(new T.MeshBasicMaterial({ color: "#ffffff", toneMapped: false })));
-        picture.position.z = 0.137; picture.visible = false; group.add(picture);
-        textureJobs.push({ artwork, picture, placeholder, w: 2.29, h: 1.53 });
-        const plaque = rounded(group, 2.25, 0.27, 0.035, white, 0.07); plaque.position.set(0, -1.1, 0.01);
-        textPlane(group, `${wing * WORLD_WING_CAPACITY + index + 1}. ${artwork.title}${artwork.studentName ? ` · ${artwork.studentName}` : ""}`, 2.1, 0.25, "#655643", undefined, 21).position.set(0, -1.1, 0.09);
-        addAction(group, { kind: "artwork", id: artwork.id });
+        const rim=box(group,0,0,.06,1,1,.12,matte("#c9baa2"));
+        const mount=box(group,0,0,.125,1,1,.025,white);mount.castShadow=false;
+        const placeholder=textPlane(group,artwork.title,1.2,.5,"#9e998b","#fffdf8",24,2);placeholder.position.z=.145;
+        const picture=new T.Mesh(geo(new T.PlaneGeometry(1,1)),mat(new T.MeshBasicMaterial({color:"#ffffff",toneMapped:false})));
+        picture.position.z=.15;picture.visible=false;group.add(picture);
+        const plaque=rounded(group,2.3,.27,.025,white,.045);
+        const caption=textPlane(group,`${wing*WORLD_WING_CAPACITY+index+1}. ${artwork.title}${artwork.artistName||artwork.studentName?` · ${artwork.artistName||artwork.studentName}`:""}`,2.17,.25,"#655643",undefined,21);
+        function resize(width:number,height:number){const size=exhibitionFrameSize(width,height);rim.scale.set(size.width,size.height,.12);mount.scale.set(size.width-size.border*2,size.height-size.border*2,.025);picture.scale.set(size.imageWidth,size.imageHeight,1);plaque.position.set(0,-size.height/2-.23,.025);caption.position.set(0,-size.height/2-.23,.11);}
+        resize(artwork.width||3,artwork.height||2);
+        textureJobs.push({artwork,picture,placeholder,w:2.05,h:2.05,resize});
+        addAction(group,{kind:"artwork",id:artwork.id});
+      }
+      function artScreen() {
+        const screen=GALLERY_SCREEN,group=new T.Group();scene.add(group);
+        group.position.z=-roomDimensions.depth/2+.34;
+        const rim=box(group,0,screen.y,.06,1,1,.12,matte("#bfb7a8"));
+        const mount=box(group,0,screen.y,.125,1,1,.025,white);mount.castShadow=false;
+        const surface=document.createElement('canvas');let texture=new T.CanvasTexture(surface),textureWidth=0,textureHeight=0;texture.colorSpace=T.SRGBColorSpace;textures.add(texture);
+        const screenMaterial=mat(new T.MeshBasicMaterial({map:texture,toneMapped:false}));
+        const picture=mesh(geo(new T.PlaneGeometry(1,1)),screenMaterial,group);
+        picture.position.set(0,screen.y,.15);picture.castShadow=false;
+        const painter=createArtScreenPainter(surface,callbacks.current.artworks,size=>{
+          // WebGL texture storage is immutable. A portrait/landscape or overview
+          // resize needs a new texture, including after a thumbnail first loads.
+          if(surface.width!==textureWidth||surface.height!==textureHeight){
+            textures.delete(texture);texture.dispose();texture=new T.CanvasTexture(surface);
+            texture.colorSpace=T.SRGBColorSpace;textures.add(texture);screenMaterial.map=texture;screenMaterial.needsUpdate=true;
+            textureWidth=surface.width;textureHeight=surface.height;
+          }
+          rim.scale.set(size.width,size.height,.12);mount.scale.set(size.width-.09,size.height-.09,.025);picture.scale.set(size.imageWidth,size.surfaceHeight,1);root!.dataset.screenFrameSize=`${size.width.toFixed(3)},${size.height.toFixed(3)}`;texture.needsUpdate=true;invalidate();
+        });
+        screenPainter.current=frame=>{root!.dataset.screenIndex=String(frame.index+1);root!.dataset.screenMode=frame.overview?'overview':'slideshow';painter.show(frame);};
+        screenPainter.current(screenFrame.current);
+        events.push(()=>{screenPainter.current=null;painter.dispose();});
+        addAction(group,{kind:'screen',id:'art-screen'});
       }
 
       if (stage === "campus") {
@@ -403,14 +447,11 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         } else {
           const slots = exhibitionWallSlots(data.artworks.length);
           data.artworks.forEach((artwork, index) => artworkFrame(artwork, index, slots[index]));
-          textPlane(scene, data.roomTitle || (english ? "Our little gallery" : "우리들의 작은 전시회"), 8, 0.46, palette.dark).position.set(0, 5.5, -roomDimensions.depth / 2 + 0.18);
+          artScreen();
+          textPlane(scene, data.roomTitle || (english ? "Our little gallery" : "우리들의 작은 전시회"), 8, 0.46, palette.dark).position.set(0, 6.75, -roomDimensions.depth / 2 + 0.18);
           const bench = rounded(scene, 3.5, 0.28, 1.0, cream, 0.14); bench.position.set(0, 0.58, -0.45);
           box(scene, -1.3, 0.26, -0.45, 0.23, 0.51, 0.7, wood); box(scene, 1.3, 0.26, -0.45, 0.23, 0.51, 0.7, wood);
           obstacles.push({ x: 0, z: -0.45, halfX: 1.95, halfZ: 0.75 });
-          if (!data.artworks.length) {
-            const empty = rounded(scene, 6.2, 2.4, 0.14, mint, 0.3); empty.position.set(0, 3.1, -roomDimensions.depth / 2 + 0.2);
-            textPlane(scene, english ? "Your wonderful artwork belongs here" : "멋진 작품을 이곳에 걸어주세요", 5.7, 0.85, "#49695d").position.set(0, 3.1, -roomDimensions.depth / 2 + 0.32);
-          }
           if (theme === "forest") { plant(-8.3, 5.7, 1.7); plant(8.3, 5.7, 1.6); }
           if (theme === "sky") { cloud(-roomDimensions.width / 2 + 1.3, 5.6, -roomDimensions.depth / 2 + 1.5, 0.7); cloud(roomDimensions.width / 2 - 1.3, 5.65, -roomDimensions.depth / 2 + 1.5, 0.7); }
           if (theme === "ocean") {
@@ -421,7 +462,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
       const cat = character("cat", 0.82); scene.add(cat.group);
       const guide = character("otter", stage === "campus" ? 1.04 : 0.95);
-      guide.group.position.set(stage === "campus" ? 3.9 : stage === "gallery" ? 3.2 : -4.8, 0, stage === "campus" ? 4.7 : stage === "gallery" ? -1.9 : 1.6);
+      guide.group.position.set(stage === "campus" ? 2.7 : stage === "gallery" ? 3.2 : -4.8, 0, stage === "campus" ? 4.7 : stage === "gallery" ? -1.9 : 1.6);
       guide.group.rotation.y = stage === "campus" ? -0.25 : 0.3; scene.add(guide.group);
       if (stage !== "gallery") {
         const guideSign = textPlane(scene, english ? "Moa · welcome!" : "모아와 함께 구경해요!", 2.3, 0.34, palette.dark, "#fff9ed", 28);
@@ -432,6 +473,8 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       function active() { return !disposed && !pausedRef.current && !document.hidden && inView && !renderer.getContext().isContextLost(); }
       function updateCamera() {
         let follow = stage === "campus" ? 5.8 : 3.75;
+        // Fit the whole facade on portrait screens instead of cropping its sides.
+        if (stage === 'campus') follow = Math.max(follow, 4.9 / (Math.tan(T.MathUtils.degToRad(27)) * camera.aspect * .84) - 8.65);
         // A camera following the child must not go through the class building when they turn around.
         if (stage === "campus") {
           const directionX = -Math.sin(yaw), directionZ = Math.cos(yaw);
@@ -448,11 +491,14 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
           }
         }
         const cameraX = player.x - Math.sin(yaw) * follow, cameraZ = player.z + Math.cos(yaw) * follow;
-        camera.position.set(T.MathUtils.clamp(cameraX, bounds.minX + 0.15, bounds.maxX - 0.15), stage === "campus" ? 3.6 : 2.3, T.MathUtils.clamp(cameraZ, bounds.minZ + 0.15, bounds.maxZ - 0.15));
-        camera.lookAt(camera.position.x + Math.sin(yaw) * 10, camera.position.y + Math.sin(pitch) * 10, camera.position.z - Math.cos(yaw) * 10);
+        const portraitCampus = stage === 'campus' && camera.aspect < .85;
+        camera.position.set(T.MathUtils.clamp(cameraX, bounds.minX + 0.15, bounds.maxX - 0.15), stage === "campus" ? (portraitCampus ? 5.6 : 3.6) : 2.3, T.MathUtils.clamp(cameraZ, bounds.minZ + 0.15, bounds.maxZ - 0.15));
+        const viewPitch = pitch - (portraitCampus ? .05 : 0);
+        camera.lookAt(camera.position.x + Math.sin(yaw) * 10, camera.position.y + Math.sin(viewPitch) * 10, camera.position.z - Math.cos(yaw) * 10);
         cat.group.position.copy(player);
         cat.group.visible = camera.position.distanceTo(new T.Vector3(player.x, 1.1, player.z)) > 1.65;
       }
+      const stick={x:0,y:0};
       function canStand(x: number, z: number) {
         return !obstacles.some(o => Math.abs(x - o.x) < o.halfX + 0.26 && Math.abs(z - o.z) < o.halfZ + 0.26);
       }
@@ -460,11 +506,11 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         frame = 0;
         if (!active()) { lastTime = 0; return; }
         const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.045) : 1 / 60; lastTime = now;
-        const forward = Number(keys.has("KeyW") || keys.has("ArrowUp")) - Number(keys.has("KeyS") || keys.has("ArrowDown"));
-        const side = Number(keys.has("KeyD") || keys.has("ArrowRight")) - Number(keys.has("KeyA") || keys.has("ArrowLeft"));
+        const forward = -stick.y + Number(keys.has("KeyW") || keys.has("ArrowUp")) - Number(keys.has("KeyS") || keys.has("ArrowDown"));
+        const side = stick.x + Number(keys.has("KeyD") || keys.has("ArrowRight")) - Number(keys.has("KeyA") || keys.has("ArrowLeft"));
         const moving = !transitioning && (forward !== 0 || side !== 0);
         if (moving) {
-          const length = Math.hypot(forward, side), speed = dt * (stage === "campus" ? 3.8 : 3.1) / length;
+          const length = Math.max(1,Math.hypot(forward, side)), speed = dt * (stage === "campus" ? 3.8 : 3.1) / length;
           const dx = (Math.sin(yaw) * forward + Math.cos(yaw) * side) * speed;
           const dz = (-Math.cos(yaw) * forward + Math.sin(yaw) * side) * speed;
           const nx = T.MathUtils.clamp(player.x + dx, bounds.minX, bounds.maxX);
@@ -487,11 +533,12 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         if (moving) invalidate();
       }
       function invalidate() { if (!frame && active()) frame = requestAnimationFrame(draw); }
-      function reset() { player.copy(initialPlayer); yaw = 0; pitch = stage === "campus" ? -0.08 : -0.045; cat.group.rotation.y = 0; keys.clear(); invalidate(); }
+      function reset() { player.copy(initialPlayer); yaw = 0; pitch = stage === "campus" ? -0.08 : -0.045; cat.group.rotation.y = 0; keys.clear();stick.x=stick.y=0; invalidate(); }
       controlsRef.current = {
+        stick:(x,y)=>{stick.x=pausedRef.current?0:x;stick.y=pausedRef.current?0:y;invalidate();},
         direction: (key, down) => { if (down && !pausedRef.current) keys.add(key); else keys.delete(key); invalidate(); },
         reset,
-        refresh: () => { if (pausedRef.current) keys.clear(); invalidate(); },
+        refresh: () => { if (pausedRef.current) {keys.clear();stick.x=stick.y=0;} invalidate(); },
       };
 
       const textureLoader = new T.TextureLoader(); textureLoader.setCrossOrigin("anonymous");
@@ -514,8 +561,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
           }
           texture.colorSpace = T.SRGBColorSpace; texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); texture.needsUpdate = true;
           textures.add(texture); job.picture.material.map = texture; job.picture.material.needsUpdate = true;
-          const ratio = imageWidth / imageHeight;
-          job.picture.scale.set(Math.min(job.w, job.h * ratio), Math.min(job.h, job.w / ratio), 1);
+          job.resize(imageWidth,imageHeight);
           job.placeholder.visible = false; job.picture.visible = true; setLoadedArtworkIds(ids => [...ids, job.artwork.id]); invalidate(); loadNextTexture();
         }, undefined, () => { if (!disposed) { setFailedImages(value => value + 1); loadNextTexture(); } });
       }
@@ -555,7 +601,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         canvas.style.cursor = "grab";
         if (clicked) { const action = actionAt(event); if (action) invoke(action); }
       };
-      const cancel = () => { drag = null; keys.clear(); };
+      const cancel = () => { drag = null; keys.clear();stick.x=stick.y=0;invalidate(); };
       const keydown = (event: KeyboardEvent) => {
         if (!root.contains(document.activeElement) || (event.target instanceof HTMLElement && event.target.matches("input, textarea, select, [contenteditable=true]"))) return;
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
@@ -563,7 +609,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         } else if (event.code === "KeyR") reset();
       };
       const keyup = (event: KeyboardEvent) => { keys.delete(event.code); invalidate(); };
-      const visibility = () => { keys.clear(); lastTime = 0; invalidate(); };
+      const visibility = () => { keys.clear();stick.x=stick.y=0; lastTime = 0; invalidate(); };
       const contextLost = (event: Event) => { event.preventDefault(); keys.clear(); if (!disposed) setStatus("fallback"); };
       canvas.addEventListener("pointerdown", down); canvas.addEventListener("pointermove", move); canvas.addEventListener("pointerup", up);
       canvas.addEventListener("pointercancel", cancel); canvas.addEventListener("lostpointercapture", cancel); canvas.addEventListener("webglcontextlost", contextLost);
@@ -575,9 +621,12 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       });
       const resize = new ResizeObserver(() => {
         width = Math.max(1, host.clientWidth); height = Math.max(1, host.clientHeight);
-        renderer.setSize(width, height, false); camera.aspect = width / height; camera.updateProjectionMatrix(); invalidate();
+        renderer.setSize(width, height, false); camera.aspect = width / height;
+        // Preserve a comfortable horizontal view on a portrait phone.
+        if(stage!=='campus')camera.fov=Math.min(94,Math.max(64,T.MathUtils.radToDeg(2*Math.atan(Math.tan(T.MathUtils.degToRad(32))*.62/camera.aspect))));
+        camera.updateProjectionMatrix(); invalidate();
       }); resize.observe(host);
-      const intersection = new IntersectionObserver(entries => { inView = entries[0]?.isIntersecting ?? true; if (!inView) keys.clear(); invalidate(); }, { threshold: 0.01 }); intersection.observe(host);
+      const intersection = new IntersectionObserver(entries => { inView = entries[0]?.isIntersecting ?? true; if (!inView) {keys.clear();stick.x=stick.y=0;} invalidate(); }, { threshold: 0.01 }); intersection.observe(host);
       cleanup = () => {
         savedViews.current.set(viewKey, { x: player.x, z: player.z, yaw, pitch });
         if (frame) cancelAnimationFrame(frame);
@@ -593,26 +642,19 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
     return () => { disposed = true; cleanup?.(); };
   }, [data, stage, theme, english, wing]);
 
-  function moveButton(key: string, label: string, icon: React.ReactNode, className: string) {
-    return <button type="button" className={className} aria-label={label} disabled={paused || status !== "ready"}
-      onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); controlsRef.current?.direction(key, true); }}
-      onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); controlsRef.current?.direction(key, false); }}
-      onPointerCancel={() => controlsRef.current?.direction(key, false)} onLostPointerCapture={() => controlsRef.current?.direction(key, false)}
-      onKeyDown={event => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); controlsRef.current?.direction(key, true); } }}
-      onKeyUp={() => controlsRef.current?.direction(key, false)} onBlur={() => controlsRef.current?.direction(key, false)}>{icon}</button>;
-  }
   const title = stage === "campus" ? (english ? "Our little exhibition school" : "우리들의 작은 전시학교") : stage === "classroom" ? buildingName || (english ? "Our classroom" : "우리 반 교실") : roomTitle || (english ? "Our exhibition" : "우리들의 전시회");
   const indexTitle = stage === "campus" ? (english ? "Choose a classroom" : "우리 반 찾기") : stage === "classroom" ? (english ? "All exhibitions" : "전시실 모두 보기") : (english ? "All artworks" : "작품 모두 보기");
   const indexVisible = indexOpen || status === "fallback";
 
-  return <section ref={rootRef} className={`ex-world ex-world--${stage}${paused ? " ex-world--paused" : ""}`} data-world-stage={stage} data-world-status={status} data-visible-artwork-count={data.artworks.length} data-loaded-artwork-count={loadedArtworkIds.length} data-loaded-artwork-ids={loadedArtworkIds.join(",")} data-total-artwork-count={artworks.length} data-world-wing={wing + 1} aria-label={title}>
+  return <section ref={rootRef} className={`ex-world ex-world--${stage}${paused || screenExpanded ? " ex-world--paused" : ""}`} data-world-stage={stage} data-world-status={status} data-visible-artwork-count={data.artworks.length} data-loaded-artwork-count={loadedArtworkIds.length} data-loaded-artwork-ids={loadedArtworkIds.join(",")} data-total-artwork-count={artworks.length} data-world-wing={wing + 1} aria-label={title}>
     <div ref={hostRef} className="ex-world-viewport" />
     <div className="ex-world-topbar">
       {stage === "campus" ? <span className="ex-world-back" /> : <button type="button" className="ex-world-pill ex-world-back" onClick={props.onExit} aria-label={english ? "Back" : "뒤로"}><ArrowLeft size={17} /><span>{stage === "gallery" ? (english ? "Classroom" : "교실로") : (english ? "Schoolyard" : "학교 앞으로")}</span></button>}
       <div className="ex-world-title"><span><Sparkles size={13} />{stage === "campus" ? "OUR LITTLE SCHOOL" : stage === "classroom" ? "OUR CLASSROOM" : "LITTLE ART GALLERY"}</span><strong>{title}</strong></div>
-      <button type="button" className={`ex-world-pill ex-world-index-toggle${indexVisible ? " is-active" : ""}`} onClick={() => setIndexOpen(value => !value)} aria-expanded={indexVisible}><Images size={17} /><span>{indexTitle}</span></button>
+      <button type="button" className={`ex-world-pill ex-world-index-toggle${indexVisible ? " is-active" : ""}`} aria-label={indexTitle} onClick={() => setIndexOpen(value => !value)} aria-expanded={indexVisible}><Images size={17} /><span>{indexTitle}</span></button>
     </div>
 
+    {stage==='gallery'&&<ExhibitionScreen key={contextKey} artworks={artworks} english={english} paused={paused||indexOpen} onFrame={showScreen} onExpanded={setScreenExpanded} openSignal={screenOpenSignal}/>}
     {status === "loading" && <div className="ex-world-loading" role="status"><span className="ex-world-loading-paw">🐾</span><strong>{english ? "Moa is opening the door…" : "모아가 문을 열고 있어요…"}</strong></div>}
     {entering && <div className="ex-world-entering" role="status"><DoorOpen size={23} /><span>{english ? "Come on in!" : "안으로 들어가요!"}</span></div>}
 
@@ -622,21 +664,19 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       <div className="ex-world-index-items">
         {stage === "campus" && buildings.map((building, i) => <button type="button" key={building.id} onClick={() => props.onEnterBuilding(building.id)}><span className="ex-world-index-icon">🏫</span><span><strong>{building.name}</strong><small>{english ? "Enter classroom" : "우리 반 교실로 들어가요"}</small></span><ChevronRight size={17} /></button>)}
         {stage === "classroom" && rooms.map(room => <button type="button" key={room.id} onClick={() => props.onEnterRoom(room.id)}><span className="ex-world-index-icon">{room.theme === "forest" ? "🌿" : room.theme === "sky" ? "☁️" : room.theme === "ocean" ? "🐳" : "🎨"}</span><span><strong>{room.title}</strong><small>{room.artworkCount ?? 0}{english ? " artworks" : "개의 작품"}</small></span><ChevronRight size={17} /></button>)}
-        {stage === "gallery" && artworks.map((artwork, i) => <button type="button" key={artwork.id} onClick={() => props.onSelectArtwork(artwork.id)}><span className="ex-world-index-number">{i + 1}</span><span><strong>{artwork.title}</strong><small>{artwork.studentName || (english ? "Our class artist" : "우리 반 작가")}{wings > 1 ? ` · ${Math.floor(i / WORLD_WING_CAPACITY) + 1}${english ? " wing" : "관"}` : ""}</small></span><ChevronRight size={17} /></button>)}
+        {stage === "gallery" && artworks.map((artwork, i) => <button type="button" key={artwork.id} onClick={() => props.onSelectArtwork(artwork.id)}><span className="ex-world-index-number">{i + 1}</span><span><strong>{artwork.title}</strong><small>{artwork.artistName || artwork.studentName || (english ? "Our class artist" : "우리 반 작가")}{wings > 1 ? ` · ${Math.floor(i / WORLD_WING_CAPACITY) + 1}${english ? " wing" : "관"}` : ""}</small></span><ChevronRight size={17} /></button>)}
         {(stage === "campus" ? buildings.length === 0 : items.length === 0) && <div className="ex-world-index-empty"><BookOpen size={28} /><p>{english ? "This space is waiting for its first story." : "첫 번째 이야기를 기다리고 있어요."}</p></div>}
       </div>
     </aside>}
 
     {status === "ready" && <>
+      {stage !== 'gallery' && !indexOpen && <div className="ex-world-entry">
+        {stage === 'campus' && data.buildings[0] && <button type="button" onClick={() => props.onEnterBuilding(data.buildings[0].id)}><span>{data.buildings[0].name}</span><strong>{english ? 'Enter classroom' : '우리 반 들어가기'} <DoorOpen size={16}/></strong></button>}
+        {stage === 'classroom' && rooms.length > 0 && <button type="button" onClick={() => rooms.length === 1 ? props.onEnterRoom(rooms[0].id) : setIndexOpen(true)}><span>{rooms.length === 1 ? rooms[0].title : (english ? 'Our class exhibitions' : '우리 반의 작은 이야기들')}</span><strong>{english ? 'Choose an exhibition' : '전시실 들어가기'} <DoorOpen size={16}/></strong></button>}
+      </div>}
       <div className="ex-world-bottom-hint"><span className="ex-world-guide-face" aria-hidden="true">🦦</span><p>{stage === "campus" ? (english ? "Pick your class building. Let's go inside!" : "우리 반 건물을 눌러 안으로 들어가요!") : stage === "classroom" ? (english ? "Pick a poster to enter its exhibition." : "벽에 걸린 포스터를 누르면 전시실이 열려요.") : (english ? "Every picture is a story. Tap a frame to look closer!" : "액자를 누르면 작품을 크게 감상할 수 있어요!")}<small><Move size={12} />{english ? "Drag to look · Arrow keys / WASD to walk" : "화면을 끌어 둘러보기 · 방향키 / WASD로 걷기"}</small></p></div>
-      <div className="ex-world-movement" aria-label={english ? "Walking controls" : "걷기 조작"}>
-        {moveButton("ArrowUp", english ? "Walk forward" : "앞으로 걷기", <ArrowUp size={21} />, "ex-world-move-up")}
-        {moveButton("ArrowLeft", english ? "Walk left" : "왼쪽으로 걷기", <ArrowLeft size={21} />, "ex-world-move-left")}
-        <span className="ex-world-move-center" aria-hidden="true">🐾</span>
-        {moveButton("ArrowRight", english ? "Walk right" : "오른쪽으로 걷기", <ArrowRight size={21} />, "ex-world-move-right")}
-        {moveButton("ArrowDown", english ? "Walk backward" : "뒤로 걷기", <ArrowDown size={21} />, "ex-world-move-down")}
-      </div>
-      <button type="button" className="ex-world-pill ex-world-reset" onClick={() => controlsRef.current?.reset()}><RotateCcw size={16} /><span>{english ? "Reset view" : "처음 위치로"}</span></button>
+      <WorldJoystick english={english} disabled={paused||screenExpanded||indexOpen||status!=="ready"} onMove={moveStick}/>
+      <button type="button" className="ex-world-pill ex-world-reset" aria-label={english ? "Reset view" : "처음 위치로"} onClick={() => controlsRef.current?.reset()}><RotateCcw size={16} /><span>{english ? "Reset view" : "처음 위치로"}</span></button>
     </>}
     {wings > 1 && <div className="ex-world-wings" aria-label={stage === "campus" ? (english ? "Schoolyards" : "학교마당 이동") : (english ? "Exhibition wings" : "전시관 이동")}><button type="button" disabled={wing === 0} onClick={() => setWingChoice({ key: contextKey, value: wing - 1 })} aria-label={english ? "Previous wing" : "이전 공간"}><ChevronLeft size={19} /></button><span><strong>{wing + 1}{english ? " / " : stage === "campus" ? "마당 / " : "관 / "}{wings}{english ? (stage === "campus" ? " yards" : " wings") : stage === "campus" ? "마당" : "관"}</strong><small>{wing * capacity + 1}–{Math.min((wing + 1) * capacity, items.length)} / {items.length}</small></span><button type="button" disabled={wing === wings - 1} onClick={() => setWingChoice({ key: contextKey, value: wing + 1 })} aria-label={english ? "Next wing" : "다음 공간"}><ChevronRight size={19} /></button></div>}
     {failedImages > 0 && <p className="ex-world-image-note" role="status">{english ? `${failedImages} picture(s) could not load. Select a frame to open the artwork.` : `사진 ${failedImages}장을 불러오지 못했어요. 액자를 눌러 작품을 열 수 있어요.`}</p>}

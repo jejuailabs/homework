@@ -55,7 +55,7 @@ test('upload manifest cannot cross owner or exhibition, or be reused after final
   assert.equal(canConsumeExhibitionUpload(teacher, 'show-b', manifest), false);
   assert.equal(canConsumeExhibitionUpload(teacher, 'show-a', { ...manifest, status: 'submitted' }), false);
   assert.equal(canConsumeExhibitionUpload(teacher, 'show-a', undefined), false);
-  assert.equal(canConsumeExhibitionUpload(student, 'show-a', { ...manifest, userUid: student.uid }), false);
+  assert.equal(canConsumeExhibitionUpload(student, 'show-a', { ...manifest, userUid: student.uid }), true);
 });
 test('photo policy rejects animated/executable declarations and unsafe sizes', () => {
   assert.equal(exhibitionUploadPolicy('image/webp', 100 * 1024 * 1024).size, 100 * 1024 * 1024);
@@ -154,4 +154,14 @@ test('failed derivative write waits for the other in-flight save before cleanup 
     new Promise(resolve => setTimeout(() => { lateWriteCompleted = true; resolve(undefined); }, 15)),
   ]), error => error === failure);
   assert.equal(lateWriteCompleted, true);
+});
+
+// Upload reservations are still gated by the exhibition setting before they can be consumed.
+test('students submit only into an opted-in open exhibition in their own class', () => {
+  const enabled = {...exhibition, allowStudentUploads: true};
+  assert.equal(canSubmitExhibition(student, enabled), true);
+  assert.equal(canSubmitExhibition(student, {...enabled, status: 'closed'}), false);
+  assert.equal(canSubmitExhibition(student, {...enabled, status: 'draft'}), false);
+  assert.equal(canSubmitExhibition({...student, classId: 'other'}, enabled), false);
+  assert.equal(canSubmitExhibition(student, {...enabled, allowStudentUploads: false}), false);
 });

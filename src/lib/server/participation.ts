@@ -46,7 +46,7 @@ function publicBoard(ctx: Context, board: StoredBoard): ParticipationBoard {
 }
 function publicAuthor(ctx: Context, board: StoredBoard, item: Data): BoardAuthor {
   const own = ctx.uid === item.authorUid;
-  const masked = board.anonymous && item.authorRole === 'student' && !isBoardOwner(ctx, board) && !own;
+  const masked = (board.anonymous || item.sourceAnonymous) && item.authorRole === 'student' && !isBoardOwner(ctx, board) && !own;
   return {
     name: masked ? `친구 ${hash(`${board.id}:${item.authorUid}`).slice(0, 4).toUpperCase()}` : item.authorName,
     character: item.authorCharacter ?? 'cat', isTeacher: item.authorRole !== 'student', isMe: own,
@@ -70,6 +70,7 @@ async function postView(ctx: Context, board: StoredBoard, value: Data, engagemen
     ...(mine?.reaction ? { ownReaction: mine.reaction } : {}), commentCount: value.commentCount ?? 0,
     createdAt: value.createdAt, updatedAt: value.updatedAt, version: value.version,
     canEdit: canWriteBoard(ctx, board) && (isBoardOwner(ctx, board) || value.authorUid === ctx.uid),
+    ...(value.source?.kind === 'assignment' ? {source: {kind: 'assignment' as const, title: value.source.title, ...(isBoardOwner(ctx, board) ? {assignmentId: value.source.assignmentId} : {})}} : {}),
   };
 }
 function commentView(ctx: Context, board: StoredBoard, value: Data): BoardComment {

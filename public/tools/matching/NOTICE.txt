@@ -1,0 +1,18 @@
+Same-picture finding artwork
+
+Noto Emoji SVG artwork
+Copyright Google LLC and Noto Emoji contributors.
+Source: https://github.com/googlefonts/noto-emoji/tree/v2.047/svg
+Version: v2.047. Images are redistributed without artwork changes.
+The project README licenses tools and most image resources under Apache 2.0.
+See APACHE-2.0.txt and NOTO-README.md for these images.
+NOTO-LICENSE.txt is the upstream font-license file, retained for reference;
+this package contains SVG artwork, not font software.
+
+flag-icons SVG artwork
+Copyright (c) 2013 Panayiotis Lipiridis and contributors.
+Source: https://github.com/lipis/flag-icons/tree/v7.5.0/flags/4x3
+Version: v7.5.0. Images are redistributed without artwork changes.
+License: MIT. See FLAGS-LICENSE.txt.
+
+manifest.json records each bundled image's source URL, license, and version.

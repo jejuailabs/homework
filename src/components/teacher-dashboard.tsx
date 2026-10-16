@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {useLocale, useTranslations} from "next-intl";
-import {ArrowRight, BookOpen, CalendarDays, CheckCheck, ChevronRight, ClipboardCheck, Clock3, Flower2, Heart, House, Images, LoaderCircle, PanelsTopLeft, Plus, RefreshCw, School, ShieldCheck, Sparkles, Star, Users} from "lucide-react";
+import {ArrowRight, BookOpen, CalendarDays, CheckCheck, ChevronRight, ClipboardCheck, Clock3, Flower2, Heart, House, Images, Layers, LoaderCircle, PanelsTopLeft, Plus, RefreshCw, School, ShieldCheck, Sparkles, Star, Users} from "lucide-react";
 import type {DashboardDetailKind, TeacherDashboardData} from "@/lib/teacher-dashboard-types";
 import {assignmentInPeriod, schoolYearAt, type DashboardPeriod} from "@/lib/teacher-dashboard-period";
 import BoardDashboardSummary from './board-dashboard-summary';
@@ -42,7 +42,9 @@ export default function TeacherDashboard() {
     finally {setLoading(false);}
   }, []);
   useEffect(() => {
-    const query = new URL(window.location.href).searchParams, linkedClass = query.get('classId');
+    const query = new URL(window.location.href).searchParams;
+    let linkedClass = query.get('classId');
+    if (!linkedClass) {try {linkedClass = sessionStorage.getItem('homework-current-class');} catch {}}
     if (linkedClass && /^[A-Za-z0-9_-]{1,200}$/.test(linkedClass)) setSelectedClassId(linkedClass);
     if (query.get('view') === 'students') setDetailKind('students');
     void load();
@@ -57,6 +59,7 @@ export default function TeacherDashboard() {
   // The API orders the newest school year first; existing older classes remain accessible.
   const classroom = data?.classes.find(item => item.id === selectedClassId) || data?.classes[0];
   const classId = classroom?.id || "";
+  useEffect(() => {if (classId) {try {sessionStorage.setItem('homework-current-class', classId);} catch {}}}, [classId]);
   const assignments = useMemo(() => (data?.assignments || []).filter(task => task.classId === classId && assignmentInPeriod(task.createdAt, period, year)), [data, classId, period, year]);
   const exhibitions = (data?.exhibitions || []).filter(room => room.classId === classId);
   const exhibitionHref = `/teacher/exhibitions${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`;
@@ -95,6 +98,7 @@ export default function TeacherDashboard() {
       <Link className="thd-shortcut thd-peach" href={exhibitionHref}><span className="thd-icon"><Images size={24}/></span><span><strong>{t("exhibitions")}</strong><small>{t("exhibitionsHint")}</small></span><img src="/characters/otter-moa.webp" alt=""/><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-sky" href={`/teacher/boards${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`}><span className="thd-icon"><PanelsTopLeft size={24}/></span><span><strong>{t("boards")}</strong><small>{t("boardsHint")}</small></span><img src="/characters/rabbit-tori.webp" alt=""/><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-lilac" href="/teacher/tools"><span className="thd-icon"><Sparkles size={24}/></span><span><strong>{t("tools")}</strong><small>{t("toolsHint")}</small></span><ArrowRight size={20}/></Link>
+      <Link className="thd-shortcut thd-peach" href={`/teacher/cards${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`}><span className="thd-icon"><Layers size={24}/></span><span><strong>{locale === 'ko' ? '카드놀이' : 'Card Play'}</strong><small>{locale === 'ko' ? '세트 만들기 · 학습 · 테스트' : 'Create sets · learn · test'}</small></span><ArrowRight size={20}/></Link>
     </nav>
 
     <section className="thd-overview" aria-labelledby="dashboard-overview">

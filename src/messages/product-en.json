@@ -98,7 +98,7 @@
     },
     "rosterDuplicate": "A student with this number already exists. Check the numbers.",
     "codeTitle": "Student entry codes are ready",
-    "codeDescription": "You can only see these codes now. Download them and give each student their own code.",
+    "codeDescription": "These are the current login codes. You can return here later to view or download them.",
     "downloadCodes": "Download entry codes",
     "code": "Entry code",
     "name": "Name",
@@ -134,7 +134,15 @@
     "submissionTypeLabel": "Submission type",
     "submissionTypeHint": "Choose how students should submit this assignment.",
     "submissionTypeRequired": "Choose text, images, or videos for this assignment.",
-    "videoPreviewUnavailable": "If the video does not play, open the file below to view it."
+    "videoPreviewUnavailable": "If the video does not play, open the file below to view it.",
+    "copyCode": "Copy code",
+    "codeCopied": "Login code copied.",
+    "codeCopyFailed": "Could not copy. Select the code to copy it or download the CSV.",
+    "codeStatus": "Code status",
+    "codeAvailable": "Current",
+    "codeLegacyUnavailable": "Older code · reissue once to view",
+    "codeUnavailable": "No code record",
+    "codeLegacyHelp": "Older letter codes were stored without a recoverable copy. Reissue only those students once to make their codes available here in future."
   },
   "student": {
     "greeting": "A little day for {name}",

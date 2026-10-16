@@ -217,3 +217,26 @@
 @media (prefers-reduced-motion: reduce) {
   .ex-world *, .ex-world *::before, .ex-world *::after { animation: none !important; transition: none !important; }
 }
+.ex-world-joystick{position:absolute;z-index:4;left:20px;bottom:20px;width:116px;height:116px;border:2px solid #fff9e9bd;border-radius:50%;background:radial-gradient(circle,#f5ecdcb0 0 45%,#fff6df8c 46% 100%);box-shadow:inset 0 1px 10px #bba88226,0 5px 18px #5c695c1a;backdrop-filter:blur(8px);touch-action:none;user-select:none;-webkit-user-select:none;display:grid;place-items:center;color:#647764;padding:0;cursor:grab}.ex-world-joystick:active{cursor:grabbing}.ex-world-joystick:disabled{opacity:.45;pointer-events:none}.ex-stick-knob{display:grid;place-items:center;position:absolute;width:51px;height:51px;border:2px solid #fffef7;border-radius:50%;background:linear-gradient(145deg,#fffdf4,#ecddc4);box-shadow:0 4px 0 #c9b89b,0 6px 12px #8c806e26;font-size:22px;pointer-events:none}.ex-world-joystick>svg{position:absolute;opacity:.65;pointer-events:none}.ex-stick-up{top:7px}.ex-stick-down{bottom:7px}.ex-stick-left{left:7px}.ex-stick-right{right:7px}.ex-world--paused .ex-world-joystick{pointer-events:none}@media(max-width:640px){.ex-world-joystick{left:13px;bottom:15px;width:108px;height:108px}}
+
+@media(max-width:760px),(max-height:520px) and (pointer:coarse){
+ .ex-world .ex-world-topbar{grid-template-columns:44px minmax(0,1fr) 44px;align-items:start;gap:6px;top:calc(8px + env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right))}
+ .ex-world .ex-world-title{grid-column:2;grid-row:1;min-width:0;max-width:100%;width:100%;margin:0;padding:10px 8px;border-radius:12px;background:#fffdf6df;box-shadow:none}.ex-world .ex-world-title>strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}.ex-world .ex-world-title>span{display:none}
+ .ex-world .ex-world-back{grid-row:1;grid-column:1}.ex-world .ex-world-index-toggle{grid-row:1;grid-column:3;justify-self:end}.ex-world .ex-world-topbar .ex-world-pill{width:44px;height:44px;min-height:44px;padding:10px;border:1px solid #fffef5;border-radius:14px;box-shadow:0 2px 8px #344b3812;background:#fffdf6df}.ex-world-topbar .ex-world-pill>span{display:none}
+ .ex-world .ex-world-joystick{width:88px;height:88px;left:max(12px,env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));background:#fff9e29c}.ex-world .ex-stick-knob{width:40px;height:40px;font-size:18px;box-shadow:0 2px 0 #c9b89b,0 4px 8px #8c806e26}
+ .ex-world .ex-world-reset{width:44px;min-height:44px;height:44px;padding:10px;right:max(12px,env(safe-area-inset-right));bottom:calc(68px + env(safe-area-inset-bottom));border:1px solid #fffef5;border-radius:14px;background:#fffdf6df}.ex-world-reset>span{display:none}
+ .ex-world .ex-world-bottom-hint{display:none}.ex-world .ex-world-wings{bottom:calc(68px + env(safe-area-inset-bottom));right:66px;padding:3px}.ex-world-wings small{display:none}.ex-world .ex-world-index{top:calc(64px + env(safe-area-inset-top));bottom:calc(112px + env(safe-area-inset-bottom))}.ex-visit-content .ex-world .ex-world-index{top:calc(112px + env(safe-area-inset-top))}
+ .ex-visit-content .ex-world .ex-world-topbar{grid-template-columns:1fr;top:calc(62px + env(safe-area-inset-top))}.ex-visit-content .ex-world .ex-world-title,.ex-visit-content .ex-world .ex-world-back{display:none}.ex-visit-content .ex-world .ex-world-index-toggle{grid-row:1;grid-column:1}
+}
+
+.ex-world-entry { display: none; }
+@media (max-width:760px), (max-height:520px) and (pointer:coarse) {
+  .ex-world-entry { display: block; position: absolute; z-index: 4; left: 116px; right: max(12px,env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .ex-world-entry > button { width: 100%; min-height: 72px; padding: 11px 14px; border: 1px solid #fffef4; border-radius: 19px; background: #fffdf2f0; box-shadow: 0 5px 0 #cfceb88c,0 8px 24px #526e4920; color: #355f4b; }
+  .ex-world-entry span { display: block; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; margin-bottom: 4px; }
+  .ex-world-entry strong { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 14px; line-height: 1.5; }
+  .ex-world--campus .ex-world-entry > button { background: #f8fff5ed; }
+}
+@media (max-width:760px), (max-height:520px) and (pointer:coarse) {
+  .ex-world-entry { max-width: 300px; margin-left: auto; }
+}

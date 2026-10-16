@@ -24,6 +24,7 @@ export type BoardAttachment = {
 export type BoardAuthor = { name: string; character: Character; isTeacher: boolean; isMe: boolean; studentId?: string; number?: number };
 export type BoardPoll = { question: string; options: { id: string; text: string; count: number }[]; ownVote?: string; totalVotes: number };
 export type BoardPost = {
+  source?: {kind: 'assignment'; title: string; assignmentId?: string};
   id: string; boardId: string; title: string; body: string; sectionId: string; color: BoardTheme;
   author: BoardAuthor; attachments: BoardAttachment[]; link: string;
   status: BoardPostStatus; pinned: boolean; order: number; x: number; y: number;

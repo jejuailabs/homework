@@ -2,13 +2,14 @@
 
 import {useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent} from 'react';
 import {useTranslations} from 'next-intl';
-import {ArrowDownToLine, CheckCircle2, KeyRound, LoaderCircle, Plus, Upload, Users} from 'lucide-react';
+import {ArrowDownToLine, CheckCircle2, Copy, KeyRound, LoaderCircle, Plus, Upload, Users} from 'lucide-react';
 import {characterFiles, type Character} from '@/lib/characters';
 import {parseRoster} from '@/lib/roster';
+import {classMetadataFetch} from '@/lib/class-metadata-cache';
 
-type Student = {id: string; name: string; number: number; character?: Character; accessCode?: string};
+type Student = {id: string; name: string; number: number; character?: Character; accessCode?: string; codeStatus?: 'available' | 'legacy-unavailable' | 'missing'};
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {...init, cache: 'no-store', headers: {'Content-Type': 'application/json', ...init?.headers}});
+  const response = await classMetadataFetch(url, {...init, cache: 'no-store', headers: {'Content-Type': 'application/json', ...init?.headers}});
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.code || 'request_failed');
   return body as T;
@@ -29,10 +30,10 @@ export default function ClassStudentManager({classId, onCount, onChanged, onBusy
   const parsed = useMemo(() => parseRoster(roster), [roster]);
   const load = useCallback(async () => {
     reading.current?.abort(); const controller = new AbortController(); reading.current = controller;
-    setLoading(true); setFailed(false);
+    setLoading(true); setFailed(false); setStudents([]); setCodes([]); setNotice('');
     try {
-      const result = await request<{students: Student[]}>(`/api/classes/${encodeURIComponent(classId)}/students`, {signal: controller.signal});
-      if (!controller.signal.aborted) {setStudents(result.students); callbacks.current.onCount(result.students.length);}
+      const result = await request<{students: Student[]}>(`/api/classes/${encodeURIComponent(classId)}/students?includeCodes=1`, {signal: controller.signal});
+      if (!controller.signal.aborted) {setStudents(result.students); setCodes(result.students); callbacks.current.onCount(result.students.length);}
     } catch {if (!controller.signal.aborted) setFailed(true);}
     finally {if (!controller.signal.aborted) setLoading(false);}
   }, [classId]);
@@ -50,7 +51,7 @@ export default function ClassStudentManager({classId, onCount, onChanged, onBusy
       const result = await request<{students: Student[]}>(base, {method: 'POST', body: JSON.stringify({students: parsed.students})});
       setStudents(previous => [...previous, ...result.students].sort((a, b) => a.number - b.number));
       callbacks.current.onCount(students.length + result.students.length);
-      setCodes(result.students); setRoster(''); setView('codes'); setNotice(t('teacher.rosterAdded')); callbacks.current.onChanged();
+      setCodes(previous => [...previous, ...result.students].sort((a,b) => a.number-b.number)); setRoster(''); setView('codes'); setNotice(t('teacher.rosterAdded')); callbacks.current.onChanged();
     } catch (cause) {
       setFormError(t(cause instanceof Error && cause.message === 'DUPLICATE_NUMBER' ? 'teacher.rosterDuplicate' : 'common.error'));
       if (cause instanceof Error && cause.message === 'DUPLICATE_NUMBER') void load();
@@ -61,17 +62,23 @@ export default function ClassStudentManager({classId, onCount, onChanged, onBusy
     startWrite();
     try {
       const result = await request<{accessCode: string}>(`${base}/${encodeURIComponent(student.id)}/reset-code`, {method: 'POST', body: '{}'});
-      setCodes([{...student, accessCode: result.accessCode}]); setView('codes'); setNotice(d('codeResetSuccess'));
+      setCodes(previous => previous.map(row => row.id === student.id ? {...row, accessCode: result.accessCode, codeStatus: 'available'} : row)); setStudents(previous => previous.map(row => row.id === student.id ? {...row, accessCode: result.accessCode, codeStatus: 'available'} : row)); setView('codes'); setNotice(d('codeResetSuccess'));
     } catch {setFormError(t('common.error'));}
     finally {endWrite();}
   }
+  async function copyCode(student: Student) {
+    if (!student.accessCode) return;
+    try {await navigator.clipboard.writeText(student.accessCode); setNotice(t('teacher.codeCopied')); setFormError('');}
+    catch {setFormError(t('teacher.codeCopyFailed'));}
+  }
+  function codeStatus(student: Student) {return student.accessCode ? t('teacher.codeAvailable') : t(student.codeStatus === 'legacy-unavailable' ? 'teacher.codeLegacyUnavailable' : 'teacher.codeUnavailable');}
   function downloadCodes() {
     const cell = (value: string | number) => {const text = String(value); return `"${(/^[=+@\-]/.test(text) ? "'" + text : text).replace(/"/g, '""')}"`;};
-    const csv = '\uFEFF' + [[t('teacher.number'), t('teacher.name'), t('teacher.code')], ...codes.map(student => [student.number, student.name, student.accessCode || ''])].map(row => row.map(cell).join(',')).join('\r\n');
+    const csv = '\uFEFF' + [[t('teacher.number'), t('teacher.name'), t('teacher.code'), t('teacher.codeStatus')], ...codes.map(student => [student.number, student.name, student.accessCode || '', codeStatus(student)])].map(row => row.map(cell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8;'}));
     const link = document.createElement('a'); link.href = url; link.download = t('teacher.codeFilename'); link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  const tabs = [{value: 'roster', label: d('rosterTab'), Icon: Users}, {value: 'add', label: d('addStudentsTab'), Icon: Plus}, ...(codes.length ? [{value: 'codes', label: d('codesTab'), Icon: KeyRound}] : [])] as const;
+  const tabs = [{value: 'roster', label: d('rosterTab'), Icon: Users}, {value: 'add', label: d('addStudentsTab'), Icon: Plus}, {value: 'codes', label: d('codesTab'), Icon: KeyRound}] as const;
   return <section className="class-student-manager" aria-busy={busy}>
     <nav className="csm-tabs" role="tablist" aria-label={d('manageStudents')}>{tabs.map(({value, label, Icon}, index) => <button type="button" role="tab" id={`${id}-${value}`} aria-selected={view === value} aria-controls={`${id}-panel`} tabIndex={view === value ? 0 : -1} key={value} disabled={busy} onClick={() => {setView(value as typeof view); setFormError('');}} onKeyDown={event => {
       if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -84,14 +91,14 @@ export default function ClassStudentManager({classId, onCount, onChanged, onBusy
     <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-${view}`}>
       {loading ? <div className="thd-detail-state" role="status"><LoaderCircle className="ws-spin" size={24}/>{t('common.loading')}</div> : failed ? <div className="ws-alert" role="alert">{t('common.networkError')}<button type="button" onClick={() => void load()}>{t('common.retry')}</button></div> : view === 'roster' ? <>
         <div className="csm-roster-heading"><p>{d('rosterManageHint')}</p><button className="ws-button ws-button-light" type="button" onClick={() => setView('add')} disabled={busy}><Plus size={16}/>{d('addStudentsTab')}</button></div>
-        {students.length ? <ul className="csm-roster">{students.map(student => <li key={student.id}><img src={`/characters/${characterFiles[student.character || 'cat'] || characterFiles.cat}.webp`} alt=""/><span><small>{d('studentNumber', {number: student.number})}</small><strong>{student.name}</strong></span><button className="ws-button ws-button-light" type="button" aria-label={`${student.name} · ${t('teacher.resetCode')}`} disabled={busy} onClick={() => void resetCode(student)}><KeyRound size={15}/>{t('teacher.resetCode')}</button></li>)}</ul> : <div className="thd-detail-state"><img src="/characters/hamster-kong.webp" alt=""/><h3>{d('studentsEmptyHint')}</h3></div>}
+        {students.length ? <ul className="csm-roster">{students.map(student => <li key={student.id}><img src={`/characters/${characterFiles[student.character || 'cat'] || characterFiles.cat}.webp`} alt=""/><span><small>{d('studentNumber', {number: student.number})}</small><strong>{student.name}</strong>{student.accessCode ? <span className="csm-current-code"><code aria-label={`${student.name} · ${t('teacher.code')}`}>{student.accessCode}</code><button type="button" className="csm-code-copy" aria-label={`${student.name} · ${t('teacher.copyCode')}`} onClick={() => void copyCode(student)}><Copy size={14}/></button></span> : <span className="csm-code-unavailable">{codeStatus(student)}</span>}</span><button className="ws-button ws-button-light" type="button" aria-label={`${student.name} · ${t('teacher.resetCode')}`} disabled={busy} onClick={() => void resetCode(student)}><KeyRound size={15}/>{t('teacher.resetCode')}</button></li>)}</ul> : <div className="thd-detail-state"><img src="/characters/hamster-kong.webp" alt=""/><h3>{d('studentsEmptyHint')}</h3></div>}
       </> : view === 'add' ? <form className="csm-add" onSubmit={addStudents}>
         <p className="ws-modal-description">{t('teacher.rosterDescription')}</p><p className="ws-roster-note">{t('teacher.newStudentsNote')}</p>
         <label className="ws-field"><span>{t('teacher.rosterLabel')}</span><textarea rows={7} value={roster} disabled={busy} onChange={event => {setRoster(event.target.value); setFormError('');}} placeholder={t('teacher.rosterPlaceholder')}/></label>
         <div className="ws-roster-tools"><button className="ws-button ws-button-light" type="button" onClick={() => csvInput.current?.click()} disabled={busy}><Upload size={16}/>{t('teacher.chooseCsv')}</button>{parsed.ok && <span className="ws-small">{t('teacher.rosterPreview', {count: parsed.students.length})}</span>}</div>
         <input className="ws-visually-hidden" ref={csvInput} type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values" tabIndex={-1} onChange={async event => {const file = event.target.files?.[0]; try {if (file) {setRoster(await file.text()); setFormError('');}} catch {setFormError(t('teacher.fileReadError'));} event.target.value = '';}}/>
         <div className="ws-form-actions"><button className="ws-button ws-button-primary" disabled={busy || !roster.trim()}>{busy ? <LoaderCircle className="ws-spin" size={17}/> : <Users size={17}/>} {t(busy ? 'common.saving' : 'teacher.addStudents')}</button></div>
-      </form> : <div className="csm-codes"><p className="ws-modal-description">{t('teacher.codeDescription')}</p><div className="ws-codes-table"><table><thead><tr><th>{t('teacher.number')}</th><th>{t('teacher.name')}</th><th>{t('teacher.code')}</th></tr></thead><tbody>{codes.map(student => <tr key={student.id}><td>{student.number}</td><td>{student.name}</td><td><code>{student.accessCode}</code></td></tr>)}</tbody></table></div><div className="ws-form-actions"><button className="ws-button ws-button-light" type="button" onClick={() => setView('roster')}><Users size={16}/>{d('rosterTab')}</button><button className="ws-button ws-button-primary" type="button" onClick={downloadCodes}><ArrowDownToLine size={16}/>{t('teacher.downloadCodes')}</button></div></div>}
+      </form> : <div className="csm-codes"><p className="ws-modal-description">{t('teacher.codeDescription')}</p>{codes.some(student => !student.accessCode) && <p className="ws-roster-note">{t('teacher.codeLegacyHelp')}</p>}<div className="ws-codes-table"><table><thead><tr><th>{t('teacher.number')}</th><th>{t('teacher.name')}</th><th>{t('teacher.code')}</th></tr></thead><tbody>{codes.map(student => <tr key={student.id}><td>{student.number}</td><td>{student.name}</td><td>{student.accessCode ? <span className="csm-current-code"><code>{student.accessCode}</code><button type="button" className="csm-code-copy" aria-label={`${student.name} · ${t('teacher.copyCode')}`} onClick={() => void copyCode(student)}><Copy size={14}/></button></span> : <span className="csm-code-unavailable">{codeStatus(student)}</span>}</td></tr>)}</tbody></table></div><div className="ws-form-actions"><button className="ws-button ws-button-light" type="button" onClick={() => setView('roster')}><Users size={16}/>{d('rosterTab')}</button><button className="ws-button ws-button-primary" type="button" onClick={downloadCodes} disabled={!codes.some(student => student.accessCode)}><ArrowDownToLine size={16}/>{t('teacher.downloadCodes')}</button></div></div>}
     </div>
   </section>;
 }

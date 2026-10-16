@@ -48,7 +48,7 @@ export async function completeExhibitionWrites(writes: Promise<unknown>[]) {
   if (failed?.status === 'rejected') throw failed.reason;
 }
 export type ExhibitionActor = { uid: string; role: Role; classId?: string; studentId?: string };
-export type ExhibitionAccess = { ownerUid: string; classId: string; status: ExhibitionStatus };
+export type ExhibitionAccess = { ownerUid: string; classId: string; status: ExhibitionStatus; allowStudentUploads?: boolean };
 
 export function ownsExhibition(actor: ExhibitionActor, exhibition: ExhibitionAccess) {
   return actor.role !== 'student' && actor.uid === exhibition.ownerUid;
@@ -57,7 +57,7 @@ export function canViewExhibition(actor: ExhibitionActor, exhibition: Exhibition
   return ownsExhibition(actor, exhibition) || (studentAudienceMatches(actor, exhibition) && exhibition.status !== 'draft');
 }
 export function canSubmitExhibition(actor: ExhibitionActor, exhibition: ExhibitionAccess) {
-  return ownsExhibition(actor, exhibition);
+  return ownsExhibition(actor, exhibition) || (studentAudienceMatches(actor, exhibition) && exhibition.status === 'open' && exhibition.allowStudentUploads === true);
 }
 export function studentAudienceMatches(actor: ExhibitionActor, exhibition: ExhibitionAccess) {
   // Class is the privacy boundary; grade/year labels never widen admission.
@@ -75,7 +75,7 @@ export function exhibitionUploadPolicy(contentType: unknown, size: unknown) {
   return { contentType, size };
 }
 export function canConsumeExhibitionUpload(actor: ExhibitionActor, exhibitionId: string, upload: { userUid?: unknown; exhibitionId?: unknown; status?: unknown } | undefined) {
-  return actor.role !== 'student' && !!upload && upload.userUid === actor.uid && upload.exhibitionId === exhibitionId && upload.status === 'pending';
+  return !!upload && upload.userUid === actor.uid && upload.exhibitionId === exhibitionId && upload.status === 'pending';
 }
 export function exhibitionStatus(value: unknown): ExhibitionStatus {
   if (value !== 'draft' && value !== 'open' && value !== 'closed') throw new ApiError(400, '전시 상태를 확인해 주세요.');

@@ -10,6 +10,7 @@ export type Exhibition = {
   id: string; title: string; description: string; classId: string; className: string;
   grade: string; year: number; theme: ExhibitionTheme;
   ownerUid: string; status: ExhibitionStatus; commentsEnabled: boolean;
+  allowStudentUploads?: boolean; publicSharingEnabled?: boolean;
   artworkCount: number; approvedCount: number; createdAt: string; updatedAt: string;
 };
 export type ExhibitionStudent = {
@@ -20,6 +21,7 @@ export type ExhibitionProfile = ExhibitionStudent & { classId: string; className
 export type ExhibitionArtwork = {
   id: string; exhibitionId: string; studentId: string; studentName: string; studentNumber: number;
   title: string; description: string; status: ArtworkStatus; feedback: string;
+  artistName?: string; artworkDate?: string;
   width: number; height: number; url: string; thumbnailUrl: string;
   createdAt: string; reviewedAt: string | null; ownReaction?: ArtReaction;
   /** Only the author and owning teacher receive this private encouragement summary. */

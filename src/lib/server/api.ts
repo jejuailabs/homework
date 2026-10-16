@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { assignmentSubmissionType } from '../assignment-submission';
@@ -7,6 +7,15 @@ import { auth, bucket, db } from './admin';
 import { getAiOperations } from './ai';
 import { assertOrigin, contextForUid, cookieName, getContext, requireStudent, requireTeacher, type Context } from './auth';
 import { ApiError, canDisableUser, canManageClass, canUseUpload, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
+import {awardHomeworkPoints} from './points';
+import {pointBalance, pointSettings, wardrobeOutfit} from './points-policy';
+import {normalizeStudentCode, validStudentCode} from '../student-entry-code';
+import {StudentCodeCollision, withStudentCodes} from './student-codes';
+import {openStudentCode, recoverNumericStudentCodes, sealStudentCode, studentCodeBinding} from './student-code-vault';
+import {bindAssignmentMaterials, signedAssignmentMaterials} from './assignment-materials';
+import {directoryFields} from '../admin-directory-fields';
+import {handleAdminDirectory} from './admin-directory';
+import {handleAdminConsole} from './admin-console';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -35,11 +44,11 @@ async function assignmentForStudent(ctx: Context, assignmentId: string) {
 async function studentProfile(ctx: Context) {
   const [student, cls] = await Promise.all([db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get()]);
   const data = student.data()!;
-  return { id: student.id, name: data.name, number: data.number, classId: ctx.classId, className: cls.data()?.name ?? '', character: data.character ?? 'cat', xp: data.xp ?? 0 };
+  return { id: student.id, name: data.name, number: data.number, classId: ctx.classId, className: cls.data()?.name ?? '', character: data.character ?? 'cat', xp: data.xp ?? 0, points: pointBalance(data.points), pointSettings: pointSettings(cls.data()?.pointSettings), wardrobeOutfit: wardrobeOutfit(data.wardrobeOutfit, data.wardrobeOwned) };
 }
 function publicStudent(doc: FirebaseFirestore.DocumentSnapshot) {
   const value = doc.data()!;
-  return { id: doc.id, number: value.number, name: value.name, character: value.character ?? 'cat', xp: value.xp ?? 0, disabled: !!value.disabled };
+  return { id: doc.id, number: value.number, name: value.name, character: value.character ?? 'cat', xp: value.xp ?? 0, points: pointBalance(value.points), wardrobeOutfit: wardrobeOutfit(value.wardrobeOutfit, value.wardrobeOwned), disabled: !!value.disabled };
 }
 async function withFileUrls(submission: Data): Promise<Data> {
   const uploads = await Promise.all((submission.uploads ?? []).map(async (upload: Data) => {
@@ -49,12 +58,27 @@ async function withFileUrls(submission: Data): Promise<Data> {
   return { ...submission, uploads };
 }
 async function audit(ctx: Context, action: string, target?: string, details?: Data) {
-  await db().collection('adminAudit').add({ actorUid: ctx.uid, action, target: target ?? null, details: details ?? {}, createdAt: now() });
+  await db().collection('adminAudit').add({ actorUid: ctx.uid, action, target: target ?? null, details: details ?? {}, kind:'change',outcome:'success',createdAt: now() });
 }
 async function adminContext(request: Request) {
   const ctx = await getContext(request);
   if (!isAdmin(ctx.role)) throw new ApiError(403, '운영자만 사용할 수 있어요.', 'FORBIDDEN');
   return ctx;
+}
+function failedCodeRef(request: Request) {
+  const address = request.headers.get('x-vercel-forwarded-for') ?? request.headers.get('x-forwarded-for') ?? 'local';
+  const ip = address.split(',')[0].trim();
+  const window = Math.floor(Date.now() / 600_000);
+  return db().doc(`rateLimits/${hash(`student-code-failed:${ip}:${window}`)}`);
+}
+async function invalidStudentCode(request: Request): Promise<never> {
+  await db().runTransaction(async tx => {
+    const ref = failedCodeRef(request), previous = await tx.get(ref);
+    const count = previous.data()?.count ?? 0;
+    if (count >= 30) throw new ApiError(429, '잠시 기다린 뒤 다시 입력해 주세요.', 'RATE_LIMITED');
+    tx.set(ref, {count: count + 1, expiresAt: Timestamp.fromMillis(Date.now() + 3_600_000)});
+  });
+  throw new ApiError(401, '학생 코드를 확인해 주세요.', 'INVALID_CODE');
 }
 async function rateLimit(request: Request, code: string) {
   const address = request.headers.get('x-vercel-forwarded-for') ?? request.headers.get('x-forwarded-for') ?? 'local';
@@ -67,6 +91,8 @@ async function rateLimit(request: Request, code: string) {
     { ref: db().doc(`rateLimits/${hash(`student-code-attempt:${ip}:${code}:${window}`)}`), max: 20 },
   ];
   await db().runTransaction(async tx => {
+    const failures = await tx.get(failedCodeRef(request));
+    if ((failures.data()?.count ?? 0) >= 30) throw new ApiError(429, '잠시 기다린 뒤 다시 입력해 주세요.', 'RATE_LIMITED');
     const snapshots = await Promise.all(limits.map(limit => tx.get(limit.ref)));
     if (snapshots.some((snapshot, index) => (snapshot.data()?.count ?? 0) >= limits[index].max)) throw new ApiError(429, '잠시 기다린 뒤 다시 입력해 주세요.', 'RATE_LIMITED');
     snapshots.forEach((snapshot, index) => tx.set(limits[index].ref, { count: (snapshot.data()?.count ?? 0) + 1, expiresAt: Timestamp.fromMillis(Date.now() + 3_600_000) }));
@@ -91,7 +117,11 @@ async function session(request: Request) {
   const ctx = await contextForUid(decoded.uid, decoded.authVersion);
   const expiresIn = ctx.role === 'student' ? 8 * 3_600_000 : 5 * 86_400_000;
   const value = await auth().createSessionCookie(token, { expiresIn });
-  if (ctx.role !== 'student') await db().doc(`users/${ctx.uid}`).set({ uid: ctx.uid, email: ctx.email, displayName: ctx.displayName, role: 'teacher', lastLoginAt: now() }, { merge: true });
+  if (ctx.role !== 'student') await db().runTransaction(async tx => {
+    const userRef=db().doc(`users/${ctx.uid}`),current=await tx.get(userRef);
+    if(current.data()?.disabled)throw new ApiError(403,'이 계정은 이용이 중지되어 있어요.','ACCOUNT_DISABLED');
+    tx.set(userRef,{uid:ctx.uid,email:ctx.email,displayName:ctx.displayName,role:'teacher',...(typeof current.data()?.disabled==='boolean'?{}:{disabled:false}),...directoryFields({role:'teacher',displayName:ctx.displayName,email:ctx.email}),lastLoginAt:now()},{merge:true});
+  });
   const response = json(ctx);
   response.cookies.set(cookieName, value, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: expiresIn / 1000 });
   return response;
@@ -103,7 +133,7 @@ async function classes(request: Request) {
     return json({ classes: sorted((await query.get()).docs.map(mapped)) });
   }
   const input = await body(request);
-  const value = { name: text(input.name, '학급 이름', 80), grade: text(String(input.grade ?? ''), '학년', 20, true), year: Number(input.year ?? new Date().getFullYear()), ownerUid: ctx.uid, studentCount: 0, createdAt: now() };
+  const value = { adminStatus:'active', name: text(input.name, '학급 이름', 80), grade: text(String(input.grade ?? ''), '학년', 20, true), year: Number(input.year ?? new Date().getFullYear()), ownerUid: ctx.uid, studentCount: 0, createdAt: now() };
   if (!Number.isInteger(value.year) || value.year < 2020 || value.year > 2100) throw new ApiError(400, '학년도를 확인해 주세요.');
   const ref = await db().collection('classes').add(value);
   return json({ class: { id: ref.id, ...value } }, 201);
@@ -112,51 +142,101 @@ async function students(request: Request, classId: string) {
   const ctx = await requireTeacher(request);
   await managedClass(ctx, classId);
   const collection = db().collection(`classes/${classId}/students`);
-  if (request.method === 'GET') return json({ students: (await collection.get()).docs.map(publicStudent).sort((a, b) => a.number - b.number) });
+  if (request.method === 'GET') {
+    const roster = (await collection.get()).docs;
+    if (new URL(request.url).searchParams.get('includeCodes') === '1') {
+      const codes = await currentStudentCodes(ctx, classId, roster);
+      return json({students: roster.map(doc => ({...publicStudent(doc), ...codes.get(doc.id)})).sort((a, b) => a.number - b.number)});
+    }
+    return json({students: roster.map(publicStudent).sort((a, b) => a.number - b.number)});
+  }
   const input = await body(request);
   if (!Array.isArray(input.students) || input.students.length < 1 || input.students.length > 100) throw new ApiError(400, '학생은 한 번에 1~100명 추가할 수 있어요.');
   const rows = input.students.map((row: Data) => ({ number: Number(row.number), name: text(row.name, '학생 이름', 50) }));
   if (rows.some(row => !Number.isInteger(row.number) || row.number < 1 || row.number > 999) || new Set(rows.map(row => row.number)).size !== rows.length) throw new ApiError(400, '출석번호는 중복 없이 1~999로 입력해 주세요.');
   const results = rows.map(row => {
     const studentId = randomUUID();
-    const code = randomBytes(9).toString('base64url').toUpperCase();
-    return { ...row, id: studentId, authUid: `student_${studentId}`, accessCode: code };
+    return { ...row, id: studentId, authUid: `student_${studentId}` };
   });
   // The transaction serializes roster additions to keep student numbers unique.
-  await db().runTransaction(async tx => {
+  const issued = await withStudentCodes(results.length, async codes => {
+    const issued = results.map((row, index) => ({...row, accessCode: codes[index]}));
+    await db().runTransaction(async tx => {
     const classRef = db().doc(`classes/${classId}`);
     const classDoc = await tx.get(classRef);
+    if (!classDoc.exists || !canManageClass(ctx.role, ctx.uid, classDoc.data()?.ownerUid)) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
     const existing = await tx.get(collection);
+    const reserved = await tx.getAll(...codes.map(code => db().doc(`studentCodes/${hash(code)}`)));
+    if (reserved.some(doc => doc.exists)) throw new StudentCodeCollision();
     const numbers = new Set(existing.docs.map(doc => doc.data().number));
     if (rows.some(row => numbers.has(row.number))) throw new ApiError(409, '이미 사용 중인 출석번호가 있어요.', 'DUPLICATE_NUMBER');
     if (existing.size + results.length > 300) throw new ApiError(400, '한 학급은 최대 300명까지 추가할 수 있어요.');
-    for (const row of results) {
+    for (const row of issued) {
       const { accessCode, ...record } = row;
       tx.create(collection.doc(row.id), { ...record, classId, character: 'cat', xp: 0, createdAt: now() });
-      tx.create(db().doc(`studentCodes/${hash(accessCode)}`), { classId, studentId: row.id, authUid: row.authUid, authVersion: 0, active: true, createdAt: now() });
-      tx.create(db().doc(`users/${row.authUid}`), { uid: row.authUid, displayName: row.name, role: 'student', classId, studentId: row.id, authVersion: 0, disabled: false, createdAt: now() });
+      tx.create(db().doc(`studentCodes/${hash(accessCode)}`), { classId, studentId: row.id, authUid: row.authUid, authVersion: 0, active: true, createdAt: now(), codeFormat: 'numeric6', encryptedCode: sealStudentCode(accessCode, studentCodeBinding(classId, row.id, hash(accessCode))) });
+      tx.create(db().doc(`users/${row.authUid}`), { uid: row.authUid, displayName: row.name, role: 'student', ...directoryFields({role:'student',displayName:row.name},{ownerUid:classDoc.data()!.ownerUid,name:row.name,number:row.number}), classId, directoryYear:classDoc.data()!.year, studentId: row.id, authVersion: 0, disabled: false, createdAt: now() });
     }
     tx.update(classRef, { studentCount: (classDoc.data()?.studentCount ?? existing.size) + results.length });
   });
-  return json({ students: results.map(({ authUid: _authUid, ...entry }) => entry) }, 201);
+    return issued;
+  });
+  return json({ students: issued.map(({ authUid: _authUid, ...entry }) => entry) }, 201);
+}
+async function currentStudentCodes(ctx: Context, classId: string, roster: FirebaseFirestore.QueryDocumentSnapshot[]) {
+  // Ordinary roster APIs stay free of login secrets; only the explicit owner view calls this.
+  const records = await db().collection('studentCodes').where('classId', '==', classId).where('active', '==', true).get();
+  const pupils = new Map(roster.map(doc => [doc.id, doc.data()]));
+  const active = records.docs.filter(doc => {
+    const data = doc.data(), pupil = pupils.get(data.studentId);
+    return pupil && pupil.authUid === data.authUid;
+  });
+  const revealed = new Map<string, string>();
+  for (const doc of active) {
+    const value = doc.data(), code = openStudentCode(value.encryptedCode, studentCodeBinding(classId, value.studentId, doc.id));
+    if (code && hash(code) === doc.id) revealed.set(doc.id, code);
+  }
+  const unknown = active.filter(doc => !revealed.has(doc.id) && doc.data().codeFormat !== 'legacy12');
+  const recovered = await recoverNumericStudentCodes(unknown.map(doc => doc.id));
+  recovered.forEach((code, key) => revealed.set(key, code));
+  const upgrades = new Map(unknown.map(doc => {
+    const code = recovered.get(doc.id);
+    return [doc.id, code ? {codeFormat: 'numeric6', encryptedCode: sealStudentCode(code, studentCodeBinding(classId, doc.data().studentId, doc.id))} : {codeFormat: 'legacy12'}];
+  }));
+  return db().runTransaction(async tx => {
+    const cls = await tx.get(db().doc(`classes/${classId}`));
+    if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
+    const fresh = active.length ? await tx.getAll(...active.map(doc => doc.ref)) : [];
+    const result = new Map<string, {accessCode: string; codeStatus: 'available' | 'legacy-unavailable' | 'missing'}>(roster.map(doc => [doc.id, {accessCode: '', codeStatus: 'missing'}]));
+    const valid = new Set<string>();
+    for (const doc of fresh) {
+      const value = doc.data();
+      if (!value?.active || value.classId !== classId || pupils.get(value.studentId)?.authUid !== value.authUid) continue;
+      valid.add(doc.id);
+      const code = revealed.get(doc.id) ?? '';
+      result.set(value.studentId, {accessCode: code, codeStatus: code ? 'available' : 'legacy-unavailable'});
+    }
+    for (const doc of fresh) if (valid.has(doc.id) && upgrades.has(doc.id)) tx.update(doc.ref, upgrades.get(doc.id)!);
+    return result;
+  });
 }
 async function studentCode(request: Request) {
   const input = await body(request);
-  const code = text(input.code, '학생 코드', 100).replace(/\s/g, '').toUpperCase();
-  if (!/^[A-Z0-9_-]{12}$/.test(code)) throw new ApiError(401, '학생 코드를 확인해 주세요.', 'INVALID_CODE');
+  const code = normalizeStudentCode(text(input.code, '학생 코드', 100));
+  if (!validStudentCode(code)) throw new ApiError(401, '학생 코드를 확인해 주세요.', 'INVALID_CODE');
   await rateLimit(request, code);
   const doc = await db().doc(`studentCodes/${hash(code)}`).get();
   const value = doc.data();
-  if (!value?.active) throw new ApiError(401, '학생 코드를 확인해 주세요.', 'INVALID_CODE');
+  if (!value?.active) return invalidStudentCode(request);
   const [student, profile] = await Promise.all([db().doc(`classes/${value.classId}/students/${value.studentId}`).get(), db().doc(`users/${value.authUid}`).get()]);
-  if (!student.exists || student.data()?.disabled || profile.data()?.disabled || (value.authVersion ?? 0) !== (profile.data()?.authVersion ?? 0)) throw new ApiError(401, '학생 코드를 확인해 주세요.', 'INVALID_CODE');
+  if (!student.exists || !profile.exists || student.data()?.disabled || profile.data()?.disabled || (value.authVersion ?? 0) !== (profile.data()?.authVersion ?? 0)) return invalidStudentCode(request);
   try { await auth().getUser(value.authUid); }
   catch (error) {
     if ((error as { code?: string }).code !== 'auth/user-not-found') throw error;
     await auth().createUser({ uid: value.authUid, displayName: student.data()?.name }).catch(error => { if (error.code !== 'auth/uid-already-exists') throw error; });
   }
   const record = await auth().getUser(value.authUid);
-  if (record.disabled) throw new ApiError(401, '학생 코드를 확인해 주세요.', 'INVALID_CODE');
+  if (record.disabled) return invalidStudentCode(request);
   const customToken = await auth().createCustomToken(value.authUid, { role: 'student', classId: value.classId, studentId: value.studentId, authVersion: profile.data()?.authVersion ?? 0 });
   return json({ customToken });
 }
@@ -180,8 +260,12 @@ async function assignments(request: Request) {
   if (!targetStudentIds.length) throw new ApiError(400, '학생을 먼저 추가해 주세요.');
   const dueAt = input.dueAt ? new Date(input.dueAt).toISOString() : null;
   const value = { classId, className: cls.name, ownerUid: cls.ownerUid, title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), submissionType, dueAt, targetStudentIds, targetCount: targetStudentIds.length, submittedCount: 0, reviewedCount: 0, createdAt: now() };
-  const ref = await db().collection('assignments').add(value);
-  return json({ assignment: { id: ref.id, ...value } }, 201);
+  const ref = db().collection('assignments').doc();
+  const materials = await db().runTransaction(async tx => {
+    const materials = await bindAssignmentMaterials(tx, ctx, classId, ref.id, input.materialIds ?? []);
+    tx.create(ref, {...value, materials}); return materials;
+  });
+  return json({ assignment: { id: ref.id, ...value, materials: await signedAssignmentMaterials(materials) } }, 201);
 }
 async function assignmentDetail(request: Request, assignmentId: string) {
   const ctx = await requireTeacher(request);
@@ -189,8 +273,18 @@ async function assignmentDetail(request: Request, assignmentId: string) {
   if (!snap.exists) throw new ApiError(404, '과제를 찾을 수 없어요.', 'NOT_FOUND');
   const assignment = mappedAssignment(snap);
   await managedClass(ctx, assignment.classId);
+  if (request.method === 'PATCH') {
+    const input = await body(request);
+    const changes = {title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), dueAt: input.dueAt ? new Date(input.dueAt).toISOString() : null};
+    const materials = await db().runTransaction(async tx => {
+      const fresh = await tx.get(snap.ref); if (!fresh.exists) throw new ApiError(404, '과제를 찾을 수 없어요.');
+      const materials = await bindAssignmentMaterials(tx, ctx, assignment.classId, assignmentId, input.materialIds ?? (fresh.data()?.materials ?? []).map((material: Data) => material.id), fresh.data()?.materials ?? []);
+      tx.update(snap.ref, {...changes, materials, updatedAt: now()}); return materials;
+    });
+    return json({assignment: {...assignment, ...changes, materials: await signedAssignmentMaterials(materials)}});
+  }
   const [roster, submissions] = await Promise.all([db().collection(`classes/${assignment.classId}/students`).get(), db().collection('submissions').where('assignmentId', '==', assignmentId).get()]);
-  return json({ assignment, students: roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id)).map(publicStudent).sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
+  return json({ assignment: {...assignment, materials: await signedAssignmentMaterials(assignment.materials)}, students: roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id)).map(publicStudent).sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
 }
 async function home(request: Request) {
   const ctx = await requireStudent(request);
@@ -199,7 +293,7 @@ async function home(request: Request) {
   const assignments = await Promise.all(sorted(tasks.docs.map(mappedAssignment).filter(task => task.targetStudentIds.includes(ctx.studentId))).map(async task => {
     const submission = byAssignment.get(task.id);
     const { targetStudentIds: _targets, ownerUid: _owner, ...visibleTask } = task;
-    return { ...visibleTask, status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission) : null };
+    return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission) : null };
   }));
   return json({ profile, assignments });
 }
@@ -279,7 +373,8 @@ async function review(request: Request, assignmentId: string) {
     const value = doc.data()!;
     if (!input.attemptId || input.attemptId !== value.attemptId) throw new ApiError(409, '새 제출물이 있어요. 새로 확인한 뒤 검사해 주세요.', 'STALE_ATTEMPT');
     const decision = nextReview(input.status, !!value.rewardGranted);
-    const updated = { ...value, status: decision.status, feedback, reviewedAt: now(), reviewerUid: ctx.uid, rewardGranted: !!value.rewardGranted || decision.reward > 0 };
+    const pointAward = decision.reward ? await awardHomeworkPoints(tx, {classId: value.classId, studentId, assignmentId, actorUid: ctx.uid}) : value.pointAward;
+    const updated = { ...value, status: decision.status, feedback, reviewedAt: now(), reviewerUid: ctx.uid, rewardGranted: !!value.rewardGranted || decision.reward > 0, ...(pointAward ? {pointAward} : {}) };
     tx.update(ref, updated);
     tx.update(ref.collection('attempts').doc(value.attemptId), { status: decision.status, feedback, reviewedAt: updated.reviewedAt, reviewerUid: ctx.uid });
     if (value.status === 'submitted') tx.update(task.ref, { reviewedCount: FieldValue.increment(1) });
@@ -291,48 +386,35 @@ async function review(request: Request, assignmentId: string) {
 async function adminOverview(request: Request) {
   const ctx = await adminContext(request);
   const [users, classes, assignments, submissions] = await Promise.all(['users', 'classes', 'assignments', 'submissions'].map(name => db().collection(name).count().get()));
-  await audit(ctx, 'overview.view');
   return json({ userCount: users.data().count, classCount: classes.data().count, assignmentCount: assignments.data().count, submissionCount: submissions.data().count });
 }
-async function adminUsers(request: Request, uid?: string) {
-  const ctx = await adminContext(request);
-  if (request.method === 'GET') {
-    const [users, roles] = await Promise.all([db().collection('users').limit(200).get(), db().collection('platformRoles').get()]);
-    const roleMap = new Map(roles.docs.map(doc => [doc.id, doc.data().role]));
-    await audit(ctx, 'users.list');
-    return json({ users: users.docs.map(doc => ({ ...mapped(doc), uid: doc.id, role: roleMap.get(doc.id) ?? doc.data().role ?? 'teacher' })) });
-  }
-  const targetUid = id(uid);
-  const targetRole = (await db().doc(`platformRoles/${targetUid}`).get()).data()?.role;
-  if (!canDisableUser(ctx.role, ctx.uid, targetUid, targetRole)) throw new ApiError(403, '본인 또는 보호된 운영자 계정은 변경할 수 없어요.');
-  const input = await body(request);
-  if (typeof input.disabled !== 'boolean') throw new ApiError(400, '이용 중지 여부를 확인해 주세요.');
-  const profile = await db().doc(`users/${targetUid}`).get();
-  if (!profile.exists) throw new ApiError(404, '사용자를 찾을 수 없어요.');
-  try { await auth().updateUser(targetUid, { disabled: input.disabled }); if (input.disabled) await auth().revokeRefreshTokens(targetUid); }
-  catch (error) { if ((error as { code?: string }).code !== 'auth/user-not-found' || profile.data()?.role !== 'student') throw error; }
-  await db().doc(`users/${targetUid}`).update({ disabled: input.disabled, updatedAt: now() });
-  await audit(ctx, input.disabled ? 'user.disable' : 'user.enable', targetUid);
-  return json({ ok: true, uid: targetUid, disabled: input.disabled });
+async function adminUsers(request:Request,uid?:string) {
+ if(request.method==='GET')return handleAdminDirectory(request);
+ return handleAdminConsole(request,['accounts',id(uid),'state']);
 }
 
 async function resetStudentCode(request: Request, classId: string, studentId: string) {
   const ctx = await requireTeacher(request);
   await managedClass(ctx, classId);
   const studentRef = db().doc(`classes/${classId}/students/${studentId}`);
-  const accessCode = randomBytes(9).toString('base64url').toUpperCase();
-  const authUid = await db().runTransaction(async tx => {
+  const {accessCode, authUid} = await withStudentCodes(1, async ([accessCode]) => {
+    const authUid = await db().runTransaction(async tx => {
+    const cls = await tx.get(db().doc(`classes/${classId}`));
+    if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
+    if ((await tx.get(db().doc(`studentCodes/${hash(accessCode)}`))).exists) throw new StudentCodeCollision();
     const student = await tx.get(studentRef);
     if (!student.exists) throw new ApiError(404, '학생을 찾을 수 없어요.');
     const uid = student.data()!.authUid;
     const userRef = db().doc(`users/${uid}`);
     const [user, oldCodes] = await Promise.all([tx.get(userRef), tx.get(db().collection('studentCodes').where('studentId', '==', studentId))]);
     const authVersion = (user.data()?.authVersion ?? 0) + 1;
-    oldCodes.docs.forEach(code => tx.delete(code.ref));
-    tx.create(db().doc(`studentCodes/${hash(accessCode)}`), { classId, studentId, authUid: uid, authVersion, active: true, createdAt: now() });
+    oldCodes.docs.forEach(code => tx.update(code.ref, {active: false, revokedAt: now()}));
+    tx.create(db().doc(`studentCodes/${hash(accessCode)}`), { classId, studentId, authUid: uid, authVersion, active: true, createdAt: now(), codeFormat: 'numeric6', encryptedCode: sealStudentCode(accessCode, studentCodeBinding(classId, studentId, hash(accessCode))) });
     tx.update(userRef, { authVersion });
     tx.update(studentRef, { codeResetAt: now() });
     return uid;
+  });
+    return {accessCode, authUid};
   });
   try { await auth().revokeRefreshTokens(authUid); }
   catch (error) { if ((error as { code?: string }).code !== 'auth/user-not-found') throw error; }
@@ -348,8 +430,10 @@ async function adminOperations(request: Request) {
     db().collection('adminAudit').orderBy('createdAt', 'desc').limit(50).get(),
     getAiOperations(),
   ]);
-  await audit(ctx, 'operations.view');
+  const accountIds=[...new Set([...classes.docs.map(doc=>doc.data().ownerUid),...logs.docs.map(doc=>doc.data().actorUid)])].filter((uid):uid is string=>typeof uid==='string'&&/^[A-Za-z0-9_-]+$/.test(uid));
+  const accountDocs=accountIds.length?await db().getAll(...accountIds.map(uid=>db().doc('users/'+uid))):[];
   return json({
+    accounts:Object.fromEntries(accountDocs.map(doc=>[doc.id,doc.data()?.displayName||doc.data()?.email||'이름 없는 계정'])),
     classes: classes.docs.map(doc => { const value = doc.data(); return { id: doc.id, name: value.name, ownerUid: value.ownerUid, studentCount: value.studentCount ?? 0, year: value.year }; }),
     uploads: { fileCount: submitted.data().fileCount, totalBytes: submitted.data().totalBytes, pendingCount: pending.data().count },
     ai,

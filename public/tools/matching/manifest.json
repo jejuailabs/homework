@@ -1,0 +1,2332 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "noto-1f436",
+      "ko": "강아지",
+      "en": "Dog",
+      "src": "/tools/matching/noto/1f436.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f436.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f431",
+      "ko": "고양이",
+      "en": "Cat",
+      "src": "/tools/matching/noto/1f431.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f431.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f42d",
+      "ko": "생쥐",
+      "en": "Mouse",
+      "src": "/tools/matching/noto/1f42d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f42d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f439",
+      "ko": "햄스터",
+      "en": "Hamster",
+      "src": "/tools/matching/noto/1f439.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f439.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f430",
+      "ko": "토끼",
+      "en": "Rabbit",
+      "src": "/tools/matching/noto/1f430.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f430.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f98a",
+      "ko": "여우",
+      "en": "Fox",
+      "src": "/tools/matching/noto/1f98a.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f98a.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f43b",
+      "ko": "곰",
+      "en": "Bear",
+      "src": "/tools/matching/noto/1f43b.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f43b.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f43c",
+      "ko": "판다",
+      "en": "Panda",
+      "src": "/tools/matching/noto/1f43c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f43c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f428",
+      "ko": "코알라",
+      "en": "Koala",
+      "src": "/tools/matching/noto/1f428.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f428.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f42f",
+      "ko": "호랑이",
+      "en": "Tiger",
+      "src": "/tools/matching/noto/1f42f.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f42f.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f981",
+      "ko": "사자",
+      "en": "Lion",
+      "src": "/tools/matching/noto/1f981.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f981.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f42e",
+      "ko": "소",
+      "en": "Cow",
+      "src": "/tools/matching/noto/1f42e.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f42e.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f437",
+      "ko": "돼지",
+      "en": "Pig",
+      "src": "/tools/matching/noto/1f437.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f437.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f438",
+      "ko": "개구리",
+      "en": "Frog",
+      "src": "/tools/matching/noto/1f438.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f438.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f435",
+      "ko": "원숭이",
+      "en": "Monkey",
+      "src": "/tools/matching/noto/1f435.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f435.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f414",
+      "ko": "닭",
+      "en": "Chicken",
+      "src": "/tools/matching/noto/1f414.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f414.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f427",
+      "ko": "펭귄",
+      "en": "Penguin",
+      "src": "/tools/matching/noto/1f427.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f427.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f426",
+      "ko": "새",
+      "en": "Bird",
+      "src": "/tools/matching/noto/1f426.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f426.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f424",
+      "ko": "병아리",
+      "en": "Chick",
+      "src": "/tools/matching/noto/1f424.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f424.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f986",
+      "ko": "오리",
+      "en": "Duck",
+      "src": "/tools/matching/noto/1f986.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f986.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f985",
+      "ko": "독수리",
+      "en": "Eagle",
+      "src": "/tools/matching/noto/1f985.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f985.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f989",
+      "ko": "부엉이",
+      "en": "Owl",
+      "src": "/tools/matching/noto/1f989.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f989.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f987",
+      "ko": "박쥐",
+      "en": "Bat",
+      "src": "/tools/matching/noto/1f987.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f987.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f43a",
+      "ko": "늑대",
+      "en": "Wolf",
+      "src": "/tools/matching/noto/1f43a.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f43a.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f417",
+      "ko": "멧돼지",
+      "en": "Boar",
+      "src": "/tools/matching/noto/1f417.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f417.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f434",
+      "ko": "말",
+      "en": "Horse",
+      "src": "/tools/matching/noto/1f434.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f434.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f41d",
+      "ko": "꿀벌",
+      "en": "Bee",
+      "src": "/tools/matching/noto/1f41d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f41d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f41b",
+      "ko": "애벌레",
+      "en": "Caterpillar",
+      "src": "/tools/matching/noto/1f41b.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f41b.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f98b",
+      "ko": "나비",
+      "en": "Butterfly",
+      "src": "/tools/matching/noto/1f98b.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f98b.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f40c",
+      "ko": "달팽이",
+      "en": "Snail",
+      "src": "/tools/matching/noto/1f40c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f40c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f41e",
+      "ko": "무당벌레",
+      "en": "Ladybug",
+      "src": "/tools/matching/noto/1f41e.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f41e.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f41c",
+      "ko": "개미",
+      "en": "Ant",
+      "src": "/tools/matching/noto/1f41c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f41c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f577",
+      "ko": "거미",
+      "en": "Spider",
+      "src": "/tools/matching/noto/1f577.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f577.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f422",
+      "ko": "거북",
+      "en": "Turtle",
+      "src": "/tools/matching/noto/1f422.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f422.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f40d",
+      "ko": "뱀",
+      "en": "Snake",
+      "src": "/tools/matching/noto/1f40d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f40d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f98e",
+      "ko": "도마뱀",
+      "en": "Lizard",
+      "src": "/tools/matching/noto/1f98e.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f98e.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f419",
+      "ko": "문어",
+      "en": "Octopus",
+      "src": "/tools/matching/noto/1f419.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f419.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f991",
+      "ko": "오징어",
+      "en": "Squid",
+      "src": "/tools/matching/noto/1f991.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f991.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f980",
+      "ko": "게",
+      "en": "Crab",
+      "src": "/tools/matching/noto/1f980.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f980.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f990",
+      "ko": "새우",
+      "en": "Shrimp",
+      "src": "/tools/matching/noto/1f990.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f990.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f420",
+      "ko": "열대어",
+      "en": "Tropical fish",
+      "src": "/tools/matching/noto/1f420.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f420.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f421",
+      "ko": "복어",
+      "en": "Pufferfish",
+      "src": "/tools/matching/noto/1f421.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f421.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f42c",
+      "ko": "돌고래",
+      "en": "Dolphin",
+      "src": "/tools/matching/noto/1f42c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f42c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f433",
+      "ko": "고래",
+      "en": "Whale",
+      "src": "/tools/matching/noto/1f433.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f433.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f988",
+      "ko": "상어",
+      "en": "Shark",
+      "src": "/tools/matching/noto/1f988.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f988.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f40a",
+      "ko": "악어",
+      "en": "Crocodile",
+      "src": "/tools/matching/noto/1f40a.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f40a.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f98f",
+      "ko": "코뿔소",
+      "en": "Rhinoceros",
+      "src": "/tools/matching/noto/1f98f.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f98f.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f418",
+      "ko": "코끼리",
+      "en": "Elephant",
+      "src": "/tools/matching/noto/1f418.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f418.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f992",
+      "ko": "기린",
+      "en": "Giraffe",
+      "src": "/tools/matching/noto/1f992.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f992.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f993",
+      "ko": "얼룩말",
+      "en": "Zebra",
+      "src": "/tools/matching/noto/1f993.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f993.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f98d",
+      "ko": "고릴라",
+      "en": "Gorilla",
+      "src": "/tools/matching/noto/1f98d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f98d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f410",
+      "ko": "염소",
+      "en": "Goat",
+      "src": "/tools/matching/noto/1f410.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f410.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f40f",
+      "ko": "양",
+      "en": "Sheep",
+      "src": "/tools/matching/noto/1f40f.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f40f.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f42a",
+      "ko": "낙타",
+      "en": "Camel",
+      "src": "/tools/matching/noto/1f42a.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f42a.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f998",
+      "ko": "캥거루",
+      "en": "Kangaroo",
+      "src": "/tools/matching/noto/1f998.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f998.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f9a5",
+      "ko": "나무늘보",
+      "en": "Sloth",
+      "src": "/tools/matching/noto/1f9a5.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f9a5.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f9a6",
+      "ko": "수달",
+      "en": "Otter",
+      "src": "/tools/matching/noto/1f9a6.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f9a6.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f994",
+      "ko": "고슴도치",
+      "en": "Hedgehog",
+      "src": "/tools/matching/noto/1f994.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f994.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f99c",
+      "ko": "앵무새",
+      "en": "Parrot",
+      "src": "/tools/matching/noto/1f99c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f99c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f9a9",
+      "ko": "홍학",
+      "en": "Flamingo",
+      "src": "/tools/matching/noto/1f9a9.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f9a9.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f34e",
+      "ko": "사과",
+      "en": "Apple",
+      "src": "/tools/matching/noto/1f34e.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f34e.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f34c",
+      "ko": "바나나",
+      "en": "Banana",
+      "src": "/tools/matching/noto/1f34c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f34c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f347",
+      "ko": "포도",
+      "en": "Grapes",
+      "src": "/tools/matching/noto/1f347.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f347.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f353",
+      "ko": "딸기",
+      "en": "Strawberry",
+      "src": "/tools/matching/noto/1f353.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f353.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f349",
+      "ko": "수박",
+      "en": "Watermelon",
+      "src": "/tools/matching/noto/1f349.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f349.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f34d",
+      "ko": "파인애플",
+      "en": "Pineapple",
+      "src": "/tools/matching/noto/1f34d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f34d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f352",
+      "ko": "체리",
+      "en": "Cherries",
+      "src": "/tools/matching/noto/1f352.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f352.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f351",
+      "ko": "복숭아",
+      "en": "Peach",
+      "src": "/tools/matching/noto/1f351.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f351.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f350",
+      "ko": "배",
+      "en": "Pear",
+      "src": "/tools/matching/noto/1f350.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f350.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f95d",
+      "ko": "키위",
+      "en": "Kiwi",
+      "src": "/tools/matching/noto/1f95d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f95d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f955",
+      "ko": "당근",
+      "en": "Carrot",
+      "src": "/tools/matching/noto/1f955.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f955.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f33d",
+      "ko": "옥수수",
+      "en": "Corn",
+      "src": "/tools/matching/noto/1f33d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f33d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f966",
+      "ko": "브로콜리",
+      "en": "Broccoli",
+      "src": "/tools/matching/noto/1f966.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f966.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f344",
+      "ko": "버섯",
+      "en": "Mushroom",
+      "src": "/tools/matching/noto/1f344.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f344.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f35e",
+      "ko": "빵",
+      "en": "Bread",
+      "src": "/tools/matching/noto/1f35e.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f35e.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f9c0",
+      "ko": "치즈",
+      "en": "Cheese",
+      "src": "/tools/matching/noto/1f9c0.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f9c0.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f697",
+      "ko": "자동차",
+      "en": "Car",
+      "src": "/tools/matching/noto/1f697.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f697.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f68c",
+      "ko": "버스",
+      "en": "Bus",
+      "src": "/tools/matching/noto/1f68c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f68c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f682",
+      "ko": "기차",
+      "en": "Train",
+      "src": "/tools/matching/noto/1f682.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f682.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f6b2",
+      "ko": "자전거",
+      "en": "Bicycle",
+      "src": "/tools/matching/noto/1f6b2.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f6b2.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-2708",
+      "ko": "비행기",
+      "en": "Airplane",
+      "src": "/tools/matching/noto/2708.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u2708.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f680",
+      "ko": "로켓",
+      "en": "Rocket",
+      "src": "/tools/matching/noto/1f680.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f680.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f681",
+      "ko": "헬리콥터",
+      "en": "Helicopter",
+      "src": "/tools/matching/noto/1f681.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f681.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f6a2",
+      "ko": "배",
+      "en": "Ship",
+      "src": "/tools/matching/noto/1f6a2.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f6a2.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f692",
+      "ko": "소방차",
+      "en": "Fire engine",
+      "src": "/tools/matching/noto/1f692.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f692.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f691",
+      "ko": "구급차",
+      "en": "Ambulance",
+      "src": "/tools/matching/noto/1f691.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f691.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f69c",
+      "ko": "트랙터",
+      "en": "Tractor",
+      "src": "/tools/matching/noto/1f69c.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f69c.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f6f4",
+      "ko": "킥보드",
+      "en": "Scooter",
+      "src": "/tools/matching/noto/1f6f4.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f6f4.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f4da",
+      "ko": "책",
+      "en": "Books",
+      "src": "/tools/matching/noto/1f4da.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f4da.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-270f",
+      "ko": "연필",
+      "en": "Pencil",
+      "src": "/tools/matching/noto/270f.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u270f.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f58d",
+      "ko": "크레용",
+      "en": "Crayon",
+      "src": "/tools/matching/noto/1f58d.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f58d.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-2702",
+      "ko": "가위",
+      "en": "Scissors",
+      "src": "/tools/matching/noto/2702.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u2702.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f4cf",
+      "ko": "자",
+      "en": "Ruler",
+      "src": "/tools/matching/noto/1f4cf.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f4cf.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f393",
+      "ko": "학사모",
+      "en": "Graduation cap",
+      "src": "/tools/matching/noto/1f393.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f393.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3a8",
+      "ko": "팔레트",
+      "en": "Palette",
+      "src": "/tools/matching/noto/1f3a8.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3a8.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3b8",
+      "ko": "기타",
+      "en": "Guitar",
+      "src": "/tools/matching/noto/1f3b8.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3b8.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3b9",
+      "ko": "피아노",
+      "en": "Piano",
+      "src": "/tools/matching/noto/1f3b9.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3b9.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-26bd",
+      "ko": "축구공",
+      "en": "Soccer ball",
+      "src": "/tools/matching/noto/26bd.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u26bd.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3c0",
+      "ko": "농구공",
+      "en": "Basketball",
+      "src": "/tools/matching/noto/1f3c0.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3c0.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3be",
+      "ko": "테니스공",
+      "en": "Tennis ball",
+      "src": "/tools/matching/noto/1f3be.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3be.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3b2",
+      "ko": "주사위",
+      "en": "Dice",
+      "src": "/tools/matching/noto/1f3b2.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3b2.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f9e9",
+      "ko": "퍼즐",
+      "en": "Puzzle",
+      "src": "/tools/matching/noto/1f9e9.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f9e9.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f4f7",
+      "ko": "카메라",
+      "en": "Camera",
+      "src": "/tools/matching/noto/1f4f7.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f4f7.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-23f0",
+      "ko": "알람시계",
+      "en": "Alarm clock",
+      "src": "/tools/matching/noto/23f0.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u23f0.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f511",
+      "ko": "열쇠",
+      "en": "Key",
+      "src": "/tools/matching/noto/1f511.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f511.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f381",
+      "ko": "선물",
+      "en": "Gift",
+      "src": "/tools/matching/noto/1f381.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f381.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f388",
+      "ko": "풍선",
+      "en": "Balloon",
+      "src": "/tools/matching/noto/1f388.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f388.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-2602",
+      "ko": "우산",
+      "en": "Umbrella",
+      "src": "/tools/matching/noto/2602.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u2602.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f308",
+      "ko": "무지개",
+      "en": "Rainbow",
+      "src": "/tools/matching/noto/1f308.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f308.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-2600",
+      "ko": "해",
+      "en": "Sun",
+      "src": "/tools/matching/noto/2600.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u2600.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f319",
+      "ko": "달",
+      "en": "Moon",
+      "src": "/tools/matching/noto/1f319.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f319.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-2b50",
+      "ko": "별",
+      "en": "Star",
+      "src": "/tools/matching/noto/2b50.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u2b50.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f33b",
+      "ko": "해바라기",
+      "en": "Sunflower",
+      "src": "/tools/matching/noto/1f33b.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f33b.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f337",
+      "ko": "튤립",
+      "en": "Tulip",
+      "src": "/tools/matching/noto/1f337.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f337.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f332",
+      "ko": "나무",
+      "en": "Tree",
+      "src": "/tools/matching/noto/1f332.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f332.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f335",
+      "ko": "선인장",
+      "en": "Cactus",
+      "src": "/tools/matching/noto/1f335.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f335.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f340",
+      "ko": "네잎클로버",
+      "en": "Clover",
+      "src": "/tools/matching/noto/1f340.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f340.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3e0",
+      "ko": "집",
+      "en": "House",
+      "src": "/tools/matching/noto/1f3e0.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3e0.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "noto-1f3eb",
+      "ko": "학교",
+      "en": "School",
+      "src": "/tools/matching/noto/1f3eb.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/googlefonts/noto-emoji/blob/v2.047/svg/emoji_u1f3eb.svg",
+        "license": "Apache-2.0",
+        "attribution": "Google Noto Emoji",
+        "version": "v2.047"
+      }
+    },
+    {
+      "id": "flag-kr",
+      "ko": "대한민국",
+      "en": "South Korea",
+      "src": "/tools/matching/flags/kr.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/kr.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-jp",
+      "ko": "일본",
+      "en": "Japan",
+      "src": "/tools/matching/flags/jp.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/jp.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-cn",
+      "ko": "중국",
+      "en": "China",
+      "src": "/tools/matching/flags/cn.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/cn.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-mn",
+      "ko": "몽골",
+      "en": "Mongolia",
+      "src": "/tools/matching/flags/mn.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/mn.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-vn",
+      "ko": "베트남",
+      "en": "Vietnam",
+      "src": "/tools/matching/flags/vn.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/vn.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-th",
+      "ko": "태국",
+      "en": "Thailand",
+      "src": "/tools/matching/flags/th.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/th.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ph",
+      "ko": "필리핀",
+      "en": "Philippines",
+      "src": "/tools/matching/flags/ph.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ph.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-my",
+      "ko": "말레이시아",
+      "en": "Malaysia",
+      "src": "/tools/matching/flags/my.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/my.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-sg",
+      "ko": "싱가포르",
+      "en": "Singapore",
+      "src": "/tools/matching/flags/sg.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/sg.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-in",
+      "ko": "인도",
+      "en": "India",
+      "src": "/tools/matching/flags/in.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/in.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-np",
+      "ko": "네팔",
+      "en": "Nepal",
+      "src": "/tools/matching/flags/np.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/np.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-bt",
+      "ko": "부탄",
+      "en": "Bhutan",
+      "src": "/tools/matching/flags/bt.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/bt.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-lk",
+      "ko": "스리랑카",
+      "en": "Sri Lanka",
+      "src": "/tools/matching/flags/lk.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/lk.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-bd",
+      "ko": "방글라데시",
+      "en": "Bangladesh",
+      "src": "/tools/matching/flags/bd.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/bd.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-pk",
+      "ko": "파키스탄",
+      "en": "Pakistan",
+      "src": "/tools/matching/flags/pk.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/pk.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-kz",
+      "ko": "카자흐스탄",
+      "en": "Kazakhstan",
+      "src": "/tools/matching/flags/kz.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/kz.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-uz",
+      "ko": "우즈베키스탄",
+      "en": "Uzbekistan",
+      "src": "/tools/matching/flags/uz.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/uz.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-tr",
+      "ko": "튀르키예",
+      "en": "Türkiye",
+      "src": "/tools/matching/flags/tr.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/tr.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-gr",
+      "ko": "그리스",
+      "en": "Greece",
+      "src": "/tools/matching/flags/gr.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/gr.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-gb",
+      "ko": "영국",
+      "en": "United Kingdom",
+      "src": "/tools/matching/flags/gb.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/gb.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-fr",
+      "ko": "프랑스",
+      "en": "France",
+      "src": "/tools/matching/flags/fr.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/fr.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-de",
+      "ko": "독일",
+      "en": "Germany",
+      "src": "/tools/matching/flags/de.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/de.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-it",
+      "ko": "이탈리아",
+      "en": "Italy",
+      "src": "/tools/matching/flags/it.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/it.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-es",
+      "ko": "스페인",
+      "en": "Spain",
+      "src": "/tools/matching/flags/es.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/es.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-pt",
+      "ko": "포르투갈",
+      "en": "Portugal",
+      "src": "/tools/matching/flags/pt.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/pt.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ie",
+      "ko": "아일랜드",
+      "en": "Ireland",
+      "src": "/tools/matching/flags/ie.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ie.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-be",
+      "ko": "벨기에",
+      "en": "Belgium",
+      "src": "/tools/matching/flags/be.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/be.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ch",
+      "ko": "스위스",
+      "en": "Switzerland",
+      "src": "/tools/matching/flags/ch.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ch.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-at",
+      "ko": "오스트리아",
+      "en": "Austria",
+      "src": "/tools/matching/flags/at.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/at.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-dk",
+      "ko": "덴마크",
+      "en": "Denmark",
+      "src": "/tools/matching/flags/dk.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/dk.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-se",
+      "ko": "스웨덴",
+      "en": "Sweden",
+      "src": "/tools/matching/flags/se.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/se.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-no",
+      "ko": "노르웨이",
+      "en": "Norway",
+      "src": "/tools/matching/flags/no.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/no.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-fi",
+      "ko": "핀란드",
+      "en": "Finland",
+      "src": "/tools/matching/flags/fi.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/fi.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-is",
+      "ko": "아이슬란드",
+      "en": "Iceland",
+      "src": "/tools/matching/flags/is.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/is.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-cz",
+      "ko": "체코",
+      "en": "Czechia",
+      "src": "/tools/matching/flags/cz.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/cz.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-hr",
+      "ko": "크로아티아",
+      "en": "Croatia",
+      "src": "/tools/matching/flags/hr.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/hr.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ua",
+      "ko": "우크라이나",
+      "en": "Ukraine",
+      "src": "/tools/matching/flags/ua.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ua.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-us",
+      "ko": "미국",
+      "en": "United States",
+      "src": "/tools/matching/flags/us.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/us.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ca",
+      "ko": "캐나다",
+      "en": "Canada",
+      "src": "/tools/matching/flags/ca.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ca.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-mx",
+      "ko": "멕시코",
+      "en": "Mexico",
+      "src": "/tools/matching/flags/mx.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/mx.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-br",
+      "ko": "브라질",
+      "en": "Brazil",
+      "src": "/tools/matching/flags/br.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/br.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ar",
+      "ko": "아르헨티나",
+      "en": "Argentina",
+      "src": "/tools/matching/flags/ar.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ar.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-cl",
+      "ko": "칠레",
+      "en": "Chile",
+      "src": "/tools/matching/flags/cl.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/cl.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-pe",
+      "ko": "페루",
+      "en": "Peru",
+      "src": "/tools/matching/flags/pe.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/pe.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-uy",
+      "ko": "우루과이",
+      "en": "Uruguay",
+      "src": "/tools/matching/flags/uy.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/uy.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ec",
+      "ko": "에콰도르",
+      "en": "Ecuador",
+      "src": "/tools/matching/flags/ec.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ec.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-cr",
+      "ko": "코스타리카",
+      "en": "Costa Rica",
+      "src": "/tools/matching/flags/cr.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/cr.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-pa",
+      "ko": "파나마",
+      "en": "Panama",
+      "src": "/tools/matching/flags/pa.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/pa.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-za",
+      "ko": "남아프리카공화국",
+      "en": "South Africa",
+      "src": "/tools/matching/flags/za.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/za.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ke",
+      "ko": "케냐",
+      "en": "Kenya",
+      "src": "/tools/matching/flags/ke.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ke.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-tz",
+      "ko": "탄자니아",
+      "en": "Tanzania",
+      "src": "/tools/matching/flags/tz.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/tz.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ug",
+      "ko": "우간다",
+      "en": "Uganda",
+      "src": "/tools/matching/flags/ug.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ug.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-gh",
+      "ko": "가나",
+      "en": "Ghana",
+      "src": "/tools/matching/flags/gh.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/gh.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ma",
+      "ko": "모로코",
+      "en": "Morocco",
+      "src": "/tools/matching/flags/ma.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ma.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-eg",
+      "ko": "이집트",
+      "en": "Egypt",
+      "src": "/tools/matching/flags/eg.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/eg.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-au",
+      "ko": "오스트레일리아",
+      "en": "Australia",
+      "src": "/tools/matching/flags/au.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/au.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-nz",
+      "ko": "뉴질랜드",
+      "en": "New Zealand",
+      "src": "/tools/matching/flags/nz.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/nz.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-fj",
+      "ko": "피지",
+      "en": "Fiji",
+      "src": "/tools/matching/flags/fj.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/fj.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-pg",
+      "ko": "파푸아뉴기니",
+      "en": "Papua New Guinea",
+      "src": "/tools/matching/flags/pg.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/pg.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    },
+    {
+      "id": "flag-ws",
+      "ko": "사모아",
+      "en": "Samoa",
+      "src": "/tools/matching/flags/ws.svg",
+      "source": {
+        "kind": "bundled",
+        "sourceUrl": "https://github.com/lipis/flag-icons/blob/v7.5.0/flags/4x3/ws.svg",
+        "license": "MIT",
+        "attribution": "flag-icons, Panayiotis Lipiridis and contributors",
+        "version": "v7.5.0"
+      }
+    }
+  ]
+}

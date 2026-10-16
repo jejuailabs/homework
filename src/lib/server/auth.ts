@@ -1,8 +1,8 @@
 import 'server-only';
 import { auth, db } from './admin';
-import { ApiError, validStudentSession, type Role } from './policy';
+import { ApiError, validSessionAuthentication, validStudentSession, type Role } from './policy';
 
-export type Context = { uid: string; email: string | null; displayName: string | null; role: Role; studentId?: string; classId?: string };
+export type Context = { uid: string; email: string | null; displayName: string | null; role: Role; studentId?: string; classId?: string; authVersion?: number };
 export const cookieName = '__session';
 export function assertOrigin(request: Request) {
   const origin = request.headers.get('origin');
@@ -11,9 +11,10 @@ export function assertOrigin(request: Request) {
   // Browsers send Origin on these JSON mutations. Reject unauthenticated cross-site forms.
   if (!request.headers.get('content-type')?.includes('application/json') && request.method !== 'DELETE') throw new ApiError(415, '요청 형식을 확인해 주세요.');
 }
-export async function contextForUid(uid: string, authVersion?: unknown): Promise<Context> {
+export async function contextForUid(uid: string, authVersion?: unknown, sessionAuthTime?: number): Promise<Context> {
   const [userRecord, userDoc, roleDoc] = await Promise.all([auth().getUser(uid), db().doc(`users/${uid}`).get(), db().doc(`platformRoles/${uid}`).get()]);
   if (userRecord.disabled || userDoc.data()?.disabled) throw new ApiError(403, '이 계정은 이용이 중지되어 있어요.', 'ACCOUNT_DISABLED');
+  if (sessionAuthTime !== undefined && !validSessionAuthentication(sessionAuthTime, userRecord.tokensValidAfterTime)) throw new ApiError(401, '로그인이 만료되었어요. 다시 로그인해 주세요.', 'UNAUTHENTICATED');
   const user = userDoc.data();
   const platformRole = roleDoc.data()?.role;
   const role: Role = platformRole === 'superadmin' || platformRole === 'admin' ? platformRole : user?.role === 'student' ? 'student' : 'teacher';
@@ -25,14 +26,17 @@ export async function contextForUid(uid: string, authVersion?: unknown): Promise
   } else if (!userRecord.emailVerified || !userRecord.providerData.some(p => p.providerId === 'google.com')) {
     throw new ApiError(403, '선생님은 Google 계정으로 로그인해 주세요.', 'GOOGLE_REQUIRED');
   }
-  return { uid, email: userRecord.email ?? null, displayName: userRecord.displayName ?? user?.displayName ?? null, role, ...(role === 'student' ? { studentId: user!.studentId, classId: user!.classId } : {}) };
+  return { uid, email: userRecord.email ?? null, displayName: userRecord.displayName ?? user?.displayName ?? null, role, ...(role === 'student' ? { studentId: user!.studentId, classId: user!.classId, authVersion: authVersion as number } : {}) };
 }
 export async function getContext(request: Request): Promise<Context> {
   const raw = request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
   if (!raw) throw new ApiError(401, '로그인이 필요해요.', 'UNAUTHENTICATED');
   try {
-    const decoded = await auth().verifySessionCookie(decodeURIComponent(raw), true);
-    return await contextForUid(decoded.uid, decoded.authVersion);
+    // Verify the signature/issuer/expiry here, then check revocation and account state
+    // against the same fresh UserRecord used for provider checks. Never skip revocation.
+    const decoded = await auth().verifySessionCookie(decodeURIComponent(raw), false);
+    if (!validSessionAuthentication(decoded.auth_time)) throw new ApiError(401, '다시 로그인해 주세요.', 'UNAUTHENTICATED');
+    return await contextForUid(decoded.uid, decoded.authVersion, decoded.auth_time);
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(401, '로그인이 만료되었어요. 다시 로그인해 주세요.', 'UNAUTHENTICATED');

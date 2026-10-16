@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes } from '../assignment-submission';
-import { ApiError, canDisableUser, canManageClass, canUseUpload, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
+import { validSessionAuthentication, ApiError, canDisableUser, canManageClass, canUseUpload, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
 
 test('teacher and platform administrator class access always requires ownership', () => {
   for (const role of ['teacher', 'admin', 'superadmin'] as const) {
@@ -107,4 +107,12 @@ test('code reset invalidates existing student sessions even before token revocat
   assert.equal(validStudentSession(undefined, 0), false);
   assert.equal(validStudentSession('1', 1), false);
   assert.equal(validStudentSession(-1, -1), false);
+});
+
+test('session revocation keeps exact Firebase authentication-time boundaries and rejects malformed times', () => {
+  assert(validSessionAuthentication(100,'1970-01-01T00:01:40.000Z'));
+  assert(!validSessionAuthentication(99,'1970-01-01T00:01:40.000Z'));
+  assert(validSessionAuthentication(101,'1970-01-01T00:01:40.000Z'));
+  for(const value of [undefined,null,'100',NaN,1.5,-1])assert(!validSessionAuthentication(value));
+  assert(!validSessionAuthentication(100,'invalid'));
 });

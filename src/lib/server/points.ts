@@ -1,0 +1,158 @@
+import 'server-only';
+import {NextResponse} from 'next/server';
+import {FieldPath} from 'firebase-admin/firestore';
+import {db} from './admin';
+import {assertOrigin, requireStudent, requireTeacher, type Context} from './auth';
+import {ApiError, canManageClass, id, text} from './policy';
+import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointDay, pointInteger, pointLedgerId, pointPurchaseDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
+import type {PointLedgerEntry, PointStudent} from '../points-types';
+
+type Data = Record<string, any>;
+const json = (data: unknown, status = 200) => NextResponse.json(data, {status, headers: {'Cache-Control': 'private, no-store'}});
+const studentRef = (classId: string, studentId: string) => db().doc(`classes/${id(classId)}/students/${id(studentId)}`);
+const ledgerRef = (classId: string, studentId: string) => studentRef(classId, studentId).collection('pointLedger');
+async function input(request: Request): Promise<Data> {
+  const raw = await request.text();
+  if (Buffer.byteLength(raw) > 20000) throw new ApiError(413, '입력 내용이 너무 커요.');
+  try {const body = JSON.parse(raw); if (body && typeof body === 'object' && !Array.isArray(body)) return body;} catch {}
+  throw new ApiError(400, '입력 내용을 확인해 주세요.');
+}
+function classOwner(ctx: Context, cls: FirebaseFirestore.DocumentSnapshot) {
+  if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
+}
+function pointStudent(doc: FirebaseFirestore.DocumentSnapshot): PointStudent {
+  const v = doc.data()!;
+  return {id: doc.id, name: v.name, number: v.number, character: v.character || 'cat', points: pointBalance(v.points), pointsEarnedTotal: pointBalance(v.pointsEarnedTotal), wardrobeOwned: wardrobeOwnership(v.wardrobeOwned), wardrobeOutfit: wardrobeOutfit(v.wardrobeOutfit, v.wardrobeOwned), disabled: !!v.disabled};
+}
+async function activeStudent(ctx: Context & {classId: string; studentId: string}, tx?: FirebaseFirestore.Transaction) {
+  const refs = [db().doc(`classes/${ctx.classId}`), studentRef(ctx.classId, ctx.studentId), db().doc(`users/${ctx.uid}`)];
+  const [cls, pupil, profile] = await Promise.all(refs.map(ref => tx ? tx.get(ref) : ref.get()));
+  if (!cls.exists || !pupil.exists || pupil.data()?.disabled || pupil.data()?.authUid !== ctx.uid || !profile.exists || profile.data()?.disabled || profile.data()?.role !== 'student' || profile.data()?.classId !== ctx.classId || profile.data()?.studentId !== ctx.studentId) throw new ApiError(403, '학생 코드를 선생님께 다시 확인해 주세요.', 'STUDENT_UNAVAILABLE');
+  return {cls, pupil};
+}
+
+/** All reads happen before commit, so a batch of awards can share one transaction. */
+async function prepareAward(tx: FirebaseFirestore.Transaction, options: {classId: string; studentId: string; source: 'manual' | 'homework'; sourceId: string; amount: number; reason: string; actorUid: string; cls: FirebaseFirestore.DocumentSnapshot; pupil?: FirebaseFirestore.DocumentSnapshot; at: Date}) {
+  const ref = studentRef(options.classId, options.studentId), ledger = ledgerRef(options.classId, options.studentId).doc(pointLedgerId(options.source, options.sourceId, options.studentId)), daily = ref.collection('pointDaily').doc(pointDay(options.at));
+  const [pupil, previous, day] = await Promise.all([options.pupil ? Promise.resolve(options.pupil) : tx.get(ref), tx.get(ledger), tx.get(daily)]);
+  if (!pupil.exists || pupil.data()?.disabled) throw new ApiError(403, '이 학생에게는 포인트를 줄 수 없어요.', 'STUDENT_UNAVAILABLE');
+  const userUid = pupil.data()?.authUid;
+  if (typeof userUid !== 'string' || !userUid || userUid.includes('/')) throw new ApiError(403, '이 학생에게는 포인트를 줄 수 없어요.', 'STUDENT_UNAVAILABLE');
+  const profile = await tx.get(db().doc(`users/${userUid}`));
+  if (!profile.exists || profile.data()?.disabled || profile.data()?.role !== 'student' || profile.data()?.classId !== options.classId || profile.data()?.studentId !== options.studentId) throw new ApiError(403, '이 학생에게는 포인트를 줄 수 없어요.', 'STUDENT_UNAVAILABLE');
+  if (previous.exists) return {status: 'already_awarded', amount: previous.data()!.amount, commit: () => {}};
+  const value = pupil.data()!, settings = pointSettings(options.cls.data()?.pointSettings);
+  const decision = pointAwardDecision(settings, pointBalance(value.points), pointBalance(day.data()?.earned), options.amount);
+  const earnedTotal = pointBalance(value.pointsEarnedTotal) + options.amount;
+  if (!Number.isSafeInteger(earnedTotal)) throw new ApiError(409, '누적 포인트를 확인해 주세요.', 'POINT_BALANCE');
+  const record = {classId: options.classId, studentId: options.studentId, amount: options.amount, kind: 'earn', source: options.source, sourceId: options.sourceId, reason: options.reason, actorUid: options.actorUid, balanceAfter: decision.balance, createdAt: options.at.toISOString()};
+  return {status: 'awarded', amount: options.amount, commit: () => {
+    tx.update(ref, {points: decision.balance, pointsEarnedTotal: earnedTotal});
+    tx.set(daily, {earned: decision.today, day: pointDay(options.at)});
+    tx.create(ledger, record);
+  }};
+}
+
+/** Call before the review transaction's first write; a capped reward never blocks homework review. */
+export async function awardHomeworkPoints(tx: FirebaseFirestore.Transaction, options: {classId: string; studentId: string; assignmentId: string; actorUid: string}) {
+  const cls = await tx.get(db().doc(`classes/${id(options.classId)}`));
+  if (!cls.exists || cls.data()?.ownerUid !== options.actorUid) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
+  const settings = pointSettings(cls.data()?.pointSettings);
+  if (!settings.enabled || settings.rules.homework === 0) return {status: 'disabled', amount: 0};
+  try {
+    const award = await prepareAward(tx, {...options, cls, source: 'homework', sourceId: options.assignmentId, amount: settings.rules.homework, reason: '숙제 완료', at: new Date()});
+    award.commit(); return {status: award.status, amount: award.amount};
+  } catch (error) {
+    if (error instanceof ApiError && ['POINT_DAILY_CAP', 'STUDENT_UNAVAILABLE'].includes(error.code)) return {status: error.code === 'POINT_DAILY_CAP' ? 'daily_cap' : 'student_unavailable', amount: 0};
+    throw error;
+  }
+}
+
+async function studentState(request: Request) {
+  const ctx = await requireStudent(request), {cls, pupil} = await activeStudent(ctx);
+  const params = new URL(request.url).searchParams;
+  let query = ledgerRef(ctx.classId, ctx.studentId).orderBy('createdAt', 'desc').orderBy(FieldPath.documentId(), 'desc');
+  if (params.get('cursor')) {
+    const cursor = await ledgerRef(ctx.classId, ctx.studentId).doc(id(params.get('cursor'))).get();
+    if (!cursor.exists) throw new ApiError(400, '목록 위치를 확인해 주세요.', 'INVALID_CURSOR');
+    query = query.startAfter(cursor);
+  }
+  const page = await query.limit(41).get(), rows = page.docs.slice(0, 40);
+  return json({settings: pointSettings(cls.data()?.pointSettings), student: pointStudent(pupil), ledger: rows.map(row => ({...row.data(), id: row.id}) as PointLedgerEntry), nextCursor: page.size > 40 ? rows.at(-1)!.id : null});
+}
+async function teacherState(request: Request, classId: string) {
+  const ctx = await requireTeacher(request), cls = await db().doc(`classes/${id(classId)}`).get(); classOwner(ctx, cls);
+  const students = await db().collection(`classes/${classId}/students`).get();
+  return json({classId, className: cls.data()!.name, settings: pointSettings(cls.data()?.pointSettings), students: students.docs.map(pointStudent).sort((a, b) => a.number - b.number)});
+}
+async function settings(request: Request, classId: string) {
+  const ctx = await requireTeacher(request), parsed = parsePointSettings(await input(request)), ref = db().doc(`classes/${id(classId)}`);
+  await db().runTransaction(async tx => {const cls = await tx.get(ref); classOwner(ctx, cls); tx.update(ref, {pointSettings: parsed});});
+  return json({settings: parsed});
+}
+async function grant(request: Request, classId: string) {
+  const ctx = await requireTeacher(request), data = await input(request), amount = pointInteger(data.amount, 1, 50), reason = text(data.reason, '지급 이유', 200), requestId = id(data.requestId);
+  if (!Array.isArray(data.studentIds) || !data.studentIds.length || data.studentIds.length > 100) throw new ApiError(400, '학생을 1~100명 선택해 주세요.', 'POINT_STUDENTS');
+  const studentIds = [...new Set<string>(data.studentIds.map((value: unknown) => id(value)))].sort();
+  const receipt = db().doc(`pointRequests/${pointLedgerId('manual', `${classId}:${ctx.uid}:${requestId}`, 'batch')}`), fingerprint = JSON.stringify({studentIds, amount, reason}), at = new Date();
+  const result = await db().runTransaction(async tx => {
+    const [cls, prior] = await Promise.all([tx.get(db().doc(`classes/${id(classId)}`)), tx.get(receipt)]); classOwner(ctx, cls);
+    if (prior.exists) {
+      if (prior.data()!.fingerprint !== fingerprint) throw new ApiError(409, '같은 요청에 다른 내용을 보낼 수 없어요.', 'REQUEST_CONFLICT');
+      return {count: studentIds.length, repeated: true};
+    }
+    const awards = await Promise.all(studentIds.map(studentId => prepareAward(tx, {classId, studentId, source: 'manual', sourceId: `${ctx.uid}:${requestId}`, amount, reason, actorUid: ctx.uid, cls, at})));
+    awards.forEach(award => award.commit());
+    tx.create(receipt, {classId, actorUid: ctx.uid, fingerprint, createdAt: at.toISOString()});
+    return {count: studentIds.length, repeated: false};
+  });
+  return json(result);
+}
+async function purchase(request: Request) {
+  const ctx = await requireStudent(request), data = await input(request), requestId = id(data.requestId), itemId = id(data.itemId);
+  const receipt = db().doc(`pointRequests/${pointLedgerId('wardrobe', `${ctx.classId}:${ctx.uid}:${requestId}`, ctx.studentId)}`);
+  const result = await db().runTransaction(async tx => {
+    const {cls, pupil} = await activeStudent(ctx, tx), prior = await tx.get(receipt), settings = pointSettings(cls.data()?.pointSettings);
+    if (!settings.enabled) throw new ApiError(409, '선생님이 포인트 꾸미기를 켜면 사용할 수 있어요.', 'POINTS_DISABLED');
+    if (prior.exists && prior.data()!.itemId !== itemId) throw new ApiError(409, '같은 요청에 다른 아이템을 담을 수 없어요.', 'REQUEST_CONFLICT');
+    if (prior.exists) return {purchased: false, repeated: true};
+    const value = pupil.data()!, decision = pointPurchaseDecision(pointBalance(value.points), value.wardrobeOwned, itemId);
+    if (decision.purchased) {
+      // One immutable spend ID per student/item also protects concurrent purchases with different request IDs.
+      tx.create(ledgerRef(ctx.classId, ctx.studentId).doc(pointLedgerId('wardrobe', itemId, ctx.studentId)), {classId: ctx.classId, studentId: ctx.studentId, amount: -decision.item.price, kind: 'spend', source: 'wardrobe', sourceId: itemId, reason: decision.item.ko, actorUid: ctx.uid, balanceAfter: decision.balance, createdAt: new Date().toISOString()});
+      tx.update(pupil.ref, {points: decision.balance, wardrobeOwned: decision.owned});
+    }
+    tx.create(receipt, {classId: ctx.classId, studentId: ctx.studentId, itemId, createdAt: new Date().toISOString()});
+    return {purchased: decision.purchased, repeated: false};
+  });
+  return json(result);
+}
+async function equip(request: Request) {
+  const ctx = await requireStudent(request), data = await input(request);
+  const result = await db().runTransaction(async tx => {
+    const {cls, pupil} = await activeStudent(ctx, tx);
+    if (!pointSettings(cls.data()?.pointSettings).enabled) throw new ApiError(409, '선생님이 포인트 꾸미기를 켜면 사용할 수 있어요.', 'POINTS_DISABLED');
+    const value = pupil.data()!, outfit = equipWardrobe(value.wardrobeOutfit, value.wardrobeOwned, data.slot, data.itemId);
+    tx.update(pupil.ref, {wardrobeOutfit: outfit}); return outfit;
+  });
+  return json({outfit: result});
+}
+export async function handlePoints(request: Request, segments: string[]) {
+  try {
+    if (request.method !== 'GET') assertOrigin(request);
+    if (segments.length === 1 && segments[0] === 'student' && request.method === 'GET') return await studentState(request);
+    if (segments.length === 1 && segments[0] === 'purchase' && request.method === 'POST') return await purchase(request);
+    if (segments.length === 1 && segments[0] === 'equip' && request.method === 'POST') return await equip(request);
+    if (segments[0] === 'classes' && segments.length >= 2) {
+      const classId = id(segments[1]);
+      if (segments.length === 2 && request.method === 'GET') return await teacherState(request, classId);
+      if (segments.length === 3 && segments[2] === 'settings' && request.method === 'POST') return await settings(request, classId);
+      if (segments.length === 3 && segments[2] === 'grant' && request.method === 'POST') return await grant(request, classId);
+    }
+    throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
+  } catch (error) {
+    if (error instanceof ApiError) return json({error: error.message, code: error.code}, error.status);
+    console.error('Points operation failed', (error as {code?: string}).code || 'INTERNAL');
+    return json({error: '잠시 후 다시 시도해 주세요.', code: 'INTERNAL_ERROR'}, 500);
+  }
+}

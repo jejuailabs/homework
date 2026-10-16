@@ -9,3 +9,6 @@ const submission = dataUrl(compile('../assignment-submission.ts'));
 const policy = dataUrl(compile('./policy.ts').replace("'../characters'", JSON.stringify(characters)).replace("'../assignment-submission'", JSON.stringify(submission)));
 const exhibition = dataUrl(compile('./exhibition-policy.ts').replace("'./policy'", JSON.stringify(policy)));
 await import(dataUrl(compile('./exhibition.test.ts').replace("'./exhibition-policy'", JSON.stringify(exhibition))));
+const metadata=dataUrl(compile('../exhibition-metadata.ts'));
+const author=dataUrl(compile('./artwork-author-policy.ts').replace("'./policy'",JSON.stringify(policy)));
+await import(dataUrl(compile('./exhibition-upgrade.test.ts').replace("'../exhibition-metadata'",JSON.stringify(metadata)).replace("'./artwork-author-policy'",JSON.stringify(author))));

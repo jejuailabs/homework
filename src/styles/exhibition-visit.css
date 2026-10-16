@@ -3,3 +3,59 @@
 @media(max-width:760px){.ex-experience-heading{align-items:flex-start;gap:12px}.ex-experience-actions{gap:6px}.ex-experience-actions>.ex-button{min-height:39px;padding:8px 10px;font-size:11px}.ex-visit-dialog{width:100vw;height:100dvh;max-width:none;max-height:none;border:0;border-radius:0}.ex-visit-head{padding:9px 10px;gap:8px}.ex-visit-title{gap:5px;flex-wrap:wrap;justify-content:flex-start}.ex-visit-title h2{font-size:16px;gap:6px}.ex-visit-title h2 svg{width:16px}.ex-visit-title>span{font-size:9px;padding:3px 7px}.ex-visit-head>.ex-button{font-size:10px;padding:7px 8px;min-height:35px;max-width:25%}.ex-visit-controls{gap:2px}.ex-visit-controls .ex-icon-btn{width:32px;height:34px}.ex-visit-controls .ex-icon-btn:first-child{display:none}.ex-visit-actions{padding:6px 9px;gap:5px}.ex-visit-actions>.ex-button{font-size:9px;padding:6px 8px}.ex-visit-caption{padding:8px;gap:7px}.ex-visit-caption>img{width:37px;height:37px}.ex-visit-caption>p{font-size:10px}.ex-visit-caption .ex-button{padding:7px;font-size:10px}.ex-visit-breadcrumb{font-size:10px;flex-wrap:wrap;gap:6px}.ex-visit-breadcrumb>.ex-private{font-size:9px}.ex-visit-empty{flex-direction:column;text-align:center;font-size:12px}.ex-visit-content>.ex-world{min-height:0}.ex-world-loading{min-height:330px}}
 @media(max-width:420px){.ex-experience-heading{flex-direction:column}.ex-experience-heading h1{font-size:25px}.ex-experience-actions{width:100%;justify-content:flex-start}.ex-visit-breadcrumb>.ex-private{width:100%;margin-left:0}.ex-visit-caption{flex-wrap:wrap}.ex-visit-caption>p{min-width:180px}.ex-visit-title h2{font-size:14px}.ex-visit-head>.ex-button>span{max-width:65px}.ex-visit-title h2 svg{display:none}}
 @media(prefers-reduced-motion:reduce){.ex-visit-dialog,.ex-visit-content{scroll-behavior:auto}}
+
+/* Full visible viewport on phones. Management actions never take space from the room. */
+.ex-visit-menu-toggle{display:none}
+@media(max-width:760px),(max-height:520px) and (pointer:coarse){
+ .ex-visit-dialog{position:fixed;inset:auto 0;top:var(--ex-view-top,0px);margin:0;width:100%;height:100vh;height:var(--ex-view-height,100dvh);max-height:none;max-width:none;border:0;border-radius:0;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+ .ex-visit-dialog .ex-visit-content{position:absolute;inset:0;overflow:hidden;min-height:0}
+ .ex-visit-dialog .ex-visit-content>.ex-world{height:100%;min-height:0;border:0;border-radius:0}
+ .ex-visit-dialog .ex-visit-head{position:absolute;z-index:20;top:0;left:0;right:0;min-height:52px;padding:calc(4px + env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) 4px max(12px,env(safe-area-inset-left));border:0;background:linear-gradient(#fffdf8f2,#fffdf8b8);backdrop-filter:blur(8px);gap:6px}
+ .ex-visit-dialog .ex-visit-head>.ex-button{display:none}.ex-visit-dialog .ex-visit-title{flex-wrap:nowrap;min-width:0;gap:6px;justify-content:flex-start}
+ .ex-visit-dialog .ex-visit-title h2{display:block;min-width:0;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}.ex-visit-dialog .ex-visit-title h2 svg{display:none}.ex-visit-dialog .ex-visit-title>span{font-size:10px;flex:none;padding:3px 6px}
+ .ex-visit-head .ex-visit-controls .ex-visit-menu-toggle{display:grid}.ex-visit-dialog .ex-visit-expand{display:none}.ex-visit-dialog .ex-visit-controls .ex-icon-btn{width:44px;height:44px;min-width:44px;min-height:44px;background:transparent}
+ .ex-visit-dialog .ex-visit-actions{display:none;position:absolute;z-index:21;top:calc(58px + env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));width:min(320px,calc(100% - 20px));max-height:calc(100% - 86px);overflow:auto;padding:12px;background:#fffdf9f7;border:1px solid var(--border);border-radius:16px;box-shadow:0 10px 30px #344b3826;backdrop-filter:blur(12px);gap:8px}
+ .ex-visit-dialog.is-menu-open .ex-visit-actions{display:flex}.ex-visit-dialog .ex-visit-actions>.ex-button{font-size:12px;min-height:44px;padding:9px 12px}.ex-visit-dialog .ex-visit-actions>.ex-status{width:100%;margin:0}
+ .ex-visit-content .ex-world-topbar{top:calc(62px + env(safe-area-inset-top));grid-template-columns:1fr;left:12px;right:12px}.ex-visit-content .ex-world-title,.ex-visit-content .ex-world-back{display:none}.ex-visit-content .ex-world-index-toggle{grid-row:1;grid-column:1;justify-self:end}
+}
+
+/* The schoolyard and classroom are part of the same mobile visit, not page cards. */
+.ex-lobby-header { display: none; }
+@media (max-width:760px), (max-height:520px) and (pointer:coarse) {
+  .ex-workspace.is-visit-mode {
+    position: fixed; z-index: 70; inset: auto 0; top: var(--ex-view-top,0px);
+    height: var(--ex-view-height,100dvh); width: 100%; overflow: hidden;
+    background: #d9eeec; isolation: isolate;
+  }
+  .ex-workspace.is-visit-mode > .ex-world { position: absolute; inset: 0; height: 100%; min-height: 0; border: 0; border-radius: 0; }
+  .is-visit-mode > .ex-visit-breadcrumb, .is-visit-mode > .ex-visit-caption { display: none; }
+  .is-visit-mode > .ex-lobby-header {
+    position: absolute; z-index: 12; top: 0; left: 0; right: 0;
+    display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; gap: 8px; align-items: center;
+    padding: calc(6px + env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 6px max(10px,env(safe-area-inset-left));
+    background: linear-gradient(#fffdf8ed,#fffdf8a6); backdrop-filter: blur(8px);
+  }
+  .ex-lobby-header .ex-icon-btn { width: 44px; height: 44px; background: transparent; }
+  .ex-lobby-header > div { min-width: 0; text-align: center; color: #385a4c; }
+  .ex-lobby-header small { display: block; font-size: 9px; letter-spacing: .7px; margin-bottom: 3px; }
+  .ex-lobby-header strong { display: block; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+  .is-visit-mode > .ex-experience-heading {
+    display: none; position: absolute; z-index: 13; top: calc(65px + env(safe-area-inset-top));
+    right: 10px; left: 10px; width: auto; padding: 14px; margin: 0;
+    border-radius: 16px; background: #fffdf8f5; box-shadow: 0 8px 30px #395b4826;
+  }
+  .is-visit-mode.is-lobby-menu-open > .ex-experience-heading { display: flex; }
+  .is-visit-mode > .ex-experience-heading > div:first-child { display: none; }
+  .is-visit-mode .ex-experience-actions { width: 100%; justify-content: flex-start; }
+  .is-visit-mode .ex-experience-actions > .ex-button { min-height: 44px; font-size: 12px; }
+  .is-visit-mode > .ex-alert, .is-visit-mode > .ex-notice { position: absolute; z-index: 14; top: 112px; left: 10px; right: 10px; }
+  .is-visit-mode > .ex-visit-list-status, .is-visit-mode > .ex-visit-empty, .is-visit-mode > .ex-more-rooms {
+    position: absolute; z-index: 5; left: 12px; right: 12px; top: calc(118px + env(safe-area-inset-top));
+    margin: 0; padding: 12px; border-radius: 16px; background: #fffdf6ed;
+  }
+  .is-visit-mode > .ex-world .ex-world-topbar { top: calc(66px + env(safe-area-inset-top)); pointer-events: none; }
+  .is-visit-mode > .ex-world .ex-world-title, .is-visit-mode > .ex-world .ex-world-back { display: none; }
+  .is-visit-mode > .ex-world .ex-world-index { top: calc(118px + env(safe-area-inset-top)); bottom: calc(114px + env(safe-area-inset-bottom)); }
+  .is-visit-mode > .ex-world .ex-world-reset { bottom: calc(104px + env(safe-area-inset-bottom)); }
+  .is-visit-mode > .ex-world .ex-world-wings { bottom: calc(110px + env(safe-area-inset-bottom)); }
+}

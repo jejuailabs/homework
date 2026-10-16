@@ -26,6 +26,12 @@ export function canUseUpload(uid: string, assignmentId: string, record: { userUi
 export function validStudentSession(tokenVersion: unknown, currentVersion: unknown) {
   return typeof tokenVersion === 'number' && Number.isSafeInteger(tokenVersion) && tokenVersion >= 0 && tokenVersion === currentVersion;
 }
+export function validSessionAuthentication(authTime: unknown, validAfter?: string): boolean {
+  if (typeof authTime !== 'number' || !Number.isSafeInteger(authTime) || authTime < 0) return false;
+  if (!validAfter) return true;
+  const cutoff = Date.parse(validAfter);
+  return Number.isFinite(cutoff) && authTime * 1000 >= cutoff;
+}
 export function requiredSubmissionType(value: unknown): SubmissionType {
   if (!submissionTypes.includes(value as SubmissionType)) throw new ApiError(400, '숙제 제출 방식을 글쓰기, 사진·이미지, 영상 중에서 선택해 주세요.', 'SUBMISSION_TYPE');
   return value as SubmissionType;

@@ -1,7 +1,6 @@
 import AccessGate from '@/components/access-gate';
-import AiToolbox from '@/components/ai-toolbox';
-import '@/styles/ai.css';
+import ToolsHub from '@/components/tools-hub';
 
 export default function ToolsPage() {
-  return <AccessGate role="teacher"><AiToolbox/></AccessGate>;
+  return <AccessGate role="teacher"><ToolsHub/></AccessGate>;
 }

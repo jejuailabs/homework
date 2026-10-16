@@ -1,0 +1,21 @@
+.nav-cards .nav-pictogram{background:var(--play-peach)}
+.thd-shortcuts{grid-template-columns:repeat(5,minmax(0,1fr))}
+.thd-shortcut strong{font-size:15px}
+@media(min-width:741px) and (max-width:1200px){.header-inner:has(.teacher-nav){height:auto;min-height:78px;flex-wrap:wrap;padding-block:12px;row-gap:8px}.top-nav.teacher-nav{order:3;flex-basis:100%;min-width:0;justify-content:space-between;overflow-x:auto}.top-nav.teacher-nav a{flex:none}}
+@media(max-width:1150px){.thd-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:740px){.top-nav.teacher-nav,html[lang=en] .top-nav.teacher-nav{display:flex;overflow-x:auto;gap:5px;scrollbar-width:thin;justify-content:flex-start}.top-nav.teacher-nav a,html[lang=en] .top-nav.teacher-nav a{flex:none;min-width:65px;white-space:nowrap;font-size:10px;flex-direction:column;padding:6px;gap:4px}.app-main:has(.cards-workspace){padding-top:18px}.thd-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.thd-shortcut strong{font-size:13px}}
+
+/* Every shortcut uses the same compact row, regardless of caption wrapping. */
+.thd-shortcuts .thd-shortcut{min-height:94px}
+.thd-shortcuts .thd-shortcut small{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+@media(max-width:740px){
+ .thd-shortcuts{grid-auto-rows:94px}
+ .thd-shortcuts .thd-shortcut{height:94px;min-height:0;padding:12px 10px;align-items:flex-start}
+ .thd-shortcuts .thd-shortcut strong{line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .thd-shortcuts .thd-shortcut small{font-size:9px;line-height:1.5;padding-right:5px}
+ .thd-shortcuts .thd-icon{width:30px;height:32px;flex:none}
+ .thd-shortcuts .thd-icon svg{width:20px}
+ .thd-shortcuts .thd-shortcut>img{display:none}
+ .thd-shortcuts .thd-shortcut>svg{position:absolute;right:9px;bottom:8px;width:13px}
+}

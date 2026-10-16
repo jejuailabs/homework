@@ -3,6 +3,14 @@ import ts from 'typescript';
 const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename, import.meta.url), 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
+const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+const materialsUrl = moduleUrl(compile('../assignment-materials.ts'));
+await import(moduleUrl(compile('../assignment-materials.test.ts').replace("'./assignment-materials'", JSON.stringify(materialsUrl))));
+const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));
+await import(moduleUrl(compile('../canvas-document.test.ts').replace("'./canvas-document'", JSON.stringify(canvasUrl))));
+const studentCodesUrl = moduleUrl(compile('./student-codes.ts'));
+const studentEntryUrl = moduleUrl(compile('../student-entry-code.ts'));
+await import(moduleUrl(compile('./student-codes.test.ts').replace("'./student-codes'", JSON.stringify(studentCodesUrl)).replace("'../student-entry-code'", JSON.stringify(studentEntryUrl))));
 const characterUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../characters.ts')).toString('base64');
 const submissionUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../assignment-submission.ts')).toString('base64');
 const rosterUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../roster.ts')).toString('base64');
@@ -12,6 +20,8 @@ const worldLayoutUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../
 const worldLayoutTest = compile('../exhibition-world-layout.test.ts').replace("'./exhibition-world-layout'", JSON.stringify(worldLayoutUrl));
 await import('data:text/javascript;base64,' + Buffer.from(worldLayoutTest).toString('base64'));
 const policyUrl = 'data:text/javascript;base64,' + Buffer.from(compile('./policy.ts').replace("'../characters'", JSON.stringify(characterUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl))).toString('base64');
+const vaultUrl = moduleUrl(compile('./student-code-vault.ts').replace("import 'server-only';", '').replace("'./policy'", JSON.stringify(policyUrl)).replace("'../student-entry-code'", JSON.stringify(studentEntryUrl)));
+await import(moduleUrl(compile('./student-code-vault.test.ts').replace("'./student-code-vault'", JSON.stringify(vaultUrl))));
 const testCode = compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policyUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl));
 await import('data:text/javascript;base64,' + Buffer.from(testCode).toString('base64'));
 await import('./run-ai-tests.mjs');
@@ -24,3 +34,13 @@ const loginDestinationUrl = 'data:text/javascript;base64,' + Buffer.from(compile
 const loginDestinationTest = compile('../login-destination.test.ts').replace("'./login-destination'", JSON.stringify(loginDestinationUrl));
 await import('data:text/javascript;base64,' + Buffer.from(loginDestinationTest).toString('base64'));
 await import('./run-participation-tests.mjs');
+await import('./run-cards-tests.mjs');
+await import('./run-cards-import-tests.mjs');
+await import('./run-points-tests.mjs');
+await import('../run-matching-tests.mjs');
+await import('../run-classroom-tools-tests.mjs');
+await import('./run-tools-report-tests.mjs');
+await import('../run-neighborhood-tests.mjs');
+
+const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
+await import(moduleUrl(compile('../admin-console-policy.test.ts').replace("'./admin-console-policy'",JSON.stringify(adminConsolePolicyUrl))));

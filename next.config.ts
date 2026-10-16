@@ -12,7 +12,7 @@ const config: NextConfig = {
       {key:'X-Frame-Options',value:'DENY'},
       {key:'Referrer-Policy',value:'strict-origin-when-cross-origin'},
       {key:'Permissions-Policy',value:'camera=(self), microphone=(self), geolocation=()'}
-    ]}];
+    ]}, ...['/gallery/moa-art-screen-v1.png', '/gallery/oak-art-frame-v1.png'].map(source => ({source, headers: [{key: 'Cache-Control', value: 'public,max-age=31536000,immutable'}]}))];
   }
 };
 export default config;
