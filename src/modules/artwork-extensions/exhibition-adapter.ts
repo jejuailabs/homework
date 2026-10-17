@@ -12,10 +12,10 @@ let visitorSecret: Promise<string> | undefined;
 function secret() { return visitorSecret ??= (async () => { if (process.env.CREATIVE_VISITOR_SECRET)
     return process.env.CREATIVE_VISITOR_SECRET; const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_APPLICATION_CREDENTIALS ? await readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8') : ''); if (!raw)
     throw new ApiError(503, '방문자 참여 설정을 확인해 주세요.'); return digest('creative-visitors-v1:' + JSON.parse(raw).private_key); })(); }
-export function moduleInstalled(name: string) { return ['voice', 'guestbook'].includes(name) && !new Set((process.env.ARTWORK_MODULES_DISABLED || '').split(',').map(s => s.trim())).has(name); }
+export function moduleInstalled(name: string) { return ['voice', 'guestbook', 'artbook'].includes(name) && !new Set((process.env.ARTWORK_MODULES_DISABLED || '').split(',').map(s => s.trim())).has(name); }
 export function effectiveOptions(value: unknown) { const options = moduleOptions(value); if (!moduleInstalled('voice'))
     options.voice.enabled = false; if (!moduleInstalled('guestbook'))
-    options.guestbook.enabled = false; return options; }
+    options.guestbook.enabled = false; if (!moduleInstalled('artbook')) options.artbook.enabled = false; return options; }
 async function visitor(request: Request) { const key = await secret(), sign = (v: string) => createHmac('sha256', key).update(v).digest('base64url'); const raw = request.headers.get('cookie')?.split(';').map(s => s.trim()).find(s => s.startsWith('creative_visitor='))?.slice(17) || '', parts = raw.split('.'); if (parts.length === 2 && /^[\w-]{43}$/.test(parts[0]) && /^[\w-]{43}$/.test(parts[1])) {
     const expected = sign(parts[0]);
     if (timingSafeEqual(Buffer.from(expected), Buffer.from(parts[1])))

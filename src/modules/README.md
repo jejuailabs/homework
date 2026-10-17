@@ -4,7 +4,7 @@
 
 ## Integration points
 
-- `artwork-extensions/exhibition-adapter.ts`: the exhibition host adapter. This is the only module layer that reads exhibition/class/QR permissions.
+- `artwork-extensions/exhibition-adapter.ts`: the exhibition host adapter for voice and guestbook. Digital artbooks use their own `digital-artbook/exhibition-source.ts` adapter.
 - `artwork-extensions/slot.tsx`: UI registration. Hosts pass an endpoint, options, display title and an optional function for an artwork's public URL.
 - `api/artwork-modules/[...segments]/route.ts`: server feature registration and HTTP boundary. It validates origin and public request limits, then dispatches to the independently loaded feature handler.
 - `artwork-extensions/settings.tsx`: reusable switches. Defaults are off. Turning a feature off hides its UI and blocks its API without deleting data.
@@ -42,3 +42,7 @@ The QR label links to a stable artwork page (`/gallery/{shareToken}?artwork={art
 All feature data/files are accessed through server APIs, so these modules require no new Firebase client write rules or composite indexes. Do not directly deploy to Vercel: commit/push validated changes and verify GitHub-triggered automatic deployment.
 
 STT implementation reference: [OpenAI file transcription guide](https://developers.openai.com/api/docs/guides/speech-to-text) and [transcription API](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create), checked2026-10-17.
+
+## 디지털 아트북
+
+`digital-artbook/`은 학생별 PDF 포트폴리오 모듈이다. 전시실별 `artbook.enabled`와 `ARTWORK_MODULES_DISABLED=artbook`으로 중지할 수 있다. 자세한 연결·분리 지점, 비공개 보관, 실행 방식과 한도는 루트 `GALLERY_ARTBOOK_IMPLEMENTATION.md`를 따른다.

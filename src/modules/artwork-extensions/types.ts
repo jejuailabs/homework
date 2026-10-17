@@ -1,4 +1,5 @@
 export type ArtworkModuleOptions = {
+    artbook: { enabled: boolean };
     voice: {
         enabled: boolean;
         publicAudio: boolean;
@@ -48,5 +49,5 @@ export type VoiceRecording = {
 };
 export function moduleOptions(value: unknown): ArtworkModuleOptions {
     const v = value && typeof value === 'object' ? value as Record<string, any> : {};
-    return { voice: { enabled: v.voice?.enabled === true, publicAudio: v.voice?.publicAudio === true }, guestbook: { enabled: v.guestbook?.enabled === true, students: v.guestbook?.students !== false, visitorStickers: v.guestbook?.visitorStickers === true, visitorComments: v.guestbook?.visitorComments === true } };
+    return { artbook: { enabled: v.artbook?.enabled === true }, voice: { enabled: v.voice?.enabled === true, publicAudio: v.voice?.publicAudio === true }, guestbook: { enabled: v.guestbook?.enabled === true, students: v.guestbook?.students !== false, visitorStickers: v.guestbook?.visitorStickers === true, visitorComments: v.guestbook?.visitorComments === true } };
 }
