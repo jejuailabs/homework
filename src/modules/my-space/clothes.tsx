@@ -1,6 +1,10 @@
 'use client';
-import { spaceItem } from './catalog';
-export function Clothes({ id }: {
-    id: string;
-}) { const item = spaceItem(id); if (!item)
-    return null; return <svg viewBox="0 0 100 100" className={'ms-clothes-art ms-clothes-' + item.motif} aria-hidden="true"><defs><pattern id={'knit-' + id} width="10" height="12" patternUnits="userSpaceOnUse"><path d="M2 1L5 7L8 1" fill="none" stroke="#fff8ed" strokeWidth="1" opacity=".45"/></pattern></defs>{item.slot === 'body' ? <><path d="M27 21L10 38L21 51L28 45L24 84Q50 94 77 84L73 45L80 51L91 38L73 21L62 15Q50 31 38 15Z" fill={item.color} stroke="#866c58" strokeWidth="2"/>{item.motif === 'knit' && <path d="M28 31H73V84H28Z" fill={'url(#knit-' + id + ')'}/>}<path d="M36 18Q50 38 65 18M26 80Q50 87 76 80" fill="none" stroke="#fff4d9" strokeWidth="5"/>{item.motif === 'sailor' && <path d="M28 24L50 47L72 24L65 19L50 33L36 19Z" fill="#fff8e9"/>}{item.motif === 'apron' && <><path d="M33 21L32 83M66 21L69 83" stroke="#fff3d8" strokeWidth="3"/><path d="M40 52H61V70Q50 77 40 70Z" fill="#eddaa8"/></>}</> : <><path d="M21 15Q52 30 77 80" fill="none" stroke={item.color} strokeWidth="7"/><rect x="45" y="48" width="42" height="36" rx="12" fill={item.color} stroke="#746b4c" strokeWidth="2"/><path d="M56 52Q66 25 78 53" fill="none" stroke={item.color} strokeWidth="5"/><path d="M68 70V59M68 65Q52 65 56 54Q69 52 68 65M68 63Q80 50 84 59Q79 68 68 63" stroke="#edf2d5" fill="#d1dfb2" strokeWidth="2"/></>}</svg>; }
+import CharacterAvatar from '@/components/character-avatar';
+import {spaceItem} from './catalog';
+
+/** The shop/picker shows a worn garment instead of the former shirt icon. */
+export function Clothes({id, pet = 'friend-cat'}: {id: string; pet?: string}) {
+  const item = spaceItem(id), friend = spaceItem(pet);
+  if (item?.kind !== 'clothes' || !item.slot) return null;
+  return <span className="ms-clothes-preview"><CharacterAvatar character={friend?.base || 'cat'} imageSrc={friend?.art} spaceOutfit={{[item.slot]: id}}/></span>;
+}

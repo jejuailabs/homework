@@ -1,0 +1,14 @@
+.avatar-fitted .avatar-worn-accessory{position:absolute;z-index:3;display:block;pointer-events:none;transform-origin:50% 85%;line-height:0}
+.avatar-fitted .avatar-worn-accessory>img{display:block;width:100%;height:auto;max-width:none;margin:0;object-fit:contain;transform:none;filter:drop-shadow(0 1px 1px #44362328)}
+.avatar-fitted .worn-neck{z-index:2}
+.avatar-fitted .worn-head{z-index:4}
+.avatar-fitted .avatar-neck-fur{position:absolute;inset:0;z-index:3;display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;filter:none;transform:none}
+.avatar-fitted .character-avatar-border{z-index:5}
+.ms-page button.ms-try-on{position:relative;margin:0;display:flex;align-items:center;justify-content:center;width:100%;min-height:150px;padding:0 4px 22px;border:0;background:radial-gradient(ellipse at center,#f0efdf,#fbf9f000)}
+.ms-try-on>.character-avatar{width:min(100%,128px);height:auto;aspect-ratio:1;max-width:100%;margin:0 auto}
+.ms-confirm-art>.character-avatar{width:min(100%,210px);height:auto;aspect-ratio:1;margin:0 auto}
+.ms-try-on>span:last-child:not(.character-avatar){position:absolute;left:0;right:0;bottom:1px;font-size:10px;color:#70846a}
+.ms-clothes-preview{display:flex;align-items:center;justify-content:center;width:100%;height:84px}
+.ms-clothes-preview>.character-avatar{width:min(100%,84px);height:auto;aspect-ratio:1;margin:0}
+.ms-clothes-preview .character-avatar-base{width:100%!important;height:100%!important}
+.ms-confirm-art{height:210px}
