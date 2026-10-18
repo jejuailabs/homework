@@ -46,3 +46,7 @@ STT implementation reference: [OpenAI file transcription guide](https://develope
 ## 디지털 아트북
 
 `digital-artbook/`은 학생별 PDF 포트폴리오 모듈이다. 전시실별 `artbook.enabled`와 `ARTWORK_MODULES_DISABLED=artbook`으로 중지할 수 있다. 자세한 연결·분리 지점, 비공개 보관, 실행 방식과 한도는 루트 `GALLERY_ARTBOOK_IMPLEMENTATION.md`를 따른다.
+
+## 나의 작은 세상
+
+`my-space/`은 기존 보말 지갑을 쓰는 학생 개인 공간 모듈이다. 동물 성장·옷·방·개인 다꾸와 카탈로그를 분리한다. `MY_SPACE_DISABLED=true`로 중지하며 보관 자료와 구매 내역을 유지한다. 연결 지점, 사진 예산, 성격·에셋과 검증은 `MY_SPACE_IMPLEMENTATION.md`를 따른다.

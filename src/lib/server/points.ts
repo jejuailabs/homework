@@ -6,6 +6,7 @@ import {assertOrigin, requireStudent, requireTeacher, type Context} from './auth
 import {ApiError, canManageClass, id, text} from './policy';
 import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointDay, pointInteger, pointLedgerId, pointPurchaseDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
 import type {PointLedgerEntry, PointStudent} from '../points-types';
+import {companionProfile} from '@/modules/my-space/profile';
 
 type Data = Record<string, any>;
 const json = (data: unknown, status = 200) => NextResponse.json(data, {status, headers: {'Cache-Control': 'private, no-store'}});
@@ -78,7 +79,8 @@ async function studentState(request: Request) {
     query = query.startAfter(cursor);
   }
   const page = await query.limit(41).get(), rows = page.docs.slice(0, 40);
-  return json({settings: pointSettings(cls.data()?.pointSettings), student: pointStudent(pupil), ledger: rows.map(row => ({...row.data(), id: row.id}) as PointLedgerEntry), nextCursor: page.size > 40 ? rows.at(-1)!.id : null});
+  const room=process.env.MY_SPACE_DISABLED==='true'?null:await pupil.ref.collection('mySpace').doc('room').get();
+  return json({settings: pointSettings(cls.data()?.pointSettings), student: pointStudent(pupil),mySpaceEnabled:process.env.MY_SPACE_DISABLED!=='true',spaceCompanion:companionProfile(pupil.data()!,room?.data()), ledger: rows.map(row => ({...row.data(), id: row.id}) as PointLedgerEntry), nextCursor: page.size > 40 ? rows.at(-1)!.id : null});
 }
 async function teacherState(request: Request, classId: string) {
   const ctx = await requireTeacher(request), cls = await db().doc(`classes/${id(classId)}`).get(); classOwner(ctx, cls);

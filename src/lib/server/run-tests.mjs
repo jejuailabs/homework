@@ -43,6 +43,7 @@ await import('./run-tools-report-tests.mjs');
 await import('../run-neighborhood-tests.mjs');
 await import('../../modules/artwork-extensions/run-tests.mjs');
 await import('../../modules/digital-artbook/run-tests.mjs');
+await import('../../modules/my-space/run-tests.mjs');
 
 const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
 await import(moduleUrl(compile('../admin-console-policy.test.ts').replace("'./admin-console-policy'",JSON.stringify(adminConsolePolicyUrl))));

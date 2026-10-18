@@ -16,6 +16,7 @@ import {bindAssignmentMaterials, signedAssignmentMaterials} from './assignment-m
 import {directoryFields} from '../admin-directory-fields';
 import {handleAdminDirectory} from './admin-directory';
 import {handleAdminConsole} from './admin-console';
+import {companionProfile} from '@/modules/my-space/profile';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -42,9 +43,9 @@ async function assignmentForStudent(ctx: Context, assignmentId: string) {
   return mappedAssignment(doc);
 }
 async function studentProfile(ctx: Context) {
-  const [student, cls] = await Promise.all([db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get()]);
+  const [student, cls, room] = await Promise.all([db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get(), process.env.MY_SPACE_DISABLED==='true'?Promise.resolve(null):db().doc(`classes/${ctx.classId}/students/${ctx.studentId}/mySpace/room`).get()]);
   const data = student.data()!;
-  return { id: student.id, name: data.name, number: data.number, classId: ctx.classId, className: cls.data()?.name ?? '', character: data.character ?? 'cat', xp: data.xp ?? 0, points: pointBalance(data.points), pointSettings: pointSettings(cls.data()?.pointSettings), wardrobeOutfit: wardrobeOutfit(data.wardrobeOutfit, data.wardrobeOwned) };
+  return { id: student.id, name: data.name, number: data.number, classId: ctx.classId, className: cls.data()?.name ?? '', character: data.character ?? 'cat', xp: data.xp ?? 0, points: pointBalance(data.points), pointSettings: pointSettings(cls.data()?.pointSettings), wardrobeOutfit: wardrobeOutfit(data.wardrobeOutfit, data.wardrobeOwned),mySpaceEnabled:process.env.MY_SPACE_DISABLED!=='true',spaceCompanion:companionProfile(data,room?.data()) };
 }
 function publicStudent(doc: FirebaseFirestore.DocumentSnapshot) {
   const value = doc.data()!;
@@ -301,7 +302,7 @@ async function character(request: Request) {
   const ctx = await requireStudent(request);
   const input = await body(request);
   if (!characters.includes(input.character)) throw new ApiError(400, '함께할 친구를 선택해 주세요.');
-  await db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).update({ character: input.character });
+  await db().runTransaction(async tx=>{const ref=db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`),space=ref.collection('mySpace').doc('room'),[pupil,room]=await Promise.all([tx.get(ref),tx.get(space)]);if(!pupil.exists||pupil.data()?.disabled||pupil.data()?.authUid!==ctx.uid)throw new ApiError(403,'학생 계정을 다시 확인해 주세요.');tx.update(ref,{character:input.character});if(room.exists)tx.update(space,{pet:'friend-'+input.character,version:(room.data()?.version||0)+1});});
   return json({ profile: await studentProfile(ctx) });
 }
 async function initUpload(request: Request) {

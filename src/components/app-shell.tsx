@@ -9,8 +9,9 @@ import {clearClassMetadata} from '@/lib/class-metadata-cache';
 import {auth} from '@/lib/firebase-client';
 import {usePreferences,type Palette} from './providers';
 import InstallShortcut from './install-shortcut';
+import StudentCompanion from '@/modules/my-space/companion';
 
-export default function AppShell({children}:{children:ReactNode}) {
+export default function AppShell({children,mySpaceEnabled=true}:{children:ReactNode;mySpaceEnabled?:boolean}) {
   const t=useTranslations('common'), path=usePathname(), router=useRouter();
   const {locale,appearance,palette,setPreference}=usePreferences();
   const [settings,setSettings]=useState(false), [busy,setBusy]=useState(false);
@@ -35,14 +36,14 @@ export default function AppShell({children}:{children:ReactNode}) {
   return <>
     <a href="#main" className="skip-link">{t('skip')}</a>
     <header className="app-header"><div className="header-inner">
-      <Link href={isLogin||isPublicGallery?'/':isAdmin?'/admin':isStudent?'/student':'/teacher'} className="brand"><span className="brand-mark"><BookOpen size={22}/></span><span>{t('brand')}<small>{t('tagline')}</small></span></Link>
-      {!isLogin&&!isPublicGallery && <nav className={`top-nav ${!isStudent&&!isAdmin?'teacher-nav':''}`} aria-label={t('home')}>
+      <Link href={isLogin||isPublicGallery?'/':isAdmin?'/admin':isStudent?'/student':'/teacher'} className="brand"><span className="brand-mark"><img src="/characters/otter-moa.webp" alt=""/></span><span>{t('brand')}<small>{t('tagline')}</small></span></Link>
+      {!isLogin&&!isPublicGallery && <nav className={`top-nav ${isStudent?'student-nav':!isAdmin?'teacher-nav':''}`} aria-label={t('home')}>
         {!isStudent&&!isAdmin&&<Link href="/teacher" className={`nav-dashboard ${path==='/teacher'?'active':''}`} aria-current={path==='/teacher'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><LayoutDashboard size={18}/></span>{t('dashboard')}</Link>}
         <Link className={`nav-homework ${path===homeworkPath?'active':''}`} aria-current={path===homeworkPath?'page':undefined} href={homeworkPath}><span className="nav-pictogram" aria-hidden="true">{isAdmin?<ShieldCheck size={18}/>:<BookOpen size={18}/>}</span>{isAdmin?t('admin'):t('homework')}</Link>
         {!isAdmin&&<Link href={`${workspacePath}/exhibitions`} className={`nav-gallery ${path.includes('/exhibitions')?'active':''}`} aria-current={path.includes('/exhibitions')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Images size={18}/></span>{t('exhibitions')}</Link>}
         {!isAdmin&&<Link href={`${workspacePath}/boards`} className={`nav-boards ${path.includes('/boards')?'active':''}`} aria-current={path.includes('/boards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{t('boards')}</Link>}
         {!isAdmin&&<Link href={`${workspacePath}/cards`} className={`nav-cards ${path.includes('/cards')?'active':''}`} aria-current={path.includes('/cards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Layers size={18}/></span>{t('cards')}</Link>}
-        {isStudent&&<Link href="/student/canvases" className={path==='/student/canvases'?'active':''} aria-current={path==='/student/canvases'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{locale==='en'?'Together Canvas':'함께캔버스'}</Link>}
+        {isStudent&&mySpaceEnabled&&<Link href="/student/my-space" className={path==='/student/my-space'?'active':''} aria-current={path==='/student/my-space'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Shell size={18}/></span>{locale==='en'?'My little world':'나의 작은 세상'}</Link>}{isStudent&&<Link href="/student/canvases" className={path==='/student/canvases'?'active':''} aria-current={path==='/student/canvases'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{locale==='en'?'Together Canvas':'함께캔버스'}</Link>}
         {isStudent&&<Link href="/student/polls" className={path==='/student/polls'?'active':''} aria-current={path==='/student/polls'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Vote size={18}/></span>{locale==='en'?'Class polls':'학급 투표'}</Link>}
         {!isStudent&&!isAdmin&&<Link href="/teacher/tools" className={`nav-tools ${path.includes('tools')?'active':''}`} aria-current={path.includes('tools')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Sparkles size={18}/></span>{t('tools')}</Link>}
         {!isStudent&&!isAdmin&&<Link href="/teacher/points" className={`nav-points ${path.includes('/points')?'active':''}`} aria-current={path.includes('/points')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Shell size={18}/></span>{t('points')}</Link>}
@@ -57,5 +58,6 @@ export default function AppShell({children}:{children:ReactNode}) {
     {settings&&<div className="settings-backdrop" onClick={()=>setSettings(false)}><section className="settings-panel" role="dialog" aria-modal="true" aria-label={t('settings')} onClick={e=>e.stopPropagation()}><div className="section-heading"><h2>{t('settings')}</h2><button className="icon-button" aria-label={t('close')} onClick={()=>setSettings(false)}><X size={20}/></button></div><label>{t('appearance')}</label><div className="segmented">{(['light','dark','system'] as const).map(value=><button key={value} className={appearance===value?'selected':''} onClick={()=>setPreference({appearance:value})}>{t(value)}</button>)}</div><label>{t('palette')}</label><div className="palette-grid">{(['mint','coral','sky','lavender','apricot','rose'] as Palette[]).map(value=><button key={value} className={palette===value?'selected':''} onClick={()=>setPreference({palette:value})} aria-pressed={palette===value}><span className={'swatch '+value}/>{t(value)}</button>)}</div><label htmlFor="locale-select">{t('language')}</label><select id="locale-select" value={locale} onChange={e=>setPreference({locale:e.target.value as 'ko'|'en'})}><option value="ko">{t('localeKorean')}</option><option value="en">{t('localeEnglish')}</option></select></section></div>}
     <main id="main" className={isLogin?'login-main':'app-main'}>{children}</main>
     <footer className="app-footer"><span>{t('brand')}</span><InstallShortcut/><span>{t('tagline')}</span></footer>
+    {isStudent&&mySpaceEnabled&&<StudentCompanion/>}
   </>;
 }

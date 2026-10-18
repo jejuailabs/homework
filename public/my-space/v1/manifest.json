@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "created": "2026-10-18",
+  "provenance": "Project assets generated using built-in ImageGen; resized and encoded to WebP with alpha preserved.",
+  "assets": [
+    {
+      "id": "bed",
+      "url": "/my-space/v1/bed.webp",
+      "bytes": 44916,
+      "width": 600,
+      "height": 400,
+      "alpha": true,
+      "sha256": "d2d8f813c582fcc99d85f4daa2ea87c8018ec65c11ff68eb2d77d8a2cee84372"
+    },
+    {
+      "id": "cat-american",
+      "url": "/my-space/v1/cat-american.webp",
+      "bytes": 125500,
+      "width": 600,
+      "height": 566,
+      "alpha": true,
+      "sha256": "a94c5d77da538f64125ba4b8920c082ef4efcdee7859b00248b699798ecd1930"
+    },
+    {
+      "id": "cat-british",
+      "url": "/my-space/v1/cat-british.webp",
+      "bytes": 115290,
+      "width": 600,
+      "height": 548,
+      "alpha": true,
+      "sha256": "b430e873677c4512ce178f6527f1ed3676c78b13e54ccc0cc95c88d2e15c9d59"
+    },
+    {
+      "id": "cat-maine",
+      "url": "/my-space/v1/cat-maine.webp",
+      "bytes": 137316,
+      "width": 600,
+      "height": 583,
+      "alpha": true,
+      "sha256": "b2d3b5a24ef2b9053da2d36cfc499e9b4031d374317976f2a782a4b2164f77cd"
+    },
+    {
+      "id": "cat-persian",
+      "url": "/my-space/v1/cat-persian.webp",
+      "bytes": 97320,
+      "width": 600,
+      "height": 551,
+      "alpha": true,
+      "sha256": "e0980d7a3a9b15d584c777adab1293f3d3d1c4541d1ac3e4a275410001ebb334"
+    },
+    {
+      "id": "cat-ragdoll",
+      "url": "/my-space/v1/cat-ragdoll.webp",
+      "bytes": 100050,
+      "width": 600,
+      "height": 548,
+      "alpha": true,
+      "sha256": "c3cb45e491b76172c46a6923c21ab809944e94c4b170eb7d50952e072ad6b657"
+    },
+    {
+      "id": "cat-siamese",
+      "url": "/my-space/v1/cat-siamese.webp",
+      "bytes": 93910,
+      "width": 600,
+      "height": 548,
+      "alpha": true,
+      "sha256": "62a97461567ce569b4a44667572c926aef853906d2a2a11de4afc27ecdb8432b"
+    },
+    {
+      "id": "lamp",
+      "url": "/my-space/v1/lamp.webp",
+      "bytes": 52374,
+      "width": 600,
+      "height": 548,
+      "alpha": true,
+      "sha256": "5c749664366f124b1754aa6b94cca16bbb6325b94ba5dc454a402d7116ca212e"
+    },
+    {
+      "id": "night",
+      "url": "/my-space/v1/night.webp",
+      "bytes": 272402,
+      "width": 1440,
+      "height": 1080,
+      "alpha": false,
+      "sha256": "00e15430b557d4d8ad58725b3b5ae2acfcb3287134a8d26139cb6189d8f9cf32"
+    },
+    {
+      "id": "plant",
+      "url": "/my-space/v1/plant.webp",
+      "bytes": 93668,
+      "width": 600,
+      "height": 548,
+      "alpha": true,
+      "sha256": "c6f00f5beec3769146651c080428de95f0c2783815f38be3fefbfa7438431fc0"
+    },
+    {
+      "id": "room",
+      "url": "/my-space/v1/room.webp",
+      "bytes": 215734,
+      "width": 1440,
+      "height": 1080,
+      "alpha": false,
+      "sha256": "adf05d9212885f6b475a5370f14cc23606b1b4e22b608ebf1203f2d760c059e7"
+    },
+    {
+      "id": "shelf",
+      "url": "/my-space/v1/shelf.webp",
+      "bytes": 61654,
+      "width": 600,
+      "height": 557,
+      "alpha": true,
+      "sha256": "f6351c95b68fee32ed7f0fd0d92050c36a08db1dea472aacff94d3e1340ae2aa"
+    }
+  ]
+}

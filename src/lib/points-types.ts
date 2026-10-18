@@ -26,6 +26,6 @@ export const wardrobeCatalog: WardrobeItem[] = [
 export const starterWardrobeIds = wardrobeCatalog.filter(item => item.price === 0).map(item => item.id);
 export type PointSettings = {enabled: boolean; label: string; dailyCap: number; rules: {homework: number}};
 export const defaultPointSettings: PointSettings = {enabled: false, label: '보말', dailyCap: 100, rules: {homework: 10}};
-export type PointLedgerEntry = {id: string; amount: number; kind: 'earn' | 'spend'; source: 'manual' | 'homework' | 'wardrobe'; sourceId: string; reason: string; balanceAfter: number; createdAt: string};
+export type PointLedgerEntry = {id: string; amount: number; kind: 'earn' | 'spend'; source: 'manual' | 'homework' | 'wardrobe' | 'myspace'; sourceId: string; reason: string; balanceAfter: number; createdAt: string};
 export type PointStudent = {id: string; name: string; number: number; character: string; points: number; pointsEarnedTotal: number; wardrobeOwned: string[]; wardrobeOutfit: WardrobeOutfit; disabled: boolean};
-export type StudentPointsState = {settings: PointSettings; student: PointStudent; ledger: PointLedgerEntry[]; nextCursor: string | null};
+export type StudentPointsState = {settings: PointSettings; student: PointStudent; ledger: PointLedgerEntry[]; nextCursor: string | null;mySpaceEnabled?:boolean;spaceCompanion?:{art?:string;name:string;outfit:Partial<Record<'body'|'bag',string>>}|null};
