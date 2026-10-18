@@ -9,6 +9,7 @@ import {storage} from "@/lib/firebase-client";
 import {characterCatalog as friends, type Character} from "@/lib/characters";
 import {acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes, type AssignmentSubmissionType} from "@/lib/assignment-submission";
 import type {PointSettings, WardrobeOutfit} from "@/lib/points-types";
+import {usePointSync} from "@/lib/use-point-sync";
 import CharacterAvatar from "./character-avatar";
 import {petPersonality} from "@/modules/my-space/personality";
 import {AssignmentMaterials} from "./assignment-materials";
@@ -103,6 +104,7 @@ export default function StudentWorkspace() {
     finally {setLoading(false);}
   }, [t]);
   useEffect(() => {void load(true);}, [load]);
+  usePointSync(value => setHome(current => current ? {...current, profile: {...current.profile, points: value.points, pointSettings: value.settings}} : current), !!home);
   useEffect(() => {
     const urls = files.map(file => ["image/jpeg", "image/png", "image/webp"].includes(contentType(file)) || contentType(file).startsWith("video/") ? URL.createObjectURL(file) : "");
     setPreviews(urls);

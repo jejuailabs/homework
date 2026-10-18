@@ -14,7 +14,6 @@ export function pointError(error: unknown, ko: boolean) {
   const errors: Record<string, [string, string]> = {
     POINTS_DISABLED: ['선생님이 꾸미기를 켜면 사용할 수 있어요.', 'Your teacher can enable the wardrobe for your class.'],
     POINTS_INSUFFICIENT: ['포인트를 조금 더 모아 주세요.', 'Collect a few more points first.'],
-    POINT_DAILY_CAP: ['선택한 학생 중 하루 지급 한도를 넘는 학생이 있어요. 지급량이나 선택을 조정해 주세요. 아직 지급되지 않았어요.', 'This would exceed the daily limit for a selected student. Adjust the amount or selection; no points were awarded.'],
     POINT_AMOUNT: ['포인트 수를 확인해 주세요.', 'Check the number of points.'],
     POINT_STUDENTS: ['학생은 한 번에 1~100명 선택해 주세요.', 'Select 1–100 students at a time.'],
     POINT_BALANCE: ['포인트 잔액을 확인해 주세요. 선생님께 알려 주세요.', 'Please ask your teacher to check the point balance.'],

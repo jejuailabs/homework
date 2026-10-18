@@ -8,6 +8,7 @@ import {wardrobeCatalog, type StudentPointsState, type WardrobeItem, type Wardro
 import AccessGate from './access-gate';
 import CharacterAvatar, {WardrobeItemArt} from './character-avatar';
 import {pointError, pointLabel, pointsRequest, usePointCopy} from './points-shared';
+import {notifyPointsChanged, usePointSync} from '@/lib/use-point-sync';
 import '@/styles/points.css';
 
 const slots: WardrobeSlot[] = ['head', 'neck', 'background', 'frame'];
@@ -18,13 +19,14 @@ function Shop() {
   const requestIds = useRef<Record<string, string>>({}), dialog = useRef<HTMLDialogElement>(null);
   const load = useCallback(async () => {setState(await pointsRequest<StudentPointsState>('/api/points/student'));}, []);
   useEffect(() => {void load().catch(error => setError(pointError(error, ko)));}, [load, ko]);
+  usePointSync(value => setState(current => current ? {...current, settings: value.settings, student: {...current.student, points: value.points, pointsEarnedTotal: value.earned}} : current), !!state);
   useEffect(() => {if (confirm) dialog.current?.showModal();}, [confirm]);
   async function action(fn: () => Promise<void>) {if (busy) return; setBusy(true); setError(''); setNotice(''); try {await fn();} catch (error) {setError(pointError(error, ko));} finally {setBusy(false);}}
   const slotName = (value: WardrobeSlot) => ({head: copy('머리', 'Head'), neck: copy('목 장식', 'Accessories'), background: copy('배경', 'Backgrounds'), frame: copy('테두리', 'Frames')})[value];
   if (!state) return <section className="points-page points-empty" aria-live="polite"><Shell size={34}/><p>{error || copy('꾸미기 방을 열고 있어요.', 'Opening your wardrobe…')}</p>{error && <button className="button" onClick={() => void action(load)}>{copy('다시 시도', 'Try again')}</button>}</section>;
   const {student, settings} = state, label = pointLabel(settings, locale), outfit: WardrobeOutfit = preview ? {...student.wardrobeOutfit, [preview.slot]: preview.id} : student.wardrobeOutfit;
   async function equip(item: WardrobeItem | null, targetSlot = slot) {await action(async () => {await pointsRequest('/api/points/equip', {method: 'POST', body: JSON.stringify({slot: targetSlot, itemId: item?.id ?? null})}); await load(); setPreview(null); setNotice(copy('꾸미기를 저장했어요!', 'Your look is saved!'));});}
-  async function purchase(item: WardrobeItem) {await action(async () => {const requestId = requestIds.current[item.id] ||= crypto.randomUUID(); await pointsRequest('/api/points/purchase', {method: 'POST', body: JSON.stringify({itemId: item.id, requestId})}); await load(); delete requestIds.current[item.id]; setConfirm(null); setPreview(item); setNotice(copy('내 옷장에 담았어요. 이제 착용해 보세요!', 'Added to your wardrobe. Try it on!'));});}
+  async function purchase(item: WardrobeItem) {await action(async () => {const requestId = requestIds.current[item.id] ||= crypto.randomUUID(); await pointsRequest('/api/points/purchase', {method: 'POST', body: JSON.stringify({itemId: item.id, requestId})}); await load(); notifyPointsChanged(); delete requestIds.current[item.id]; setConfirm(null); setPreview(item); setNotice(copy('내 옷장에 담았어요. 이제 착용해 보세요!', 'Added to your wardrobe. Try it on!'));});}
   return <main className="points-page"><Link className="points-back" href="/student"><ArrowLeft size={17}/>{copy('내 교실', 'My classroom')}</Link>
     {state.mySpaceEnabled!==false&&<Link className="points-back" href="/student/my-space">{copy('내 방·동물 친구·다꾸도 만나 봐요 →','Visit your room, animal friends and journal →')}</Link>}<header className="points-heading"><div><span className="points-eyebrow">{copy('모아의 꾸미기 방', 'Moa’s wardrobe')}</span><h1>{copy('우리 친구 꾸미기', 'Dress up your friend')}</h1><p>{copy('차곡차곡 모은 보상으로 나만의 친구를 꾸며요.', 'Make your friend your own with the rewards you collect.')}</p></div><span className="points-balance"><Shell size={25}/><strong>{student.points.toLocaleString(locale)}</strong><span>{label}</span></span></header>
     {error && <p className="points-error" role="alert">{error}</p>}{notice && <p className="points-notice" role="status">{notice}</p>}

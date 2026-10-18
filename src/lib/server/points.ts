@@ -4,7 +4,7 @@ import {FieldPath} from 'firebase-admin/firestore';
 import {db} from './admin';
 import {assertOrigin, requireStudent, requireTeacher, type Context} from './auth';
 import {ApiError, canManageClass, id, text} from './policy';
-import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointDay, pointInteger, pointLedgerId, pointPurchaseDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
+import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
 import type {PointLedgerEntry, PointStudent} from '../points-types';
 import {companionProfile} from '@/modules/my-space/profile';
 
@@ -34,27 +34,26 @@ async function activeStudent(ctx: Context & {classId: string; studentId: string}
 
 /** All reads happen before commit, so a batch of awards can share one transaction. */
 async function prepareAward(tx: FirebaseFirestore.Transaction, options: {classId: string; studentId: string; source: 'manual' | 'homework'; sourceId: string; amount: number; reason: string; actorUid: string; cls: FirebaseFirestore.DocumentSnapshot; pupil?: FirebaseFirestore.DocumentSnapshot; at: Date}) {
-  const ref = studentRef(options.classId, options.studentId), ledger = ledgerRef(options.classId, options.studentId).doc(pointLedgerId(options.source, options.sourceId, options.studentId)), daily = ref.collection('pointDaily').doc(pointDay(options.at));
-  const [pupil, previous, day] = await Promise.all([options.pupil ? Promise.resolve(options.pupil) : tx.get(ref), tx.get(ledger), tx.get(daily)]);
+  const ref = studentRef(options.classId, options.studentId), ledger = ledgerRef(options.classId, options.studentId).doc(pointLedgerId(options.source, options.sourceId, options.studentId));
+  const [pupil, previous] = await Promise.all([options.pupil ? Promise.resolve(options.pupil) : tx.get(ref), tx.get(ledger)]);
   if (!pupil.exists || pupil.data()?.disabled) throw new ApiError(403, '이 학생에게는 포인트를 줄 수 없어요.', 'STUDENT_UNAVAILABLE');
   const userUid = pupil.data()?.authUid;
   if (typeof userUid !== 'string' || !userUid || userUid.includes('/')) throw new ApiError(403, '이 학생에게는 포인트를 줄 수 없어요.', 'STUDENT_UNAVAILABLE');
   const profile = await tx.get(db().doc(`users/${userUid}`));
   if (!profile.exists || profile.data()?.disabled || profile.data()?.role !== 'student' || profile.data()?.classId !== options.classId || profile.data()?.studentId !== options.studentId) throw new ApiError(403, '이 학생에게는 포인트를 줄 수 없어요.', 'STUDENT_UNAVAILABLE');
-  if (previous.exists) return {status: 'already_awarded', amount: previous.data()!.amount, commit: () => {}};
+  if (previous.exists) return {status: 'already_awarded', amount: previous.data()!.amount, student: {id: pupil.id, points: pointBalance(pupil.data()?.points), pointsEarnedTotal: pointBalance(pupil.data()?.pointsEarnedTotal)}, commit: () => {}};
   const value = pupil.data()!, settings = pointSettings(options.cls.data()?.pointSettings);
-  const decision = pointAwardDecision(settings, pointBalance(value.points), pointBalance(day.data()?.earned), options.amount);
+  const decision = pointAwardDecision(settings, pointBalance(value.points), options.amount);
   const earnedTotal = pointBalance(value.pointsEarnedTotal) + options.amount;
   if (!Number.isSafeInteger(earnedTotal)) throw new ApiError(409, '누적 포인트를 확인해 주세요.', 'POINT_BALANCE');
   const record = {classId: options.classId, studentId: options.studentId, amount: options.amount, kind: 'earn', source: options.source, sourceId: options.sourceId, reason: options.reason, actorUid: options.actorUid, balanceAfter: decision.balance, createdAt: options.at.toISOString()};
-  return {status: 'awarded', amount: options.amount, commit: () => {
+  return {status: 'awarded', amount: options.amount, student: {id: pupil.id, points: decision.balance, pointsEarnedTotal: earnedTotal}, commit: () => {
     tx.update(ref, {points: decision.balance, pointsEarnedTotal: earnedTotal});
-    tx.set(daily, {earned: decision.today, day: pointDay(options.at)});
     tx.create(ledger, record);
   }};
 }
 
-/** Call before the review transaction's first write; a capped reward never blocks homework review. */
+/** Call before the review transaction's first write; each homework is rewarded once. */
 export async function awardHomeworkPoints(tx: FirebaseFirestore.Transaction, options: {classId: string; studentId: string; assignmentId: string; actorUid: string}) {
   const cls = await tx.get(db().doc(`classes/${id(options.classId)}`));
   if (!cls.exists || cls.data()?.ownerUid !== options.actorUid) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
@@ -64,7 +63,7 @@ export async function awardHomeworkPoints(tx: FirebaseFirestore.Transaction, opt
     const award = await prepareAward(tx, {...options, cls, source: 'homework', sourceId: options.assignmentId, amount: settings.rules.homework, reason: '숙제 완료', at: new Date()});
     award.commit(); return {status: award.status, amount: award.amount};
   } catch (error) {
-    if (error instanceof ApiError && ['POINT_DAILY_CAP', 'STUDENT_UNAVAILABLE'].includes(error.code)) return {status: error.code === 'POINT_DAILY_CAP' ? 'daily_cap' : 'student_unavailable', amount: 0};
+    if (error instanceof ApiError && error.code === 'STUDENT_UNAVAILABLE') return {status: 'student_unavailable', amount: 0};
     throw error;
   }
 }
@@ -87,13 +86,17 @@ async function teacherState(request: Request, classId: string) {
   const students = await db().collection(`classes/${classId}/students`).get();
   return json({classId, className: cls.data()!.name, settings: pointSettings(cls.data()?.pointSettings), students: students.docs.map(pointStudent).sort((a, b) => a.number - b.number)});
 }
+async function studentBalance(request: Request) {
+  const ctx = await requireStudent(request), {cls, pupil} = await activeStudent(ctx);
+  return json({classId: ctx.classId, studentId: ctx.studentId, points: pointBalance(pupil.data()?.points), earned: pointBalance(pupil.data()?.pointsEarnedTotal), settings: pointSettings(cls.data()?.pointSettings)});
+}
 async function settings(request: Request, classId: string) {
   const ctx = await requireTeacher(request), parsed = parsePointSettings(await input(request)), ref = db().doc(`classes/${id(classId)}`);
   await db().runTransaction(async tx => {const cls = await tx.get(ref); classOwner(ctx, cls); tx.update(ref, {pointSettings: parsed});});
   return json({settings: parsed});
 }
 async function grant(request: Request, classId: string) {
-  const ctx = await requireTeacher(request), data = await input(request), amount = pointInteger(data.amount, 1, 50), reason = text(data.reason, '지급 이유', 200), requestId = id(data.requestId);
+  const ctx = await requireTeacher(request), data = await input(request), amount = pointInteger(data.amount, 1, Number.MAX_SAFE_INTEGER), reason = text(data.reason, '지급 이유', 200), requestId = id(data.requestId);
   if (!Array.isArray(data.studentIds) || !data.studentIds.length || data.studentIds.length > 100) throw new ApiError(400, '학생을 1~100명 선택해 주세요.', 'POINT_STUDENTS');
   const studentIds = [...new Set<string>(data.studentIds.map((value: unknown) => id(value)))].sort();
   const receipt = db().doc(`pointRequests/${pointLedgerId('manual', `${classId}:${ctx.uid}:${requestId}`, 'batch')}`), fingerprint = JSON.stringify({studentIds, amount, reason}), at = new Date();
@@ -101,12 +104,13 @@ async function grant(request: Request, classId: string) {
     const [cls, prior] = await Promise.all([tx.get(db().doc(`classes/${id(classId)}`)), tx.get(receipt)]); classOwner(ctx, cls);
     if (prior.exists) {
       if (prior.data()!.fingerprint !== fingerprint) throw new ApiError(409, '같은 요청에 다른 내용을 보낼 수 없어요.', 'REQUEST_CONFLICT');
-      return {count: studentIds.length, repeated: true};
+      const pupils = await tx.getAll(...studentIds.map(studentId => studentRef(classId, studentId)));
+      return {count: studentIds.length, repeated: true, students: pupils.map(doc => ({id: doc.id, points: pointBalance(doc.data()?.points), pointsEarnedTotal: pointBalance(doc.data()?.pointsEarnedTotal)}))};
     }
     const awards = await Promise.all(studentIds.map(studentId => prepareAward(tx, {classId, studentId, source: 'manual', sourceId: `${ctx.uid}:${requestId}`, amount, reason, actorUid: ctx.uid, cls, at})));
     awards.forEach(award => award.commit());
     tx.create(receipt, {classId, actorUid: ctx.uid, fingerprint, createdAt: at.toISOString()});
-    return {count: studentIds.length, repeated: false};
+    return {count: studentIds.length, repeated: false, students: awards.map(award => award.student)};
   });
   return json(result);
 }
@@ -143,6 +147,7 @@ export async function handlePoints(request: Request, segments: string[]) {
   try {
     if (request.method !== 'GET') assertOrigin(request);
     if (segments.length === 1 && segments[0] === 'student' && request.method === 'GET') return await studentState(request);
+    if (segments.length === 1 && segments[0] === 'balance' && request.method === 'GET') return await studentBalance(request);
     if (segments.length === 1 && segments[0] === 'purchase' && request.method === 'POST') return await purchase(request);
     if (segments.length === 1 && segments[0] === 'equip' && request.method === 'POST') return await equip(request);
     if (segments[0] === 'classes' && segments.length >= 2) {

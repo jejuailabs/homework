@@ -1,26 +1,25 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointDay, pointInteger, pointLedgerId, pointPurchaseDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
+import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
 import {wardrobeCatalog} from '../points-types';
 
-test('points are disabled by default and validated settings stay bounded', () => {
+test('points are disabled by default and old daily limits are ignored', () => {
   assert.equal(pointSettings(undefined).enabled, false);
   assert.equal(pointSettings({enabled: 'true'}).enabled, false);
-  assert.equal(pointSettings({dailyCap: -1, rules: {homework: NaN}}).dailyCap, 100);
-  assert.deepEqual(parsePointSettings({enabled: true, label: '조개', dailyCap: 100, rules: {homework: 0}}), {enabled: true, label: '조개', dailyCap: 100, rules: {homework: 0}});
-  for (const v of [-1, 0, 51, 1.5, '10', NaN, Infinity]) assert.throws(() => pointInteger(v, 1, 50));
-  assert.throws(() => parsePointSettings({enabled: true, label: 'a', dailyCap: 1001, rules: {homework: 10}}));
+  assert.deepEqual(pointSettings({enabled: true, dailyCap: 1, rules: {homework: NaN}}), {enabled: true, label: '보말', rules: {homework: 10}});
+  assert.deepEqual(parsePointSettings({enabled: true, label: '조개', dailyCap: 100, rules: {homework: 0}}), {enabled: true, label: '조개', rules: {homework: 0}});
+  assert.equal(pointSettings({rules: {homework: 5000}}).rules.homework, 5000);
+  assert.equal(parsePointSettings({enabled: true, label: '조개', rules: {homework: 5000}}).rules.homework, 5000);
+  for (const v of [-1, 0, 1.5, '10', NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => pointInteger(v, 1, Number.MAX_SAFE_INTEGER));
+  assert.throws(() => parsePointSettings({enabled: true, label: 'a', rules: {homework: -1}}));
 });
-test('an award respects class settings, exact daily limit, and never modifies XP', () => {
+test('teacher awards have no daily or per-award cap while preserving integer balances', () => {
   const settings = pointSettings({enabled: true, dailyCap: 100});
-  assert.deepEqual(pointAwardDecision(settings, 40, 90, 10), {balance: 50, today: 100});
-  assert.throws(() => pointAwardDecision(settings, 40, 91, 10), (e: any) => e.code === 'POINT_DAILY_CAP');
-  assert.throws(() => pointAwardDecision({...settings, enabled: false}, 40, 0, 10), (e: any) => e.code === 'POINTS_DISABLED');
-  assert.throws(() => pointAwardDecision(settings, Number.MAX_SAFE_INTEGER, 0, 1));
-});
-test('point days use the Korean classroom calendar across the UTC day boundary', () => {
-  assert.equal(pointDay(new Date('2026-10-13T14:59:59.000Z')), '2026-10-13');
-  assert.equal(pointDay(new Date('2026-10-13T15:00:00.000Z')), '2026-10-14');
+  assert.deepEqual(pointAwardDecision(settings, 40, 5000), {balance: 5040});
+  assert.deepEqual(pointAwardDecision(settings, 5040, 10000), {balance: 15040});
+  assert.throws(() => pointAwardDecision({...settings, enabled: false}, 40, 10), (e: any) => e.code === 'POINTS_DISABLED');
+  assert.throws(() => pointAwardDecision(settings, Number.MAX_SAFE_INTEGER, 1), (e: any) => e.code === 'POINT_BALANCE');
+  assert.deepEqual(pointAwardDecision(settings, 0, Number.MAX_SAFE_INTEGER), {balance: Number.MAX_SAFE_INTEGER});
 });
 test('ledger keys are stable, separate sources/students, and cannot collide via separators', () => {
   assert.equal(pointLedgerId('homework', 'task1', 's1'), pointLedgerId('homework', 'task1', 's1'));
