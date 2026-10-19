@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { db, bucket } from '@/lib/server/admin';
 import { requireStudent, type Context } from '@/lib/server/auth';
 import { ApiError, id } from '@/lib/server/policy';
-import { pointBalance, pointSettings, wardrobeOutfit } from '@/lib/server/points-policy';
+import { pointBalance, pointSettings, wardrobeOutfit, wardrobeOwnership } from '@/lib/server/points-policy';
 import { defaultRoom, spaceCatalog, spaceItem, type DiaryPage } from './catalog';
 import { ownedItems, revision, SpaceError, validateRoom, validateDiary } from './policy';
 type Data = Record<string, any>;
@@ -31,7 +31,7 @@ async function active(ctx: StudentContext, tx?: FirebaseFirestore.Transaction, w
         throw new ApiError(403, '선생님이 보말 꾸미기를 켜면 사용할 수 있어요.');
     return { s: s.data()!, settings: pointSettings(c.data()?.pointSettings) };
 }
-export async function bootstrap(ctx: StudentContext) { const [{ s, settings }, r] = await Promise.all([active(ctx), room(ctx).get()]); return { settings, profile: { name: s.name, character: s.character || 'cat', points: pointBalance(s.points), earned: pointBalance(s.pointsEarnedTotal), xp: pointBalance(s.xp), wardrobe: wardrobeOutfit(s.wardrobeOutfit, s.wardrobeOwned), adopted: s.spaceAdopted || {} }, owned: ownedItems(s.spaceOwned), room: r.exists ? r.data() : defaultRoom(s.character || 'cat'), catalogVersion: 1 }; }
+export async function bootstrap(ctx: StudentContext) { const [{ s, settings }, r] = await Promise.all([active(ctx), room(ctx).get()]); return { settings, profile: { name: s.name, character: s.character || 'cat', points: pointBalance(s.points), earned: pointBalance(s.pointsEarnedTotal), xp: pointBalance(s.xp), wardrobe: wardrobeOutfit(s.wardrobeOutfit, s.wardrobeOwned), wardrobeOwned: wardrobeOwnership(s.wardrobeOwned), adopted: s.spaceAdopted || {} }, owned: ownedItems(s.spaceOwned), room: r.exists ? r.data() : defaultRoom(s.character || 'cat'), catalogVersion: 1 }; }
 export async function buy(ctx: StudentContext, input: Data) {
     const key = id(input.itemId), requestId = id(input.requestId), item = spaceItem(key);
     if (!item)
