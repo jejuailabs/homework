@@ -28,12 +28,17 @@ export function wardrobeItem(itemId: unknown) {
   if (!item) throw new ApiError(404, '꾸미기 아이템을 찾을 수 없어요.', 'ITEM_NOT_FOUND');
   return item;
 }
-export function pointLedgerId(source: 'manual' | 'homework' | 'wardrobe', sourceId: string, studentId: string) {return createHash('sha256').update(JSON.stringify([source, sourceId, studentId])).digest('hex');}
+export function pointLedgerId(source: 'manual' | 'homework' | 'wardrobe' | 'revoke', sourceId: string, studentId: string) {return createHash('sha256').update(JSON.stringify([source, sourceId, studentId])).digest('hex');}
 export function pointAwardDecision(settings: PointSettings, balance: number, amount: number) {
   if (!settings.enabled) throw new ApiError(409, '선생님이 포인트 꾸미기를 켜면 사용할 수 있어요.', 'POINTS_DISABLED');
   pointInteger(amount, 1, Number.MAX_SAFE_INTEGER);
   if (!Number.isSafeInteger(balance + amount)) throw new ApiError(409, '포인트 잔액을 확인해 주세요.', 'POINT_BALANCE');
   return {balance: balance + amount};
+}
+export function pointRevokeDecision(balance: number, amount: number) {
+  pointInteger(amount, 1, Number.MAX_SAFE_INTEGER);
+  if (balance < amount) throw new ApiError(409, '현재 잔액보다 많이 회수할 수 없어요.', 'POINT_REVOKE_INSUFFICIENT');
+  return {balance: balance - amount};
 }
 export function pointPurchaseDecision(balance: number, owned: unknown, itemId: unknown) {
   const item = wardrobeItem(itemId), ownership = wardrobeOwnership(owned);

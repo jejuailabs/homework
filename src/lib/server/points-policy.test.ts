@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
+import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointRevokeDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
 import {wardrobeCatalog} from '../points-types';
 
 test('points are disabled by default and old daily limits are ignored', () => {
@@ -26,6 +26,16 @@ test('ledger keys are stable, separate sources/students, and cannot collide via 
   assert.notEqual(pointLedgerId('homework', 'task1', 's1'), pointLedgerId('manual', 'task1', 's1'));
   assert.notEqual(pointLedgerId('manual', 'a_b', 'c'), pointLedgerId('manual', 'a', 'b_c'));
   assert.notEqual(pointLedgerId('wardrobe', 'head-crown', 's1'), pointLedgerId('wardrobe', 'head-crown', 's2'));
+  assert.notEqual(pointLedgerId('manual', 'request1', 's1'), pointLedgerId('revoke', 'request1', 's1'));
+});
+
+test('recovery accepts positive whole points up to the balance, never creates debt', () => {
+  assert.deepEqual(pointRevokeDecision(70, 30), {balance: 40});
+  assert.deepEqual(pointRevokeDecision(70, 70), {balance: 0});
+  assert.deepEqual(pointRevokeDecision(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER), {balance: 0});
+  assert.throws(() => pointRevokeDecision(20, 21), (e: any) => e.code === 'POINT_REVOKE_INSUFFICIENT');
+  assert.throws(() => pointRevokeDecision(0, 1), (e: any) => e.code === 'POINT_REVOKE_INSUFFICIENT');
+  for (const amount of [0, -1, 0.5, '10', NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => pointRevokeDecision(70, amount as number), (e: any) => e.code === 'POINT_AMOUNT');
 });
 test('purchases use server catalogue prices and a repeated ownership check cannot charge twice', () => {
   const item = wardrobeCatalog.find(item => item.id === 'head-crown')!;

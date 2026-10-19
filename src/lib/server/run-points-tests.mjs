@@ -8,3 +8,5 @@ const base = moduleUrl(compile('./policy.ts').replace("'../characters'", JSON.st
 const types = moduleUrl(compile('../points-types.ts'));
 const policy = moduleUrl(compile('./points-policy.ts').replace("'./policy'", JSON.stringify(base)).replace("'../points-types'", JSON.stringify(types)));
 await import(moduleUrl(compile('./points-policy.test.ts').replace("'./points-policy'", JSON.stringify(policy)).replace("'../points-types'", JSON.stringify(types))));
+const history = moduleUrl(compile('./points-history.ts').replace("'./policy'", JSON.stringify(base)));
+await import(moduleUrl(compile('./points-history.test.ts').replace("'./points-history'", JSON.stringify(history))));
