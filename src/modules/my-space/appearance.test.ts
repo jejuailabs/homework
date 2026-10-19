@@ -7,7 +7,8 @@ import {wardrobeCatalog} from '@/lib/points-types';
 import {spaceCatalog, defaultRoom, starterSpaceIds} from './catalog';
 import {validateRoom} from './policy';
 import {avatarPet, wearablePets, wearStates, wearState, wornSprite, accessoryArt, accessoryFit} from './appearance';
-import {accessoryAspect} from './wearable-metrics';
+import {attachmentLayout, characterRigs, characterRig, attachmentIds, chinPath} from './attachment-rig';
+import {attachmentAssets} from './attachment-assets';
 
 test('all twelve character identities resolve without confusing the six cat breeds', () => {
   assert.equal(wearablePets.length, 12);
@@ -36,11 +37,40 @@ test('6480 head/neck/body/bag combinations use bounded registered layers and bun
     cases++; assert(state);
     for (const id of [head, neck].filter((v): v is string => !!v)) {
       const src = accessoryArt(id, pet)!; assert(existsSync('public' + src));
-      const f = accessoryFit(pet, id), ratio = accessoryAspect[`${pet.startsWith('cat-') ? 'fur' : 'soft'}/${id}`];
-      assert(f.left >= 0 && f.top >= 0 && f.width > 0 && f.left + f.width <= 100 && f.top + f.width / ratio <= 100, `${pet} ${id}`);
+      const f = accessoryFit(pet, id, state);
+      assert(f.left >= 0 && f.top >= 0 && f.width > 0 && f.left + f.width <= 100 && f.top + f.height <= 100, `${pet} ${id} ${state}`);
     }
   }
   assert.equal(cases, 6480);
+});
+
+test('all 108 character/item attachment sets use their own alpha art and preserve asset integrity', () => {
+  const manifest = JSON.parse(readFileSync('public/my-space/v3/attachments/manifest.json','utf8'));
+  assert.equal(manifest.assets.length,108);assert.equal(Object.keys(attachmentAssets).length,108);
+  const paths = new Set<string>();
+  for(const pet of wearablePets) for(const id of attachmentIds) {
+    const key=pet+'/'+id,a=attachmentAssets[key];assert(a,key);assert.equal(accessoryArt(id,pet),a.src);paths.add(a.src);
+    const row=manifest.assets.find((r:any)=>r.pet===pet&&r.id===id),bytes=readFileSync('public'+a.src);
+    assert.equal(bytes.length,row.bytes);assert.equal(createHash('sha256').update(bytes).digest('hex'),row.sha256);
+    assert(a.width>0&&a.height>0&&Number.isFinite(a.ratio));
+  }
+  assert.equal(paths.size,108);assert.equal(accessoryArt('__proto__'),undefined);
+});
+
+test('fit profiles distinguish item geometry, art style and clothing collar landmarks', () => {
+  assert.equal(Object.keys(characterRigs).length,12);
+  assert.equal(characterRigs['friend-cat'].style,'ink-watercolor');assert.equal(characterRigs['cat-american'].style,'soft-fur');
+  assert.notEqual(attachmentLayout('cat-american','neck-bow','bare').top,attachmentLayout('cat-american','neck-bow','hoodie').top);
+  assert.notEqual(attachmentLayout('friend-rabbit','head-crown').width,attachmentLayout('friend-rabbit','head-flower').width);
+  for(const pet of wearablePets)for(const state of wearStates){assert(!chinPath(pet,state).includes('NaN'));assert(!chinPath(pet,state,true).includes('NaN'));}
+});
+test('raised bag poses move both hats and collar masks with the actual character', () => {
+  for(const pet of ['friend-otter','friend-hamster','friend-alpaca'])for(const body of ['raincoat','hoodie','overalls','dino','pajamas']){
+    const plain=characterRig(pet,body),bag=characterRig(pet,body+'-bag');
+    assert(bag.seat<plain.seat);assert(bag.neck<plain.neck);
+    assert.notEqual(chinPath(pet,body),chinPath(pet,body+'-bag'));
+    assert(attachmentLayout(pet,'head-crown',body+'-bag').top<attachmentLayout(pet,'head-crown',body).top);
+  }
 });
 test('the wardrobe asset manifest is complete, immutable and matches all 234 actual files', () => {
   const m = JSON.parse(readFileSync('public/my-space/v2/wardrobe/manifest.json', 'utf8'));
