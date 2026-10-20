@@ -1,9 +1,10 @@
 import {createHash} from 'node:crypto';
+import {ANNUAL_QUIZ_VERSION, quizMathStage, quizWordIndices} from './curriculum';
 import {quizVocabulary} from './vocabulary';
 import type {QuizAnswer, QuizPack, QuizPublicSession, QuizQuestion, QuizScope, QuizSession, QuizSkill, QuizSubject, Understanding} from './types';
 export const QUIZ_VERSION = 'pilot-v1';
-export const ENGLISH_PACK_VERSION = 'pilot-v2';
-export const DAILY_REWARD_HALF_UNITS = 10; // 5 Bomal; production wallets are not touched.
+export const ENGLISH_PACK_VERSION = ANNUAL_QUIZ_VERSION;
+export const DAILY_REWARD_HALF_UNITS = 10; // 5 Bomal per completed common subject.
 export const REVIEW_LIMIT = 5;
 export function validQuizCronSecret(value: unknown): value is string {return typeof value === 'string' && value.length >= 16 && !/\s/.test(value);}
 export class QuizError extends Error {constructor(message: string, public code = 'QUIZ_INPUT', public status = 400) {super(message);}}
@@ -19,7 +20,7 @@ export function quizScope(value: {grade?: unknown; semester?: unknown; date?: un
   if (!Number.isInteger(grade) || grade < 1 || grade > 6 || ![1, 2].includes(semester)) throw new QuizError('초등 1~6학년과 학기를 선택해 주세요.');
   return {grade, semester, date: quizDate(value.date)};
 }
-export function quizPackId(scope: QuizScope, subject: QuizSubject) {return `${subject === 'english' ? ENGLISH_PACK_VERSION : QUIZ_VERSION}_${scope.date}_g${scope.grade}_s${scope.semester}_${subject}`;}
+export function quizPackId(scope: QuizScope, subject: QuizSubject) {return `${ANNUAL_QUIZ_VERSION}_${scope.date}_g${scope.grade}_${subject}`;}
 export function seededRandom(seed: string) {
   let value = 2166136261;
   for (let i = 0; i < seed.length; i++) value = Math.imul(value ^ seed.charCodeAt(i), 16777619) >>> 0;
@@ -52,36 +53,52 @@ export function checkQuizAnswer(question: QuizQuestion, raw: unknown): {answer: 
   return {answer, correct: answer.normalize('NFKC').toLowerCase() === question.answer.normalize('NFKC').toLowerCase()};
 }
 function englishQuestion(scope: QuizScope, index: number, seed: string, skillId?: string, spell = false): QuizQuestion {
-  const words = quizVocabulary(scope.grade), random = seededRandom(seed), startDay = Math.floor(Date.parse(`${scope.date}T00:00:00Z`) / 86400000);
-  const word = skillId ? words.find(word => word.id === skillId)! : words[(startDay * 10 + index + (scope.semester - 1) * 5) % words.length];
+  const words = quizVocabulary(scope.grade), random = seededRandom(seed);
+  const word = skillId ? words.find(word => word.id === skillId)! : words[quizWordIndices(scope.date, words.length)[index]];
   if (!word) throw new QuizError('복습할 단어를 찾을 수 없어요.');
   const choices = spell ? [] : shuffle([word.meaning, ...shuffle(words.filter(item => item.id !== word.id), random).slice(0, 3).map(item => item.meaning)], random);
   return {id: questionId(seed, index), subject: 'english', skillId: word.id, skillLabel: `${word.word} · ${word.meaning}`, prompt: spell ? `‘${word.meaning}’에 해당하는 영어 단어를 쓰세요.` : `‘${word.word}’의 뜻을 고르세요.`, choices, answer: spell ? word.word : word.meaning, explanation: `${word.word} = ${word.meaning}`, kind: spell ? 'text' : 'choice'};
 }
 function mathQuestion(scope: QuizScope, index: number, seed: string, skillId?: string): QuizQuestion {
   const random = seededRandom(seed), grade = scope.grade;
-  let operation = skillId?.split('-').at(-1) || (index % 2 ? 'sub' : 'add'), prompt = '', answer = '', label = '';
-  if (grade <= 2) {
-    const max = grade === 1 ? (scope.semester === 1 ? 10 : 20) : (scope.semester === 1 ? 99 : 999);
+  const retained = skillId?.match(/^annual-g\d-t(\d+)-(add|sub|mul|div)$/);
+  const stage = retained ? Number(retained[1]) : quizMathStage(scope.date, index);
+  let operation = retained?.[2] || (index % 2 ? 'sub' : 'add'), prompt = '', answer = '', label = '';
+  let family: 'whole' | 'product' | 'fraction-sum' | 'fraction-product' | 'decimal-sum' | 'decimal-product' = 'whole';
+  if (grade === 2 && stage >= 9 || grade === 3 && stage >= 3 || grade === 4) family = 'product';
+  if (grade === 5 && stage >= 2) family = stage >= 9 ? 'decimal-sum' : 'fraction-sum';
+  if (grade === 6) family = stage < 2 ? 'fraction-sum' : stage < 7 ? 'fraction-product' : 'decimal-product';
+  if (family === 'whole') {
+    const ranges = grade === 1 ? [10,10,10,10,20,20,20,20,50,50,99,99] : grade === 2 ? [20,20,50,99,99,99,999,999,999,999,999,999] : grade === 3 ? [99,999,999] : [999,999];
+    const max = ranges[stage] || 999;
     if (operation === 'add') {const a = pickInt(random, 1, max - 1), b = pickInt(random, 1, max - a); prompt = `${a} + ${b}`; answer = String(a + b); label = `${max} 이내 덧셈`;}
     else {const a = pickInt(random, 2, max), b = pickInt(random, 1, a); prompt = `${a} − ${b}`; answer = String(a - b); label = `${max} 이내 뺄셈`;}
-  } else if (grade <= 4) {
-    operation = skillId?.split('-').at(-1) || (index % 2 ? 'div' : 'mul');
-    const maxFactor = grade === 3 ? (scope.semester === 1 ? 9 : 99) : (scope.semester === 1 ? 99 : 999), a = pickInt(random, 2, maxFactor), b = pickInt(random, 2, grade === 4 && scope.semester === 2 ? 20 : 9);
-    if (operation === 'mul') {prompt = `${a} × ${b}`; answer = String(a * b); label = '자연수 곱셈';}
-    else {prompt = `${a * b} ÷ ${b}`; answer = String(a); label = '나누어떨어지는 나눗셈';}
-  } else if (grade === 5) {
-    const denominator = pickInt(random, 3, 12), other = scope.semester === 1 ? denominator : pickInt(random, 3, 12);
+  } else if (family === 'product') {
+    operation = retained?.[2] || (index % 2 && (grade !== 2 || stage >= 11) ? 'div' : 'mul');
+    const maxFactor = grade === 2 ? 9 : grade === 3 ? stage < 7 ? 9 : stage < 10 ? 30 : 99 : stage < 4 ? 99 : 999;
+    const maxDivisor = grade === 2 ? stage < 11 ? 5 : 9 : grade === 4 && stage >= 8 ? 20 : 9;
+    const a = pickInt(random, 2, maxFactor), b = pickInt(random, 2, maxDivisor);
+    prompt = operation === 'mul' ? `${a} × ${b}` : `${a * b} ÷ ${b}`; answer = String(operation === 'mul' ? a * b : a);
+    label = operation === 'mul' ? `${maxFactor}까지 수의 곱셈` : `${maxDivisor}까지 수로 나누는 나눗셈`;
+  } else if (family === 'fraction-sum') {
+    const denominator = pickInt(random, 3, stage < 5 ? 6 : 12), other = grade === 5 && stage < 6 ? denominator : pickInt(random, 3, stage < 5 ? 6 : 12);
     let a = pickInt(random, 1, denominator - 1), b = pickInt(random, 1, other - 1), d1 = denominator, d2 = other;
     if (operation === 'sub' && a * d2 < b * d1) {[a, b] = [b, a]; [d1, d2] = [d2, d1];}
-    prompt = `${a}/${d1} ${operation === 'sub' ? '−' : '+'} ${b}/${d2}`; answer = rational(operation === 'sub' ? a * d2 - b * d1 : a * d2 + b * d1, d1 * d2); label = scope.semester === 1 ? '같은 분모 분수의 덧셈·뺄셈' : '다른 분모 분수의 덧셈·뺄셈';
+    prompt = `${a}/${d1} ${operation === 'sub' ? '−' : '+'} ${b}/${d2}`; answer = rational(operation === 'sub' ? a * d2 - b * d1 : a * d2 + b * d1, d1 * d2);
+    label = other === denominator ? '같은 분모 분수의 덧셈·뺄셈' : '분수의 덧셈·뺄셈';
+  } else if (family === 'decimal-sum') {
+    const places = stage < 11 ? 10 : 100;
+    let a = pickInt(random, 1, 99), b = pickInt(random, 1, 99);
+    if (operation === 'sub' && a < b) [a, b] = [b, a];
+    prompt = `${(a / places).toFixed(places === 10 ? 1 : 2)} ${operation === 'sub' ? '−' : '+'} ${(b / places).toFixed(places === 10 ? 1 : 2)}`;
+    answer = rational(operation === 'sub' ? a - b : a + b, places); label = '소수의 덧셈·뺄셈';
   } else {
-    operation = skillId?.split('-').at(-1) || (index % 2 ? 'div' : 'mul');
-    const a = pickInt(random, 1, 9), b = pickInt(random, 2, 10), c = pickInt(random, 1, 9), d = pickInt(random, 2, 10);
-    if (scope.semester === 1) {prompt = `${a}/${b} ${operation === 'div' ? '÷' : '×'} ${c}/${d}`; answer = operation === 'div' ? rational(a * d, b * c) : rational(a * c, b * d); label = '분수의 곱셈·나눗셈';}
-    else {const n = a * 10 + b, m = c * 10 + d; prompt = operation === 'div' ? `${(n * m / 100).toFixed(2)} ÷ ${(m / 10).toFixed(1)}` : `${(n / 10).toFixed(1)} × ${(m / 10).toFixed(1)}`; answer = operation === 'div' ? rational(n, 10) : rational(n * m, 100); label = '소수의 곱셈·나눗셈';}
+    operation = retained?.[2] || (index % 2 && stage >= 4 ? 'div' : 'mul');
+    const a = pickInt(random, 1, 9), b = pickInt(random, 2, stage < 5 ? 6 : 10), c = pickInt(random, 1, 9), d = pickInt(random, 2, stage < 5 ? 6 : 10);
+    if (family === 'fraction-product') {prompt = `${a}/${b} ${operation === 'div' ? '÷' : '×'} ${c}/${d}`; answer = operation === 'div' ? rational(a * d, b * c) : rational(a * c, b * d); label = '분수의 곱셈·나눗셈';}
+    else {const n = stage < 9 ? a : a * 10 + b, m = c * 10 + d; prompt = operation === 'div' ? `${(n * m / 100).toFixed(2)} ÷ ${(m / 10).toFixed(1)}` : `${(n / 10).toFixed(1)} × ${(m / 10).toFixed(1)}`; answer = operation === 'div' ? rational(n, 10) : rational(n * m, 100); label = '소수의 곱셈·나눗셈';}
   }
-  return {id: questionId(seed, index), subject: 'math', skillId: `math-g${grade}-s${scope.semester}-${operation}`, skillLabel: label, prompt: `${prompt} = ?`, choices: [], answer, explanation: `${prompt} = ${answer}${grade >= 5 ? ' (같은 값의 분수·소수도 정답으로 인정해요.)' : ''}`, kind: 'number'};
+  return {id: questionId(seed, index), subject: 'math', skillId: `annual-g${grade}-t${stage}-${operation}`, skillLabel: label, prompt: `${prompt} = ?`, choices: [], answer, explanation: `${prompt} = ${answer}${grade >= 5 ? ' (같은 값의 분수·소수도 정답으로 인정해요.)' : ''}`, kind: 'number'};
 }
 export function generateQuizPack(scope: QuizScope, subject: QuizSubject): QuizPack {
   quizScope(scope);
@@ -93,7 +110,7 @@ export function generateQuizPack(scope: QuizScope, subject: QuizSubject): QuizPa
     if (questions.some(previous => previous.prompt === question.prompt)) throw new QuizError('중복 없는 문제 준비에 실패했어요.', 'QUIZ_GENERATION', 500);
     questions.push(question);
   }
-  return {...scope, id, subject, version: subject === 'english' ? ENGLISH_PACK_VERSION : QUIZ_VERSION, questions};
+  return {...scope, id, subject, version: ANNUAL_QUIZ_VERSION, questions};
 }
 export function generateQuizReview(scope: QuizScope, learnerId: string, skills: QuizSkill[]): QuizQuestion[] {
   const due = skills.filter(skill => skill.dueDate <= scope.date && skill.lastDate < scope.date).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id)).slice(0, REVIEW_LIMIT);

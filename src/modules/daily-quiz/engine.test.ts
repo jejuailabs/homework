@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {checkQuizAnswer, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, quizAddDays, quizNumber, quizRanking, quizScope, quizWeekStart, seoulQuizDate, validQuizCronSecret} from './engine';
 import {quizVocabulary} from './vocabulary';
+import {quizCalendar, quizWordIndices, quizMathStage} from './curriculum';
 import type {QuizAnswer, QuizSession, QuizSkill} from './types';
 const scope = {grade: 3, semester: 1, date: '2026-10-20'};
 const result: QuizAnswer = {answer: '1', correct: false, understanding: 'unknown', submittedAt: '2026-10-20T00:00:00Z'};
@@ -39,8 +40,8 @@ test('six grades, two semesters and 40 dates produce deterministic unique ten-qu
     }
   }
 });
-test('pilot vocabulary has unique words and meanings within each grade', () => {
-  for (let grade = 1; grade <= 6; grade++) {const words = quizVocabulary(grade); assert.equal(words.length, 30); assert.equal(new Set(words.map(word => word.id)).size, 30); assert.equal(new Set(words.map(word => word.meaning)).size, 30);}
+test('annual vocabulary has unique words and meanings within each grade', () => {
+  for (let grade = 1; grade <= 6; grade++) {const words = quizVocabulary(grade); assert.equal(words.length, 120); assert.equal(new Set(words.map(word => word.id)).size, 120); assert.equal(new Set(words.map(word => word.meaning)).size, 120);}
 });
 test('marking accepts exact equivalent fractions and decimals while rejecting malformed answers', () => {
   const question = {...generateQuizPack({...scope, grade: 6}, 'math').questions[0], answer: '3/4'};
@@ -86,10 +87,43 @@ test('short and mixed reviews round only the English question count to twenty pe
   const mixed = generateQuizReview(tomorrow, 'friend1', [...math, ...english]);
   assert.equal(mixed.filter(question => question.kind === 'text').length, Math.round(mixed.filter(question => question.subject === 'english').length * 0.2));
 });
-test('new English packs use a new content version without resetting daily sessions or math packs', () => {
-  const english = generateQuizPack(scope, 'english'), math = generateQuizPack(scope, 'math');
-  assert.equal(english.version, 'pilot-v2'); assert(english.id.startsWith('pilot-v2_'));
-  assert.equal(math.version, 'pilot-v1'); assert(math.id.startsWith('pilot-v1_'));
+test('annual packs share the calendar across semester selectors without resetting pilot session IDs', () => {
+  for (const subject of ['english', 'math'] as const) {
+    const pack = generateQuizPack(scope, subject);
+    assert.equal(pack.version, 'annual-v1'); assert(pack.id.startsWith('annual-v1_'));
+    assert.deepEqual(pack.questions, generateQuizPack({...scope, semester: 2}, subject).questions);
+  }
+});
+test('March through November covers all 120 words gradually, December through February revisits the full range', () => {
+  const seen = new Set<number>(); let previousStage = 0;
+  for (let day = 0; day < 275; day++) {
+    const date = quizAddDays('2026-03-01', day), plan = quizCalendar(date), indices = quizWordIndices(date, 120);
+    assert.equal(indices.length, 10); assert.equal(new Set(indices).size, 10);
+    assert(plan.stage >= previousStage && plan.stage <= previousStage + 1); previousStage = plan.stage;
+    assert(indices.every(index => index < (plan.stage + 1) * 10)); indices.forEach(index => seen.add(index));
+    const stages = Array.from({length: 10}, (_, i) => quizMathStage(date, i));
+    assert(stages.every(stage => stage <= plan.stage)); assert(stages.slice(0, 6).every(stage => stage === plan.stage));
+  }
+  assert.equal(seen.size, 120); assert.equal(previousStage, 11);
+  const cumulative = new Set<number>();
+  for (let day = 0; day < 12; day++) quizWordIndices(quizAddDays('2026-12-01', day), 120).forEach(index => cumulative.add(index));
+  assert.equal(cumulative.size, 120);
+  assert.equal(quizCalendar('2027-02-28').schoolYear, 2026); assert.equal(quizCalendar('2027-02-28').cumulative, true);
+  assert.equal(quizCalendar('2027-03-01').stage, 0); assert.equal(quizCalendar('2027-03-01').schoolYear, 2027);
+});
+test('every grade can generate unique daily questions across a full school year and review preserves the earlier arithmetic stage', () => {
+  for (let grade = 1; grade <= 6; grade++) for (let day = 0; day < 365; day++) {
+    const date = quizAddDays('2027-03-01', day);
+    for (const subject of ['english', 'math'] as const) {
+      const questions = generateQuizPack({grade, semester: quizCalendar(date).semester, date}, subject).questions;
+      assert.equal(new Set(questions.map(q => q.prompt)).size, 10);
+      assert(questions.every(q => checkQuizAnswer(q, q.answer).correct));
+    }
+  }
+  const first = {...scope, grade: 2, date: '2026-03-01'}, question = generateQuizPack(first, 'math').questions[0];
+  const skill = nextQuizSkill(question, result, first.date);
+  const review = generateQuizReview({...first, date: '2026-11-30'}, 'learner', [skill])[0];
+  assert.equal(review.skillId, question.skillId); assert(review.prompt.includes('+'));
 });
 test('weekly ranking counts only completed common daily first answers, with shared ranks and no review advantage', () => {
   const question = generateQuizPack(scope, 'math').questions[0], base: QuizSession = {...scope, id: 'session', mode: 'math', questions: [question], answers: {[question.id]: {...result, correct: true, understanding: 'known'}}, completed: true, createdAt: 'now'};

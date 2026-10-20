@@ -14,12 +14,12 @@ const learnerRef = (uid: string, scope: QuizScope, learner: string) => db().doc(
 const sessionId = (scope: QuizScope, mode: QuizMode) => `${QUIZ_VERSION}_${scope.date}_${mode}`;
 const modeFor = (value: unknown): QuizMode => {if (!quizModes.includes(value as QuizMode)) throw new QuizError('학습 종류를 확인해 주세요.'); return value as QuizMode;};
 const learnerFor = (value: unknown) => {if (!quizLearners.some(learner => learner.id === value)) throw new QuizError('연습 학생을 선택해 주세요.'); return value as string;};
-async function input(request: Request): Promise<Input> {
+export async function input(request: Request): Promise<Input> {
   const raw = await request.text(); if (Buffer.byteLength(raw) > 10000) throw new QuizError('입력 내용이 너무 커요.');
   try {const data = JSON.parse(raw); if (data && typeof data === 'object' && !Array.isArray(data)) return data;} catch {}
   throw new QuizError('입력 내용을 확인해 주세요.');
 }
-async function ensurePack(scope: QuizScope, subject: QuizSubject) {
+export async function ensurePack(scope: QuizScope, subject: QuizSubject) {
   const ref = packRef(scope, subject), previous = await ref.get();
   if (previous.exists) return {pack: previous.data() as QuizPack, created: false};
   const pack = generateQuizPack(scope, subject);

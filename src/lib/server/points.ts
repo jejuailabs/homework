@@ -4,7 +4,7 @@ import {FieldPath} from 'firebase-admin/firestore';
 import {db} from './admin';
 import {assertOrigin, requireStudent, requireTeacher, type Context} from './auth';
 import {ApiError, canManageClass, id, text} from './policy';
-import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointRevokeDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
+import {addPointBalance, equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointRevokeDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
 import {comparePointHistory, parsePointHistoryCursor, pointHistoryBoundary, pointHistoryCursor} from './points-history';
 import type {PointLedgerEntry, PointStudent, TeacherPointLedgerEntry} from '../points-types';
 import {companionProfile} from '@/modules/my-space/profile';
@@ -45,8 +45,7 @@ async function prepareAward(tx: FirebaseFirestore.Transaction, options: {classId
   if (previous.exists) return {status: 'already_awarded', amount: previous.data()!.amount, student: {id: pupil.id, points: pointBalance(pupil.data()?.points), pointsEarnedTotal: pointBalance(pupil.data()?.pointsEarnedTotal)}, commit: () => {}};
   const value = pupil.data()!, settings = pointSettings(options.cls.data()?.pointSettings);
   const decision = pointAwardDecision(settings, pointBalance(value.points), options.amount);
-  const earnedTotal = pointBalance(value.pointsEarnedTotal) + options.amount;
-  if (!Number.isSafeInteger(earnedTotal)) throw new ApiError(409, '누적 포인트를 확인해 주세요.', 'POINT_BALANCE');
+  const earnedTotal = addPointBalance(pointBalance(value.pointsEarnedTotal), options.amount);
   const record = {classId: options.classId, studentId: options.studentId, amount: options.amount, kind: 'earn', source: options.source, sourceId: options.sourceId, reason: options.reason, actorUid: options.actorUid, balanceAfter: decision.balance, createdAt: options.at.toISOString()};
   return {status: 'awarded', amount: options.amount, student: {id: pupil.id, points: decision.balance, pointsEarnedTotal: earnedTotal}, commit: () => {
     tx.update(ref, {points: decision.balance, pointsEarnedTotal: earnedTotal});

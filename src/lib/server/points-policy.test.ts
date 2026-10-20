@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointRevokeDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
+import {addPointBalance, equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointRevokeDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
 import {wardrobeCatalog} from '../points-types';
 
 test('points are disabled by default and old daily limits are ignored', () => {
@@ -65,4 +65,15 @@ test('equip validates both ownership and slot, and safely removes one decoration
 test('balances cannot expose invalid, negative, or unsafe stored numbers', () => {
   for (const value of [-10, NaN, Infinity, '200', Number.MAX_SAFE_INTEGER + 1]) assert.equal(pointBalance(value), 0);
   assert.equal(pointBalance(0), 0); assert.equal(pointBalance(75), 75);
+});
+
+test('half-point quiz balances survive teacher awards, recovery and purchases without migration', () => {
+  const settings = pointSettings({enabled: true});
+  assert.equal(pointBalance(70.5), 70.5); assert.equal(pointBalance(0.25), 0);
+  assert.equal(addPointBalance(70, 0.5), 70.5);
+  assert.equal(pointAwardDecision(settings, 70.5, 10).balance, 80.5);
+  assert.equal(pointRevokeDecision(70.5, 10).balance, 60.5);
+  assert.equal(pointPurchaseDecision(70.5, [], 'head-crown').balance, 10.5);
+  assert.throws(() => addPointBalance(Number.MAX_SAFE_INTEGER, 0.5));
+  assert.throws(() => addPointBalance(Number.MAX_SAFE_INTEGER - 1, 0.5));
 });
