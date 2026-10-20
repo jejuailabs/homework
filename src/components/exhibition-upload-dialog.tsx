@@ -59,7 +59,7 @@ export default function ExhibitionUploadDialog({teacher, exhibitionId, students,
     } catch(cause){
       await Promise.allSettled([...transfers.current.values()].map(discardUpload));transfers.current.clear();uploads.current.clear();
       const code=cause instanceof Error?cause.message:'';
-      const messages:Record<string,string>={STORAGE_QUOTA:'storageFull',FILE_SIZE:'fileSize',FILE_TYPE:'fileType',IMAGE_INVALID:'invalidImage',ARTWORK_LIMIT:'artworkFull',UNAUTHENTICATED:'uploadSignIn',CODE_RESET:'uploadSignIn',UPLOAD_NETWORK:'uploadNetwork',UPLOAD_TIMEOUT:'uploadNetwork',UPLOAD_CLEANUP:'cleanupError'};
+      const messages:Record<string,string>={STORAGE_QUOTA:'storageFull',PLAN_STORAGE_FULL:'storageFull',FILE_SIZE:'fileSize',FILE_TYPE:'fileType',IMAGE_INVALID:'invalidImage',ARTWORK_LIMIT:'artworkFull',UNAUTHENTICATED:'uploadSignIn',CODE_RESET:'uploadSignIn',UPLOAD_NETWORK:'uploadNetwork',UPLOAD_TIMEOUT:'uploadNetwork',UPLOAD_CLEANUP:'cleanupError'};
       setError(t(messages[code]||'uploadError'));
     }
     finally {sending.current=false;setBusy(false);}

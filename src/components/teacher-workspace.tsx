@@ -1,5 +1,4 @@
 "use client";
-import StorageGuide from './storage-guide';
 
 import {useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
 import {useLocale, useTranslations} from "next-intl";
@@ -216,7 +215,6 @@ function TeacherWorkspace({entry}: {entry: WorkspaceEntry}) {
 
   if (loading) return <section className="ws-loading" role="status"><LoaderCircle size={26} className="ws-spin"/><p>{t("common.loading")}</p></section>;
   return <div className="ws ws-teacher">
-    <StorageGuide/>
     <header id="teacher-homework" className="td-workspace-heading"><div><span className="td-heading-icon"><BookOpen size={22}/></span><h1>{common("homework")}</h1><span className="td-workspace-hint">{t(selectedId ? "teacher.reviewBoard" : "teacher.listFirstHint")}</span></div><img src="/characters/cat-mochi.webp" alt="" width={54} height={54}/></header>
     {error && <div className="ws-alert" role="alert">{error}<button onClick={() => {void loadClasses(); setRefresh(previous => previous + 1);}}>{t("common.retry")}</button></div>}
     <div className="ws-announcement" role="status" aria-live="polite">{notice && <><CheckCircle2 size={16}/>{notice}</>}</div>

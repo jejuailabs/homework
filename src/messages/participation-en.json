@@ -24,7 +24,7 @@
   "retry": "Try again",
   "error": "We couldn’t load this. Please try again.",
   "saveError": "Couldn’t save. Your writing is still here.",
-  "storageLimit": "Your teacher’s board storage (5GB) is full. Please let your teacher know. Your writing is still here.",
+  "storageLimit": "Your teacher's storage is full. Please let your teacher know. Your writing is still here.",
   "conflict": "This post changed elsewhere. Refresh and check the latest version.",
   "session": "Please sign in again.",
   "forbidden": "You don’t have access to this board.",

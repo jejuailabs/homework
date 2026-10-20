@@ -1,5 +1,4 @@
 "use client";
-import StorageGuide from './storage-guide';
 
 import {useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
 import dynamic from "next/dynamic";
@@ -250,7 +249,6 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   if (!home) return <div className="ex-empty"><Palette size={38}/><p role="alert">{error}</p><button className="ex-button" onClick={() => void loadHome()}><RefreshCw size={17}/>{t("retry")}</button></div>;
 
   return <div ref={visitRoot} className={`ex-workspace${!manage ? ' is-visit-mode' : ''}${lobbyMenu ? ' is-lobby-menu-open' : ''}`}>
-    {teacher && manage && <StorageGuide/>}
     {!manage && <header className="ex-lobby-header">
       <button className="ex-icon-btn" aria-label={place === 'classroom' ? (locale === 'en' ? 'Back to schoolyard' : '학교 앞으로') : (locale === 'en' ? 'Leave exhibition school' : '전시학교 나가기')} onClick={() => {setLobbyMenu(false); if(place === 'classroom') setPlace('campus'); else router.push(`/${role}`);}}><ArrowLeft size={21}/></button>
       <div><small>{locale === 'en' ? 'LITTLE ART SCHOOL' : '우리들의 작은 전시학교'}</small><strong>{place === 'classroom' ? worldBuildingName : (locale === 'en' ? 'Welcome to our school' : '우리 반 이야기를 만나러 가요')}</strong></div>

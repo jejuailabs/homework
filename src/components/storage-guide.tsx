@@ -45,6 +45,6 @@ export default function StorageGuide() {
       {exported?.status==='complete'&&<p className="sp-muted">{w(`${day(exported.expiresAt,locale)}까지 받을 수 있어요.`,`Available until ${day(exported.expiresAt,locale)}.`)}</p>}
       {exportError&&<p className="ws-form-error" role="alert">{exportError}</p>}
     </div>
-    <details className="sp-limits"><summary>{w('첨부 제한 안내','Attachment limits')}</summary><p>{w('숙제: 사진·PDF 최대 10개(파일당 100MB). 사진은 학생 폰에서 긴 변 2000px로 줄여서 올려요. 영상 숙제는 1개·최대 3분·원본 250MB까지이며 서버에서 720p로 압축해 보관해요.','Homework: up to 10 photos/PDFs (100MB each); photos are resized to 2000px on the pupil’s device. Video homework: one video up to 3 minutes and 250MB, kept as 720p.')}</p><p>{w('전시실 사진은 100MB·4천만 화소 이하, 수업 자료는 사진 25MB·영상 250MB까지예요. 모든 파일이 위 저장 공간 하나를 함께 사용해요.','Exhibition photos up to 100MB / 40MP; materials up to 25MB photos and 250MB videos. All files share the storage above.')}</p></details>
+    <p className="sp-muted sp-note">{w('숙제·작품전시·게시판·수업 자료는 기능별 용량 제한 없이 이 저장 공간 하나를 함께 써요.','Homework, exhibitions, boards and materials all share this one allowance, with no per-feature limits.')}</p>
   </section>;
 }

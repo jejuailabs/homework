@@ -30,12 +30,13 @@ async function measureUsage(uid: string) {
   const classes = await db().collection('classes').where('ownerUid', '==', uid).get();
   const perClass = await Promise.all(classes.docs.map(async cls => {
     const uploads = db().collection('uploads').where('classId', '==', cls.id);
+    // Each sum below has a matching composite index in firestore.indexes.json (production requires them).
     const [submitted, video, processing, pending] = await Promise.all([
-      total(uploads.where('status', '==', 'submitted'), 'storedBytes', 'originalRetainedBytes'),
+      total(uploads.where('status', '==', 'submitted'), 'storedBytes'),
       // Verified homework videos are always stored as MP4 by the video worker.
-      total(uploads.where('status', '==', 'submitted').where('contentType', '==', 'video/mp4'), 'storedBytes', 'originalRetainedBytes'),
-      total(uploads.where('status', '==', 'video-processing'), 'size', 'stagedOutputBytes'),
-      total(uploads.where('status', 'in', ['pending', 'cleanup']), 'size', 'thumbnailSize'),
+      total(uploads.where('status', '==', 'submitted').where('contentType', '==', 'video/mp4'), 'storedBytes'),
+      total(uploads.where('status', '==', 'video-processing'), 'size'),
+      total(uploads.where('status', 'in', ['pending', 'cleanup']), 'size'),
     ]);
     return {video: video + processing, photo: submitted - video, pending};
   }));

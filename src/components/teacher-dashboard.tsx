@@ -8,6 +8,7 @@ import type {DashboardDetailKind, TeacherDashboardData} from "@/lib/teacher-dash
 import {assignmentInPeriod, schoolYearAt, type DashboardPeriod} from "@/lib/teacher-dashboard-period";
 import BoardDashboardSummary from './board-dashboard-summary';
 import TeacherDashboardDetails from './teacher-dashboard-details';
+import StorageGuide from './storage-guide';
 
 function homeworkHref(classId?: string, assignmentId?: string, status?: string, action?: string) {
   const query = new URLSearchParams();
@@ -100,6 +101,7 @@ export default function TeacherDashboard() {
       <Link className="thd-shortcut thd-lilac" href="/teacher/tools"><span className="thd-icon"><Sparkles size={24}/></span><span><strong>{t("tools")}</strong><small>{t("toolsHint")}</small></span><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-peach" href={`/teacher/cards${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`}><span className="thd-icon"><Layers size={24}/></span><span><strong>{locale === 'ko' ? '카드놀이' : 'Card Play'}</strong><small>{locale === 'ko' ? '세트 만들기 · 학습 · 테스트' : 'Create sets · learn · test'}</small></span><ArrowRight size={20}/></Link>
     </nav>
+    <StorageGuide/>
 
     <section className="thd-overview" aria-labelledby="dashboard-overview">
       <div className="thd-section-heading"><div className="thd-heading-label"><span className="thd-small-icon thd-yellow"><ClipboardCheck size={21}/></span><h2 id="dashboard-overview">{t("overview")}</h2></div><button className="ws-icon-btn ws-outlined" aria-label={t("refresh")} disabled={loading} onClick={() => void load()}><RefreshCw size={18} className={loading ? "ws-spin" : ""}/></button></div>

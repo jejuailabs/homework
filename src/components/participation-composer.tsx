@@ -82,7 +82,7 @@ export default function ParticipationComposer({board, viewerId, post, sectionId 
       const payload: BoardPostInput = {requestId: submitId.current, title: title.trim(), body: body.trim(), sectionId: board.sections.some(item => item.id === section) ? section : '', color, uploadIds, link: link.trim(), poll: showPoll ? {question: pollQuestion.trim(), options: cleanOptions} : null, location: showLocation && lat.trim() && lng.trim() ? {lat: Number(lat), lng: Number(lng), label: locationName.trim()} : null, ...(post ? {version: post.version} : {})};
       const result = await boardRequest<{post: BoardPost}>(`/api/boards/${board.id}/posts${post ? `/${post.id}` : ''}`, {method: post ? 'PATCH' : 'POST', body: JSON.stringify(payload)});
       removeDraft(draftKey); onSaved(result.post);
-    } catch (cause) {setError(t(cause instanceof BoardRequestError && cause.code === 'STORAGE_LIMIT' ? 'storageLimit' : cause instanceof BoardRequestError && cause.status === 409 ? 'conflict' : cause instanceof BoardRequestError && ['FILE_SIZE', 'FILE_TYPE', 'UPLOAD_LIMIT'].includes(cause.code) ? 'fileLimit' : 'saveError'));}
+    } catch (cause) {setError(t(cause instanceof BoardRequestError && ['STORAGE_LIMIT', 'PLAN_STORAGE_FULL'].includes(cause.code) ? 'storageLimit' : cause instanceof BoardRequestError && cause.status === 409 ? 'conflict' : cause instanceof BoardRequestError && ['FILE_SIZE', 'FILE_TYPE', 'UPLOAD_LIMIT'].includes(cause.code) ? 'fileLimit' : 'saveError'));}
     finally {setBusy(false);}
   }
   return <BoardDialog title={t(post ? 'edit' : 'addPost')} onClose={onClose} busy={busy || recording} className="pb-composer">
