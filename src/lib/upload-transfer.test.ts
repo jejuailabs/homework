@@ -28,3 +28,16 @@ test('permission and size failures are surfaced without automatic repeat uploads
   globalThis.XMLHttpRequest=XHR as any;
   try{await assert.rejects(sendUpload(transfer,new File(['file'],'test.png'),()=>{}),(error:any)=>error instanceof UploadTransferError&&error.code==='UPLOAD_HTTP_403');assert.equal(sends,1);}finally{globalThis.XMLHttpRequest=originalXHR;}
 });
+test('a slow transfer that keeps making progress is never cut off, a stalled one resumes',async()=>{
+  const originalXHR=globalThis.XMLHttpRequest,originalFetch=globalThis.fetch,originalTimeout=globalThis.setTimeout,originalClear=globalThis.clearTimeout;
+  const timers=new Map<number,()=>void>();let next=0,sends=0;
+  globalThis.setTimeout=((fn:()=>void)=>{timers.set(++next,fn);return next;}) as any;globalThis.clearTimeout=((handle:number)=>{timers.delete(handle);}) as any;
+  const fire=()=>{const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());};
+  class XHR {upload={onprogress:null as null|((event:any)=>void)};status=200;onload=()=>{};onerror=()=>{};ontimeout=()=>{};onabort=()=>{};open(){}setRequestHeader(){}
+    send(){sends++;if(sends===1){this.upload.onprogress?.({lengthComputable:true,loaded:2});queueMicrotask(()=>{this.upload.onprogress?.({lengthComputable:true,loaded:4});fire();});}else queueMicrotask(()=>this.onload());}
+    abort(){this.onabort();}}
+  globalThis.XMLHttpRequest=XHR as any;
+  globalThis.fetch=(async()=>new Response(null,{status:308,headers:{Range:'bytes=0-3'}})) as typeof fetch;
+  try{await sendUpload(transfer,new File(['0123456789'],'test.png'),()=>{});assert.equal(sends,2);}
+  finally{globalThis.XMLHttpRequest=originalXHR;globalThis.fetch=originalFetch;globalThis.setTimeout=originalTimeout;globalThis.clearTimeout=originalClear;}
+});

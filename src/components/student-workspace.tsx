@@ -14,6 +14,9 @@ import {petPersonality} from "@/modules/my-space/personality";
 import {AssignmentMaterials} from "./assignment-materials";
 import VideoSubmissionStatus from './video-submission-status';
 import {videoSelectionError,type VideoJobView} from '@/lib/video-submission';
+import {compressImage} from "@/lib/image-compression";
+import {countUsage, countUsageOnce} from "@/lib/usage-beacon";
+import {compressionCounter} from "@/lib/usage-events";
 import type {AssignmentMaterial} from "@/lib/assignment-materials";
 
 type Status = "pending" | "submitted" | "done" | "revision";
@@ -29,11 +32,11 @@ function SubmissionTypeBadge({type}: {type: AssignmentSubmissionType}) {
   return <span className={`sd-submission-type sd-submission-type-${type}`} aria-label={`${t("student.typeLabel")}: ${t(`submissionTypes.${type}`)}`}>{type === "text" ? <PencilLine size={14}/> : type === "image" ? <Images size={14}/> : type === "video" ? <Video size={14}/> : <Paperclip size={14}/>}<span>{t(`submissionTypes.${type}`)}</span></span>;
 }
 
-function VideoPreview({url, name,poster}: {url: string; name: string;poster?:string}) {
+function VideoPreview({url, name,poster,usageId}: {url: string; name: string;poster?:string;usageId?:string}) {
   const t = useTranslations("product");
   const [failed, setFailed] = useState(false);
   useEffect(() => {setFailed(false);}, [url]);
-  return <div className="sd-video-preview"><video src={url} poster={poster} controls playsInline preload="metadata" aria-label={name} onError={() => setFailed(true)}/>{failed && <p className="ws-small" role="status">{t("student.videoPreviewUnavailable")}</p>}</div>;
+  return <div className="sd-video-preview"><video src={url} poster={poster} controls playsInline preload="metadata" aria-label={name} onPlay={() => {if (usageId) countUsageOnce("videoPlay", usageId);}} onError={() => setFailed(true)}/>{failed && <p className="ws-small" role="status">{t("student.videoPreviewUnavailable")}</p>}</div>;
 }
 
 function SubmittedImage({upload, onRefresh}: {upload: Upload; onRefresh: () => Promise<void>}) {
@@ -47,14 +50,14 @@ function SubmittedImage({upload, onRefresh}: {upload: Upload; onRefresh: () => P
     try {await onRefresh(); setFailed(false); setAttempt(value => value + 1);}
     finally {setRefreshing(false);}
   }
-  return <>{upload.url && !failed && <a className="sd-submitted-image" href={upload.url} target="_blank" rel="noopener noreferrer" aria-label={t("common.openFile", {name: upload.fileName})}><img key={`${upload.url}-${attempt}`} src={upload.url} alt={upload.fileName} onError={() => setFailed(true)}/><span><Images size={15}/>{t("student.enlargeImage")}<ArrowRight size={15}/></span></a>}{(!upload.url || failed) && <div className="sd-image-unavailable"><Images size={26}/><p>{t("student.imagePreviewUnavailable")}</p><button className="ws-button ws-button-light" type="button" disabled={refreshing} onClick={() => void retry()}>{refreshing ? <LoaderCircle size={16} className="ws-spin"/> : <RefreshCw size={16}/>} {t("student.reloadImage")}</button></div>}</>;
+  return <>{upload.url && !failed && <a className="sd-submitted-image" href={upload.url} target="_blank" rel="noopener noreferrer" aria-label={t("common.openFile", {name: upload.fileName})}><img key={`${upload.url}-${attempt}`} src={upload.url} alt={upload.fileName} decoding="async" onLoad={() => countUsageOnce("imageView", upload.id)} onError={() => setFailed(true)}/><span><Images size={15}/>{t("student.enlargeImage")}<ArrowRight size={15}/></span></a>}{(!upload.url || failed) && <div className="sd-image-unavailable"><Images size={26}/><p>{t("student.imagePreviewUnavailable")}</p><button className="ws-button ws-button-light" type="button" disabled={refreshing} onClick={() => void retry()}>{refreshing ? <LoaderCircle size={16} className="ws-spin"/> : <RefreshCw size={16}/>} {t("student.reloadImage")}</button></div>}</>;
 }
 
 function SubmittedFiles({uploads, revision, onRefresh}: {uploads: Upload[]; revision: boolean; onRefresh: () => Promise<void>}) {
   const t = useTranslations("product");
   if (!uploads.length) return null;
   return <section className="ws-submitted-files sd-sent-files"><h3>{t(revision ? "student.previousFiles" : "student.submittedFiles", {count: uploads.length})}</h3>{uploads.map(upload => <div className="sd-submitted-attachment" key={upload.id}>
-    {imageSubmissionMimeTypes.includes(upload.contentType as (typeof imageSubmissionMimeTypes)[number]) ? <SubmittedImage upload={upload} onRefresh={onRefresh}/> : upload.url && upload.contentType.startsWith("video/") ? <VideoPreview url={upload.url} name={upload.fileName} poster={upload.thumbnailUrl}/> : null}
+    {imageSubmissionMimeTypes.includes(upload.contentType as (typeof imageSubmissionMimeTypes)[number]) ? <SubmittedImage upload={upload} onRefresh={onRefresh}/> : upload.url && upload.contentType.startsWith("video/") ? <VideoPreview url={upload.url} name={upload.fileName} poster={upload.thumbnailUrl} usageId={upload.id}/> : null}
     {upload.url ? <a className="ws-file-link" href={upload.url} target="_blank" rel="noopener noreferrer"><Paperclip size={17}/><span>{upload.fileName}</span><ArrowRight size={16}/></a> : <div className="ws-file-link"><Paperclip size={17}/><span>{upload.fileName}</span></div>}
   </div>)}</section>;
 }
@@ -90,6 +93,7 @@ export default function StudentWorkspace() {
   const [previews, setPreviews] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [preparing, setPreparing] = useState<{current: number; total: number} | null>(null);
   const [videoHandoff,setVideoHandoff]=useState(false),[selectingVideo,setSelectingVideo]=useState(false);
   const [changingFriend, setChangingFriend] = useState(false);
   const [formError, setFormError] = useState("");
@@ -97,6 +101,8 @@ export default function StudentWorkspace() {
   const photoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadCache = useRef<Map<File, string>>(new Map());
+  // Keyed by the chosen original so a retry re-sends the same resized photo instead of re-encoding it.
+  const resizedImages = useRef(new WeakMap<File, File>());
   const uploadKeys = useRef(new WeakMap<File,string>()), stagedUploads = useRef(new Set<string>()), transferAbort = useRef<AbortController|null>(null), sendingRef = useRef(false);
   useEffect(()=>()=>{transferAbort.current?.abort(); stagedUploads.current.forEach(uploadId=>{void discardUpload(`/api/uploads/${uploadId}`).catch(()=>{});});},[]);
 
@@ -145,18 +151,18 @@ export default function StudentWorkspace() {
     if (!incoming) return;
     if(submissionType==='video'){
       const chosen=Array.from(incoming);const reason=videoSelectionError([...files,...chosen].map(file=>({type:contentType(file),size:file.size})));
-      if(reason){setFormError(t(reason==='VIDEO_COUNT'?'student.videoOneOnly':reason==='FILE_SIZE'?'student.fileTooLarge':'student.wrongSubmissionType'));return;}
+      if(reason){if(reason==='FILE_SIZE')countUsage('videoRejectSize');setFormError(t(reason==='VIDEO_COUNT'?'student.videoOneOnly':reason==='FILE_SIZE'?'student.fileTooLarge':'student.wrongSubmissionType'));return;}
       setSelectingVideo(true);setFormError('');
       const candidate=chosen[0],url=URL.createObjectURL(candidate),video=document.createElement('video');video.preload='metadata';
       let finished=false;
-      const finish=(duration?:number)=>{if(finished)return;finished=true;clearTimeout(timer);video.onloadedmetadata=null;video.onerror=null;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);setSelectingVideo(false);if(videoSelectionError([{type:contentType(candidate),size:candidate.size}],duration)==='VIDEO_DURATION')setFormError(t('student.videoTooLong'));else setFiles([candidate]);};
+      const finish=(duration?:number)=>{if(finished)return;finished=true;clearTimeout(timer);video.onloadedmetadata=null;video.onerror=null;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);setSelectingVideo(false);if(videoSelectionError([{type:contentType(candidate),size:candidate.size}],duration)==='VIDEO_DURATION'){countUsage('videoRejectDuration');setFormError(t('student.videoTooLong'));}else setFiles([candidate]);};
       const timer=setTimeout(()=>finish(),10000);video.onloadedmetadata=()=>finish(Number.isFinite(video.duration)?video.duration:undefined);video.onerror=()=>finish();video.src=url;return;
     }
     if (files.length + incoming.length > 10) {setFormError(t("student.tooManyFiles")); return;}
     const selectedFiles = Array.from(incoming);
     if (selectedFiles.some(file => !acceptsSubmissionFile(submissionType, contentType(file)))) {setFormError(t(submissionType === "legacy" ? "student.unsupportedFile" : "student.wrongSubmissionType")); return;}
     if (selectedFiles.some(file => file.size === 0)) {setFormError(t("student.emptyFile")); return;}
-    if (selectedFiles.some(file => file.size > (contentType(file).startsWith("video/") ? 250 : 100) * 1024 * 1024)) {setFormError(t("student.fileTooLarge")); return;}
+    if (selectedFiles.some(file => file.size > (contentType(file).startsWith("video/") ? 250 : 100) * 1024 * 1024)) {if (selectedFiles.some(file => contentType(file).startsWith("image/") && file.size > 100 * 1024 * 1024)) countUsage("imageRejectSize"); setFormError(t("student.fileTooLarge")); return;}
     setFiles(previous => [...previous, ...selectedFiles]); setFormError("");
   }
   async function chooseFriend(id: Character) {
@@ -176,15 +182,26 @@ export default function StudentWorkspace() {
     sendingRef.current=true;setSending(true);setVideoHandoff(false); setFormError(""); setProgress(0);
     try {
       const uploadIds: string[] = [];
+      const images = files.filter(file => contentType(file).startsWith("image/"));
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
         const cached = uploadCache.current.get(file);
         if (cached) {uploadIds.push(cached); setProgress(Math.round(((index + 1) / files.length) * 100)); continue;}
+        // One photo at a time, just before its upload: a low-end phone never holds
+        // more than one decoded photo, and a slow resize falls back to the original.
+        let outgoing = resizedImages.current.get(file) ?? file;
+        if (outgoing === file && contentType(file).startsWith("image/")) {
+          setPreparing({current: images.indexOf(file) + 1, total: images.length});
+          const result = await compressImage(file, contentType(file));
+          outgoing = result.file; resizedImages.current.set(file, outgoing); setPreparing(null);
+          countUsage(compressionCounter[result.reason]); countUsage("imageBytesIn", file.size); countUsage("imageBytesOut", outgoing.size);
+          if (!["small", "unsupported", "too-large"].includes(result.reason)) countUsage("imageCompressMs", result.ms);
+        }
         const requestId = uploadKeys.current.get(file) || crypto.randomUUID(); uploadKeys.current.set(file,requestId);
-        const upload = await request<UploadTransfer>("/api/uploads/init", {method:"POST",body:JSON.stringify({requestId,assignmentId:selected.id,fileName:file.name,contentType:contentType(file),size:file.size})});
+        const upload = await request<UploadTransfer>("/api/uploads/init", {method:"POST",body:JSON.stringify({requestId,assignmentId:selected.id,fileName:outgoing.name,contentType:contentType(outgoing),size:outgoing.size})});
         stagedUploads.current.add(upload.uploadId);
         const controller=new AbortController();transferAbort.current=controller;
-        await sendUpload(upload,file,fraction=>setProgress(Math.round((index+fraction)/files.length*100)),controller.signal);
+        await sendUpload(upload,outgoing,fraction=>setProgress(Math.round((index+fraction)/files.length*100)),controller.signal);
         uploadCache.current.set(file, upload.uploadId); uploadIds.push(upload.uploadId);
       }
       if(submissionType==='video')setVideoHandoff(true);
@@ -211,7 +228,7 @@ export default function StudentWorkspace() {
       } else {
         setFormError(t(["UPLOAD_NETWORK","UPLOAD_TIMEOUT"].includes(code) ? (submissionType==="video"?"student.videoTransferFailed":"student.uploadNetwork") : ["UNAUTHENTICATED","CODE_RESET"].includes(code) ? "student.uploadSignIn" : code === "not_configured" ? "student.notConfigured" : code === "FILE_SIZE" ? "student.fileTooLarge" : code === "FILE_TYPE" ? "student.unsupportedFile" : code === "UPLOAD_INCOMPLETE" ? "student.uploadIncomplete" : "common.error"));
       }
-    } finally {sendingRef.current=false;transferAbort.current=null;setSending(false);setVideoHandoff(false);}
+    } finally {sendingRef.current=false;transferAbort.current=null;setSending(false);setVideoHandoff(false);setPreparing(null);}
   }
   async function retryVideo(job:VideoJobView){const result=await request<{videoJob:VideoJobView}>(`/api/video-submissions/${job.id}`,{method:'POST',body:'{}'});setHome(previous=>previous?{...previous,assignments:previous.assignments.map(task=>task.id===job.assignmentId?{...task,videoJob:result.videoJob}:task)}:previous);void load();}
 
@@ -240,10 +257,10 @@ export default function StudentWorkspace() {
         {!canSubmit ? <>{!videoBlocked&&<div className="ws-result-buddy"><img src={`/characters/${character.file}.webp`} alt=""/><p>{t(selected.status === "done" ? "student.doneMessage" : "student.waiting")}</p></div>}{selected.submission?.text && <div className="ws-submitted-note"><h3>{t("student.submittedText")}</h3><p>{selected.submission.text}</p></div>}</> : <form onSubmit={submit}>
           {selected.status === "revision" && <p className="ws-encouragement">{t("student.revisionMessage")}</p>}
           {submissionType !== "text" && <div className={`ws-upload-zone sd-upload-${submissionType}`}><span className="sd-camera-sticker" aria-hidden="true">{submissionType === "video" ? <Video size={30}/> : <Camera size={30}/>}<Star size={15}/></span><h3>{t(submissionType === "video" ? "student.videoHeading" : submissionType === "image" ? "student.imageHeading" : "student.attachHeading")}</h3><p>{t(submissionType === "video" ? "submissionTypes.videoHint" : submissionType === "image" ? "submissionTypes.imageHint" : "student.attachHint")}</p><small className="ws-upload-limits">{t(submissionType === "video" ? "student.videoUploadLimits" : submissionType === "image" ? "student.imageUploadLimits" : "student.uploadLimits")}</small><div className="ws-upload-actions"><button type="button" className="ws-button ws-button-light" onClick={() => photoInput.current?.click()} disabled={sending||selectingVideo}>{submissionType === "video" ? <Video size={20}/> : <Camera size={20}/>}<span>{t(submissionType === "video" ? "student.recordVideo" : "student.camera")}</span></button><button type="button" className="ws-button ws-button-light" onClick={() => fileInput.current?.click()} disabled={sending||selectingVideo}>{submissionType === "video" ? <Video size={19}/> : submissionType === "image" ? <Images size={19}/> : <Paperclip size={19}/>}<span>{t(submissionType === "video" ? "student.chooseVideos" : submissionType === "image" ? "student.chooseImages" : "student.chooseFiles")}</span></button></div><input ref={photoInput} type="file" accept={submissionType === "video" ? videoAccept : imageAccept} capture="environment" className="ws-visually-hidden" tabIndex={-1} disabled={sending||selectingVideo} onChange={event => {addFiles(event.target.files); event.target.value = "";}}/><input ref={fileInput} type="file" accept={uploadAccept} multiple={submissionType!=="video"} className="ws-visually-hidden" tabIndex={-1} disabled={sending||selectingVideo} onChange={event => {addFiles(event.target.files); event.target.value = "";}}/></div>}
-          {files.length > 0 && <div className="ws-file-previews">{files.map((file, index) => <div className={`ws-file-preview ${contentType(file).startsWith("video/") ? "sd-file-video" : ""}`} key={`${file.name}-${index}`}>{previews[index] ? contentType(file).startsWith("video/") ? <VideoPreview url={previews[index]} name={file.name}/> : <img src={previews[index]} alt=""/> : <Paperclip size={23}/>}<span>{file.name}</span><button type="button" className="ws-icon-btn" aria-label={t("student.removeFile", {name: file.name})} disabled={sending||selectingVideo} onClick={() => {setFiles(previous => previous.filter((_, item) => item !== index)); setFormError(""); uploadCache.current.delete(file);}}><X size={16}/></button></div>)}</div>}
+          {files.length > 0 && <div className="ws-file-previews">{files.map((file, index) => <div className={`ws-file-preview ${contentType(file).startsWith("video/") ? "sd-file-video" : ""}`} key={`${file.name}-${index}`}>{previews[index] ? contentType(file).startsWith("video/") ? <VideoPreview url={previews[index]} name={file.name}/> : <img src={previews[index]} alt="" decoding="async"/> : <Paperclip size={23}/>}<span>{file.name}</span><button type="button" className="ws-icon-btn" aria-label={t("student.removeFile", {name: file.name})} disabled={sending||selectingVideo} onClick={() => {setFiles(previous => previous.filter((_, item) => item !== index)); setFormError(""); uploadCache.current.delete(file);}}><X size={16}/></button></div>)}</div>}
           <label className={`ws-field ${submissionType === "text" ? "sd-text-answer" : ""}`}><span>{submissionType === "text" && <PencilLine size={17}/>} {t(submissionType === "text" ? "student.answerLabel" : submissionType === "legacy" ? "student.messageLabel" : "student.captionLabel")}</span><textarea value={message} onChange={event => {setMessage(event.target.value); setFormError("");}} placeholder={t(submissionType === "text" ? "student.answerPlaceholder" : submissionType === "legacy" ? "student.messagePlaceholder" : "student.captionPlaceholder")} rows={submissionType === "text" ? 7 : 3} maxLength={10000} required={submissionType === "text"} disabled={sending||selectingVideo}/></label>
           {selectingVideo&&<p role="status">{t("student.videoChecking")}</p>}{formError && <p className="ws-form-error" role="alert">{formError}</p>}
-          {sending && <div className="ws-upload-progress" role="status"><span>{submissionType==="video"?t(videoHandoff?"student.videoPreparing":"student.videoUploading",{progress}):files.length?t("student.uploading",{progress}):t("student.sending")}</span>{!videoHandoff&&<progress max="100" value={progress}/>}</div>}
+          {sending && <div className="ws-upload-progress" role="status"><span>{preparing?t("student.preparingImage",preparing):submissionType==="video"?t(videoHandoff?"student.videoPreparing":"student.videoUploading",{progress}):files.length?t("student.uploading",{progress}):t("student.sending")}</span>{!videoHandoff&&<progress max="100" value={progress}/>}</div>}
           <button type="submit" className="ws-button ws-button-primary ws-send-button" disabled={sending || selectingVideo || !hasRequiredContent}>{sending ? <LoaderCircle size={21} className="ws-spin"/> : <Send size={21}/>} {t(sending ? "student.sending" : submissionType==="video"?"student.videoSubmitAction":"student.sendAction")}</button><p className="ws-upload-footnote">{t(sending ? (submissionType==="video"?"student.videoKeepOpen":"student.keepOpen") : "student.submissionSafe")}</p>
         </form>}
       </div>
