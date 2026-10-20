@@ -24,7 +24,7 @@ test('six grades, two semesters and 40 dates produce deterministic unique ten-qu
       assert.equal(pack.questions.length, 10); assert.equal(new Set(pack.questions.map(question => question.prompt)).size, 10);
       for (const question of pack.questions) {
         assert.equal(checkQuizAnswer(question, question.answer).correct, true);
-        if (subject === 'english') {if (question.kind === 'choice') {assert.equal(question.choices.length, 4); assert.equal(new Set(question.choices).size, 4);}}
+        if (subject === 'english') {assert.equal(pack.questions.filter(item => item.kind === 'text').length, 2); if (question.kind === 'choice') {assert.equal(question.choices.length, 4); assert.equal(new Set(question.choices).size, 4);}}
         else {
           const match = question.prompt.match(/^([\d./]+) ([+−×÷]) ([\d./]+) = \?$/)!; assert(match);
           const left = quizNumber(match[1])!, right = quizNumber(match[3])!, expected = quizNumber(question.answer)!;
@@ -73,6 +73,23 @@ test('personal reviews are frozen by the caller, select only due skills from pri
   assert.equal(review.length, 5); assert.equal(new Set(review.map(question => question.skillId)).size, 5);
   assert.deepEqual(review, generateQuizReview(tomorrow, 'friend1', skills));
   assert(review.every(question => !question.id.includes('word-')));
+  assert.equal(review.filter(question => question.kind === 'text').length, 1);
+});
+test('short and mixed reviews round only the English question count to twenty percent', () => {
+  const tomorrow = {...scope, date: quizAddDays(scope.date, 1)};
+  const english = generateQuizPack(scope, 'english').questions.map(question => nextQuizSkill(question, result, scope.date));
+  const math = generateQuizPack(scope, 'math').questions.slice(0, 2).map(question => nextQuizSkill(question, result, scope.date));
+  for (let count = 1; count <= 5; count++) {
+    const review = generateQuizReview(tomorrow, 'friend1', english.slice(0, count));
+    assert.equal(review.filter(question => question.kind === 'text').length, Math.round(count * 0.2));
+  }
+  const mixed = generateQuizReview(tomorrow, 'friend1', [...math, ...english]);
+  assert.equal(mixed.filter(question => question.kind === 'text').length, Math.round(mixed.filter(question => question.subject === 'english').length * 0.2));
+});
+test('new English packs use a new content version without resetting daily sessions or math packs', () => {
+  const english = generateQuizPack(scope, 'english'), math = generateQuizPack(scope, 'math');
+  assert.equal(english.version, 'pilot-v2'); assert(english.id.startsWith('pilot-v2_'));
+  assert.equal(math.version, 'pilot-v1'); assert(math.id.startsWith('pilot-v1_'));
 });
 test('weekly ranking counts only completed common daily first answers, with shared ranks and no review advantage', () => {
   const question = generateQuizPack(scope, 'math').questions[0], base: QuizSession = {...scope, id: 'session', mode: 'math', questions: [question], answers: {[question.id]: {...result, correct: true, understanding: 'known'}}, completed: true, createdAt: 'now'};

@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {quizVocabulary} from './vocabulary';
 import type {QuizAnswer, QuizPack, QuizPublicSession, QuizQuestion, QuizScope, QuizSession, QuizSkill, QuizSubject, Understanding} from './types';
 export const QUIZ_VERSION = 'pilot-v1';
+export const ENGLISH_PACK_VERSION = 'pilot-v2';
 export const DAILY_REWARD_HALF_UNITS = 10; // 5 Bomal; production wallets are not touched.
 export const REVIEW_LIMIT = 5;
 export function validQuizCronSecret(value: unknown): value is string {return typeof value === 'string' && value.length >= 16 && !/\s/.test(value);}
@@ -18,7 +19,7 @@ export function quizScope(value: {grade?: unknown; semester?: unknown; date?: un
   if (!Number.isInteger(grade) || grade < 1 || grade > 6 || ![1, 2].includes(semester)) throw new QuizError('초등 1~6학년과 학기를 선택해 주세요.');
   return {grade, semester, date: quizDate(value.date)};
 }
-export function quizPackId(scope: QuizScope, subject: QuizSubject) {return `${QUIZ_VERSION}_${scope.date}_g${scope.grade}_s${scope.semester}_${subject}`;}
+export function quizPackId(scope: QuizScope, subject: QuizSubject) {return `${subject === 'english' ? ENGLISH_PACK_VERSION : QUIZ_VERSION}_${scope.date}_g${scope.grade}_s${scope.semester}_${subject}`;}
 export function seededRandom(seed: string) {
   let value = 2166136261;
   for (let i = 0; i < seed.length; i++) value = Math.imul(value ^ seed.charCodeAt(i), 16777619) >>> 0;
@@ -27,6 +28,7 @@ export function seededRandom(seed: string) {
 const pickInt = (random: () => number, min: number, max: number) => min + Math.floor(random() * (max - min + 1));
 const questionId = (seed: string, index: number) => createHash('sha256').update(`${seed}:${index}`).digest('hex').slice(0, 32);
 function shuffle<T>(items: T[], random: () => number) {const result = [...items]; for (let i = result.length - 1; i > 0; i--) {const j = pickInt(random, 0, i); [result[i], result[j]] = [result[j], result[i]];} return result;}
+function spellingSlots(indices: number[], seed: string) {return new Set(shuffle(indices, seededRandom(seed)).slice(0, Math.round(indices.length * 0.2)));}
 function gcd(a: number, b: number): number {return b ? gcd(b, a % b) : Math.abs(a);}
 function rational(n: number, d = 1) {const divisor = gcd(n, d); n /= divisor; d /= divisor; return d === 1 ? String(n) : `${n}/${d}`;}
 export function quizNumber(value: string): [number, number] | null {
@@ -49,11 +51,11 @@ export function checkQuizAnswer(question: QuizQuestion, raw: unknown): {answer: 
   }
   return {answer, correct: answer.normalize('NFKC').toLowerCase() === question.answer.normalize('NFKC').toLowerCase()};
 }
-function englishQuestion(scope: QuizScope, index: number, seed: string, skillId?: string): QuizQuestion {
+function englishQuestion(scope: QuizScope, index: number, seed: string, skillId?: string, spell = false): QuizQuestion {
   const words = quizVocabulary(scope.grade), random = seededRandom(seed), startDay = Math.floor(Date.parse(`${scope.date}T00:00:00Z`) / 86400000);
   const word = skillId ? words.find(word => word.id === skillId)! : words[(startDay * 10 + index + (scope.semester - 1) * 5) % words.length];
   if (!word) throw new QuizError('복습할 단어를 찾을 수 없어요.');
-  const spell = (index + startDay) % 2 === 1, choices = spell ? [] : shuffle([word.meaning, ...shuffle(words.filter(item => item.id !== word.id), random).slice(0, 3).map(item => item.meaning)], random);
+  const choices = spell ? [] : shuffle([word.meaning, ...shuffle(words.filter(item => item.id !== word.id), random).slice(0, 3).map(item => item.meaning)], random);
   return {id: questionId(seed, index), subject: 'english', skillId: word.id, skillLabel: `${word.word} · ${word.meaning}`, prompt: spell ? `‘${word.meaning}’에 해당하는 영어 단어를 쓰세요.` : `‘${word.word}’의 뜻을 고르세요.`, choices, answer: spell ? word.word : word.meaning, explanation: `${word.word} = ${word.meaning}`, kind: spell ? 'text' : 'choice'};
 }
 function mathQuestion(scope: QuizScope, index: number, seed: string, skillId?: string): QuizQuestion {
@@ -84,18 +86,21 @@ function mathQuestion(scope: QuizScope, index: number, seed: string, skillId?: s
 export function generateQuizPack(scope: QuizScope, subject: QuizSubject): QuizPack {
   quizScope(scope);
   const id = quizPackId(scope, subject), questions: QuizQuestion[] = [];
+  const spelling = spellingSlots(Array.from({length: 10}, (_, i) => i), `${id}_spelling`);
   for (let i = 0; i < 10; i++) {
     let question: QuizQuestion, attempt = 0;
-    do {const seed = `${id}_${i}_${attempt++}`; question = subject === 'english' ? englishQuestion(scope, i, seed) : mathQuestion(scope, i, seed);} while (questions.some(previous => previous.prompt === question.prompt) && attempt < 100);
+    do {const seed = `${id}_${i}_${attempt++}`; question = subject === 'english' ? englishQuestion(scope, i, seed, undefined, spelling.has(i)) : mathQuestion(scope, i, seed);} while (questions.some(previous => previous.prompt === question.prompt) && attempt < 100);
     if (questions.some(previous => previous.prompt === question.prompt)) throw new QuizError('중복 없는 문제 준비에 실패했어요.', 'QUIZ_GENERATION', 500);
     questions.push(question);
   }
-  return {...scope, id, subject, version: QUIZ_VERSION, questions};
+  return {...scope, id, subject, version: subject === 'english' ? ENGLISH_PACK_VERSION : QUIZ_VERSION, questions};
 }
 export function generateQuizReview(scope: QuizScope, learnerId: string, skills: QuizSkill[]): QuizQuestion[] {
-  return skills.filter(skill => skill.dueDate <= scope.date && skill.lastDate < scope.date).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id)).slice(0, REVIEW_LIMIT).map((skill, i) => {
+  const due = skills.filter(skill => skill.dueDate <= scope.date && skill.lastDate < scope.date).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id)).slice(0, REVIEW_LIMIT);
+  const spelling = spellingSlots(due.flatMap((skill, i) => skill.subject === 'english' ? [i] : []), `review_${scope.date}_${learnerId}_spelling`);
+  return due.map((skill, i) => {
     const seed = `review_${scope.date}_g${scope.grade}_s${scope.semester}_${learnerId}_${skill.id}`;
-    return skill.subject === 'english' ? englishQuestion(scope, i + 1, seed, skill.id) : mathQuestion(scope, i, seed, skill.id);
+    return skill.subject === 'english' ? englishQuestion(scope, i + 1, seed, skill.id, spelling.has(i)) : mathQuestion(scope, i, seed, skill.id);
   });
 }
 export function nextQuizSkill(question: QuizQuestion, result: QuizAnswer, date: string, previous?: QuizSkill): QuizSkill {
