@@ -1,0 +1,17 @@
+export type QuizSubject = 'english' | 'math';
+export type QuizMode = QuizSubject | 'review';
+export type Understanding = 'known' | 'unsure' | 'unknown';
+export type QuizScope = {grade: number; semester: number; date: string};
+export type QuizQuestion = {id: string; subject: QuizSubject; skillId: string; skillLabel: string; prompt: string; choices: string[]; answer: string; explanation: string; kind: 'choice' | 'text' | 'number'};
+export type QuizPack = QuizScope & {id: string; version: string; subject: QuizSubject; questions: QuizQuestion[]};
+export type QuizAnswer = {answer: string; correct: boolean; understanding: Understanding | null; submittedAt: string; completedAt?: string; nextDue?: string};
+export type QuizSession = QuizScope & {id: string; mode: QuizMode; questions: QuizQuestion[]; answers: Record<string, QuizAnswer>; completed: boolean; createdAt: string};
+export type QuizSkill = {id: string; subject: QuizSubject; label: string; dueDate: string; interval: number; attempts: number; correctStreak: number; lastDate: string; lastQuestionId: string};
+export type QuizPublicQuestion = Omit<QuizQuestion, 'answer' | 'explanation' | 'skillId'> & {result?: QuizAnswer & {expected: string; explanation: string}};
+export type QuizPublicSession = Omit<QuizSession, 'questions' | 'answers'> & {questions: QuizPublicQuestion[]};
+export type QuizWalletRow = {id: string; date: string; reason: string; halfUnits: number; balanceHalfUnits: number};
+export type QuizRank = {id: string; name: string; score: number; correct: number; completedDays: number; completedSubjects: number; rank: number};
+export type QuizLabState = QuizScope & {today: string; weekStart: string; learners: {id: string; name: string}[]; learnerId: string; walletHalfUnits: number; ledger: QuizWalletRow[]; skills: QuizSkill[]; dueCount: number; sessions: Partial<Record<QuizMode, QuizPublicSession>>; ranking: QuizRank[]; prepared: {date: string; english: boolean; math: boolean}[]; schedulerConfigured: boolean; lastPreparation: {at: string; created: number; existing: number; source: string} | null};
+export const quizLearners = [{id: 'friend1', name: '연습 친구 1'}, {id: 'friend2', name: '연습 친구 2'}, {id: 'friend3', name: '연습 친구 3'}];
+export const quizModes: QuizMode[] = ['english', 'math', 'review'];
+export const understandingLabels: Record<Understanding, string> = {known: '알겠어요', unsure: '헷갈려요', unknown: '모르겠어요'};
