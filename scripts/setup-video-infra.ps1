@@ -1,7 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$Account,[string]$Project='book-9b8ce',[string]$Region='asia-northeast3',[string]$Bucket='book-9b8ce.firebasestorage.app')
 $ErrorActionPreference='Stop'
-function Cloud {param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments) & gcloud @Arguments --project $Project --account $Account --quiet; if($LASTEXITCODE -ne 0){throw "gcloud failed: $($Arguments[0..1] -join ' ')"} }
-function Exists {param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Arguments) $previous=$ErrorActionPreference;try{$ErrorActionPreference='Continue';& gcloud @Arguments --project $Project --account $Account --quiet 2>$null | Out-Null;return $LASTEXITCODE -eq 0}finally{$ErrorActionPreference=$previous} }
+function Cloud {param([string[]]$Arguments) & gcloud.cmd @Arguments --project $Project --account $Account --quiet; if($LASTEXITCODE -ne 0){throw "gcloud failed: $($Arguments[0..1] -join ' ')"} }
+function Exists {param([string[]]$Arguments) $previous=$ErrorActionPreference;try{$ErrorActionPreference='Continue';& gcloud.cmd @Arguments --project $Project --account $Account --quiet 2>$null | Out-Null;return $LASTEXITCODE -eq 0}finally{$ErrorActionPreference=$previous} }
 New-Item -ItemType Directory -Force (Join-Path $PSScriptRoot '../.qa') | Out-Null
 $worker="homework-video-worker@$Project.iam.gserviceaccount.com"
 $tasks="homework-video-tasks@$Project.iam.gserviceaccount.com"
