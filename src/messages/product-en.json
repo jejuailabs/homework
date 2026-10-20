@@ -215,13 +215,50 @@
     "videoPreviewUnavailable": "If the video does not play, open the file to view it.",
     "typeLabel": "Submission type",
     "imageUploadLimits": "Up to 10 images · 100MB each · originals kept separately from exhibitions.",
-    "videoUploadLimits": "Up to 10 videos · 250MB each · originals kept separately from exhibitions.",
+    "videoUploadLimits": "Submit one video, up to 3 minutes. The original can be up to 250MB and is compressed on the server.",
     "previousFiles": "My previous files · {count}",
     "enlargeImage": "View full-size photo",
     "imagePreviewUnavailable": "This photo could not be displayed. Reload it or open the original file below.",
     "reloadImage": "Reload photo",
     "uploadNetwork": "The transfer was interrupted. Check your connection and submit again.",
-    "uploadSignIn": "Your sign-in expired. Sign in again with your student code."
+    "uploadSignIn": "Your sign-in expired. Sign in again with your student code.",
+    "videoOneOnly": "Please submit one video.",
+    "videoTooLong": "Videos must be 3 minutes or shorter. Please choose a shorter video.",
+    "videoChecking": "Checking video length…",
+    "videoUploading": "Sending your video · {progress}%",
+    "videoPreparing": "Upload complete! Preparing your submission video",
+    "videoCanLeave": "You can leave this page. Your processing status will still be here when you return.",
+    "videoElapsed": "· elapsed {minutes}m {seconds}s",
+    "videoComplete": "Submitted! Your teacher has your video",
+    "videoProcessingFailed": "Video compression could not finish",
+    "videoDelayed": "Video processing is taking longer",
+    "videoRetryProcessing": "Retry processing without uploading",
+    "videoRetrying": "Checking processing…",
+    "videoStatusError": "Could not check the processing status. Please try again shortly.",
+    "videoUnavailable": "The video processor is being prepared. Please try again shortly.",
+    "videoTransferFailed": "Video upload failed. Check your connection and submit again.",
+    "videoStages": {
+      "queued": "Waiting for a processor.",
+      "download": "Checking the uploaded video.",
+      "inspect": "Checking video length and format.",
+      "encode": "Compressing your submission video.",
+      "verify": "Verifying video playback.",
+      "save": "Saving and checking the video.",
+      "submit": "Finishing your submission."
+    },
+    "videoErrors": {
+      "VIDEO_DURATION": "Videos must be 3 minutes or shorter. Please choose a shorter video.",
+      "VIDEO_INVALID": "This video cannot be read. Please choose another file.",
+      "VIDEO_RESOLUTION": "The video resolution is too high. Please record at a lower resolution.",
+      "VIDEO_INPUT_MISMATCH": "Could not verify the uploaded video. Please choose another video.",
+      "VIDEO_ACCESS_CHANGED": "The assignment or student information has changed. Please check with your teacher.",
+      "VIDEO_SUBMISSION_CHANGED": "Your submission review status changed. Please refresh.",
+      "VIDEO_ENCODE_FAILED": "Your uploaded video is saved. You can retry compression without uploading it again.",
+      "VIDEO_SOURCE_MISSING": "The source video expired or is unavailable. Please select your video again."
+    },
+    "videoSubmitAction": "Submit video",
+    "videoKeepOpen": "Keep this page open until the upload finishes.",
+    "videoPending": "Processing video"
   },
   "submissionTypes": {
     "text": "Write an answer",
@@ -230,6 +267,6 @@
     "legacy": "Flexible submission",
     "textHint": "Write your answer",
     "imageHint": "Send photos or drawings",
-    "videoHint": "Send a video you made"
+    "videoHint": "Record or select one video, up to 3 minutes."
   }
 }

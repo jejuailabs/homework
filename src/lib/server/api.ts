@@ -1,5 +1,6 @@
 import 'server-only';
 import {prepareHomeworkUpload} from './homework-uploads';
+import {createVideoSubmission,studentVideoJobs,videoConfig} from './video-submissions';
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -55,7 +56,8 @@ function publicStudent(doc: FirebaseFirestore.DocumentSnapshot) {
 async function withFileUrls(submission: Data): Promise<Data> {
   const uploads = await Promise.all((submission.uploads ?? []).map(async (upload: Data) => {
     const [url] = await bucket().file(upload.path).getSignedUrl({ action: 'read', expires: Date.now() + 15 * 60 * 1000 });
-    return { ...upload, url };
+    const thumbnailUrl=upload.thumbnailPath?(await bucket().file(upload.thumbnailPath).getSignedUrl({action:'read',expires:Date.now()+15*60*1000}))[0]:undefined;
+    return { ...upload, url, ...(thumbnailUrl?{thumbnailUrl}:{}) };
   }));
   return { ...submission, uploads };
 }
@@ -292,12 +294,13 @@ async function home(request: Request) {
   const ctx = await requireStudent(request);
   const [profile, tasks, submitted] = await Promise.all([studentProfile(ctx), db().collection('assignments').where('classId', '==', ctx.classId).limit(200).get(), db().collection('submissions').where('studentId', '==', ctx.studentId).limit(200).get()]);
   const byAssignment = new Map(submitted.docs.map(doc => [doc.data().assignmentId, mapped(doc)]));
+  const jobs=new Map((await studentVideoJobs(ctx)).map(job=>[job.assignmentId,job]));
   const assignments = await Promise.all(sorted(tasks.docs.map(mappedAssignment).filter(task => task.targetStudentIds.includes(ctx.studentId))).map(async task => {
     const submission = byAssignment.get(task.id);
     const { targetStudentIds: _targets, ownerUid: _owner, ...visibleTask } = task;
-    return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission) : null };
+    return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission) : null,videoJob:jobs.get(task.id)||null };
   }));
-  return json({ profile, assignments });
+  return json({ profile, assignments,videoProcessingEnabled:!!await videoConfig() });
 }
 async function character(request: Request) {
   const ctx = await requireStudent(request);
@@ -324,6 +327,7 @@ async function finalize(request: Request) {
   if (!Array.isArray(input.uploadIds) || input.uploadIds.length > 10 || new Set(input.uploadIds).size !== input.uploadIds.length) throw new ApiError(400, '첨부파일은 최대 10개까지 제출할 수 있어요.');
   const uploadIds = input.uploadIds.map((value: unknown) => id(value));
   submissionContentPolicy(assignment.submissionType, answer, uploadIds.length);
+  if(assignment.submissionType==='video')return json({processing:true,videoJob:await createVideoSubmission(ctx,assignment,answer,uploadIds)},202);
   const fingerprint = hash(JSON.stringify({ answer, uploadIds }));
   const ref = db().doc(`submissions/${assignmentId}_${ctx.studentId}`);
   const previous = await ref.get();

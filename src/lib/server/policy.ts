@@ -37,6 +37,7 @@ export function requiredSubmissionType(value: unknown): SubmissionType {
   return value as SubmissionType;
 }
 export function submissionContentPolicy(type: AssignmentSubmissionType, answer: string, fileCount: number) {
+  if(type==='video'&&fileCount!==1)throw new ApiError(400,'영상은 한 개만 제출해 주세요.','VIDEO_COUNT');
   if (type === 'text') {
     if (!answer.trim() || fileCount !== 0) throw new ApiError(400, '글쓰기 숙제는 내용을 적어 제출해 주세요. 첨부파일은 사용할 수 없어요.', 'SUBMISSION_CONTENT');
     return;

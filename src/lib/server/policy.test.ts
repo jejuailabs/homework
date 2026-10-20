@@ -54,7 +54,8 @@ test('image and video assignments require their media and permit an optional cap
     assert.throws(() => submissionContentPolicy(type, '', 0));
     assert.throws(() => submissionContentPolicy(type, '설명만 적었어요.', 0));
     assert.doesNotThrow(() => submissionContentPolicy(type, '', 1));
-    assert.doesNotThrow(() => submissionContentPolicy(type, '짧은 설명이에요.', 10));
+    if(type==='video')assert.throws(()=>submissionContentPolicy(type,'짧은 설명이에요.',2));
+    else assert.doesNotThrow(() => submissionContentPolicy(type, '짧은 설명이에요.', 10));
   }
   for (const mime of imageSubmissionMimeTypes) {
     assert.equal(acceptsSubmissionFile('image', mime), true);

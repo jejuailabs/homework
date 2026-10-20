@@ -6,6 +6,7 @@ node_modules/
 *firebase-adminsdk*.json
 *.md
 scripts/
+workers/
 firestore.*
 storage.rules
 firebase.json

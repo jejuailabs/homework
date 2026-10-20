@@ -20,3 +20,4 @@ function app() {
 export const auth = () => getAuth(app());
 export const db = () => getFirestore(app());
 export const bucket = () => getStorage(app()).bucket();
+export async function cloudAccessToken() {return (await app().options.credential!.getAccessToken()).access_token;}

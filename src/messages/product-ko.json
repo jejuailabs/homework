@@ -215,13 +215,50 @@
     "videoPreviewUnavailable": "영상이 재생되지 않으면 파일을 열어 확인해 주세요.",
     "typeLabel": "제출 방식",
     "imageUploadLimits": "제출당 사진 최대 10개 · 사진당 100MB · 원본 보관 · 갤러리와 별도로 저장해요.",
-    "videoUploadLimits": "제출당 영상 최대 10개 · 영상당 250MB · 원본 보관 · 갤러리와 별도로 저장해요.",
+    "videoUploadLimits": "영상 1개, 최대 3분까지 제출할 수 있어요. 전송 원본은 최대 250MB이며, 서버에서 제출용 영상으로 압축해요.",
     "previousFiles": "전에 보낸 자료 · {count}개",
     "enlargeImage": "사진 크게 보기",
     "imagePreviewUnavailable": "사진을 표시하지 못했어요. 다시 불러오거나 아래 원본 파일을 열어 주세요.",
     "reloadImage": "사진 다시 불러오기",
     "uploadNetwork": "파일 전송이 끊겼어요. 연결을 확인하고 다시 제출해 주세요.",
-    "uploadSignIn": "로그인이 만료됐어요. 학생 코드로 다시 로그인해 주세요."
+    "uploadSignIn": "로그인이 만료됐어요. 학생 코드로 다시 로그인해 주세요.",
+    "videoOneOnly": "영상은 한 개만 제출할 수 있어요.",
+    "videoTooLong": "영상은 최대 3분까지 제출할 수 있어요. 더 짧은 영상을 선택해 주세요.",
+    "videoChecking": "영상 길이를 확인하고 있어요.",
+    "videoUploading": "영상을 보내고 있어요 · {progress}%",
+    "videoPreparing": "전송 완료! 제출용 영상을 준비하고 있어요",
+    "videoCanLeave": "다른 화면으로 이동해도 괜찮아요. 다시 들어오면 처리 상태가 이어져요.",
+    "videoElapsed": "· 경과 {minutes}분 {seconds}초",
+    "videoComplete": "제출 완료! 선생님께 보냈어요",
+    "videoProcessingFailed": "영상 압축을 마치지 못했어요",
+    "videoDelayed": "영상 처리가 지연되고 있어요",
+    "videoRetryProcessing": "업로드 없이 처리 다시 시도",
+    "videoRetrying": "처리 상태 확인 중…",
+    "videoStatusError": "처리 상태를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.",
+    "videoUnavailable": "영상 처리 서버를 준비하고 있어요. 잠시 뒤 다시 시도해 주세요.",
+    "videoTransferFailed": "영상 전송에 실패했어요. 연결을 확인한 뒤 다시 제출해 주세요.",
+    "videoStages": {
+      "queued": "처리 순서를 기다리고 있어요.",
+      "download": "전송된 영상을 확인하고 있어요.",
+      "inspect": "영상 길이와 형식을 확인하고 있어요.",
+      "encode": "제출용 영상으로 압축하고 있어요.",
+      "verify": "압축된 영상이 재생되는지 확인하고 있어요.",
+      "save": "영상을 저장하고 확인하고 있어요.",
+      "submit": "선생님께 제출을 마무리하고 있어요."
+    },
+    "videoErrors": {
+      "VIDEO_DURATION": "최대 3분까지 제출할 수 있어요. 더 짧은 영상을 선택해 주세요.",
+      "VIDEO_INVALID": "영상을 읽을 수 없어요. 다른 영상 파일을 선택해 주세요.",
+      "VIDEO_RESOLUTION": "영상 해상도가 너무 커요. 더 낮은 해상도로 촬영해 주세요.",
+      "VIDEO_INPUT_MISMATCH": "전송된 영상 정보를 확인하지 못했어요. 다른 영상을 선택해 주세요.",
+      "VIDEO_ACCESS_CHANGED": "숙제나 학생 정보가 바뀌었어요. 선생님께 확인해 주세요.",
+      "VIDEO_SUBMISSION_CHANGED": "숙제 확인 상태가 바뀌었어요. 새로고침해서 확인해 주세요.",
+      "VIDEO_ENCODE_FAILED": "전송된 영상은 보관되어 있어요. 다시 업로드하지 않고 압축을 재시도할 수 있어요.",
+      "VIDEO_SOURCE_MISSING": "영상 보관 기한이 지났거나 원본이 없어요. 영상을 다시 선택해 주세요."
+    },
+    "videoSubmitAction": "제출하기",
+    "videoKeepOpen": "전송이 끝날 때까지 이 화면을 유지해 주세요.",
+    "videoPending": "영상 처리 중"
   },
   "submissionTypes": {
     "text": "텍스트 작성",
@@ -230,6 +267,6 @@
     "legacy": "자유 제출",
     "textHint": "글로 답을 적어요",
     "imageHint": "사진이나 그림을 올려요",
-    "videoHint": "촬영한 영상을 올려요"
+    "videoHint": "영상 한 개(최대 3분)를 촬영하거나 선택해 제출해요."
   }
 }
