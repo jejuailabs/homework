@@ -5,8 +5,8 @@ import {db} from '@/lib/server/admin';
 import {assertOrigin, getContext, type Context} from '@/lib/server/auth';
 import {ApiError, canManageClass, id} from '@/lib/server/policy';
 import {addPointBalance, pointBalance} from '@/lib/server/points-policy';
-import {checkQuizAnswer, generateQuizReview, nextQuizSkill, publicQuizSession, QuizError, quizScope, quizWeekStart, seoulQuizDate} from './engine';
-import {ANNUAL_QUIZ_VERSION, quizCalendar} from './curriculum';
+import {checkQuizAnswer, generatePracticeMathPack, generateQuizReview, nextQuizSkill, publicQuizSession, QuizError, quizScope, quizWeekStart, seoulQuizDate} from './engine';
+import {ANNUAL_QUIZ_VERSION, MATH_PRACTICE_VERSION, quizMathProgress, quizCalendar} from './curriculum';
 import {ensurePack, input} from './server';
 import {quizModes, type QuizLabState, type QuizMode, type QuizScope, type QuizSession, type QuizSkill, type QuizWalletRow, type Understanding} from './types';
 
@@ -16,6 +16,7 @@ type Access = {ctx: StudentContext; scope: QuizScope; day: FirebaseFirestore.Doc
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const yearRef = (access: Access) => access.pupil.ref.collection('dailyQuizYears').doc(String(quizCalendar(access.scope.date).schoolYear));
 const sessionRef = (access: Access, mode: QuizMode) => yearRef(access).collection('sessions').doc(`${access.scope.date}_${mode}`);
+const mathProgressRef = (access: Access) => yearRef(access).collection('progress').doc(`math_g${access.scope.grade}`);
 const scoreRef = (pupil: FirebaseFirestore.DocumentReference, date: string) => pupil.collection('dailyQuizScores').doc(quizWeekStart(date));
 function gradeOf(value: unknown) {const grade = Number(value); if (!Number.isInteger(grade) || grade < 1 || grade > 6) throw new QuizError('선생님이 학급의 초등 학년(1~6)을 설정하면 시작할 수 있어요.', 'QUIZ_GRADE', 409); return grade;}
 function modeOf(value: unknown) {if (!quizModes.includes(value as QuizMode)) throw new QuizError('학습 종류를 확인해 주세요.'); return value as QuizMode;}
@@ -46,28 +47,32 @@ async function ranks(clsId: string, grade: number, date: string) {
 }
 async function studentState(ctx: Context) {
   const access = await accessStudent(ctx), {scope, pupil, cls} = access, root = yearRef(access);
-  const [sessions, skills, ledger, ranking] = await Promise.all([
+  const [sessions, skills, ledger, ranking, progress] = await Promise.all([
     db().getAll(...quizModes.map(mode => sessionRef(access, mode))), root.collection(`skills_g${scope.grade}`).get(),
-    root.collection('ledger').orderBy('createdAt', 'desc').limit(30).get(), ranks(ctx.classId!, scope.grade, scope.date),
+    root.collection('ledger').orderBy('createdAt', 'desc').limit(30).get(), ranks(ctx.classId!, scope.grade, scope.date), mathProgressRef(access).get(),
   ]);
   const skillRows = skills.docs.map(doc => doc.data() as QuizSkill);
   return {...scope, today: scope.date, weekStart: quizWeekStart(scope.date), learners: [{id: ctx.studentId!, name: pupil.data()!.name}], learnerId: ctx.studentId!, className: cls.data()!.name, walletHalfUnits: pointBalance(pupil.data()?.points) * 2,
     ledger: ledger.docs.map(doc => ({id: doc.id, ...doc.data()}) as QuizWalletRow), skills: skillRows, dueCount: skillRows.filter(skill => skill.dueDate <= scope.date && skill.lastDate < scope.date).length,
-    sessions: Object.fromEntries(sessions.filter(doc => doc.exists).map(doc => {const session = doc.data() as QuizSession; return [session.mode, publicQuizSession(session)];})), ranking, prepared: [], schedulerConfigured: false, lastPreparation: null,
+    mathProgress: quizMathProgress(progress.data()?.completedDays ?? 0), sessions: Object.fromEntries(sessions.filter(doc => doc.exists).map(doc => {const session = doc.data() as QuizSession; return [session.mode, publicQuizSession(session)];})), ranking, prepared: [], schedulerConfigured: false, lastPreparation: null,
   } satisfies QuizLabState & {className: string};
 }
 async function start(ctx: Context, data: Record<string, unknown>) {
   const initial = await accessStudent(ctx); validateScope(data, initial.scope);
-  const mode = modeOf(data.mode), pack = mode === 'review' ? null : (await ensurePack(initial.scope, mode)).pack;
+  const mode = modeOf(data.mode), pack = mode === 'english' ? (await ensurePack(initial.scope, mode)).pack : null;
   return db().runTransaction(async tx => {
     const access = await accessStudent(ctx, tx); validateScope(initial.scope, access.scope);
     const ref = sessionRef(access, mode), root = yearRef(access);
-    const [existing, skills] = await Promise.all([tx.get(ref), mode === 'review' ? tx.get(root.collection(`skills_g${access.scope.grade}`)) : Promise.resolve(null)]);
-    if (existing.exists) return {session: publicQuizSession(existing.data() as QuizSession)};
-    const questions = pack?.questions || generateQuizReview(access.scope, ctx.studentId!, skills!.docs.map(doc => doc.data() as QuizSkill));
+    const [existing, skills, progress] = await Promise.all([tx.get(ref), mode === 'review' ? tx.get(root.collection(`skills_g${access.scope.grade}`)) : Promise.resolve(null), mode === 'math' ? tx.get(mathProgressRef(access)) : Promise.resolve(null)]);
+    const previous = existing.data() as QuizSession | undefined;
+    if (previous && (mode !== 'math' || previous.completed || previous.mathPractice?.version === MATH_PRACTICE_VERSION)) return {session: publicQuizSession(previous)};
+    const completedBefore = quizMathProgress(progress?.data()?.completedDays ?? 0).completedDays;
+    const questions = mode === 'math' ? generatePracticeMathPack(access.scope, completedBefore).questions : pack?.questions || generateQuizReview(access.scope, ctx.studentId!, skills!.docs.map(doc => doc.data() as QuizSkill));
     if (!questions.length) throw new QuizError('오늘 예정된 복습이 없어요. 데일리를 풀면 다음 복습 일정이 생겨요.', 'QUIZ_NO_REVIEW', 409);
-    const session: QuizSession = {...access.scope, id: ref.id, mode, questions, answers: {}, completed: false, createdAt: new Date().toISOString()};
-    tx.set(access.day, access.scope); tx.create(ref, session);
+    const session: QuizSession = {...access.scope, id: ref.id, mode, questions, answers: {}, completed: false, createdAt: new Date().toISOString(), ...(mode === 'math' ? {mathPractice: {version: MATH_PRACTICE_VERSION, completedBefore}} : {})};
+    // Preserve an unfinished calendar-based attempt; completed sessions and reward IDs never reset.
+    if (previous) tx.create(ref.collection('migrations').doc(MATH_PRACTICE_VERSION), previous);
+    tx.set(access.day, access.scope); tx.set(ref, session);
     return {session: publicQuizSession(session)};
   });
 }
@@ -93,7 +98,8 @@ async function study(ctx: Context, data: Record<string, unknown>, phase: 'answer
     const root = yearRef(access), skillRef = root.collection(`skills_g${session.grade}`).doc(question.skillId);
     const receiptId = digest(`${ANNUAL_QUIZ_VERSION}:${quizCalendar(session.date).schoolYear}:${session.id}:${mode === 'review' ? questionId : 'daily'}`);
     const receipt = access.pupil.ref.collection('pointLedger').doc(`quiz_${receiptId}`), score = scoreRef(access.pupil.ref, session.date);
-    const [skill, paid, ranking] = await Promise.all([tx.get(skillRef), tx.get(receipt), tx.get(score)]);
+    const [skill, paid, ranking, progress] = await Promise.all([tx.get(skillRef), tx.get(receipt), tx.get(score), mode === 'math' ? tx.get(mathProgressRef(access)) : Promise.resolve(null)]);
+    const wasCompleted = session.completed;
     const at = new Date().toISOString(); previousAnswer.understanding = data.understanding as Understanding; previousAnswer.completedAt = at;
     const next = nextQuizSkill(question, previousAnswer, session.date, skill.exists ? skill.data() as QuizSkill : undefined);
     previousAnswer.nextDue = next.dueDate;
@@ -101,6 +107,9 @@ async function study(ctx: Context, data: Record<string, unknown>, phase: 'answer
     const amount = paid.exists ? 0 : mode === 'review' ? 0.5 : session.completed ? 5 : 0;
     const balance = addPointBalance(points, amount), earned = addPointBalance(pointBalance(access.pupil.data()?.pointsEarnedTotal), amount);
     tx.update(ref, {answers: session.answers, completed: session.completed}); tx.set(skillRef, next);
+    if (mode === 'math' && session.mathPractice?.version === MATH_PRACTICE_VERSION && !wasCompleted && session.completed) {
+      tx.set(mathProgressRef(access), {completedDays: quizMathProgress(progress?.data()?.completedDays ?? 0).completedDays + 1, updatedAt: at});
+    }
     if (amount) {
       const reason = mode === 'review' ? `복습 완료 · ${question.skillLabel}` : `${mode === 'english' ? '영어' : '연산'} 데일리 10문제 완료`;
       tx.update(access.pupil.ref, {points: balance, pointsEarnedTotal: earned});
@@ -123,11 +132,11 @@ async function teacherClass(ctx: Context, classId: string) {
 async function report(ctx: Context, classId: string) {
   const cls = await teacherClass(ctx, classId), date = seoulQuizDate(), grade = gradeOf(cls.data()?.grade), semester = quizCalendar(date).semester;
   const pupils = await db().collection(`classes/${classId}/students`).get();
-  const [ranking, packs] = await Promise.all([ranks(classId, grade, date), Promise.all((['english', 'math'] as const).map(subject => ensurePack({grade, semester, date}, subject)))]);
+  const [ranking, packs] = await Promise.all([ranks(classId, grade, date), Promise.all([ensurePack({grade, semester, date}, 'english'), Promise.resolve({pack: generatePracticeMathPack({grade, semester, date}, 0)})])]);
   const students = await Promise.all(pupils.docs.filter(doc => !doc.data().disabled).map(async pupil => {
     const refs = quizModes.map(mode => pupil.ref.collection('dailyQuizYears').doc(String(quizCalendar(date).schoolYear)).collection('sessions').doc(`${date}_${mode}`));
-    const sessions = await db().getAll(...refs);
-    return {id: pupil.id, name: pupil.data().name, number: pupil.data().number, points: pointBalance(pupil.data().points), modes: Object.fromEntries(sessions.filter(s => s.exists).map(doc => {const session = doc.data() as QuizSession; return [session.mode, {completed: session.completed, total: session.questions.length, finished: Object.values(session.answers).filter(a => a.understanding).length, correct: Object.values(session.answers).filter(a => a.correct).length}];}))};
+    const [sessions, progress] = await Promise.all([db().getAll(...refs), pupil.ref.collection('dailyQuizYears').doc(String(quizCalendar(date).schoolYear)).collection('progress').doc(`math_g${grade}`).get()]);
+    return {id: pupil.id, name: pupil.data().name, number: pupil.data().number, points: pointBalance(pupil.data().points), mathStage: quizMathProgress(progress.data()?.completedDays ?? 0).stage + 1, modes: Object.fromEntries(sessions.filter(s => s.exists).map(doc => {const session = doc.data() as QuizSession; return [session.mode, {completed: session.completed, total: session.questions.length, finished: Object.values(session.answers).filter(a => a.understanding).length, correct: Object.values(session.answers).filter(a => a.correct).length}];}))};
   }));
   return {className: cls.data()!.name, grade, date, semester, ranking, students: students.sort((a, b) => a.number - b.number), packs: packs.map(p => p.pack)};
 }

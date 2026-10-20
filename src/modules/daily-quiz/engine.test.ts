@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {checkQuizAnswer, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, quizAddDays, quizNumber, quizRanking, quizScope, quizWeekStart, seoulQuizDate, validQuizCronSecret} from './engine';
+import {checkQuizAnswer, generatePracticeMathPack, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, quizAddDays, quizNumber, quizRanking, quizScope, quizWeekStart, seoulQuizDate, validQuizCronSecret} from './engine';
 import {quizVocabulary} from './vocabulary';
-import {quizCalendar, quizWordIndices, quizMathStage} from './curriculum';
+import {quizCalendar, quizWordIndices, quizMathStage, quizMathProgress, quizPracticeMathStage} from './curriculum';
 import type {QuizAnswer, QuizSession, QuizSkill} from './types';
 const scope = {grade: 3, semester: 1, date: '2026-10-20'};
 const result: QuizAnswer = {answer: '1', correct: false, understanding: 'unknown', submittedAt: '2026-10-20T00:00:00Z'};
@@ -129,4 +129,50 @@ test('weekly ranking counts only completed common daily first answers, with shar
   const question = generateQuizPack(scope, 'math').questions[0], base: QuizSession = {...scope, id: 'session', mode: 'math', questions: [question], answers: {[question.id]: {...result, correct: true, understanding: 'known'}}, completed: true, createdAt: 'now'};
   const rows = quizRanking([{id: 'a', name: 'A', sessions: [base, {...base, mode: 'review'}]}, {id: 'b', name: 'B', sessions: [base]}, {id: 'c', name: 'C', sessions: [{...base, completed: false}]}]);
   assert.deepEqual(rows.map(row => row.rank), [1, 1, 3]); assert.deepEqual(rows.map(row => row.score), [1, 1, 0]); assert.equal(rows[0].completedDays, 1);
+});
+
+
+test('a new pupil always starts arithmetic at the beginning of their grade, even in October or February', () => {
+  for (let grade = 1; grade <= 6; grade++) for (const date of ['2026-03-01', '2026-10-20', '2027-02-28']) {
+    const pack = generatePracticeMathPack({...scope, grade, date}, 0);
+    assert.equal(pack.questions.length, 10);
+    assert.equal(new Set(pack.questions.map(q => q.prompt)).size, 10);
+    assert(pack.questions.every(q => q.skillId.startsWith(`annual-g${grade}-t0-`)));
+    assert(pack.questions.every(q => checkQuizAnswer(q, q.answer).correct));
+    assert.deepEqual(pack, generatePracticeMathPack({...scope, grade, date}, 0));
+  }
+  const october = generatePracticeMathPack(scope, 0);
+  assert(october.questions.every(q => /^[0-9]+ [＋+−] [0-9]+/.test(q.prompt)));
+});
+
+test('only completed practice days advance arithmetic; later packs include earlier skills for review', () => {
+  assert.equal(quizMathProgress(0).stage, 0); assert.equal(quizMathProgress(9).stage, 0);
+  assert.equal(quizMathProgress(10).stage, 1); assert.equal(quizMathProgress(119).stage, 11);
+  assert.equal(quizMathProgress(120).cumulative, true);
+  for (const invalid of [-1, NaN, Infinity, 0.5]) assert.equal(quizMathProgress(invalid).stage, 0);
+  for (let completed = 0; completed <= 130; completed++) for (let grade = 1; grade <= 6; grade++) {
+    const pack = generatePracticeMathPack({...scope, grade}, completed), plan = quizMathProgress(completed);
+    assert.equal(new Set(pack.questions.map(q => q.prompt)).size, 10);
+    pack.questions.forEach((q, i) => {
+      assert.equal(Number(q.skillId.match(/-t(\d+)-/)![1]), quizPracticeMathStage(completed, i));
+      assert(checkQuizAnswer(q, q.answer).correct);
+    });
+    if (!plan.cumulative) assert(pack.questions.slice(0, 6).every(q => q.skillId.includes(`-t${plan.stage}-`)));
+  }
+});
+
+test('English spelling is always last, including resumed legacy sessions, without changing saved question IDs or answers', () => {
+  for (let grade = 1; grade <= 6; grade++) {
+    const pack = generateQuizPack({...scope, grade}, 'english');
+    assert.deepEqual(pack.questions.map(q => q.kind), [...Array(8).fill('choice'), 'text', 'text']);
+    const legacy = [pack.questions[8], ...pack.questions.slice(0, 8), pack.questions[9]];
+    const answered = legacy[1];
+    const session: QuizSession = {...scope, grade, id: 'legacy', mode: 'english', questions: legacy, answers: {[answered.id]: {...result, answer: answered.answer, understanding: 'known'}}, completed: false, createdAt: 'now'};
+    const view = publicQuizSession(session);
+    assert.deepEqual(view.questions.map(q => q.kind), [...Array(8).fill('choice'), 'text', 'text']);
+    assert.equal(view.questions.find(q => q.id === answered.id)?.result?.answer, answered.answer);
+    assert.deepEqual(new Set(view.questions.map(q => q.id)), new Set(legacy.map(q => q.id)));
+    assert.equal(session.questions[0].kind, 'text');
+    assert(view.questions.filter(q => !q.result).every(q => !('answer' in q) && !('skillId' in q)));
+  }
 });

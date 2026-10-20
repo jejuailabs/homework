@@ -1,7 +1,21 @@
-/** A broad March–November ramp, followed by cumulative practice through February.
- * Shared calendar progression never depends on an individual pupil's attendance. */
+/** English vocabulary and legacy pack preparation use a shared school calendar.
+ * Student arithmetic uses completion-based progress below. */
 export const ANNUAL_QUIZ_VERSION = 'annual-v1';
 export const ANNUAL_STAGES = 12;
+export const MATH_PRACTICE_VERSION = 'practice-v1';
+export const MATH_DAYS_PER_STAGE = 10;
+/** Attendance/completion, never the calendar month, determines arithmetic progress. */
+export function quizMathProgress(completedDays: number) {
+  const completed = Number.isSafeInteger(completedDays) && completedDays > 0 ? completedDays : 0;
+  return {completedDays: completed, stage: Math.min(ANNUAL_STAGES - 1, Math.floor(completed / MATH_DAYS_PER_STAGE)), cumulative: completed >= ANNUAL_STAGES * MATH_DAYS_PER_STAGE};
+}
+export function quizPracticeMathStage(completedDays: number, index: number) {
+  const plan = quizMathProgress(completedDays);
+  if (plan.cumulative) return (plan.completedDays * 10 + index) % ANNUAL_STAGES;
+  if (index < 6 || !plan.stage) return plan.stage;
+  if (index < 9) return plan.stage - 1;
+  return plan.completedDays % plan.stage;
+}
 export function quizCalendar(date: string) {
   const year = Number(date.slice(0, 4)), month = Number(date.slice(5, 7));
   const schoolYear = month < 3 ? year - 1 : year;
