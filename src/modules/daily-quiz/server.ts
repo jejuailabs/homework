@@ -4,7 +4,7 @@ import {NextResponse} from 'next/server';
 import {db} from '@/lib/server/admin';
 import {assertOrigin, getContext} from '@/lib/server/auth';
 import {ApiError, id, isAdmin} from '@/lib/server/policy';
-import {checkQuizAnswer, DAILY_REWARD_HALF_UNITS, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, QuizError, quizAddDays, quizPackId, quizRanking, quizScope, quizWeekStart, QUIZ_VERSION, seoulQuizDate} from './engine';
+import {checkQuizAnswer, DAILY_REWARD_HALF_UNITS, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, QuizError, quizAddDays, quizPackId, quizRanking, quizScope, quizWeekStart, QUIZ_VERSION, seoulQuizDate, validQuizCronSecret} from './engine';
 import {quizLearners, quizModes, type QuizLabState, type QuizMode, type QuizPack, type QuizScope, type QuizSession, type QuizSkill, type QuizSubject, type QuizWalletRow, type Understanding} from './types';
 
 type Input = Record<string, unknown>;
@@ -50,7 +50,7 @@ async function state(uid: string, data: Input): Promise<QuizLabState> {
   const skillRows = skills.docs.map(doc => doc.data() as QuizSkill).sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.id.localeCompare(b.id));
   return {...scope, today: seoulQuizDate(), weekStart, learners: quizLearners, learnerId, walletHalfUnits: learner.data()?.walletHalfUnits || 0, ledger: ledger.docs.map(doc => ({id: doc.id, ...doc.data()}) as QuizWalletRow), skills: skillRows, dueCount: skillRows.filter(skill => skill.dueDate <= scope.date && skill.lastDate < scope.date).length,
     sessions: Object.fromEntries(sessionDocs.filter(doc => doc.exists).map(doc => {const session = doc.data() as QuizSession; return [session.mode, publicQuizSession(session)];})), ranking: quizRanking(ranks),
-    prepared: dates.map((date, i) => ({date, english: packs[i * 2].exists, math: packs[i * 2 + 1].exists})), schedulerConfigured: !!process.env.CRON_SECRET, lastPreparation: operation.exists ? operation.data() as QuizLabState['lastPreparation'] : null};
+    prepared: dates.map((date, i) => ({date, english: packs[i * 2].exists, math: packs[i * 2 + 1].exists})), schedulerConfigured: validQuizCronSecret(process.env.CRON_SECRET), lastPreparation: operation.exists ? operation.data() as QuizLabState['lastPreparation'] : null};
 }
 async function start(uid: string, data: Input) {
   const scope = quizScope(data), learnerId = learnerFor(data.learnerId), mode = modeFor(data.mode), ref = learnerRef(uid, scope, learnerId), sessionRef = ref.collection('sessions').doc(sessionId(scope, mode));
@@ -142,7 +142,7 @@ export async function handleQuizLab(request: Request, segments: string[]) {
 }
 export async function handleQuizCron(request: Request) {
   const secret = process.env.CRON_SECRET, value = request.headers.get('authorization') || '';
-  if (!secret || secret.length < 16) return json({error: '예약 작업 인증 설정이 필요해요.'}, 503);
+  if (!validQuizCronSecret(secret)) return json({error: '예약 작업 인증 설정이 필요해요.'}, 503);
   const expected = Buffer.from(`Bearer ${secret}`), actual = Buffer.from(value);
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) return json({error: '인증이 필요해요.'}, 401);
   try {

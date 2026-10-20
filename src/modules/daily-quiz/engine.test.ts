@@ -1,10 +1,14 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {checkQuizAnswer, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, quizAddDays, quizNumber, quizRanking, quizScope, quizWeekStart, seoulQuizDate} from './engine';
+import {checkQuizAnswer, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, quizAddDays, quizNumber, quizRanking, quizScope, quizWeekStart, seoulQuizDate, validQuizCronSecret} from './engine';
 import {quizVocabulary} from './vocabulary';
 import type {QuizAnswer, QuizSession, QuizSkill} from './types';
 const scope = {grade: 3, semester: 1, date: '2026-10-20'};
 const result: QuizAnswer = {answer: '1', correct: false, understanding: 'unknown', submittedAt: '2026-10-20T00:00:00Z'};
+test('scheduled preparation secret must be long enough and contain no HTTP header whitespace', () => {
+  assert.equal(validQuizCronSecret('demo-only-quiz-scheduler-secret'), true);
+  for (const value of [undefined, '', 'short', ' 1234567890123456', '1234567890123456\n', '12345678 90123456', '1234567890123456\r\n']) assert.equal(validQuizCronSecret(value), false);
+});
 test('quiz scope and Seoul calendar reject invalid dates and isolate grades and semesters', () => {
   assert.equal(seoulQuizDate(new Date('2026-10-19T15:00:00Z')), '2026-10-20');
   assert.equal(quizAddDays('2028-02-28', 1), '2028-02-29');

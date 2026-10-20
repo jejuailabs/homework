@@ -4,6 +4,7 @@ import type {QuizAnswer, QuizPack, QuizPublicSession, QuizQuestion, QuizScope, Q
 export const QUIZ_VERSION = 'pilot-v1';
 export const DAILY_REWARD_HALF_UNITS = 10; // 5 Bomal; production wallets are not touched.
 export const REVIEW_LIMIT = 5;
+export function validQuizCronSecret(value: unknown): value is string {return typeof value === 'string' && value.length >= 16 && !/\s/.test(value);}
 export class QuizError extends Error {constructor(message: string, public code = 'QUIZ_INPUT', public status = 400) {super(message);}}
 export function seoulQuizDate(now = new Date()) {return new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(now);}
 export function quizDate(value: unknown): string {
