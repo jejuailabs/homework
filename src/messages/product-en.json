@@ -205,6 +205,7 @@
     "imageHeading": "Show your homework in photos",
     "videoHeading": "Show your homework in a video",
     "chooseImages": "Choose photos",
+    "planStorageFull": "Your teacher's storage is full, so files cannot be uploaded. Please tell your teacher.",
     "uploadVideo": "Upload video",
     "chooseVideos": "Choose videos",
     "recordVideo": "Record a video",

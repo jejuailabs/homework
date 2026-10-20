@@ -12,9 +12,13 @@ export const IMAGE_SKIP_BYTES = 600 * 1024;
 export const IMAGE_MAX_SOURCE_BYTES = 25 * 1024 ** 2;
 export const IMAGE_MAX_SOURCE_PIXELS = 50_000_000;
 export const IMAGE_TIMEOUT_MS = 8000;
+// Lists show this small preview; the full photo downloads only when opened.
+export const THUMBNAIL_EDGE = 480;
+export const THUMBNAIL_QUALITY = 0.72;
+export const THUMBNAIL_MAX_BYTES = 300 * 1024;
 const compressible = ['image/jpeg', 'image/png', 'image/webp'];
 
-export type ImageCompressionResult = {file: File; compressed: boolean; reason: 'compressed' | 'small' | 'unsupported' | 'too-large' | 'not-smaller' | 'failed' | 'timeout'; ms: number};
+export type ImageCompressionResult = {file: File; thumbnail?: File; compressed: boolean; reason: 'compressed' | 'small' | 'unsupported' | 'too-large' | 'not-smaller' | 'failed' | 'timeout'; ms: number};
 
 export function targetSize(width: number, height: number, maxEdge = IMAGE_MAX_EDGE) {
   const scale = Math.min(1, maxEdge / Math.max(width, height));
@@ -32,7 +36,7 @@ export function jpegName(name: string) {return `${name.replace(/\.[^./\\]+$/, ''
 
 // Runs decode, resize and JPEG encoding off the main thread so the page (spinner,
 // buttons) keeps responding on slow phones. Inline source: no extra bundle to fetch.
-const workerSource = `self.onmessage=async({data})=>{try{const bitmap=await createImageBitmap(data.file,{imageOrientation:'from-image'});try{if(bitmap.width*bitmap.height>data.maxPixels){self.postMessage({blob:null});return;}const scale=Math.min(1,data.maxEdge/Math.max(bitmap.width,bitmap.height)),width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale)),canvas=new OffscreenCanvas(width,height),context=canvas.getContext('2d');if(!context){self.postMessage({blob:null});return;}context.fillStyle='#fff';context.fillRect(0,0,width,height);context.imageSmoothingQuality='high';context.drawImage(bitmap,0,0,width,height);self.postMessage({blob:await canvas.convertToBlob({type:'image/jpeg',quality:data.quality})});}finally{bitmap.close();}}catch{self.postMessage({blob:null});}};`;
+const workerSource = `self.onmessage=async({data})=>{try{const bitmap=await createImageBitmap(data.file,{imageOrientation:'from-image'});try{if(bitmap.width*bitmap.height>data.maxPixels){self.postMessage({blob:null});return;}const scale=Math.min(1,data.maxEdge/Math.max(bitmap.width,bitmap.height)),width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale)),canvas=new OffscreenCanvas(width,height),context=canvas.getContext('2d');if(!context){self.postMessage({blob:null});return;}context.fillStyle='#fff';context.fillRect(0,0,width,height);context.imageSmoothingQuality='high';context.drawImage(bitmap,0,0,width,height);const blob=await canvas.convertToBlob({type:'image/jpeg',quality:data.quality});const ts=Math.min(1,data.thumbEdge/Math.max(width,height)),tw=Math.max(1,Math.round(width*ts)),th=Math.max(1,Math.round(height*ts)),small=new OffscreenCanvas(tw,th),sc=small.getContext('2d');let thumb=null;if(sc){sc.imageSmoothingQuality='high';sc.drawImage(canvas,0,0,tw,th);thumb=await small.convertToBlob({type:'image/jpeg',quality:data.thumbQuality});}self.postMessage({blob,thumb});}finally{bitmap.close();}}catch{self.postMessage({blob:null});}};`;
 let workerUrl: string | null = null;
 
 function workerSupported() {
@@ -40,20 +44,21 @@ function workerSupported() {
 }
 
 /** Resolves null when the photo cannot be resized; `timeout` also terminates the worker to free its memory. */
-function encodeInWorker(file: File, timeoutMs: number): Promise<Blob | null | 'timeout'> {
+type Encoded = {blob: Blob; thumb: Blob | null} | null;
+function encodeInWorker(file: File, timeoutMs: number): Promise<Encoded | 'timeout'> {
   workerUrl ??= URL.createObjectURL(new Blob([workerSource], {type: 'text/javascript'}));
   const worker = new Worker(workerUrl);
   return new Promise(resolve => {
-    const finish = (value: Blob | null | 'timeout') => {clearTimeout(timer); worker.terminate(); resolve(value);};
+    const finish = (value: Encoded | 'timeout') => {clearTimeout(timer); worker.terminate(); resolve(value);};
     const timer = setTimeout(() => finish('timeout'), timeoutMs);
-    worker.onmessage = event => finish(event.data?.blob instanceof Blob ? event.data.blob : null);
+    worker.onmessage = event => finish(event.data?.blob instanceof Blob ? {blob: event.data.blob, thumb: event.data.thumb instanceof Blob ? event.data.thumb : null} : null);
     worker.onerror = () => finish(null);
-    worker.postMessage({file, maxEdge: IMAGE_MAX_EDGE, quality: IMAGE_QUALITY, maxPixels: IMAGE_MAX_SOURCE_PIXELS});
+    worker.postMessage({file, maxEdge: IMAGE_MAX_EDGE, quality: IMAGE_QUALITY, maxPixels: IMAGE_MAX_SOURCE_PIXELS, thumbEdge: THUMBNAIL_EDGE, thumbQuality: THUMBNAIL_QUALITY});
   });
 }
 
 // Older browsers without OffscreenCanvas: same steps on the main thread.
-async function encodeOnPage(file: File): Promise<Blob | null> {
+async function encodeOnPage(file: File): Promise<Encoded> {
   if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') return null;
   // Applies EXIF rotation so phone photos keep their orientation after the resize.
   const bitmap = await createImageBitmap(file, {imageOrientation: 'from-image'});
@@ -67,8 +72,12 @@ async function encodeOnPage(file: File): Promise<Blob | null> {
     context.fillStyle = '#fff'; context.fillRect(0, 0, size.width, size.height);
     context.imageSmoothingQuality = 'high'; context.drawImage(bitmap, 0, 0, size.width, size.height);
     const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', IMAGE_QUALITY));
-    canvas.width = canvas.height = 0;
-    return blob;
+    const thumbSize = targetSize(size.width, size.height, THUMBNAIL_EDGE), small = document.createElement('canvas');
+    small.width = thumbSize.width; small.height = thumbSize.height;
+    small.getContext('2d')?.drawImage(canvas, 0, 0, thumbSize.width, thumbSize.height);
+    const thumb = await new Promise<Blob | null>(resolve => small.toBlob(resolve, 'image/jpeg', THUMBNAIL_QUALITY));
+    canvas.width = canvas.height = small.width = small.height = 0;
+    return blob ? {blob, thumb} : null;
   } finally {bitmap.close();}
 }
 
@@ -78,12 +87,14 @@ export async function compressImage(file: File, type = file.type): Promise<Image
   if (skip) return done({file, compressed: false, reason: skip});
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const blob = workerSupported() ? await encodeInWorker(file, IMAGE_TIMEOUT_MS) : await Promise.race([encodeOnPage(file), new Promise<'timeout'>(resolve => {timer = setTimeout(() => resolve('timeout'), IMAGE_TIMEOUT_MS);})]);
-    if (blob === 'timeout') return done({file, compressed: false, reason: 'timeout'});
+    const encoded = workerSupported() ? await encodeInWorker(file, IMAGE_TIMEOUT_MS) : await Promise.race([encodeOnPage(file), new Promise<'timeout'>(resolve => {timer = setTimeout(() => resolve('timeout'), IMAGE_TIMEOUT_MS);})]);
+    if (encoded === 'timeout') return done({file, compressed: false, reason: 'timeout'});
+    const blob = encoded?.blob, thumb = encoded?.thumb;
     // Some browsers silently fall back to PNG when they cannot encode JPEG.
     if (!blob || blob.type !== 'image/jpeg') return done({file, compressed: false, reason: 'failed'});
     if (blob.size >= file.size) return done({file, compressed: false, reason: 'not-smaller'});
-    return done({file: new File([blob], jpegName(file.name), {type: 'image/jpeg', lastModified: file.lastModified}), compressed: true, reason: 'compressed'});
+    const thumbnail = thumb?.type === 'image/jpeg' && thumb.size > 0 && thumb.size <= THUMBNAIL_MAX_BYTES ? new File([thumb], 'thumbnail.jpg', {type: 'image/jpeg'}) : undefined;
+    return done({file: new File([blob], jpegName(file.name), {type: 'image/jpeg', lastModified: file.lastModified}), ...(thumbnail ? {thumbnail} : {}), compressed: true, reason: 'compressed'});
   } catch {return done({file, compressed: false, reason: 'failed'});}
   finally {clearTimeout(timer);}
 }

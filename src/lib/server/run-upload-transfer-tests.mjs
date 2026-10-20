@@ -6,3 +6,5 @@ const transfer=url(compile('../upload-transfer.ts'));
 await import(url(compile('../upload-transfer.test.ts').replace("'./upload-transfer'",JSON.stringify(transfer))));
 await import(url(compile('../image-compression.test.ts').replace("'./image-compression'",JSON.stringify(url(compile('../image-compression.ts'))))));
 await import(url(compile('../usage-events.test.ts').replace("'./usage-events'",JSON.stringify(url(compile('../usage-events.ts'))))));
+await import(url(compile('../storage-plan.test.ts').replace("'./storage-plan'",JSON.stringify(url(compile('../storage-plan.ts')))).replace("'./storage-cache'",JSON.stringify(url(compile('../storage-cache.ts'))))));
+await import(url(compile('../storage-export.test.ts').replace("'./storage-export'",JSON.stringify(url(compile('../storage-export.ts'))))));

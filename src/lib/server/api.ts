@@ -1,5 +1,7 @@
 import 'server-only';
 import {prepareHomeworkUpload} from './homework-uploads';
+import {stableReadUrl} from './signed-urls';
+import {assertTeacherStorage} from './teacher-storage';
 import {createVideoSubmission,studentVideoJobs,videoConfig} from './video-submissions';
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
@@ -8,7 +10,7 @@ import { assignmentSubmissionType } from '../assignment-submission';
 import { auth, bucket, db } from './admin';
 import { getAiOperations } from './ai';
 import { assertOrigin, contextForUid, cookieName, getContext, requireStudent, requireTeacher, type Context } from './auth';
-import { ApiError, canDisableUser, canManageClass, canUseUpload, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
+import { ApiError, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
 import {awardHomeworkPoints} from './points';
 import {pointBalance, pointSettings, wardrobeOutfit} from './points-policy';
 import {normalizeStudentCode, validStudentCode} from '../student-entry-code';
@@ -55,8 +57,8 @@ function publicStudent(doc: FirebaseFirestore.DocumentSnapshot) {
 }
 async function withFileUrls(submission: Data): Promise<Data> {
   const uploads = await Promise.all((submission.uploads ?? []).map(async (upload: Data) => {
-    const [url] = await bucket().file(upload.path).getSignedUrl({ action: 'read', expires: Date.now() + 15 * 60 * 1000 });
-    const thumbnailUrl=upload.thumbnailPath?(await bucket().file(upload.thumbnailPath).getSignedUrl({action:'read',expires:Date.now()+15*60*1000}))[0]:undefined;
+    const url = await stableReadUrl(upload.path);
+    const thumbnailUrl=upload.thumbnailPath?await stableReadUrl(upload.thumbnailPath):undefined;
     return { ...upload, url, ...(thumbnailUrl?{thumbnailUrl}:{}) };
   }));
   return { ...submission, uploads };
@@ -315,7 +317,9 @@ async function initUpload(request: Request) {
   const assignmentId = id(input.assignmentId);
   const assignment = await assignmentForStudent(ctx, assignmentId);
   const { contentType, size } = uploadPolicy(input.contentType, input.size, assignment.submissionType);
-  const transfer = await prepareHomeworkUpload(ctx.uid, {studentId: ctx.studentId, classId: ctx.classId, assignmentId, fileName: text(input.fileName, '파일 이름', 255), contentType, size, requestId: input.requestId}, new URL(request.url).origin);
+  const thumbnailSize = homeworkThumbnailSize(contentType, input.thumbnailSize);
+  await assertTeacherStorage(assignment.ownerUid, size + (thumbnailSize ?? 0));
+  const transfer = await prepareHomeworkUpload(ctx.uid, {studentId: ctx.studentId, classId: ctx.classId, assignmentId, fileName: text(input.fileName, '파일 이름', 255), contentType, size, ...(thumbnailSize ? {thumbnailSize} : {}), requestId: input.requestId}, new URL(request.url).origin);
   return json(transfer, 201);
 }
 async function finalize(request: Request) {
@@ -343,7 +347,10 @@ async function finalize(request: Request) {
     uploadPolicy(value.contentType, value.size, assignment.submissionType);
     const [metadata] = await bucket().file(value.path).getMetadata().catch(() => { throw new ApiError(409, '아직 파일 전송 중이에요. 잠시 뒤 다시 제출해 주세요.', 'UPLOAD_INCOMPLETE'); });
     if (Number(metadata.size) !== value.size || metadata.contentType !== value.contentType) throw new ApiError(400, '파일 정보가 달라요. 다시 올려 주세요.', 'UPLOAD_MISMATCH');
-    return { id: doc.id, path: value.path, fileName: value.fileName, contentType: value.contentType, size: value.size };
+    // The preview is optional: a missing or mismatched one just falls back to the full photo.
+    const thumbnail = value.thumbnailPath ? (await bucket().file(value.thumbnailPath).getMetadata().catch(() => [null]))[0] : null;
+    const thumbnailPath = thumbnail && Number(thumbnail.size) === value.thumbnailSize && thumbnail.contentType === 'image/jpeg' ? value.thumbnailPath : undefined;
+    return { id: doc.id, path: value.path, fileName: value.fileName, contentType: value.contentType, size: value.size, ...(thumbnailPath ? {thumbnailPath, thumbnailSize: value.thumbnailSize} : {}) };
   }));
   const profile = await studentProfile(ctx);
   const attemptId = randomUUID();
@@ -355,7 +362,7 @@ async function finalize(request: Request) {
     const submission = { id: ref.id, assignmentId, classId: ctx.classId, studentId: ctx.studentId, studentName: profile.name, text: answer, uploads, attemptId, attemptNumber: (old?.attemptNumber ?? 0) + 1, status: 'submitted', feedback: '', submittedAt: now(), reviewedAt: null, fingerprint, rewardGranted: !!old?.rewardGranted };
     tx.set(ref, submission);
     tx.create(ref.collection('attempts').doc(attemptId), submission);
-    uploadDocs.forEach(doc => {tx.update(doc.ref, {status:'submitted',submissionId:ref.id});if(assignment.ownerUid)tx.set(db().doc(`uploadTransferStats/homework_${doc.id}`),{ownerUid:assignment.ownerUid,bytes:doc.data()!.size,month:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).format(new Date()),createdAt:now(),source:'homework'});});
+    uploadDocs.forEach((doc, index) => {tx.update(doc.ref, {status:'submitted',submissionId:ref.id,storedBytes:uploads[index].size+(uploads[index].thumbnailSize??0)});if(assignment.ownerUid)tx.set(db().doc(`uploadTransferStats/homework_${doc.id}`),{ownerUid:assignment.ownerUid,bytes:doc.data()!.size,month:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).format(new Date()),createdAt:now(),source:'homework'});});
     tx.update(db().doc(`assignments/${assignmentId}`), { submittedCount: FieldValue.increment(old ? 0 : 1), reviewedCount: FieldValue.increment(old && old.status !== 'submitted' ? -1 : 0) });
     return submission;
   });

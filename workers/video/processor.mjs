@@ -26,8 +26,8 @@ export async function processVideoJob({db,bucket},jobId,retryVersion=0){
  if(!size||size>50*1024**2)throw new MediaError('VIDEO_OUTPUT_SIZE',true);
  await update('save');
  const outputPath=`processed-videos/${job.userUid}/${job.id}/video.mp4`,thumbnailPath=`processed-videos/${job.userUid}/${job.id}/thumbnail.jpg`;
- await bucket.upload(output,{destination:outputPath,resumable:false,metadata:{contentType:'video/mp4',cacheControl:'private,no-store',metadata:{videoJobId:job.id}}});
- await bucket.upload(thumb,{destination:thumbnailPath,resumable:false,metadata:{contentType:'image/jpeg',cacheControl:'private,no-store'}});
+ await bucket.upload(output,{destination:outputPath,resumable:false,metadata:{contentType:'video/mp4',cacheControl:'private,max-age=86400',metadata:{videoJobId:job.id}}});
+ await bucket.upload(thumb,{destination:thumbnailPath,resumable:false,metadata:{contentType:'image/jpeg',cacheControl:'private,max-age=86400'}});
  await db.runTransaction(async tx=>{const current=await tx.get(ref);if(current.data()?.leaseToken!==token||current.data()?.retryVersion!==retryVersion)throw new MediaError('VIDEO_SUPERSEDED');tx.update(ref,{stagedOutputBytes:size+thumbnailBytes});tx.update(db.doc(`uploads/${job.id}`),{stagedOutputBytes:size+thumbnailBytes});});
  await bucket.file(outputPath).download({destination:readback,validation:'crc32c'});
  if(await hashFile(output)!==await hashFile(readback))throw new MediaError('VIDEO_VERIFY_FAILED',true);

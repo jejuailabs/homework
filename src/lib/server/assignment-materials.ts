@@ -5,12 +5,16 @@ import {NextResponse} from 'next/server';
 import sharp from 'sharp';
 import {bucket, db} from './admin';
 import {cancelUploadTransfer, createUploadTransfer} from './upload-transfer';
+import {stableReadUrl} from './signed-urls';
+import {FILE_CACHE_CONTROL} from '../storage-cache';
+import {FEATURE_STORAGE_CEILING} from '../storage-plan';
+import {assertTeacherStorage} from './teacher-storage';
 import {assertOrigin, requireTeacher, type Context} from './auth';
 import {ApiError, canManageClass, id, text} from './policy';
 import {ASSIGNMENT_MATERIAL_LIMIT, validAssignmentMaterial, type AssignmentMaterial} from '../assignment-materials';
 
 type StoredMaterial = AssignmentMaterial & {ownerUid: string; userUid: string; classId: string; path: string; status: string; assignmentId?: string; expiresAt: Timestamp; uploadUrl?: string; boardReferences?: number};
-const quotaLimit = 5 * 1024 ** 3;
+const quotaLimit = FEATURE_STORAGE_CEILING;
 const json = (value: unknown, status = 200) => NextResponse.json(value, {status, headers: {'Cache-Control': 'private,no-store'}});
 const uploadRef = (uploadId: string) => db().doc(`assignmentMaterials/${id(uploadId)}`);
 const quotaRef = (uid: string) => db().doc(`assignmentStorage/${uid}`);
@@ -87,7 +91,7 @@ export async function signedAssignmentMaterials(materials: AssignmentMaterial[] 
   return Promise.all(materials.map(async material => {
     const doc = await uploadRef(material.id).get(), value = doc.data() as StoredMaterial | undefined;
     if (!value || value.status !== 'attached') return {...material, url: undefined};
-    const [url] = await bucket().file(value.path).getSignedUrl({action: 'read', expires: Date.now() + 15 * 60_000});
+    const url = await stableReadUrl(value.path);
     return {...publicMaterial(value), url};
   }));
 }
@@ -105,9 +109,10 @@ export async function handleAssignmentMaterials(request: Request, uploadId?: str
       await cleanupExpired(ctx);
       const uploadId = randomUUID(), path = `assignment-materials/${ctx.uid}/${uploadId}/file`, ref = uploadRef(uploadId);
       const value = {id: uploadId, ownerUid: ctx.uid, userUid: ctx.uid, classId, path, status: 'pending', fileName: text(input.fileName, '파일 이름', 255), contentType: input.contentType as string, size: input.size as number, createdAt: new Date().toISOString(), expiresAt: Timestamp.fromMillis(Date.now() + 3600_000)};
+      await assertTeacherStorage(ctx.uid, value.size);
       await db().runTransaction(async tx => {
         const quota = await tx.get(quotaRef(ctx.uid)), reserved = quota.data()?.reservedBytes ?? 0;
-        if (reserved + value.size > quotaLimit) throw new ApiError(409, '숙제 자료 보관 공간(5GB)이 부족해요.', 'MATERIAL_QUOTA');
+        if (reserved + value.size > quotaLimit) throw new ApiError(409, '자료 전송 대기 용량이 너무 커요. 잠시 뒤 다시 올려 주세요.', 'MATERIAL_QUOTA');
         tx.set(quota.ref, {reservedBytes: reserved + value.size}, {merge: true}); tx.create(ref, value);
       });
       try {const transfer=await createUploadTransfer(path,value.contentType,value.size,new URL(request.url).origin);await ref.update({uploadUrl:transfer.uploadUrl});return json({uploadId,path,...transfer},201);}catch(error){await removeStaged(ctx,uploadId);throw error;}
@@ -117,7 +122,7 @@ export async function handleAssignmentMaterials(request: Request, uploadId?: str
     if (value.status !== 'pending' || value.expiresAt.toMillis() <= Date.now()) throw new ApiError(409, '자료를 다시 올려 주세요.', 'MATERIAL_EXPIRED');
     const file = bucket().file(value.path);
     const [metadata] = await file.getMetadata().catch(() => {throw new ApiError(409, '아직 전송 중이에요.', 'UPLOAD_INCOMPLETE');});
-    await file.setMetadata({cacheControl: 'private,no-store', metadata: {firebaseStorageDownloadTokens: null}});
+    await file.setMetadata({cacheControl: FILE_CACHE_CONTROL, metadata: {firebaseStorageDownloadTokens: null}});
     if (Number(metadata.size) !== value.size || metadata.contentType !== value.contentType) throw new ApiError(400, '파일 정보가 달라요.', 'UPLOAD_MISMATCH');
     if (value.contentType.startsWith('image/')) {
       try {const [bytes] = await file.download(); const info = await sharp(bytes, {limitInputPixels: 40_000_000}).metadata(); if (!info.width || !info.height || !['jpeg', 'png', 'webp'].includes(info.format || '')) throw new Error();}

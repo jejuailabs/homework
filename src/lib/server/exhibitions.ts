@@ -5,6 +5,9 @@ import { FieldPath, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import sharp, { type Metadata } from 'sharp';
 import { bucket, db } from './admin';
 import {awaitUploadTransfer, cancelUploadTransfer, createUploadTransfer} from './upload-transfer';
+import {stableReadUrl} from './signed-urls';
+import {assertTeacherStorage} from './teacher-storage';
+import {FILE_CACHE_CONTROL} from '../storage-cache';
 import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, canManageClass, id, text } from './policy';
 import {
@@ -68,11 +71,7 @@ function studentValue(snapshot: FirebaseFirestore.DocumentSnapshot): ExhibitionS
   return { id: snapshot.id, name: value.name, number: value.number, character: value.character ?? 'cat', xp: value.xp ?? 0 };
 }
 async function signedArtwork(ctx: Context, exhibition: Exhibition, value: Data, ownReaction?: string): Promise<ExhibitionArtwork> {
-  const expires = Date.now() + 15 * 60_000;
-  const [[url], [thumbnailUrl]] = await Promise.all([
-    bucket().file(value.displayPath).getSignedUrl({ action: 'read', expires }),
-    bucket().file(value.thumbnailPath).getSignedUrl({ action: 'read', expires }),
-  ]);
+  const [url, thumbnailUrl] = await Promise.all([stableReadUrl(value.displayPath), stableReadUrl(value.thumbnailPath)]);
   // Never expose original storage paths, tokenized URLs, uploader UIDs, or private manifests.
   return {
     id: value.id, exhibitionId: value.exhibitionId, studentId: value.studentId, artistName: value.artistName ?? value.studentName ?? '', artworkDate: value.artworkDate ?? artworkToday(new Date(value.createdAt)),
@@ -284,6 +283,7 @@ async function initUpload(ctx: Context, exhibition: Exhibition, request: Request
   const same = await ref.get(); if(same.data()?.status==='cleanup') await cleanupUpload(exhibition.ownerUid,uploadId,undefined,true);
   await cleanupOwnerUploads(exhibition.ownerUid);
   const reservedBytes = size + EXHIBITION_DERIVATIVE_RESERVATION, expiresAt = Timestamp.fromMillis(Date.now() + 3_600_000);
+  await assertTeacherStorage(exhibition.ownerUid, reservedBytes);
   let existing = await uploadTransaction(async tx => {
     const quota = await tx.get(quotaRef(exhibition.ownerUid));
     const fresh = await tx.get(exhibitionRef(exhibition.id));
@@ -335,7 +335,7 @@ async function prepareImage(uploadId: string, upload: Data, processingToken: str
     display = await image.clone().rotate().resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true }).webp({ quality: 86 }).toBuffer();
     thumbnail = await image.clone().rotate().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).webp({ quality: 78 }).toBuffer();
   } catch { throw new ApiError(400, '손상된 사진이에요. 다른 사진으로 다시 올려 주세요.', 'IMAGE_INVALID'); }
-  const options = { resumable: false, metadata: { contentType: 'image/webp', cacheControl: 'private,max-age=300' } };
+  const options = { resumable: false, metadata: { contentType: 'image/webp', cacheControl: FILE_CACHE_CONTROL } };
   const lease = (await db().doc(`exhibitionUploads/${uploadId}`).get()).data();
   if (lease?.status !== 'processing' || lease.processingToken !== processingToken || lease.cleanupAt.toMillis() <= Date.now()) throw new ApiError(409, '사진 처리가 만료되었어요. 다시 올려 주세요.', 'UPLOAD_EXPIRED');
   const storedBytes = upload.size + display.length + thumbnail.length;
@@ -603,8 +603,7 @@ export async function publicExhibition(request: Request, token: string) {
     const room = await exhibitionRef(link.data()!.exhibitionId).get(), value = room.data();
     if (!room.exists || value?.publicSharingEnabled !== true || !['open', 'closed'].includes(value.status)) throw new ApiError(404, '전시실이 아직 공개되지 않았거나 공유가 종료됐어요.', 'NOT_FOUND');
     const works = await room.ref.collection('artworks').where('status', '==', 'approved').limit(EXHIBITION_ARTWORK_LIMIT).get();
-    const expires = Date.now() + 15 * 60_000;
-    const artworks = await Promise.all(works.docs.map(async doc => {const art = doc.data(); const [[url], [thumbnailUrl]] = await Promise.all([bucket().file(art.displayPath).getSignedUrl({action: 'read', expires}), bucket().file(art.thumbnailPath).getSignedUrl({action: 'read', expires})]);return {id: doc.id, title: art.title, artistName: art.artistName || art.studentName || '', artworkDate: art.artworkDate || artworkToday(new Date(art.createdAt)), description: art.description, width: art.width, height: art.height, url, thumbnailUrl};}));
+    const artworks = await Promise.all(works.docs.map(async doc => {const art = doc.data(); const [url, thumbnailUrl] = await Promise.all([stableReadUrl(art.displayPath), stableReadUrl(art.thumbnailPath)]);return {id: doc.id, title: art.title, artistName: art.artistName || art.studentName || '', artworkDate: art.artworkDate || artworkToday(new Date(art.createdAt)), description: art.description, width: art.width, height: art.height, url, thumbnailUrl};}));
     const fresh = await room.ref.get();
     if (fresh.data()?.publicSharingEnabled !== true || !['open', 'closed'].includes(fresh.data()?.status)) throw new ApiError(404, '공유가 종료됐어요.', 'NOT_FOUND');
     return json({exhibition: {id: room.id, title: value.title, description: value.description, theme: value.theme, allowStudentUploads: value.allowStudentUploads === true && value.status === 'open', artworkModules: {...effectiveOptions(value.artworkModules),voice:{...effectiveOptions(value.artworkModules).voice,enabled:effectiveOptions(value.artworkModules).voice.enabled&&effectiveOptions(value.artworkModules).voice.publicAudio}}}, artworks});

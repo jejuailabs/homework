@@ -115,7 +115,8 @@ test('encouragement counts replace prior choices and do not grow on retries', ()
   assert.deepEqual(nextReactionCounts(otherChild, 'story', 'idea'), { colors: 0, idea: 1, story: 1 });
 });
 test('storage quota is bounded, counts pending originals and leaves no unlimited setting', () => {
-  assert.equal(exhibitionStorageLimit(undefined), 5 * 1024 ** 3);
+  // The teacher's 200GB plan is the real limit; the gallery ledger only keeps a ceiling.
+  assert.equal(exhibitionStorageLimit(undefined), 1024 ** 4);
   assert.equal(exhibitionStorageLimit(String(100 * 1024 ** 2)), 100 * 1024 ** 2);
   assert.equal(exhibitionStorageLimit(String(1024 ** 4)), 1024 ** 4);
   for (const value of ['unlimited', 'Infinity', '-1', '0', 100 * 1024 ** 2 - 1, 1024 ** 4 + 1]) assert.throws(() => exhibitionStorageLimit(value));

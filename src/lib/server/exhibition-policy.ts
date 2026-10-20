@@ -7,7 +7,8 @@ export const EXHIBITION_IMAGE_LIMIT = 100 * 1024 * 1024;
 export const EXHIBITION_PIXEL_LIMIT = 40_000_000;
 export const EXHIBITION_DERIVATIVE_RESERVATION = 16 * 1024 * 1024;
 export function exhibitionStorageLimit(raw: unknown) {
-  if (raw === undefined || raw === '') return 5 * 1024 ** 3;
+  // The teacher's plan is the real limit; this per-gallery ledger only needs a ceiling.
+  if (raw === undefined || raw === '') return 1024 ** 4;
   const value = typeof raw === 'string' ? Number(raw) : raw;
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 100 * 1024 ** 2 || value > 1024 ** 4) throw new ApiError(500, '전시 저장 공간 설정을 확인해 주세요.', 'STORAGE_CONFIGURATION');
   return value;

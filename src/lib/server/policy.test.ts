@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes } from '../assignment-submission';
-import { validSessionAuthentication, ApiError, canDisableUser, canManageClass, canUseUpload, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
+import { validSessionAuthentication, ApiError, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
 
 test('teacher and platform administrator class access always requires ownership', () => {
   for (const role of ['teacher', 'admin', 'superadmin'] as const) {
@@ -116,4 +116,10 @@ test('session revocation keeps exact Firebase authentication-time boundaries and
   assert(validSessionAuthentication(101,'1970-01-01T00:01:40.000Z'));
   for(const value of [undefined,null,'100',NaN,1.5,-1])assert(!validSessionAuthentication(value));
   assert(!validSessionAuthentication(100,'invalid'));
+});
+test('a phone-made photo preview is optional, photo-only and capped at 300KB', () => {
+  assert.equal(homeworkThumbnailSize('image/jpeg', undefined), undefined);
+  assert.equal(homeworkThumbnailSize('video/mp4', 1000), undefined);
+  assert.equal(homeworkThumbnailSize('image/jpeg', 30_000), 30_000);
+  for (const bad of [0, -1, 1.5, 300 * 1024 + 1, '30000']) assert.throws(() => homeworkThumbnailSize('image/jpeg', bad));
 });

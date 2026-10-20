@@ -1,12 +1,13 @@
 import 'server-only';
 import {bucket} from './admin';
 import {ApiError} from './policy';
+import {FILE_CACHE_CONTROL} from '../storage-cache';
 
 /** The validated web session grants one exact-size object upload. The browser
  * no longer needs a second, independently persisted Firebase Auth session. */
 export async function createUploadTransfer(path: string, contentType: string, size: number, origin: string) {
   const [uploadUrl] = await bucket().file(path).createResumableUpload({
-    origin, metadata: {contentType, contentLength: size, cacheControl: 'private,no-store'}, preconditionOpts: {ifGenerationMatch: 0},
+    origin, metadata: {contentType, contentLength: size, cacheControl: FILE_CACHE_CONTROL}, preconditionOpts: {ifGenerationMatch: 0},
   });
   return {uploadUrl, uploadHeaders: {'Content-Type': contentType}};
 }

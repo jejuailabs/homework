@@ -56,3 +56,9 @@ export function nextReview(status: unknown, alreadyRewarded: boolean) {
   if (status !== 'done' && status !== 'revision') throw new ApiError(400, '확인 상태를 선택해 주세요.');
   return { status, reward: status === 'done' && !alreadyRewarded ? 10 : 0 };
 }
+/** A phone-made JPEG preview is accepted only alongside a photo and only while it stays small. */
+export function homeworkThumbnailSize(contentType: string, raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || !contentType.startsWith('image/')) return undefined;
+  if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw <= 0 || raw > 300 * 1024) throw new ApiError(400, '미리보기 사진 정보를 확인해 주세요.', 'THUMBNAIL_SIZE');
+  return raw;
+}

@@ -7,7 +7,8 @@ type Board = { ownerUid: string; classId: string; status: string; revealMode?: b
 type Post = { authorUid: string; status: string; deleted?: boolean };
 export const BOARD_POST_LIMIT = 500;
 export const BOARD_PAGE_LIMIT = 100;
-export const BOARD_STORAGE_LIMIT = 5 * 1024 ** 3;
+// The teacher's plan is the real limit; the board ledger keeps accounting under this ceiling.
+export const BOARD_STORAGE_LIMIT = 1024 ** 4;
 export const isBoardOwner = (actor: Actor, board: Board) => actor.role !== 'student' && actor.uid === board.ownerUid;
 export const canViewBoard = (actor: Actor, board: Board) => isBoardOwner(actor, board) || (actor.role === 'student' && actor.classId === board.classId && board.status !== 'archived');
 export const canWriteBoard = (actor: Actor, board: Board) => isBoardOwner(actor, board) || (canViewBoard(actor, board) && board.status === 'open');

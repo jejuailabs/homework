@@ -8,6 +8,9 @@ import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, canManageClass, id, text } from './policy';
 import { BOARD_PAGE_LIMIT, BOARD_POST_LIMIT, BOARD_STORAGE_LIMIT, assertBoardOwner, assertBoardWrite, boardPostInput, boardSettings, boardUploadPolicy, canViewBoard, canViewBoardComment, canViewBoardPost, canWriteBoard, changedReaction, isBoardOwner } from './participation-policy';
 import type { BoardAttachment, BoardAuthor, BoardComment, BoardPost, ParticipationBoard } from '../participation-types';
+import {stableReadUrl} from './signed-urls';
+import {assertTeacherStorage} from './teacher-storage';
+import {FILE_CACHE_CONTROL} from '../storage-cache';
 
 type Data = Record<string, any>;
 type StoredBoard = Data & { id: string; ownerUid: string; classId: string; status: string };
@@ -54,9 +57,8 @@ function publicAuthor(ctx: Context, board: StoredBoard, item: Data): BoardAuthor
   };
 }
 async function attachmentView(value: Data): Promise<BoardAttachment> {
-  const expires = Date.now() + 15 * 60_000;
-  const [url] = await bucket().file(value.path).getSignedUrl({ action: 'read', expires, responseDisposition: value.kind === 'file' ? `attachment; filename*=UTF-8''${encodeURIComponent(value.name)}` : 'inline' });
-  const thumbnailUrl = value.thumbnailPath ? (await bucket().file(value.thumbnailPath).getSignedUrl({ action: 'read', expires }))[0] : undefined;
+  const url = await stableReadUrl(value.path, { responseDisposition: value.kind === 'file' ? `attachment; filename*=UTF-8''${encodeURIComponent(value.name)}` : 'inline' });
+  const thumbnailUrl = value.thumbnailPath ? await stableReadUrl(value.thumbnailPath) : undefined;
   return { id: value.id, name: value.name, contentType: value.contentType, size: value.size, kind: value.kind, url, ...(thumbnailUrl ? { thumbnailUrl } : {}) };
 }
 async function postView(ctx: Context, board: StoredBoard, value: Data, engagement?: Data | null): Promise<BoardPost> {
@@ -428,6 +430,7 @@ async function initUpload(ctx: Context, board: StoredBoard, request: Request) {
   const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
   const reserve = policy.size + (policy.kind === 'image' ? 4 * 1024 ** 2 : 0);
   await cleanupUploads(board);
+  await assertTeacherStorage(board.ownerUid, reserve);
   const value = await db().runTransaction(async tx => {
     const [freshDoc, existing, quota] = await Promise.all([tx.get(boardRef(board.id)), tx.get(ref), tx.get(quotaRef(board.ownerUid))]);
     assertBoardWrite(ctx, asBoard(freshDoc));
@@ -503,9 +506,9 @@ async function finalizeUpload(ctx: Context, board: StoredBoard, uploadId: string
       if (info.format !== expected[value.contentType]) throw new ApiError(400, '사진 형식을 확인해 주세요.');
       const thumbnail = await processor.rotate().resize({ width: 640, height: 640, fit: 'inside', withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
       actualBytes += thumbnail.byteLength;
-      await reuseImmutable(thumbnailPath, () => bucket().file(thumbnailPath).save(thumbnail, { resumable: false, preconditionOpts: { ifGenerationMatch: 0 }, metadata: { contentType: 'image/webp', cacheControl: 'private,max-age=300', metadata: { sourceGeneration } } }));
+      await reuseImmutable(thumbnailPath, () => bucket().file(thumbnailPath).save(thumbnail, { resumable: false, preconditionOpts: { ifGenerationMatch: 0 }, metadata: { contentType: 'image/webp', cacheControl: FILE_CACHE_CONTROL, metadata: { sourceGeneration } } }));
     }
-    await reuseImmutable(path, () => immutableSource.copy(bucket().file(path), { preconditionOpts: { ifGenerationMatch: 0 }, contentType: value.contentType, cacheControl: 'private,max-age=300', metadata: { sourceGeneration, firebaseStorageDownloadTokens: null } }));
+    await reuseImmutable(path, () => immutableSource.copy(bucket().file(path), { preconditionOpts: { ifGenerationMatch: 0 }, contentType: value.contentType, cacheControl: FILE_CACHE_CONTROL, metadata: { sourceGeneration, firebaseStorageDownloadTokens: null } }));
     const stored = await db().runTransaction(async tx => {
       const [snapshot, quota, freshDoc] = await Promise.all([tx.get(ref), tx.get(quotaRef(board.ownerUid)), tx.get(boardRef(board.id))]);
       if (snapshot.data()?.lease !== lease || snapshot.data()?.status !== 'processing') throw new ApiError(409, '파일 처리 상태가 바뀌었어요. 다시 확인해 주세요.');

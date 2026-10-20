@@ -36,7 +36,7 @@ function VideoPreview({url, name,poster,usageId}: {url: string; name: string;pos
   const t = useTranslations("product");
   const [failed, setFailed] = useState(false);
   useEffect(() => {setFailed(false);}, [url]);
-  return <div className="sd-video-preview"><video src={url} poster={poster} controls playsInline preload="metadata" aria-label={name} onPlay={() => {if (usageId) countUsageOnce("videoPlay", usageId);}} onError={() => setFailed(true)}/>{failed && <p className="ws-small" role="status">{t("student.videoPreviewUnavailable")}</p>}</div>;
+  return <div className="sd-video-preview"><video src={url} poster={poster} controls playsInline preload={usageId ? "none" : "metadata"} aria-label={name} onPlay={() => {if (usageId) countUsageOnce("videoPlay", usageId);}} onError={() => setFailed(true)}/>{failed && <p className="ws-small" role="status">{t("student.videoPreviewUnavailable")}</p>}</div>;
 }
 
 function SubmittedImage({upload, onRefresh}: {upload: Upload; onRefresh: () => Promise<void>}) {
@@ -50,7 +50,7 @@ function SubmittedImage({upload, onRefresh}: {upload: Upload; onRefresh: () => P
     try {await onRefresh(); setFailed(false); setAttempt(value => value + 1);}
     finally {setRefreshing(false);}
   }
-  return <>{upload.url && !failed && <a className="sd-submitted-image" href={upload.url} target="_blank" rel="noopener noreferrer" aria-label={t("common.openFile", {name: upload.fileName})}><img key={`${upload.url}-${attempt}`} src={upload.url} alt={upload.fileName} decoding="async" onLoad={() => countUsageOnce("imageView", upload.id)} onError={() => setFailed(true)}/><span><Images size={15}/>{t("student.enlargeImage")}<ArrowRight size={15}/></span></a>}{(!upload.url || failed) && <div className="sd-image-unavailable"><Images size={26}/><p>{t("student.imagePreviewUnavailable")}</p><button className="ws-button ws-button-light" type="button" disabled={refreshing} onClick={() => void retry()}>{refreshing ? <LoaderCircle size={16} className="ws-spin"/> : <RefreshCw size={16}/>} {t("student.reloadImage")}</button></div>}</>;
+  return <>{upload.url && !failed && <a className="sd-submitted-image" href={upload.url} target="_blank" rel="noopener noreferrer" aria-label={t("common.openFile", {name: upload.fileName})}><img key={`${upload.url}-${attempt}`} src={upload.thumbnailUrl || upload.url} alt={upload.fileName} loading="lazy" decoding="async" onLoad={() => countUsageOnce("imageView", upload.id)} onError={() => setFailed(true)}/><span><Images size={15}/>{t("student.enlargeImage")}<ArrowRight size={15}/></span></a>}{(!upload.url || failed) && <div className="sd-image-unavailable"><Images size={26}/><p>{t("student.imagePreviewUnavailable")}</p><button className="ws-button ws-button-light" type="button" disabled={refreshing} onClick={() => void retry()}>{refreshing ? <LoaderCircle size={16} className="ws-spin"/> : <RefreshCw size={16}/>} {t("student.reloadImage")}</button></div>}</>;
 }
 
 function SubmittedFiles({uploads, revision, onRefresh}: {uploads: Upload[]; revision: boolean; onRefresh: () => Promise<void>}) {
@@ -104,7 +104,7 @@ export default function StudentWorkspace() {
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadCache = useRef<Map<File, string>>(new Map());
   // Keyed by the chosen original so a retry re-sends the same resized photo instead of re-encoding it.
-  const resizedImages = useRef(new WeakMap<File, File>());
+  const resizedImages = useRef(new WeakMap<File, {file: File; thumbnail?: File}>());
   const uploadKeys = useRef(new WeakMap<File,string>()), stagedUploads = useRef(new Set<string>()), transferAbort = useRef<AbortController|null>(null), sendingRef = useRef(false);
   useEffect(()=>()=>{transferAbort.current?.abort(); stagedUploads.current.forEach(uploadId=>{void discardUpload(`/api/uploads/${uploadId}`).catch(()=>{});});},[]);
 
@@ -191,19 +191,23 @@ export default function StudentWorkspace() {
         if (cached) {uploadIds.push(cached); setProgress(Math.round(((index + 1) / files.length) * 100)); continue;}
         // One photo at a time, just before its upload: a low-end phone never holds
         // more than one decoded photo, and a slow resize falls back to the original.
-        let outgoing = resizedImages.current.get(file) ?? file;
-        if (outgoing === file && contentType(file).startsWith("image/")) {
+        let prepared = resizedImages.current.get(file);
+        if (!prepared && contentType(file).startsWith("image/")) {
           setPreparing({current: images.indexOf(file) + 1, total: images.length});
           const result = await compressImage(file, contentType(file));
-          outgoing = result.file; resizedImages.current.set(file, outgoing); setPreparing(null);
+          prepared = {file: result.file, thumbnail: result.thumbnail}; resizedImages.current.set(file, prepared); setPreparing(null);
+          const outgoing = result.file;
           countUsage(compressionCounter[result.reason]); countUsage("imageBytesIn", file.size); countUsage("imageBytesOut", outgoing.size);
           if (!["small", "unsupported", "too-large"].includes(result.reason)) countUsage("imageCompressMs", result.ms);
         }
+        const outgoing = prepared?.file ?? file, thumbnail = prepared?.thumbnail;
         const requestId = uploadKeys.current.get(file) || crypto.randomUUID(); uploadKeys.current.set(file,requestId);
-        const upload = await request<UploadTransfer>("/api/uploads/init", {method:"POST",body:JSON.stringify({requestId,assignmentId:selected.id,fileName:outgoing.name,contentType:contentType(outgoing),size:outgoing.size})});
+        const upload = await request<UploadTransfer>("/api/uploads/init", {method:"POST",body:JSON.stringify({requestId,assignmentId:selected.id,fileName:outgoing.name,contentType:contentType(outgoing),size:outgoing.size,...(thumbnail?{thumbnailSize:thumbnail.size}:{})})});
         stagedUploads.current.add(upload.uploadId);
         const controller=new AbortController();transferAbort.current=controller;
         await sendUpload(upload,outgoing,fraction=>setProgress(Math.round((index+fraction)/files.length*100)),controller.signal);
+        // Best effort: without the preview, lists simply show the full photo.
+        if (thumbnail && upload.thumbnail) await sendUpload({...upload, ...upload.thumbnail}, thumbnail, () => {}, controller.signal).catch(() => {});
         uploadCache.current.set(file, upload.uploadId); uploadIds.push(upload.uploadId);
       }
       if(submissionType==='video')setVideoHandoff(true);
@@ -228,7 +232,7 @@ export default function StudentWorkspace() {
       } else if (code === "SUBMISSION_FILE_TYPE") {
         setFormError(t("student.wrongSubmissionType"));
       } else {
-        setFormError(t(["UPLOAD_NETWORK","UPLOAD_TIMEOUT"].includes(code) ? (submissionType==="video"?"student.videoTransferFailed":"student.uploadNetwork") : ["UNAUTHENTICATED","CODE_RESET"].includes(code) ? "student.uploadSignIn" : code === "not_configured" ? "student.notConfigured" : code === "FILE_SIZE" ? "student.fileTooLarge" : code === "FILE_TYPE" ? "student.unsupportedFile" : code === "UPLOAD_INCOMPLETE" ? "student.uploadIncomplete" : "common.error"));
+        setFormError(t(["UPLOAD_NETWORK","UPLOAD_TIMEOUT"].includes(code) ? (submissionType==="video"?"student.videoTransferFailed":"student.uploadNetwork") : ["UNAUTHENTICATED","CODE_RESET"].includes(code) ? "student.uploadSignIn" : code === "not_configured" ? "student.notConfigured" : code === "PLAN_STORAGE_FULL" ? "student.planStorageFull" : code === "FILE_SIZE" ? "student.fileTooLarge" : code === "FILE_TYPE" ? "student.unsupportedFile" : code === "UPLOAD_INCOMPLETE" ? "student.uploadIncomplete" : "common.error"));
       }
     } finally {sendingRef.current=false;transferAbort.current=null;setSending(false);setVideoHandoff(false);setPreparing(null);}
   }

@@ -1,4 +1,4 @@
-export type UploadTransfer = {uploadId: string; path: string; uploadUrl: string; uploadHeaders: Record<string, string>; alreadyUploaded?: boolean};
+export type UploadTransfer = {uploadId: string; path: string; uploadUrl: string; uploadHeaders: Record<string, string>; alreadyUploaded?: boolean; thumbnail?: {uploadUrl: string; uploadHeaders: Record<string, string>; alreadyUploaded?: boolean}};
 export const UPLOAD_STALL_MS = 60_000;
 export class UploadTransferError extends Error {constructor(public code: string) {super(code);}}
 
