@@ -1,4 +1,5 @@
 import 'server-only';
+import {prepareHomeworkUpload} from './homework-uploads';
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore';
@@ -311,10 +312,8 @@ async function initUpload(request: Request) {
   const assignmentId = id(input.assignmentId);
   const assignment = await assignmentForStudent(ctx, assignmentId);
   const { contentType, size } = uploadPolicy(input.contentType, input.size, assignment.submissionType);
-  const uploadId = randomUUID();
-  const path = `uploads/${ctx.uid}/${uploadId}/file`;
-  await db().doc(`uploads/${uploadId}`).create({ userUid: ctx.uid, studentId: ctx.studentId, classId: ctx.classId, assignmentId, path, fileName: text(input.fileName, '파일 이름', 255), contentType, size, status: 'pending', createdAt: now(), expiresAt: Timestamp.fromMillis(Date.now() + 3_600_000) });
-  return json({ uploadId, path }, 201);
+  const transfer = await prepareHomeworkUpload(ctx.uid, {studentId: ctx.studentId, classId: ctx.classId, assignmentId, fileName: text(input.fileName, '파일 이름', 255), contentType, size, requestId: input.requestId}, new URL(request.url).origin);
+  return json(transfer, 201);
 }
 async function finalize(request: Request) {
   const ctx = await requireStudent(request);
@@ -352,7 +351,7 @@ async function finalize(request: Request) {
     const submission = { id: ref.id, assignmentId, classId: ctx.classId, studentId: ctx.studentId, studentName: profile.name, text: answer, uploads, attemptId, attemptNumber: (old?.attemptNumber ?? 0) + 1, status: 'submitted', feedback: '', submittedAt: now(), reviewedAt: null, fingerprint, rewardGranted: !!old?.rewardGranted };
     tx.set(ref, submission);
     tx.create(ref.collection('attempts').doc(attemptId), submission);
-    uploadDocs.forEach(doc => tx.update(doc.ref, { status: 'submitted', submissionId: ref.id }));
+    uploadDocs.forEach(doc => {tx.update(doc.ref, {status:'submitted',submissionId:ref.id});if(assignment.ownerUid)tx.set(db().doc(`uploadTransferStats/homework_${doc.id}`),{ownerUid:assignment.ownerUid,bytes:doc.data()!.size,month:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).format(new Date()),createdAt:now(),source:'homework'});});
     tx.update(db().doc(`assignments/${assignmentId}`), { submittedCount: FieldValue.increment(old ? 0 : 1), reviewedCount: FieldValue.increment(old && old.status !== 'submitted' ? -1 : 0) });
     return submission;
   });

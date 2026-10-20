@@ -4,11 +4,12 @@ import {Timestamp, type Transaction} from 'firebase-admin/firestore';
 import {NextResponse} from 'next/server';
 import sharp from 'sharp';
 import {bucket, db} from './admin';
+import {cancelUploadTransfer, createUploadTransfer} from './upload-transfer';
 import {assertOrigin, requireTeacher, type Context} from './auth';
 import {ApiError, canManageClass, id, text} from './policy';
 import {ASSIGNMENT_MATERIAL_LIMIT, validAssignmentMaterial, type AssignmentMaterial} from '../assignment-materials';
 
-type StoredMaterial = AssignmentMaterial & {ownerUid: string; userUid: string; classId: string; path: string; status: string; assignmentId?: string; expiresAt: Timestamp; boardReferences?: number};
+type StoredMaterial = AssignmentMaterial & {ownerUid: string; userUid: string; classId: string; path: string; status: string; assignmentId?: string; expiresAt: Timestamp; uploadUrl?: string; boardReferences?: number};
 const quotaLimit = 5 * 1024 ** 3;
 const json = (value: unknown, status = 200) => NextResponse.json(value, {status, headers: {'Cache-Control': 'private,no-store'}});
 const uploadRef = (uploadId: string) => db().doc(`assignmentMaterials/${id(uploadId)}`);
@@ -34,6 +35,7 @@ async function removeStaged(ctx: Context, uploadId: string, expiredOnly = false)
   });
   if (!value) return;
   // A cleanup claim prevents finalization or attachment while the exact staging file is removed.
+  await cancelUploadTransfer(value.uploadUrl);
   const file = bucket().file(value.path);
   try {const [metadata] = await file.getMetadata(); await file.delete({ifGenerationMatch: metadata.generation});}
   catch (error) {if ((error as {code?: number}).code !== 404) throw error;}
@@ -49,6 +51,16 @@ async function removeStaged(ctx: Context, uploadId: string, expiredOnly = false)
 async function cleanupExpired(ctx: Context) {
   const candidates = await db().collection('assignmentMaterials').where('ownerUid', '==', ctx.uid).where('expiresAt', '<=', Timestamp.now()).limit(20).get();
   for (const doc of candidates.docs) await removeStaged(ctx, doc.id, true);
+}
+export async function cleanupExpiredAssignmentMaterials() {
+  const candidates=await db().collection('assignmentMaterials').where('expiresAt','<=',Timestamp.now()).limit(100).get();
+  let cleaned=0;
+  for(const doc of candidates.docs) {
+    const value=doc.data();
+    if(['attached','retained','admin-quarantined'].includes(value.status)||value.adminRestoreJobId)continue;
+    try {await removeStaged({uid:value.ownerUid,role:'teacher',email:null,displayName:null},doc.id,true);cleaned++;}catch{console.error('Reference material cleanup deferred');}
+  }
+  return {cleaned,hasMore:candidates.size===100};
 }
 
 /** Called inside the assignment transaction. No client-supplied paths or URLs are accepted. */
@@ -95,12 +107,10 @@ export async function handleAssignmentMaterials(request: Request, uploadId?: str
       const value = {id: uploadId, ownerUid: ctx.uid, userUid: ctx.uid, classId, path, status: 'pending', fileName: text(input.fileName, '파일 이름', 255), contentType: input.contentType as string, size: input.size as number, createdAt: new Date().toISOString(), expiresAt: Timestamp.fromMillis(Date.now() + 3600_000)};
       await db().runTransaction(async tx => {
         const quota = await tx.get(quotaRef(ctx.uid)), reserved = quota.data()?.reservedBytes ?? 0;
-        const hour = Math.floor(Date.now() / 3600_000), count = quota.data()?.hour === hour ? quota.data()?.count ?? 0 : 0;
         if (reserved + value.size > quotaLimit) throw new ApiError(409, '숙제 자료 보관 공간(5GB)이 부족해요.', 'MATERIAL_QUOTA');
-        if (count >= 100) throw new ApiError(429, '자료를 많이 올렸어요. 잠시 뒤 다시 시도해 주세요.', 'RATE_LIMITED');
-        tx.set(quota.ref, {reservedBytes: reserved + value.size, hour, count: count + 1}, {merge: true}); tx.create(ref, value);
+        tx.set(quota.ref, {reservedBytes: reserved + value.size}, {merge: true}); tx.create(ref, value);
       });
-      return json({uploadId, path}, 201);
+      try {const transfer=await createUploadTransfer(path,value.contentType,value.size,new URL(request.url).origin);await ref.update({uploadUrl:transfer.uploadUrl});return json({uploadId,path,...transfer},201);}catch(error){await removeStaged(ctx,uploadId);throw error;}
     }
     const doc = await uploadRef(uploadId).get(), value = doc.data() as StoredMaterial | undefined; owned(ctx, value); await managed(ctx, value.classId);
     if (value.status === 'ready') return json({material: publicMaterial(value)});
@@ -117,7 +127,7 @@ export async function handleAssignmentMaterials(request: Request, uploadId?: str
       const valid = value.contentType === 'video/webm' ? header.subarray(0, 4).equals(Buffer.from([0x1a,0x45,0xdf,0xa3])) : ['ftyp', 'moov', 'mdat', 'wide', 'free'].includes(header.toString('ascii', 4, 8));
       if (!valid) throw new ApiError(400, '영상 파일을 읽을 수 없어요.', 'MATERIAL_FILE_INVALID');
     }
-    await db().runTransaction(async tx => {const fresh = await tx.get(doc.ref); if (fresh.data()?.status !== 'pending' || fresh.data()?.expiresAt.toMillis() <= Date.now()) throw new ApiError(409, '자료 상태가 변경됐어요.'); tx.update(doc.ref, {status: 'ready'});});
+    await db().runTransaction(async tx => {const fresh = await tx.get(doc.ref); if (fresh.data()?.status !== 'pending' || fresh.data()?.expiresAt.toMillis() <= Date.now()) throw new ApiError(409, '자료 상태가 변경됐어요.'); tx.update(doc.ref, {status:'ready'});tx.set(db().doc(`uploadTransferStats/material_${doc.id}`),{ownerUid:ctx.uid,bytes:value.size,month:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).format(new Date()),createdAt:new Date().toISOString(),source:'materials'});});
     return json({material: publicMaterial(value)});
   } catch (error) {
     if (error instanceof ApiError) return json({error: error.message, code: error.code}, error.status);

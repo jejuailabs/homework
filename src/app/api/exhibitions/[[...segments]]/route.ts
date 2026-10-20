@@ -2,7 +2,7 @@ import { handleExhibitions } from '@/lib/server/exhibitions';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 240;
 
 type RouteParams = { params: Promise<{ segments?: string[] }> };
 async function handle(request: Request, context: RouteParams) {
@@ -11,3 +11,4 @@ async function handle(request: Request, context: RouteParams) {
 export const GET = handle;
 export const POST = handle;
 export const PATCH = handle;
+export const DELETE = handle;

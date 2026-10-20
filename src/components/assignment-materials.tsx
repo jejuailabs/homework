@@ -1,9 +1,8 @@
 'use client';
 import {useEffect, useRef, useState} from 'react';
 import {useLocale} from 'next-intl';
-import {ref, uploadBytesResumable, type UploadTask} from 'firebase/storage';
+import {sendUpload} from '@/lib/upload-transfer';
 import {ImagePlus, LoaderCircle, Paperclip, RefreshCw, X} from 'lucide-react';
-import {storage} from '@/lib/firebase-client';
 import {ASSIGNMENT_MATERIAL_LIMIT, assignmentMaterialMime, validAssignmentMaterial, type AssignmentMaterial} from '@/lib/assignment-materials';
 import '@/styles/assignment-materials.css';
 
@@ -23,10 +22,10 @@ export function AssignmentMaterials({materials = [], onRefresh}: {materials?: As
 type Item = {key: string; file?: File; preview?: string; material?: AssignmentMaterial; progress: number; uploading: boolean; error?: string};
 export function AssignmentMaterialEditor({classId, initial = [], onChange, onBusy}: {classId: string; initial?: AssignmentMaterial[]; onChange: (materials: AssignmentMaterial[]) => void; onBusy: (busy: boolean) => void}) {
   const en = useLocale() === 'en', input = useRef<HTMLInputElement>(null), active = useRef(true);
-  const tasks = useRef(new Map<string, UploadTask>()), stagedIds = useRef(new Set<string>()), previews = useRef(new Set<string>());
+  const tasks = useRef(new Map<string, AbortController>()), stagedIds = useRef(new Set<string>()), previews = useRef(new Set<string>());
   const [items, setItems] = useState<Item[]>(() => initial.map(material => ({key: material.id, material, uploading: false, progress: 100})));
   const [error, setError] = useState('');
-  useEffect(() => {active.current = true; return () => {active.current = false; tasks.current.forEach(task => task.cancel()); previews.current.forEach(url => URL.revokeObjectURL(url)); stagedIds.current.forEach(uploadId => {void fetch(`/api/assignment-materials/${uploadId}`, {method: 'DELETE', keepalive: true}).catch(() => {});});};}, []);
+  useEffect(() => {active.current = true; return () => {active.current = false; tasks.current.forEach(task => task.abort()); previews.current.forEach(url => URL.revokeObjectURL(url)); stagedIds.current.forEach(uploadId => {void fetch(`/api/assignment-materials/${uploadId}`, {method: 'DELETE', keepalive: true}).catch(() => {});});};}, []);
   useEffect(() => {onChange(items.flatMap(item => item.material ? [item.material] : [])); onBusy(items.some(item => item.uploading || !item.material));}, [items, onChange, onBusy]);
   const patch = (key: string, patch: Partial<Item>) => {if (active.current) setItems(old => old.map(item => item.key === key ? {...item, ...patch} : item));};
   async function upload(item: Item) {
@@ -38,13 +37,13 @@ export function AssignmentMaterialEditor({classId, initial = [], onChange, onBus
       const prepared = await api('/api/assignment-materials', {classId, fileName: item.file.name, contentType, size: item.file.size});
       uploadId = prepared.uploadId; stagedIds.current.add(uploadId!);
       if (!active.current) {await api(`/api/assignment-materials/${uploadId}`, undefined, 'DELETE'); return;}
-      const task = uploadBytesResumable(ref(storage, prepared.path), item.file, {contentType}); tasks.current.set(item.key, task);
-      await new Promise<void>((resolve, reject) => task.on('state_changed', snapshot => patch(item.key, {progress: Math.round(snapshot.bytesTransferred / snapshot.totalBytes * 95)}), reject, resolve));
+      const task = new AbortController(); tasks.current.set(item.key,task);
+      await sendUpload(prepared,item.file,fraction=>patch(item.key,{progress:Math.round(fraction*95)}),task.signal);
       const completed = await api(`/api/assignment-materials/${uploadId}`, {});
       patch(item.key, {material: completed.material, progress: 100, uploading: false});
     } catch (error) {
       patch(item.key, {uploading: false, error: error instanceof Error ? error.message : en ? 'Upload failed. Please retry.' : '전송하지 못했어요. 다시 시도해 주세요.'});
-      if (uploadId) {void api(`/api/assignment-materials/${uploadId}`, undefined, 'DELETE').catch(() => {}); stagedIds.current.delete(uploadId);}
+      if (uploadId) {await api(`/api/assignment-materials/${uploadId}`, undefined, 'DELETE').catch(() => {}); stagedIds.current.delete(uploadId);}
     } finally {tasks.current.delete(item.key);}
   }
   function choose(files: File[]) {
@@ -62,7 +61,7 @@ export function AssignmentMaterialEditor({classId, initial = [], onChange, onBus
     if (item.preview) {URL.revokeObjectURL(item.preview); previews.current.delete(item.preview);}
     if (item.material && stagedIds.current.has(item.material.id)) {stagedIds.current.delete(item.material.id); void api(`/api/assignment-materials/${item.material.id}`, undefined, 'DELETE').catch(() => {});}
   }
-  return <section className="assignment-material-editor"><h3>{en ? 'Reference images & videos' : '참고 이미지·영상'}</h3><p>{en ? 'Students can view these while doing their homework. Images 25MB · videos 250MB · 10 files · teacher storage 5GB.' : '학생이 숙제를 보며 확인할 자료예요. 사진 25MB · 영상 250MB · 최대 10개 · 교사 보관 공간 5GB'}</p><input ref={input} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple hidden onChange={event => {choose(Array.from(event.target.files || [])); event.target.value = '';}}/><button type="button" className="ws-button ws-button-light" disabled={items.length >= ASSIGNMENT_MATERIAL_LIMIT} onClick={() => input.current?.click()}><ImagePlus size={17}/>{en ? 'Add images or videos' : '이미지·영상 추가'}</button>
+  return <section className="assignment-material-editor"><h3>{en ? 'Reference images & videos' : '참고 이미지·영상'}</h3><p>{en ? 'Students can view these while doing their homework. Images 25MB / 40 megapixels · videos 250MB · 10 files · separate teacher storage 5GiB.' : '학생이 숙제를 보며 확인할 자료예요. 사진 25MB·4천만 화소 · 영상 250MB · 최대 10개 · 교사별 별도 5GiB'}</p><input ref={input} type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" multiple hidden onChange={event => {choose(Array.from(event.target.files || [])); event.target.value = '';}}/><button type="button" className="ws-button ws-button-light" disabled={items.length >= ASSIGNMENT_MATERIAL_LIMIT} onClick={() => input.current?.click()}><ImagePlus size={17}/>{en ? 'Add images or videos' : '이미지·영상 추가'}</button>
     {items.map(item => {const mime = item.material?.contentType || (item.file ? assignmentMaterialMime(item.file) : ''); return <div className="assignment-material-row" key={item.key}>
       {(item.preview || item.material?.url) && (mime.startsWith('image/') ? <img src={item.preview || item.material?.url} alt=""/> : <video src={item.preview || item.material?.url} controls playsInline preload="metadata"/>)}<div><strong>{item.file?.name || item.material?.fileName}</strong>{item.uploading ? <><progress value={item.progress} max={100}/><span role="status"><LoaderCircle size={13} className="ws-spin"/> {item.progress}%</span></> : item.error ? <><p role="alert">{item.error}</p><button type="button" onClick={() => void upload(item)}>{en ? 'Retry' : '다시 올리기'}</button></> : <small>{en ? 'Ready' : '전송 완료'}</small>}</div><button type="button" disabled={item.uploading} aria-label={`${item.file?.name || item.material?.fileName} ${en ? 'remove' : '빼기'}`} onClick={() => remove(item)}><X size={17}/></button>
     </div>;})}{error && <p role="alert">{error}</p>}</section>;

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { FieldPath, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import sharp, { type Metadata } from 'sharp';
 import { bucket, db } from './admin';
+import {awaitUploadTransfer, cancelUploadTransfer, createUploadTransfer} from './upload-transfer';
 import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, canManageClass, id, text } from './policy';
 import {
@@ -22,6 +23,7 @@ import {effectiveOptions} from '@/modules/artwork-extensions/exhibition-adapter'
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
+const uploadTransaction = <T>(run: (tx: FirebaseFirestore.Transaction) => Promise<T>) => db().runTransaction(run, {maxAttempts: 15});
 const now = () => new Date().toISOString();
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const exhibitionRef = (exhibitionId: string) => db().doc(`exhibitions/${id(exhibitionId)}`);
@@ -188,20 +190,21 @@ async function edit(ctx: Context, exhibition: Exhibition, request: Request) {
 }
 
 /** Delete abandoned/invalid bytes before releasing their quota. Leases serialize finalize and cleanup. */
-async function cleanupUpload(ownerUid: string, uploadId: string, processingToken?: string) {
+export async function cleanupUpload(ownerUid: string, uploadId: string, processingToken?: string, forcePending = false) {
   const ref = db().doc(`exhibitionUploads/${id(uploadId)}`);
   const cleanupToken = randomUUID();
-  const claimed = await db().runTransaction(async tx => {
+  const claimed = await uploadTransaction(async tx => {
     const snapshot = await tx.get(ref);
     const value = snapshot.data();
     if (!value || value.ownerUid !== ownerUid || value.status === 'submitted' || value.status === 'cleaned') return null;
-    const forced = !!processingToken && value.status === 'processing' && value.processingToken === processingToken;
+    const forced = (!!processingToken && value.status === 'processing' && value.processingToken === processingToken) || (forcePending && ['pending','cleanup'].includes(value.status));
     if (!forced && (!value.cleanupAt || value.cleanupAt.toMillis() > Date.now())) return null;
     if (!['pending', 'processing', 'cleanup'].includes(value.status)) return null;
     tx.update(ref, { status: 'cleanup', cleanupToken, cleanupAt: Timestamp.fromMillis(Date.now() + 5 * 60_000) });
     return value;
   });
   if (!claimed) return false;
+  try {await cancelUploadTransfer(claimed.uploadUrl);} catch {return false;}
   const paths = [
     `exhibition-uploads/${id(claimed.userUid)}/${uploadId}/original`,
     `exhibition-assets/${id(claimed.exhibitionId)}/${uploadId}/display.webp`,
@@ -209,13 +212,14 @@ async function cleanupUpload(ownerUid: string, uploadId: string, processingToken
   ];
   const removed = await Promise.allSettled(paths.map(path => bucket().file(path).delete({ ignoreNotFound: true })));
   if (removed.some(result => result.status === 'rejected')) return false;
-  return db().runTransaction(async tx => {
-    const [snapshot, quota] = await Promise.all([tx.get(ref), tx.get(quotaRef(ownerUid))]);
+  return uploadTransaction(async tx => {
+    const quota = await tx.get(quotaRef(ownerUid));
+    const snapshot = await tx.get(ref);
     const value = snapshot.data();
     if (!value || value.status !== 'cleanup' || value.cleanupToken !== cleanupToken) return false;
     const usage = releaseExhibitionBytes(storageValue(quota.data()), value.reservedBytes ?? 0, false, true);
     tx.set(quota.ref, { ...usage, updatedAt: now() });
-    tx.update(ref, { status: 'cleaned', reservedBytes: 0, cleanedAt: now(), cleanupAt: null });
+    tx.delete(ref);
     return true;
   });
 }
@@ -236,37 +240,80 @@ async function cleanup(ctx: Context) {
   return json({ ...result, storageUsage: storageValue((await quotaRef(ctx.uid).get()).data()) });
 }
 
+function queueReplacedArtwork(tx: FirebaseFirestore.Transaction, ownerUid: string, old: Data) {
+  const fileId = old.uploadId || old.displayPath.split('/')[2];
+  const jobId=hash(old.exhibitionId + ':' + fileId);
+  tx.set(db().doc(`exhibitionAssetCleanup/${jobId}`), {ownerUid, paths: [`exhibition-uploads/${old.uploaderUid}/${fileId}/original`, old.displayPath, old.thumbnailPath], bytes: old.storedBytes || 0, originalManifest: fileId});
+  return jobId;
+}
+export async function cleanupReplacedArtworks(ownerUid: string, jobIds?: string[]) {
+  const jobs = jobIds ? (jobIds.length ? await db().getAll(...jobIds.map(jobId=>db().doc(`exhibitionAssetCleanup/${jobId}`))) : []) : (await db().collection('exhibitionAssetCleanup').where('ownerUid', '==', ownerUid).limit(30).get()).docs;
+  for (const job of jobs) {
+    if(!job.exists || job.data()?.ownerUid!==ownerUid)continue;
+    const value = job.data()!;
+    const removed = await Promise.allSettled(value.paths.map((path: string) => bucket().file(path).delete({ignoreNotFound: true})));
+    if (removed.some(result => result.status === 'rejected')) continue;
+    await uploadTransaction(async tx => {
+      const quota = await tx.get(quotaRef(ownerUid));
+      const [fresh, manifest] = await Promise.all([tx.get(job.ref), tx.get(db().doc(`exhibitionUploads/${value.originalManifest}`))]);
+      if (!fresh.exists) return;
+      const usage = storageValue(quota.data()); tx.set(quota.ref, {...usage, usedBytes: Math.max(0, usage.usedBytes - value.bytes), updatedAt: now()});
+      if (manifest.exists) tx.delete(manifest.ref);
+      tx.delete(job.ref);
+    });
+  }
+}
+export async function cleanupExpiredExhibitionUploads() {
+  const pending = await db().collection('exhibitionUploads').where('status','in',['pending','processing','cleanup']).get();
+  const expired = pending.docs.filter(doc=>(doc.data().cleanupAt?.toMillis()||Infinity)<=Date.now()).slice(0,100);
+  let cleaned=0;
+  for(let start=0;start<expired.length;start+=5) await Promise.all(expired.slice(start,start+5).map(async doc=>{if(await cleanupUpload(doc.data().ownerUid,doc.id))cleaned++;}));
+  const jobs=await db().collection('exhibitionAssetCleanup').get();
+  for(const ownerUid of new Set(jobs.docs.map(doc=>doc.data().ownerUid as string))) await cleanupReplacedArtworks(ownerUid);
+  return {cleaned,hasMore:expired.length===100};
+}
 async function initUpload(ctx: Context, exhibition: Exhibition, request: Request) {
   submissionAccess(ctx, exhibition);
   const input = await body(request);
-  const { contentType, size } = exhibitionUploadPolicy(input.contentType, input.size);
-  const fileName = text(input.fileName, '파일 이름', 255);
-  const uploadId = randomUUID();
-  const path = `exhibition-uploads/${ctx.uid}/${uploadId}/original`;
+  const {contentType, size} = exhibitionUploadPolicy(input.contentType, input.size), fileName = text(input.fileName, '파일 이름', 255);
+  const uploadId = input.requestId ? hash(`${ctx.uid}:${exhibition.id}:${id(input.requestId)}`) : randomUUID();
+  const ref = db().doc(`exhibitionUploads/${uploadId}`), path = `exhibition-uploads/${ctx.uid}/${uploadId}/original`;
+  // Supersede this learner's abandoned transfers, not other classmates' uploads.
+  const staged = await db().collection('exhibitionUploads').where('userUid', '==', ctx.uid).get();
+  for (const doc of staged.docs) if (ctx.role === 'student' && doc.id !== uploadId && doc.data().exhibitionId === exhibition.id && ['pending','cleanup'].includes(doc.data().status)) await cleanupUpload(exhibition.ownerUid, doc.id, undefined, true);
+  const same = await ref.get(); if(same.data()?.status==='cleanup') await cleanupUpload(exhibition.ownerUid,uploadId,undefined,true);
   await cleanupOwnerUploads(exhibition.ownerUid);
-  const reservedBytes = size + EXHIBITION_DERIVATIVE_RESERVATION;
-  const expiresAt = Timestamp.fromMillis(Date.now() + 3_600_000);
-  // Bound abandoned upload reservations as well as finalized works.
-  const window = Math.floor(Date.now() / 3_600_000);
-  const limitRef = db().doc(`rateLimits/${hash(`exhibition-upload:${ctx.uid}:${window}`)}`);
-  await db().runTransaction(async tx => {
-    const [counter, fresh, quota] = await Promise.all([tx.get(limitRef), tx.get(exhibitionRef(exhibition.id)), tx.get(quotaRef(exhibition.ownerUid))]);
-    if (!fresh.exists) throw new ApiError(404, '전시회를 찾을 수 없어요.');
-    submissionAccess(ctx, asExhibition(fresh));
-    if ((fresh.data()!.artworkCount ?? 0) >= EXHIBITION_ARTWORK_LIMIT) throw new ApiError(409, '전시 한 곳에는 작품 300점까지 담을 수 있어요. 새 전시회를 만들어 주세요.', 'ARTWORK_LIMIT');
-    const limit = ctx.role === 'student' ? 20 : 400;
-    if ((counter.data()?.count ?? 0) >= limit) throw new ApiError(429, '파일을 많이 올렸어요. 잠시 뒤 다시 시도해 주세요.', 'UPLOAD_RATE_LIMIT');
+  const reservedBytes = size + EXHIBITION_DERIVATIVE_RESERVATION, expiresAt = Timestamp.fromMillis(Date.now() + 3_600_000);
+  let existing = await uploadTransaction(async tx => {
+    const quota = await tx.get(quotaRef(exhibition.ownerUid));
+    const fresh = await tx.get(exhibitionRef(exhibition.id));
+    const old = await tx.get(ref);
+    if (!fresh.exists) throw new ApiError(404, '전시회를 찾을 수 없어요.'); submissionAccess(ctx, asExhibition(fresh));
+    if (old.exists) {
+      const value = old.data()!;
+      if (value.userUid !== ctx.uid || value.fileName !== fileName || value.size !== size || value.contentType !== contentType) throw new ApiError(409, '전송 정보가 바뀌었어요.', 'UPLOAD_MISMATCH');
+      if (!['pending','submitted'].includes(value.status)) throw new ApiError(409, '사진을 정리 중이에요. 다시 시도해 주세요.', 'UPLOAD_PROCESSING');
+      return value;
+    }
     const usage = reserveExhibitionBytes(storageValue(quota.data()), reservedBytes);
-    tx.set(limitRef, { count: (counter.data()?.count ?? 0) + 1, expiresAt: Timestamp.fromMillis(Date.now() + 7_200_000) });
-    tx.set(quota.ref, { ...usage, updatedAt: now() });
-    tx.create(db().doc(`exhibitionUploads/${uploadId}`), {
-      exhibitionId: exhibition.id, classId: exhibition.classId, userUid: ctx.uid, ownerUid: exhibition.ownerUid, studentId: ctx.studentId ?? null, path,
-      fileName, contentType, size, reservedBytes, status: 'pending', createdAt: now(), expiresAt, cleanupAt: expiresAt,
-    });
+    tx.set(quota.ref, {...usage, updatedAt: now()});
+    tx.create(ref, {exhibitionId: exhibition.id, classId: exhibition.classId, userUid: ctx.uid, ownerUid: exhibition.ownerUid, studentId: ctx.studentId ?? null, path, fileName, contentType, size, reservedBytes, status: 'pending', createdAt: now(), expiresAt, cleanupAt: expiresAt});
+    return null;
   });
-  return json({ uploadId, path }, 201);
+  existing = await awaitUploadTransfer(ref, existing);
+  if (existing?.status === 'submitted') return json({uploadId, path, alreadyUploaded: true, uploadUrl: '', uploadHeaders: {}});
+  try {
+    const transfer = existing?.uploadUrl ? {uploadUrl: existing.uploadUrl, uploadHeaders: {'Content-Type': contentType}} : await createUploadTransfer(path, contentType, size, new URL(request.url).origin);
+    if (!existing?.uploadUrl) await ref.update({uploadUrl: transfer.uploadUrl});
+    return json({uploadId, path, ...transfer, alreadyUploaded: existing ? (await bucket().file(path).exists())[0] : false}, 201);
+  } catch (error) {await cleanupUpload(exhibition.ownerUid, uploadId, undefined, true); throw error;}
 }
-
+async function cancelUpload(ctx: Context, exhibition: Exhibition, uploadId: string) {
+  const doc = await db().doc(`exhibitionUploads/${id(uploadId)}`).get();
+  if (doc.exists && (doc.data()?.exhibitionId !== exhibition.id || doc.data()?.userUid !== ctx.uid)) throw new ApiError(403, '본인의 전송만 정리할 수 있어요.', 'FORBIDDEN');
+  if (doc.exists) await cleanupUpload(exhibition.ownerUid, uploadId, undefined, true);
+  return json({ok: true});
+}
 async function prepareImage(uploadId: string, upload: Data, processingToken: string) {
   const file = bucket().file(upload.path);
   const [metadata] = await file.getMetadata().catch(() => { throw new ApiError(409, '사진을 전송하고 있어요. 잠시 뒤 다시 시도해 주세요.', 'UPLOAD_INCOMPLETE'); });
@@ -294,9 +341,10 @@ async function prepareImage(uploadId: string, upload: Data, processingToken: str
   const storedBytes = upload.size + display.length + thumbnail.length;
   if (storedBytes > lease.reservedBytes) {
     // Reserve any unusual derivative expansion before writing those bytes to storage.
-    await db().runTransaction(async tx => {
+    await uploadTransaction(async tx => {
       const ref = db().doc(`exhibitionUploads/${uploadId}`);
-      const [fresh, quota] = await Promise.all([tx.get(ref), tx.get(quotaRef(upload.ownerUid))]);
+      const quota = await tx.get(quotaRef(upload.ownerUid));
+      const fresh = await tx.get(ref);
       const current = fresh.data();
       if (current?.status !== 'processing' || current.processingToken !== processingToken || current.cleanupAt.toMillis() <= Date.now()) throw new ApiError(409, '사진 처리가 만료되었어요.', 'UPLOAD_EXPIRED');
       const extra = storedBytes - current.reservedBytes;
@@ -331,7 +379,7 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
   const upload = uploadDoc.data();
   if (studentId && (!studentDoc?.exists || studentDoc.data()?.disabled)) throw new ApiError(400, '이 학급의 학생을 선택해 주세요.', 'STUDENT_INVALID');
   if (!upload || upload.userUid !== ctx.uid || upload.exhibitionId !== exhibition.id) throw new ApiError(400, '사진을 다시 올려 주세요.', 'UPLOAD_INVALID');
-  if (upload.status === 'submitted' && upload.fingerprint === fingerprint) return json({ artwork: await signedArtwork(ctx, exhibition, mapped(await artRef(exhibition.id, uploadId).get())) });
+  if (upload.status === 'submitted' && upload.fingerprint === fingerprint) return json({ artwork: await signedArtwork(ctx, exhibition, mapped(await artRef(exhibition.id, upload.artworkId || uploadId).get())) });
   if (upload.status === 'processing') {
     if ((upload.cleanupAt?.toMillis() ?? 0) <= Date.now()) {
       await cleanupUpload(upload.ownerUid, uploadId);
@@ -341,7 +389,7 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
   }
   if (!canConsumeExhibitionUpload(ctx, exhibition.id, upload) || upload.expiresAt.toMillis() <= Date.now()) throw new ApiError(409, '사진을 다시 올려 주세요.', 'UPLOAD_USED');
   const processingToken = randomUUID();
-  const acquired = await db().runTransaction(async tx => {
+  const acquired = await uploadTransaction(async tx => {
     const snapshot = await tx.get(uploadRef);
     const current = snapshot.data();
     if (current?.status === 'submitted' && current.fingerprint === fingerprint && current.userUid === ctx.uid) return false;
@@ -357,48 +405,56 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
     await cleanupUpload(upload.ownerUid, uploadId);
     throw new ApiError(409, '사진 처리가 만료되었어요. 다시 올려 주세요.', 'UPLOAD_EXPIRED');
   }
-  if (!acquired) return json({ artwork: await signedArtwork(ctx, exhibition, mapped(await artRef(exhibition.id, uploadId).get())) });
+  if (!acquired) return json({ artwork: await signedArtwork(ctx, exhibition, mapped(await artRef(exhibition.id, upload.artworkId || uploadId).get())) });
   try {
   const image = await prepareImage(uploadId, upload, processingToken);
-  const ref = artRef(exhibition.id, uploadId);
+  const slot = studentId ? exhibitionRef(exhibition.id).collection('studentWorks').doc(studentId) : null;
+  const legacy = studentId ? await exhibitionRef(exhibition.id).collection('artworks').where('studentId', '==', studentId).get() : null;
+  const targetId = legacy?.docs.sort((a,b) => String(b.data().createdAt).localeCompare(String(a.data().createdAt)))[0]?.id || uploadId;
+  const slotDoc = slot ? await slot.get() : null;
+  const ref = artRef(exhibition.id, slotDoc?.data()?.artworkId || targetId);
   const passport = studentId ? passportRef(exhibition.id, studentId) : null;
-  const result = await db().runTransaction(async tx => {
-    const [freshUpload, freshExhibition, previous, freshStudent, previousPassport, quota] = await Promise.all([
-      tx.get(uploadRef), tx.get(exhibitionRef(exhibition.id)), tx.get(ref), studentDoc ? tx.get(studentDoc.ref) : null, passport ? tx.get(passport) : null, tx.get(quotaRef(exhibition.ownerUid)),
+  const cleanupJobs=new Set<string>();
+  const result = await uploadTransaction(async tx => {
+    // Every quota-writing transaction acquires shared documents in this order.
+    // Parallel reads could otherwise hold the room and quota in opposite orders.
+    const quota = await tx.get(quotaRef(exhibition.ownerUid));
+    const freshExhibition = await tx.get(exhibitionRef(exhibition.id));
+    const [freshUpload, previous, freshStudent, previousPassport] = await Promise.all([
+      tx.get(uploadRef), tx.get(ref), studentDoc ? tx.get(studentDoc.ref) : null, passport ? tx.get(passport) : null,
     ]);
+    const freshSlot = slot ? await tx.get(slot) : null;
+    const extraRefs = legacy?.docs.filter(doc=>doc.id!==ref.id).map(doc=>doc.ref) || [];
+    const extras = extraRefs.length ? (await tx.getAll(...extraRefs)).filter(doc=>doc.exists && doc.data()?.studentId===studentId) : [];
+    if (freshSlot?.exists && freshSlot.data()?.artworkId !== ref.id) throw new ApiError(409, '작품 저장이 겹쳤어요. 다시 시도해 주세요.', 'UPLOAD_PROCESSING');
     if (!freshExhibition.exists) throw new ApiError(404, '전시회를 찾을 수 없어요.');
     submissionAccess(ctx, asExhibition(freshExhibition));
     if (previous.exists && freshUpload.data()?.fingerprint === fingerprint && freshUpload.data()?.userUid === ctx.uid) return mapped(previous);
     if (freshUpload.data()?.status !== 'processing' || freshUpload.data()?.processingToken !== processingToken || freshUpload.data()!.cleanupAt.toMillis() <= Date.now()) throw new ApiError(409, '이미 사용되었거나 만료된 사진이에요.', 'UPLOAD_USED');
     if (studentId && (!freshStudent?.exists || freshStudent.data()?.disabled || (ctx.role === 'student' && freshStudent.data()?.authUid !== ctx.uid))) throw new ApiError(400, '학생 정보를 다시 확인해 주세요.', 'STUDENT_INVALID');
-    if ((freshExhibition.data()!.artworkCount ?? 0) >= EXHIBITION_ARTWORK_LIMIT) throw new ApiError(409, '전시 한 곳에는 작품 300점까지 담을 수 있어요.', 'ARTWORK_LIMIT');
+    if (!previous.exists && (freshExhibition.data()!.artworkCount ?? 0) >= EXHIBITION_ARTWORK_LIMIT) throw new ApiError(409, '전시 한 곳에는 작품 300점까지 담을 수 있어요.', 'ARTWORK_LIMIT');
     const value = {
-      id: uploadId, exhibitionId: exhibition.id, classId: exhibition.classId, uploaderUid: ctx.uid,
+      id: ref.id, uploadId, exhibitionId: exhibition.id, classId: exhibition.classId, uploaderUid: ctx.uid,
       studentId, studentName: freshStudent?.data()?.name ?? '', studentNumber: freshStudent?.data()?.number ?? 0,
       title, description, artworkDate, artistName: ctx.role === 'student' ? freshStudent?.data()?.name ?? '' : artistName || freshStudent?.data()?.name || '', status: ctx.role === 'student' ? 'pending' : 'approved', feedback: '', ...image,
-      createdAt: now(), reviewedAt: ctx.role === 'student' ? null : now(), commentCount: 0, reactionCounts: { colors: 0, idea: 0, story: 0 },
+      createdAt: now(), reviewedAt: ctx.role === 'student' ? null : now(), commentCount: previous.data()?.commentCount || 0, reactionCounts: previous.data()?.reactionCounts || { colors: 0, idea: 0, story: 0 },
     };
     const usage = settleExhibitionBytes(storageValue(quota.data()), freshUpload.data()!.reservedBytes ?? 0, image.storedBytes);
-    tx.create(ref, value);
+    tx.set(db().doc(`uploadTransferStats/gallery_${uploadId}`),{ownerUid:exhibition.ownerUid,bytes:upload.size,month:artworkToday().slice(0,7),createdAt:now(),source:'gallery'});
+    tx.set(ref, value);
+    if (slot) tx.set(slot, {artworkId: ref.id});
+    if (previous.exists) cleanupJobs.add(queueReplacedArtwork(tx, exhibition.ownerUid, previous.data()!));
+    extras.forEach(doc=>{cleanupJobs.add(queueReplacedArtwork(tx, exhibition.ownerUid, doc.data()!));tx.delete(doc.ref);});
     tx.set(quota.ref, { ...usage, updatedAt: now() });
-    tx.update(uploadRef, { status: 'submitted', artworkId: uploadId, fingerprint, submittedAt: now(), reservedBytes: 0, storedBytes: image.storedBytes, cleanupAt: null });
-    tx.update(exhibitionRef(exhibition.id), { artworkCount: FieldValue.increment(1), approvedCount: FieldValue.increment(ctx.role === 'student' ? 0 : 1), updatedAt: now() });
+    tx.update(uploadRef, { status: 'submitted', artworkId: ref.id, fingerprint, submittedAt: now(), reservedBytes: 0, storedBytes: image.storedBytes, cleanupAt: null });
+    tx.update(exhibitionRef(exhibition.id), { artworkCount: FieldValue.increment((previous.exists ? 0 : 1) - extras.length), approvedCount: FieldValue.increment((ctx.role === 'student' ? 0 : 1) - (previous.data()?.status === 'approved' ? 1 : 0) - extras.filter(doc=>doc.data()?.status==='approved').length), updatedAt: now() });
     if (passport && ctx.role !== 'student') tx.set(passport, { ...nextPassport(previousPassport?.data(), 'artist'), updatedAt: now() });
     return value;
   });
+  await cleanupReplacedArtworks(exhibition.ownerUid,[...cleanupJobs]).catch(()=>console.error('Replaced artwork cleanup deferred'));
   return json({ artwork: await signedArtwork(ctx, exhibition, result) }, 201);
   } catch (error) {
-    if (error instanceof ApiError && error.code === 'UPLOAD_INCOMPLETE') {
-      // No immutable original exists yet; keep the reservation available for this upload.
-      await db().runTransaction(async tx => {
-        const snapshot = await tx.get(uploadRef);
-        if (snapshot.data()?.status === 'processing' && snapshot.data()?.processingToken === processingToken) tx.update(uploadRef, { status: 'pending', cleanupAt: snapshot.data()!.expiresAt, processingToken: null });
-      });
-    } else {
-      // Invalid/transient partial outputs are terminal for this manifest. Cleanup failure
-      // leaves its bytes charged and its lease available for a later safe retry.
-      await cleanupUpload(upload.ownerUid, uploadId, processingToken);
-    }
+    await cleanupUpload(upload.ownerUid, uploadId, processingToken);
     throw error;
   }
 }
@@ -416,11 +472,16 @@ async function reviewArtwork(ctx: Context, exhibition: Exhibition, artworkId: st
   if ('studentId' in input) changes.studentId = artworkStudentId(input.studentId);
   if (!Object.keys(changes).length) throw new ApiError(400, '수정할 내용을 입력해 주세요.');
   const ref = artRef(exhibition.id, artworkId);
-  const result = await db().runTransaction(async tx => {
+  const result = await uploadTransaction(async tx => {
+    await tx.get(exhibitionRef(exhibition.id));
     const snapshot = await tx.get(ref);
     if (!snapshot.exists) throw new ApiError(404, '작품을 찾을 수 없어요.');
     const value = snapshot.data()!;
     const studentId = 'studentId' in changes ? changes.studentId : value.studentId;
+    const oldSlot = value.studentId ? exhibitionRef(exhibition.id).collection('studentWorks').doc(value.studentId) : null;
+    const newSlot = studentId ? exhibitionRef(exhibition.id).collection('studentWorks').doc(studentId) : null;
+    const [oldSlotDoc, newSlotDoc] = await Promise.all([oldSlot ? tx.get(oldSlot) : null, newSlot ? tx.get(newSlot) : null]);
+    if ('studentId' in changes && studentId !== value.studentId && newSlotDoc?.exists && newSlotDoc.data()?.artworkId !== ref.id) throw new ApiError(409, '이 학생의 작품이 이미 있어요. 해당 작품을 교체해 주세요.', 'STUDENT_WORK_EXISTS');
     const stampRef = studentId ? passportRef(exhibition.id, studentId) : null;
     const [stamp, student] = await Promise.all([
       stampRef ? tx.get(stampRef) : null,
@@ -435,6 +496,10 @@ async function reviewArtwork(ctx: Context, exhibition: Exhibition, artworkId: st
     // Keep the effective state explicit for metadata-only edits and TypeScript inference.
     const updated = { ...value, ...edited, id: snapshot.id, status: (changes.status ?? value.status) as ArtworkStatus };
     tx.update(ref, edited);
+    if ('studentId' in changes) {
+      if (oldSlot && value.studentId !== studentId && oldSlotDoc?.data()?.artworkId === ref.id) tx.delete(oldSlot);
+      if (newSlot) tx.set(newSlot, {artworkId: ref.id});
+    }
     tx.update(exhibitionRef(exhibition.id), { approvedCount: FieldValue.increment(approvalCountDelta(value.status, updated.status)), updatedAt: now() });
     if (updated.status === 'approved' && stampRef) tx.set(stampRef, { ...nextPassport(stamp?.data(), 'artist'), updatedAt: now() });
     return updated;
@@ -467,7 +532,7 @@ async function comments(ctx: Context, exhibition: Exhibition, artworkId: string,
     authorName: isTeacher ? (ctx.displayName ?? '선생님') : profile?.data()?.name ?? '친구',
     authorRole: isTeacher ? 'teacher' : 'student', status: isTeacher ? 'approved' : 'pending', createdAt: now(),
   };
-  const saved = await db().runTransaction(async tx => {
+  const saved = await uploadTransaction(async tx => {
     const [freshExhibition, freshArt, previous] = await Promise.all([tx.get(exhibitionRef(exhibition.id)), tx.get(artRef(exhibition.id, artworkId)), tx.get(ref)]);
     if (!freshExhibition.exists || !freshArt.exists) throw new ApiError(404, '작품을 찾을 수 없어요.');
     participationAccess(ctx, asExhibition(freshExhibition));
@@ -485,7 +550,7 @@ async function moderateComment(ctx: Context, exhibition: Exhibition, artworkId: 
   const input = await body(request);
   if (input.status !== 'approved' && input.status !== 'hidden') throw new ApiError(400, '감상 확인 상태를 선택해 주세요.');
   const ref = artRef(exhibition.id, artworkId).collection('comments').doc(id(commentId));
-  const result = await db().runTransaction(async tx => {
+  const result = await uploadTransaction(async tx => {
     const [comment, artwork] = await Promise.all([tx.get(ref), tx.get(artRef(exhibition.id, artworkId))]);
     if (!comment.exists || !artwork.exists) throw new ApiError(404, '감상을 찾을 수 없어요.');
     const value = comment.data()!;
@@ -503,7 +568,7 @@ async function reaction(ctx: Context, exhibition: Exhibition, artworkId: string,
   const input = await body(request);
   const kind = artReaction(input.kind);
   const ref = exhibitionRef(exhibition.id).collection('reactions').doc(hash(`${ctx.uid}:${artworkId}`));
-  const result = await db().runTransaction(async tx => {
+  const result = await uploadTransaction(async tx => {
     const [freshExhibition, artwork, previous] = await Promise.all([tx.get(exhibitionRef(exhibition.id)), tx.get(artRef(exhibition.id, artworkId)), tx.get(ref)]);
     if (!freshExhibition.exists || !artwork.exists) throw new ApiError(404, '작품을 찾을 수 없어요.');
     participationAccess(ctx, asExhibition(freshExhibition));
@@ -520,7 +585,7 @@ async function reaction(ctx: Context, exhibition: Exhibition, artworkId: string,
 async function shareExhibition(ctx: Context, exhibition: Exhibition, request: Request) {
   owner(ctx, exhibition);
   const ref = db().doc(`exhibitionShares/${exhibition.id}`);
-  const result = await db().runTransaction(async tx => {
+  const result = await uploadTransaction(async tx => {
     const cls = await tx.get(exhibitionRef(exhibition.id)), previous = await tx.get(ref);
     if (!cls.exists || !ownsExhibition(ctx, asExhibition(cls))) throw new ApiError(403, '이 전시를 공유할 권한이 없어요.');
     let token = previous.data()?.token as string | undefined;
@@ -563,6 +628,7 @@ export async function handleExhibitions(request: Request, segments: string[] = [
       if (segments.length === 2 && section === 'share' && request.method === 'GET') return await shareExhibition(ctx, exhibition, request);
       if (segments.length === 2 && section === 'read-authors' && request.method === 'POST') {owner(ctx, exhibition); const input = await readBoundedJson(request, 3_300_000) as {images?: unknown}; return json({names: await readArtworkAuthors(ctx.uid, artworkAuthorImages(input.images))});}
       if (segments.length === 2 && section === 'uploads' && request.method === 'POST') return await initUpload(ctx, exhibition, request);
+      if (segments.length === 3 && section === 'uploads' && request.method === 'DELETE') return await cancelUpload(ctx, exhibition, artworkId);
       if (section === 'artworks') {
         if (segments.length === 2 && request.method === 'POST') return await finalize(ctx, exhibition, request);
         if (segments.length === 3 && request.method === 'PATCH') return await reviewArtwork(ctx, exhibition, artworkId, request);

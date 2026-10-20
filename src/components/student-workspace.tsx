@@ -3,9 +3,8 @@
 import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode} from "react";
 import Link from "next/link";
 import {useLocale, useTranslations} from "next-intl";
-import {uploadBytesResumable, ref as storageRef} from "firebase/storage";
+import {sendUpload, discardUpload, type UploadTransfer} from "@/lib/upload-transfer";
 import {ArrowRight, BookOpen, Camera, Check, CheckCircle2, Clock3, Cloud, Flower2, Heart, Images, LoaderCircle, MessageCircleHeart, Palette, PanelsTopLeft, Paperclip, PencilLine, RefreshCw, Send, Sparkles, Star, Video, X} from "lucide-react";
-import {storage} from "@/lib/firebase-client";
 import {characterCatalog as friends, type Character} from "@/lib/characters";
 import {acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes, type AssignmentSubmissionType} from "@/lib/assignment-submission";
 import type {PointSettings, WardrobeOutfit} from "@/lib/points-types";
@@ -95,6 +94,8 @@ export default function StudentWorkspace() {
   const photoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadCache = useRef<Map<File, string>>(new Map());
+  const uploadKeys = useRef(new WeakMap<File,string>()), stagedUploads = useRef(new Set<string>()), transferAbort = useRef<AbortController|null>(null), sendingRef = useRef(false);
+  useEffect(()=>()=>{transferAbort.current?.abort(); stagedUploads.current.forEach(uploadId=>{void discardUpload(`/api/uploads/${uploadId}`).catch(()=>{});});},[]);
 
   const load = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
@@ -153,30 +154,30 @@ export default function StudentWorkspace() {
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!selected || sending) return;
+    if (!selected || sendingRef.current) return;
     if (!hasRequiredContent) {setFormError(t(submissionType === "text" ? "student.requiredText" : submissionType === "image" ? "student.requiredImage" : submissionType === "video" ? "student.requiredVideo" : "student.emptySubmission")); return;}
     if (files.some(file => !acceptsSubmissionFile(submissionType, contentType(file)))) {setFormError(t("student.wrongSubmissionType")); return;}
-    setSending(true); setFormError(""); setProgress(0);
+    sendingRef.current=true;setSending(true); setFormError(""); setProgress(0);
     try {
       const uploadIds: string[] = [];
       for (let index = 0; index < files.length; index++) {
         const file = files[index];
         const cached = uploadCache.current.get(file);
         if (cached) {uploadIds.push(cached); setProgress(Math.round(((index + 1) / files.length) * 100)); continue;}
-        if (!storage) throw new Error("not_configured");
-        const upload = await request<{uploadId: string; path: string}>("/api/uploads/init", {method: "POST", body: JSON.stringify({assignmentId: selected.id, fileName: file.name, contentType: contentType(file), size: file.size})});
-        await new Promise<void>((resolve, reject) => {
-          const task = uploadBytesResumable(storageRef(storage, upload.path), file, {contentType: contentType(file)});
-          task.on("state_changed", snapshot => setProgress(Math.round(((index + snapshot.bytesTransferred / Math.max(1, snapshot.totalBytes)) / files.length) * 100)), reject, () => resolve());
-        });
+        const requestId = uploadKeys.current.get(file) || crypto.randomUUID(); uploadKeys.current.set(file,requestId);
+        const upload = await request<UploadTransfer>("/api/uploads/init", {method:"POST",body:JSON.stringify({requestId,assignmentId:selected.id,fileName:file.name,contentType:contentType(file),size:file.size})});
+        stagedUploads.current.add(upload.uploadId);
+        const controller=new AbortController();transferAbort.current=controller;
+        await sendUpload(upload,file,fraction=>setProgress(Math.round((index+fraction)/files.length*100)),controller.signal);
         uploadCache.current.set(file, upload.uploadId); uploadIds.push(upload.uploadId);
       }
       const result = await request<{submission: Submission}>("/api/submissions/finalize", {method: "POST", body: JSON.stringify({assignmentId: selected.id, text: message.trim(), uploadIds})});
       setHome(previous => previous ? {...previous, assignments: previous.assignments.map(assignment => assignment.id === selected.id ? {...assignment, status: result.submission.status, submission: result.submission} : assignment)} : previous);
-      setSelectedId(null); setFiles([]); setMessage(""); uploadCache.current.clear();
+      stagedUploads.current.clear();setSelectedId(null); setFiles([]); setMessage(""); uploadCache.current.clear();
       setNotice(t("student.sendSuccess")); setCelebrate(true);
       void load();
     } catch (cause) {
+      await Promise.allSettled([...stagedUploads.current].map(uploadId=>discardUpload(`/api/uploads/${uploadId}`)));stagedUploads.current.clear();uploadCache.current.clear();
       const code = cause instanceof Error ? cause.message : "";
       if (["UPLOAD_INVALID", "UPLOAD_USED", "UPLOAD_MISMATCH"].includes(code)) {
         // Expired or consumed upload IDs cannot be finalized again. Keep the
@@ -188,9 +189,9 @@ export default function StudentWorkspace() {
       } else if (code === "SUBMISSION_FILE_TYPE") {
         setFormError(t("student.wrongSubmissionType"));
       } else {
-        setFormError(t(code === "not_configured" ? "student.notConfigured" : code === "FILE_SIZE" ? "student.fileTooLarge" : code === "FILE_TYPE" ? "student.unsupportedFile" : code === "UPLOAD_INCOMPLETE" ? "student.uploadIncomplete" : "common.error"));
+        setFormError(t(["UPLOAD_NETWORK","UPLOAD_TIMEOUT"].includes(code) ? "student.uploadNetwork" : ["UNAUTHENTICATED","CODE_RESET"].includes(code) ? "student.uploadSignIn" : code === "not_configured" ? "student.notConfigured" : code === "FILE_SIZE" ? "student.fileTooLarge" : code === "FILE_TYPE" ? "student.unsupportedFile" : code === "UPLOAD_INCOMPLETE" ? "student.uploadIncomplete" : "common.error"));
       }
-    } finally {setSending(false);}
+    } finally {sendingRef.current=false;transferAbort.current=null;setSending(false);}
   }
 
   if (loading) return <section className="ws-loading" role="status"><img src="/characters/cat-mochi.webp" alt=""/><LoaderCircle className="ws-spin" size={23}/><p>{t("common.loading")}</p></section>;
