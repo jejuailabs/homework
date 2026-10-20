@@ -39,7 +39,7 @@ export async function neighborhoodMapRoute(request:Request){
     let endpointUrl:URL;try{endpointUrl=new URL(endpoint);}catch{throw new ApiError(503,'지도 서비스 연결 설정을 확인해 주세요.','MAP_NOT_CONFIGURED');}
     if(endpointUrl.protocol!=='https:'||endpointUrl.username||endpointUrl.password)throw new ApiError(503,'지도 서비스 연결 설정을 확인해 주세요.','MAP_NOT_CONFIGURED');
     let upstream:Response;
-    try{upstream=await fetch(endpointUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'HomeworkFriends-ClassroomMaps/1.0 (+https://homework-indol-gamma.vercel.app)'},body:new URLSearchParams({data:overpassQuery(center)}),cache:'no-store',signal:AbortSignal.timeout(28000),redirect:'error'});}catch{throw new ApiError(503,'지도를 불러오지 못했어요. 잠시 뒤 다시 시도하거나 GeoJSON 지도를 가져와 주세요.','MAP_UNAVAILABLE');}
+    try{upstream=await fetch(endpointUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'HomeworkFriends-ClassroomMaps/1.0 (+https://homework-indol-gamma.vercel.app)'},body:new URLSearchParams({data:overpassQuery(center)}),cache:'no-store',signal:AbortSignal.timeout(28000),redirect:'error'});}catch{throw new ApiError(503,'외부 지도 서버가 응답하지 않아요. 잠시 뒤 다시 시도하거나 저장한 자료·GeoJSON 지도를 가져와 주세요.','MAP_UNAVAILABLE');}
     if(!upstream.ok)throw new ApiError(503,'지도 서비스가 잠시 바빠요. 저장한 자료를 사용하거나 잠시 뒤 다시 시도해 주세요.','MAP_UNAVAILABLE');
     let map;try{map=parseOverpassMap(await readBoundedJson(upstream,3_000_000),center,stamp());}catch{throw new ApiError(502,'이 범위의 지도 자료를 가져오지 못했어요. 범위를 줄이거나 GeoJSON 파일을 가져와 주세요.','MAP_INCOMPLETE');}
     const mapJson=JSON.stringify(map);if(Buffer.byteLength(mapJson)>700000)throw new ApiError(413,'지도 범위를 줄여서 다시 불러와 주세요.','MAP_SIZE');
