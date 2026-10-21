@@ -10,6 +10,8 @@ import {auth} from '@/lib/firebase-client';
 import {usePreferences,type Palette} from './providers';
 import InstallShortcut from './install-shortcut';
 import StudentCompanion from '@/modules/my-space/companion';
+// Card Play is hidden from the top menu for now; its pages still work by direct link.
+const cardsMenuVisible = false;
 
 export default function AppShell({children,mySpaceEnabled=true}:{children:ReactNode;mySpaceEnabled?:boolean}) {
   const t=useTranslations('common'), path=usePathname(), router=useRouter();
@@ -43,7 +45,7 @@ export default function AppShell({children,mySpaceEnabled=true}:{children:ReactN
         {!isAdmin&&<Link href={`${workspacePath}/exhibitions`} className={`nav-gallery ${path.includes('/exhibitions')?'active':''}`} aria-current={path.includes('/exhibitions')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Images size={18}/></span>{t('exhibitions')}</Link>}
         {!isAdmin&&<Link href={`${workspacePath}/boards`} className={`nav-boards ${path.includes('/boards')?'active':''}`} aria-current={path.includes('/boards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{t('boards')}</Link>}
         {!isAdmin&&<Link href={`${workspacePath}/daily-quiz`} className={path.includes('/daily-quiz')?'active':''} aria-current={path.includes('/daily-quiz')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><BookOpen size={18}/></span>{locale==='en'?'Daily quiz':'데일리 퀴즈'}</Link>}
-        {!isAdmin&&<Link href={`${workspacePath}/cards`} className={`nav-cards ${path.includes('/cards')?'active':''}`} aria-current={path.includes('/cards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Layers size={18}/></span>{t('cards')}</Link>}
+        {!isAdmin&&cardsMenuVisible&&<Link href={`${workspacePath}/cards`} className={`nav-cards ${path.includes('/cards')?'active':''}`} aria-current={path.includes('/cards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Layers size={18}/></span>{t('cards')}</Link>}
         {isStudent&&mySpaceEnabled&&<Link href="/student/my-space" className={path==='/student/my-space'?'active':''} aria-current={path==='/student/my-space'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Shell size={18}/></span>{locale==='en'?'My little world':'나의 작은 세상'}</Link>}{isStudent&&<Link href="/student/canvases" className={path==='/student/canvases'?'active':''} aria-current={path==='/student/canvases'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{locale==='en'?'Together Canvas':'함께캔버스'}</Link>}
         {isStudent&&<Link href="/student/polls" className={path==='/student/polls'?'active':''} aria-current={path==='/student/polls'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Vote size={18}/></span>{locale==='en'?'Class polls':'학급 투표'}</Link>}
         {!isStudent&&!isAdmin&&<Link href="/teacher/tools" className={`nav-tools ${path.includes('tools')?'active':''}`} aria-current={path.includes('tools')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Sparkles size={18}/></span>{t('tools')}</Link>}
