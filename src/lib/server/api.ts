@@ -10,7 +10,7 @@ import { assignmentSubmissionType } from '../assignment-submission';
 import { auth, bucket, db } from './admin';
 import { getAiOperations } from './ai';
 import { assertOrigin, contextForUid, cookieName, getContext, requireStudent, requireTeacher, type Context } from './auth';
-import { ApiError, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
+import { ApiError, batchReviewItems, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
 import {awardHomeworkPoints} from './points';
 import {pointBalance, pointSettings, wardrobeOutfit} from './points-policy';
 import {normalizeStudentCode, validStudentCode} from '../student-entry-code';
@@ -290,7 +290,11 @@ async function assignmentDetail(request: Request, assignmentId: string) {
     return json({assignment: {...assignment, ...changes, materials: await signedAssignmentMaterials(materials)}});
   }
   const [roster, submissions] = await Promise.all([db().collection(`classes/${assignment.classId}/students`).get(), db().collection('submissions').where('assignmentId', '==', assignmentId).get()]);
-  return json({ assignment: {...assignment, materials: await signedAssignmentMaterials(assignment.materials)}, students: roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id)).map(publicStudent).sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
+  const targets = roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id));
+  // Show each student's My Space friend and clothes, matching what they see at home.
+  const rooms = process.env.MY_SPACE_DISABLED === 'true' || !targets.length ? [] : await db().getAll(...targets.map(doc => doc.ref.collection('mySpace').doc('room')));
+  const students = targets.map((doc, index) => ({...publicStudent(doc), spaceCompanion: rooms.length ? companionProfile(doc.data(), rooms[index].data()) : null}));
+  return json({ assignment: {...assignment, materials: await signedAssignmentMaterials(assignment.materials)}, students: students.sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
 }
 async function home(request: Request) {
   const ctx = await requireStudent(request);
@@ -369,21 +373,22 @@ async function finalize(request: Request) {
   // The student can reopen the result immediately, before the home refresh.
   return json({ submission: await withFileUrls(result) });
 }
-async function review(request: Request, assignmentId: string) {
+async function reviewTask(request: Request, assignmentId: string) {
   const ctx = await requireTeacher(request);
   const task = await db().doc(`assignments/${id(assignmentId)}`).get();
   if (!task.exists) throw new ApiError(404, '과제를 찾을 수 없어요.');
   await managedClass(ctx, task.data()!.classId);
-  const input = await body(request);
-  const studentId = id(input.studentId);
-  const feedback = text(input.feedback, '피드백', 5000, true);
-  const ref = db().doc(`submissions/${assignmentId}_${studentId}`);
-  const submission = await db().runTransaction(async tx => {
+  return { ctx, task };
+}
+/** One student's review in its own transaction, shared by single and batch checks. */
+async function reviewSubmission(ctx: Context, task: FirebaseFirestore.DocumentSnapshot, studentId: string, attemptId: unknown, status: unknown, feedback: string) {
+  const assignmentId = task.id, ref = db().doc(`submissions/${assignmentId}_${studentId}`);
+  return db().runTransaction(async tx => {
     const doc = await tx.get(ref);
     if (!doc.exists) throw new ApiError(404, '아직 제출하지 않은 학생이에요.', 'NOT_SUBMITTED');
     const value = doc.data()!;
-    if (!input.attemptId || input.attemptId !== value.attemptId) throw new ApiError(409, '새 제출물이 있어요. 새로 확인한 뒤 검사해 주세요.', 'STALE_ATTEMPT');
-    const decision = nextReview(input.status, !!value.rewardGranted);
+    if (!attemptId || attemptId !== value.attemptId) throw new ApiError(409, '새 제출물이 있어요. 새로 확인한 뒤 검사해 주세요.', 'STALE_ATTEMPT');
+    const decision = nextReview(status, !!value.rewardGranted);
     const pointAward = decision.reward ? await awardHomeworkPoints(tx, {classId: value.classId, studentId, assignmentId, actorUid: ctx.uid}) : value.pointAward;
     const updated = { ...value, status: decision.status, feedback, reviewedAt: now(), reviewerUid: ctx.uid, rewardGranted: !!value.rewardGranted || decision.reward > 0, ...(pointAward ? {pointAward} : {}) };
     tx.update(ref, updated);
@@ -392,7 +397,28 @@ async function review(request: Request, assignmentId: string) {
     if (decision.reward) tx.update(db().doc(`classes/${value.classId}/students/${studentId}`), { xp: FieldValue.increment(decision.reward) });
     return updated;
   });
+}
+async function review(request: Request, assignmentId: string) {
+  const { ctx, task } = await reviewTask(request, assignmentId);
+  const input = await body(request);
+  const submission = await reviewSubmission(ctx, task, id(input.studentId), input.attemptId, input.status, text(input.feedback, '피드백', 5000, true));
   return json({ submission });
+}
+async function reviewBatch(request: Request, assignmentId: string) {
+  const { ctx, task } = await reviewTask(request, assignmentId);
+  const items = batchReviewItems((await body(request)).items);
+  const results = [];
+  // Sequential on purpose: each student keeps the single-review guarantees and one failure never blocks the rest.
+  for (const item of items) {
+    try {
+      const submission = await reviewSubmission(ctx, task, item.studentId, item.attemptId, 'done', item.feedback);
+      results.push({ studentId: item.studentId, ok: true, submission });
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+      results.push({ studentId: item.studentId, ok: false, code: error.code ?? 'ERROR' });
+    }
+  }
+  return json({ results });
 }
 async function adminOverview(request: Request) {
   const ctx = await adminContext(request);
@@ -469,6 +495,7 @@ export async function handle(request: Request, operation: string, parameter?: st
       case 'upload-init': return await initUpload(request);
       case 'submission-finalize': return await finalize(request);
       case 'review': return await review(request, id(parameter));
+      case 'review-batch': return await reviewBatch(request, id(parameter));
       case 'admin-overview': return await adminOverview(request);
       case 'admin-users': return await adminUsers(request, parameter);
       case 'admin-operations': return await adminOperations(request);

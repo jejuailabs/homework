@@ -13,6 +13,7 @@ export type ParticipationBoard = {
   layout: BoardLayout; theme: BoardTheme; character: Character; status: BoardStatus;
   commentsEnabled: boolean; reactionsEnabled: boolean; moderation: boolean;
   anonymous: boolean; revealMode: boolean; revealed: boolean;
+  publicViewEnabled: boolean; visitorComments: boolean;
   sections: BoardSection[]; sort: 'manual' | 'newest' | 'oldest';
   postCount: number; participantCount: number; createdAt: string; updatedAt: string;
   canManage: boolean; canPost: boolean;
@@ -21,7 +22,7 @@ export type BoardAttachment = {
   id: string; name: string; contentType: string; size: number;
   kind: 'image' | 'video' | 'audio' | 'file'; url: string; thumbnailUrl?: string;
 };
-export type BoardAuthor = { name: string; character: Character; isTeacher: boolean; isMe: boolean; studentId?: string; number?: number };
+export type BoardAuthor = { name: string; character: Character; isTeacher: boolean; isVisitor?: boolean; isMe: boolean; studentId?: string; number?: number };
 export type BoardPoll = { question: string; options: { id: string; text: string; count: number }[]; ownVote?: string; totalVotes: number };
 export type BoardPost = {
   source?: {kind: 'assignment'; title: string; assignmentId?: string};
@@ -36,7 +37,7 @@ export type BoardComment = { id: string; text: string; author: BoardAuthor; stat
 export type BoardListResponse = { boards: ParticipationBoard[]; classes: { id: string; name: string; studentCount: number }[]; viewerRole: 'teacher' | 'student'; viewerId: string; nextCursor: string | null };
 export type BoardDetailResponse = { board: ParticipationBoard; posts: BoardPost[]; nextCursor: string | null; viewerRole: 'teacher' | 'student'; viewerId: string; unchanged?: boolean };
 export type BoardCreateInput = { requestId: string; classId: string; title: string; description?: string; layout?: BoardLayout; theme?: BoardTheme; character?: Character };
-export type BoardSettingsInput = Partial<Pick<ParticipationBoard, 'title' | 'description' | 'layout' | 'theme' | 'character' | 'status' | 'commentsEnabled' | 'reactionsEnabled' | 'moderation' | 'anonymous' | 'revealMode' | 'revealed' | 'sections' | 'sort'>>;
+export type BoardSettingsInput = Partial<Pick<ParticipationBoard, 'title' | 'description' | 'layout' | 'theme' | 'character' | 'status' | 'commentsEnabled' | 'reactionsEnabled' | 'moderation' | 'anonymous' | 'revealMode' | 'revealed' | 'publicViewEnabled' | 'visitorComments' | 'sections' | 'sort'>>;
 export type BoardPostInput = {
   requestId?: string; title?: string; body?: string; sectionId?: string; color?: BoardTheme;
   uploadIds?: string[]; link?: string; x?: number; y?: number;
@@ -44,6 +45,8 @@ export type BoardPostInput = {
   poll?: { question: string; options: { id: string; text: string }[] } | null;
   status?: BoardPostStatus; pinned?: boolean; version?: number;
 };
+export type PublicBoardView = Pick<ParticipationBoard, 'id' | 'title' | 'description' | 'className' | 'layout' | 'theme' | 'character' | 'reactionsEnabled' | 'sections' | 'visitorComments'>;
+export type PublicBoardResponse = { board: PublicBoardView; posts: BoardPost[]; nextCursor: string | null };
 export type BoardUploadResponse = { uploadId: string; uploadUrl: string; method: 'PUT'; headers: Record<string, string>; expiresAt: string };
 export type BoardVersion = { id: string; version: number; title: string; body: string; link: string; createdAt: string };
 
@@ -70,5 +73,9 @@ export type BoardVersion = { id: string; version: number; title: string; body: s
  * Use finalized attachment IDs as uploadIds. For edits include IDs of retained attachments too.
  * Teachers own their class boards; students only their authenticated class. Anonymous mode masks peers,
  * not teachers/self. Pending/hidden/reveal-protected posts & comments never reach other students.
+ * GET/POST /api/boards/:id/share {rotate?} -> {path} owner only; the token link works only while publicViewEnabled.
+ * GET /api/board-view/:token?cursor= -> PublicBoardResponse (published posts only, no sign-in).
+ * GET/POST /api/board-view/:token/posts/:postId/comments -> {comments} / {comment}; POST {requestId,authorName,text}
+ *   needs visitorComments; visitor comments always wait for teacher approval.
  * Frozen/archived blocks student writes, comments, reactions and uploads; teachers retain management.
  */

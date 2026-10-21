@@ -590,7 +590,7 @@ async function shareExhibition(ctx: Context, exhibition: Exhibition, request: Re
     if (!cls.exists || !ownsExhibition(ctx, asExhibition(cls))) throw new ApiError(403, '이 전시를 공유할 권한이 없어요.');
     let token = previous.data()?.token as string | undefined;
     if (!token) {token = randomBytes(32).toString('base64url'); tx.create(ref, {token, createdAt: now()}); tx.create(db().doc(`exhibitionShareLinks/${hash(token)}`), {exhibitionId: exhibition.id});}
-    return {path: `/gallery/${token}`, enabled: cls.data()?.publicSharingEnabled === true, status: cls.data()?.status};
+    return {path: `/gallery/${token}`, enabled: cls.data()?.publicSharingEnabled === true, status: cls.data()?.status, artworkModules: moduleOptions(cls.data()?.artworkModules)};
   });
   return json(result);
 }

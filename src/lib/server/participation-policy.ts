@@ -39,7 +39,7 @@ export function boardSettings(input: Record<string, unknown>): BoardSettingsInpu
   if ('character' in input) out.character = choice(input.character, characters, '캐릭터');
   if ('status' in input) out.status = choice(input.status, ['open', 'frozen', 'archived'] as const, '보드 상태');
   if ('sort' in input) out.sort = choice(input.sort, ['manual', 'newest', 'oldest'] as const, '정렬');
-  for (const key of ['commentsEnabled', 'reactionsEnabled', 'moderation', 'anonymous', 'revealMode', 'revealed'] as const) {
+  for (const key of ['commentsEnabled', 'reactionsEnabled', 'moderation', 'anonymous', 'revealMode', 'revealed', 'publicViewEnabled', 'visitorComments'] as const) {
     if (key in input) { if (typeof input[key] !== 'boolean') throw new ApiError(400, '설정을 확인해 주세요.'); out[key] = input[key]; }
   }
   if ('sections' in input) {

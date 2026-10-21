@@ -58,6 +58,8 @@ test('deleted posts/comments are never returned, including to owner', () => {
 test('settings whitelist ignores arbitrary ownership and rejects invalid booleans/layouts', () => {
   assert.deepEqual(boardSettings({ ownerUid: 'intruder', classId: 'class-b', title: ' 함께 생각해요 ' }), { title: '함께 생각해요' });
   assert.throws(() => boardSettings({ anonymous: 'false' }));
+  assert.deepEqual(boardSettings({ publicViewEnabled: true, visitorComments: false }), { publicViewEnabled: true, visitorComments: false });
+  assert.throws(() => boardSettings({ visitorComments: 'yes' }));
   assert.throws(() => boardSettings({ layout: 'javascript' }));
   assert.throws(() => assertBoardOwner(student, board));
 });
