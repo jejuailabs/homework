@@ -290,7 +290,11 @@ async function assignmentDetail(request: Request, assignmentId: string) {
     return json({assignment: {...assignment, ...changes, materials: await signedAssignmentMaterials(materials)}});
   }
   const [roster, submissions] = await Promise.all([db().collection(`classes/${assignment.classId}/students`).get(), db().collection('submissions').where('assignmentId', '==', assignmentId).get()]);
-  return json({ assignment: {...assignment, materials: await signedAssignmentMaterials(assignment.materials)}, students: roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id)).map(publicStudent).sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
+  const targets = roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id));
+  // Show each student's My Space friend and clothes, matching what they see at home.
+  const rooms = process.env.MY_SPACE_DISABLED === 'true' || !targets.length ? [] : await db().getAll(...targets.map(doc => doc.ref.collection('mySpace').doc('room')));
+  const students = targets.map((doc, index) => ({...publicStudent(doc), spaceCompanion: rooms.length ? companionProfile(doc.data(), rooms[index].data()) : null}));
+  return json({ assignment: {...assignment, materials: await signedAssignmentMaterials(assignment.materials)}, students: students.sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
 }
 async function home(request: Request) {
   const ctx = await requireStudent(request);

@@ -154,3 +154,6 @@
 .ws-teacher .ws-drawer-student .td-submission-badge{margin:5px 7px 5px 0}
 .ws-teacher .td-review-video{width:100%;max-height:370px;border-radius:14px;background:#18221f}
 @media(max-width:440px){.ws-teacher .td-submission-options{grid-template-columns:1fr;gap:8px}.ws-teacher .td-submission-option{display:grid;grid-template-columns:36px minmax(0,1fr);column-gap:10px;row-gap:2px;padding:10px 32px 10px 10px}.ws-teacher .td-submission-option-icon{grid-row:span 2;width:34px;height:34px;margin:0;align-self:center}.ws-teacher .td-submission-option input{top:50%;transform:translateY(-50%)}.ws-teacher .td-submission-option strong{font-size:12px}}
+
+.ws-student-box>.ws-student-avatar{width:72px;height:72px;margin:5px auto 1px;flex:none}.ws-teacher .ws-student-box>.ws-student-avatar{width:80px;height:80px}.ws-drawer-student>.ws-student-avatar{width:85px;height:85px;margin:0;flex:none;background:var(--accent-soft);border-radius:19px}
+@media(max-width:560px){.ws-teacher .ws-student-box>.ws-student-avatar{width:62px;height:62px}}
