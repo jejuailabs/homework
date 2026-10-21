@@ -188,7 +188,7 @@ export default function ParticipationWorkspace({role}: {role: Role}) {
     </div>}
     {modal === 'create' && home && <CreateBoardDialog classes={home.classes} initialClassId={classId} onClose={() => setModal(null)} onCreated={next => {applyBoard(next); navigate(next.id);}}/>}
     {modal === 'settings' && board && <BoardSettingsDialog key={board.id} board={board} onClose={() => setModal(null)} onSaved={next => {applyBoard(next); setSort(next.sort); setModal(null); setNotice(t('saved')); void loadDetail(next.id);}} onDuplicate={duplicateBoard} onExport={exportCsv}/>}
-    {modal === 'share' && board && <BoardShareDialog board={board} onClose={() => setModal(null)}/>}
+    {modal === 'share' && board && <BoardShareDialog board={board} onClose={() => setModal(null)} onSaved={applyBoard}/>}
     {composer && board && <ParticipationComposer key={`${board.id}:${composer.post?.id || 'new'}`} board={board} viewerId={viewerId} post={composer.post} sectionId={composer.sectionId} onClose={() => setComposer(null)} onSaved={post => {applyPost(post); setComposer(null); setNotice(t(post.status === 'pending' ? 'pending' : 'saved')); void loadDetail(post.boardId);}}/>}
     {commentPost && board && <CommentsDialog key={`${board.id}:${commentPost.id}`} board={board} post={commentPost} viewerId={viewerId} onClose={() => setCommentsPostId('')} onChange={() => void loadDetail(board.id)}/>}
     {historyPost && board && <HistoryDialog boardId={board.id} post={historyPost} onClose={() => setHistoryPostId('')} onRestored={post => {applyPost(post); setHistoryPostId(''); setNotice(t('saved'));}}/>}

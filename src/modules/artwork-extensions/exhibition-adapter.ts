@@ -16,7 +16,7 @@ export function moduleInstalled(name: string) { return ['voice', 'guestbook', 'a
 export function effectiveOptions(value: unknown) { const options = moduleOptions(value); if (!moduleInstalled('voice'))
     options.voice.enabled = false; if (!moduleInstalled('guestbook'))
     options.guestbook.enabled = false; if (!moduleInstalled('artbook')) options.artbook.enabled = false; return options; }
-async function visitor(request: Request) { const key = await secret(), sign = (v: string) => createHmac('sha256', key).update(v).digest('base64url'); const raw = request.headers.get('cookie')?.split(';').map(s => s.trim()).find(s => s.startsWith('creative_visitor='))?.slice(17) || '', parts = raw.split('.'); if (parts.length === 2 && /^[\w-]{43}$/.test(parts[0]) && /^[\w-]{43}$/.test(parts[1])) {
+export async function visitor(request: Request) { const key = await secret(), sign = (v: string) => createHmac('sha256', key).update(v).digest('base64url'); const raw = request.headers.get('cookie')?.split(';').map(s => s.trim()).find(s => s.startsWith('creative_visitor='))?.slice(17) || '', parts = raw.split('.'); if (parts.length === 2 && /^[\w-]{43}$/.test(parts[0]) && /^[\w-]{43}$/.test(parts[1])) {
     const expected = sign(parts[0]);
     if (timingSafeEqual(Buffer.from(expected), Buffer.from(parts[1])))
         return { key: digest(raw), cookie: '' };

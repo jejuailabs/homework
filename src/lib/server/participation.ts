@@ -1,5 +1,5 @@
 import 'server-only';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FieldPath } from 'firebase-admin/firestore';
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
@@ -11,6 +11,9 @@ import type { BoardAttachment, BoardAuthor, BoardComment, BoardPost, Participati
 import {stableReadUrl} from './signed-urls';
 import {assertTeacherStorage} from './teacher-storage';
 import {FILE_CACHE_CONTROL} from '../storage-cache';
+import { visitor } from '@/modules/artwork-extensions/exhibition-adapter';
+import { consumeModuleRate } from '@/modules/artwork-extensions/server-utils';
+import { guestName, guestText } from '@/modules/warm-guestbook/policy';
 
 type Data = Record<string, any>;
 type StoredBoard = Data & { id: string; ownerUid: string; classId: string; status: string };
@@ -21,6 +24,8 @@ const postRef = (boardId: string, postId: string) => boardRef(boardId).collectio
 const uploadRef = (boardId: string, uploadId: string) => boardRef(boardId).collection('uploads').doc(id(uploadId));
 const engagementRef = (boardId: string, uid: string, postId: string) => boardRef(boardId).collection('engagement').doc(hash(uid)).collection('posts').doc(id(postId));
 const quotaRef = (uid: string) => db().doc(`participationStorage/${uid}`);
+const shareRef = (boardId: string) => db().doc(`participationBoardShares/${id(boardId)}`);
+const shareLinkRef = (token: string) => db().doc(`participationBoardShareLinks/${hash(token)}`);
 const map = (doc: FirebaseFirestore.DocumentSnapshot): Data => ({ ...doc.data(), id: doc.id });
 const asBoard = (doc: FirebaseFirestore.DocumentSnapshot) => map(doc) as StoredBoard;
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -45,14 +50,14 @@ function requestKey(input: Data, ctx: Context, action: string) {
 }
 function publicBoard(ctx: Context, board: StoredBoard): ParticipationBoard {
   const { id, classId, className, title, description, layout, theme, character, status, commentsEnabled, reactionsEnabled, moderation, anonymous, revealMode, revealed, sections, sort, postCount, participantCount, createdAt, updatedAt } = board;
-  return { id, classId, className, title, description, layout, theme, character, status: status as ParticipationBoard['status'], commentsEnabled, reactionsEnabled, moderation, anonymous, revealMode, revealed, sections, sort, postCount, participantCount, createdAt, updatedAt, canManage: isBoardOwner(ctx, board), canPost: canWriteBoard(ctx, board) };
+  return { id, classId, className, title, description, layout, theme, character, status: status as ParticipationBoard['status'], commentsEnabled, reactionsEnabled, moderation, anonymous, revealMode, revealed, publicViewEnabled: board.publicViewEnabled === true, visitorComments: board.visitorComments === true, sections, sort, postCount, participantCount, createdAt, updatedAt, canManage: isBoardOwner(ctx, board), canPost: canWriteBoard(ctx, board) };
 }
 function publicAuthor(ctx: Context, board: StoredBoard, item: Data): BoardAuthor {
   const own = ctx.uid === item.authorUid;
   const masked = (board.anonymous || item.sourceAnonymous) && item.authorRole === 'student' && !isBoardOwner(ctx, board) && !own;
   return {
     name: masked ? `친구 ${hash(`${board.id}:${item.authorUid}`).slice(0, 4).toUpperCase()}` : item.authorName,
-    character: item.authorCharacter ?? 'cat', isTeacher: item.authorRole !== 'student', isMe: own,
+    character: item.authorCharacter ?? 'cat', isTeacher: item.authorRole === 'teacher', ...(item.authorRole === 'visitor' ? { isVisitor: true } : {}), isMe: own,
     ...(!masked && item.authorStudentId ? { studentId: item.authorStudentId, number: item.authorNumber } : {}),
   };
 }
@@ -527,6 +532,99 @@ async function finalizeUpload(ctx: Context, board: StoredBoard, uploadId: string
   }
 }
 
+async function shareBoard(ctx: Context, board: StoredBoard, input: Data) {
+  assertBoardOwner(ctx, board);
+  if ('rotate' in input && input.rotate !== true) throw new ApiError(400, '요청 내용을 확인해 주세요.');
+  const token = await db().runTransaction(async tx => {
+    const fresh = asBoard(await tx.get(boardRef(board.id))); assertBoardOwner(ctx, fresh);
+    const previous = (await tx.get(shareRef(board.id))).data()?.token as string | undefined;
+    if (previous && !input.rotate) return previous;
+    const next = randomBytes(32).toString('base64url');
+    if (previous) tx.delete(shareLinkRef(previous));
+    tx.set(shareRef(board.id), { token: next, createdAt: now() });
+    tx.create(shareLinkRef(next), { boardId: board.id });
+    return next;
+  });
+  return json({ path: `/board/${token}` });
+}
+
+// Visitors never get a Context; this stand-in only drives the read-side author masking.
+const visitorViewer = { uid: '', role: 'visitor', email: null, displayName: null } as unknown as Context;
+const publicPostVisible = (board: StoredBoard, post: Data) => !post.deleted && post.status === 'published' && !(board.revealMode && !board.revealed);
+async function sharedBoard(token: string) {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError(404, '공유된 보드를 찾을 수 없어요.', 'NOT_FOUND');
+  const link = await shareLinkRef(token).get();
+  const snapshot = link.exists ? await boardRef(link.data()!.boardId).get() : null;
+  const board = snapshot?.exists ? asBoard(snapshot) : null;
+  if (!board || board.publicViewEnabled !== true || board.status === 'archived') throw new ApiError(404, '보드가 공개되지 않았거나 공유가 끝났어요.', 'NOT_FOUND');
+  return board;
+}
+async function publicPostView(board: StoredBoard, value: Data): Promise<BoardPost> {
+  const post = await postView(visitorViewer, board, value, null);
+  return { ...post, canEdit: false, ...(post.source ? { source: { kind: post.source.kind, title: post.source.title } } : {}) };
+}
+async function publicComments(board: StoredBoard, postId: string, request: Request) {
+  const snapshot = await postRef(board.id, postId).get();
+  if (!snapshot.exists || !publicPostVisible(board, snapshot.data()!)) throw new ApiError(404, '게시물을 찾을 수 없어요.', 'NOT_FOUND');
+  const collection = snapshot.ref.collection('comments');
+  if (request.method === 'GET') {
+    const docs = await collection.where('deleted', '==', false).limit(300).get();
+    return json({ comments: docs.docs.filter(d => d.data().status === 'published').map(d => ({ ...commentView(visitorViewer, board, map(d)), canEdit: false })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)) });
+  }
+  if (board.visitorComments !== true) throw new ApiError(403, '이 보드는 방문자 댓글을 받지 않아요.', 'COMMENTS_DISABLED');
+  const input = await body(request);
+  let commentText: string, name: string;
+  try { commentText = guestText(input.text); name = guestName(input.authorName); }
+  catch { throw new ApiError(400, '댓글은 연락처·링크 없이 120자 이내로, 별명은 20자까지 적어 주세요.', 'COMMENT_INVALID'); }
+  const who = await visitor(request), ref = collection.doc(hash(`${who.key}:${postId}:${id(input.requestId, '요청 번호')}`).slice(0, 40));
+  await consumeModuleRate([
+    { key: 'board-visitor:' + who.key, limit: 12, windowMs: 3600000 },
+    { key: 'visitor-ip:' + hash(request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'), limit: 30, windowMs: 3600000 },
+    { key: 'board-visitors:' + board.id, limit: 500, windowMs: 86400000 },
+  ]);
+  const saved = await db().runTransaction(async tx => {
+    const [freshDoc, post, existing] = await Promise.all([tx.get(boardRef(board.id)), tx.get(snapshot.ref), tx.get(ref)]);
+    const fresh = asBoard(freshDoc);
+    if (fresh.publicViewEnabled !== true || fresh.visitorComments !== true || fresh.status === 'archived') throw new ApiError(409, '보드 공유 설정이 바뀌었어요. 새로고침해 주세요.', 'COMMENTS_DISABLED');
+    if (!post.exists || !publicPostVisible(fresh, post.data()!)) throw new ApiError(404, '게시물을 찾을 수 없어요.', 'NOT_FOUND');
+    if (existing.exists) return map(existing);
+    if ((post.data()!.commentCount ?? 0) >= 300) throw new ApiError(409, '이 글의 댓글 공간이 가득 찼어요.', 'COMMENT_LIMIT');
+    // Visitor comments always wait for the teacher, whatever the board's moderation setting is.
+    const value = { text: commentText, authorUid: 'visitor:' + who.key, authorRole: 'visitor', authorName: name, authorStudentId: '', authorNumber: 0, authorCharacter: 'cat', status: 'pending', deleted: false, createdAt: now(), updatedAt: now() };
+    tx.create(ref, value);
+    tx.update(post.ref, { commentCount: (post.data()!.commentCount ?? 0) + 1, totalCommentWrites: (post.data()!.totalCommentWrites ?? post.data()!.commentCount ?? 0) + 1 });
+    tx.update(boardRef(board.id), { updatedAt: now() });
+    return { ...value, id: ref.id };
+  });
+  const response = json({ comment: { ...commentView(visitorViewer, board, saved), canEdit: false } }, 201);
+  if (who.cookie) response.headers.append('Set-Cookie', who.cookie);
+  return response;
+}
+export async function handlePublicBoard(request: Request, token: string, segments: string[] = []) {
+  try {
+    if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
+    segments.forEach(v => id(v));
+    const board = await sharedBoard(token);
+    if (!segments.length && request.method === 'GET') {
+      const cursor = new URL(request.url).searchParams.get('cursor');
+      let query = boardRef(board.id).collection('posts').where('deleted', '==', false).orderBy(FieldPath.documentId());
+      if (cursor) query = query.startAfter(id(cursor));
+      const page = await query.limit(BOARD_PAGE_LIMIT + 1).get();
+      const docs = page.docs.slice(0, BOARD_PAGE_LIMIT);
+      const posts = await Promise.all(docs.filter(doc => publicPostVisible(board, doc.data())).map(doc => publicPostView(board, map(doc))));
+      const { id: boardId, title, description, className, layout, theme, character, reactionsEnabled, sections } = board;
+      return json({ board: { id: boardId, title, description, className, layout, theme, character, reactionsEnabled, sections: sections ?? [], visitorComments: board.visitorComments === true }, posts, nextCursor: page.size > BOARD_PAGE_LIMIT ? docs.at(-1)!.id : null });
+    }
+    const [section, postId, action] = segments;
+    if (segments.length === 3 && section === 'posts' && action === 'comments' && ['GET', 'POST'].includes(request.method)) return await publicComments(board, postId, request);
+    throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
+  } catch (error) {
+    if (error instanceof ApiError) return json({ error: error.message, code: error.code }, error.status);
+    console.error('Public board operation failed', (error as { code?: unknown }).code ?? 'INTERNAL');
+    return json({ error: '보드를 열지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'INTERNAL_ERROR' }, 500);
+  }
+}
+
 export async function handleParticipation(request: Request, segments: string[] = []) {
   try {
     if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
@@ -545,6 +643,7 @@ export async function handleParticipation(request: Request, segments: string[] =
       if (segments.length === 2 && section === 'participants' && method === 'GET') return await participants(ctx, board);
       if (segments.length === 2 && section === 'cleanup' && method === 'POST') { assertBoardOwner(ctx, board); return json({ cleaned: await cleanupUploads(board) }); }
       if (segments.length === 2 && section === 'reorder' && method === 'POST') return await reorder(ctx, board, request);
+      if (segments.length === 2 && section === 'share' && ['GET', 'POST'].includes(method)) return await shareBoard(ctx, board, method === 'POST' ? await body(request) : {});
       if (section === 'uploads') {
         if (segments.length === 2 && method === 'POST') return await initUpload(ctx, board, request);
         if (segments.length === 4 && action === 'finalize' && method === 'POST') return await finalizeUpload(ctx, board, postId);
