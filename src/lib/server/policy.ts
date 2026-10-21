@@ -56,6 +56,18 @@ export function nextReview(status: unknown, alreadyRewarded: boolean) {
   if (status !== 'done' && status !== 'revision') throw new ApiError(400, '확인 상태를 선택해 주세요.');
   return { status, reward: status === 'done' && !alreadyRewarded ? 10 : 0 };
 }
+export const BATCH_REVIEW_LIMIT = 50;
+/** Bulk checks only approve; each item still names the exact attempt the teacher saw. */
+export function batchReviewItems(raw: unknown) {
+  if (!Array.isArray(raw) || !raw.length || raw.length > BATCH_REVIEW_LIMIT) throw new ApiError(400, `한 번에 1~${BATCH_REVIEW_LIMIT}명까지 확인할 수 있어요.`, 'BATCH_SIZE');
+  const items = raw.map(value => {
+    const row = value as Record<string, unknown>;
+    if (!row || typeof row !== 'object' || typeof row.attemptId !== 'string' || !row.attemptId) throw new ApiError(400, '확인할 제출물을 다시 골라 주세요.', 'BATCH_ITEM');
+    return { studentId: id(row.studentId), attemptId: row.attemptId, feedback: text(row.feedback ?? '', '피드백', 5000, true) };
+  });
+  if (new Set(items.map(item => item.studentId)).size !== items.length) throw new ApiError(400, '같은 학생이 두 번 들어 있어요.', 'BATCH_DUPLICATE');
+  return items;
+}
 /** A phone-made JPEG preview is accepted only alongside a photo and only while it stays small. */
 export function homeworkThumbnailSize(contentType: string, raw: unknown): number | undefined {
   if (raw === undefined || raw === null || !contentType.startsWith('image/')) return undefined;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes } from '../assignment-submission';
-import { validSessionAuthentication, ApiError, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
+import { validSessionAuthentication, ApiError, BATCH_REVIEW_LIMIT, batchReviewItems, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
 
 test('teacher and platform administrator class access always requires ownership', () => {
   for (const role of ['teacher', 'admin', 'superadmin'] as const) {
@@ -14,6 +14,11 @@ test('teacher and platform administrator class access always requires ownership'
 test('only the first successful review grants growth credit', () => {
   assert.equal(nextReview('revision', false).reward, 0);
   assert.equal(nextReview('done', false).reward, 10);
+  assert.deepEqual(batchReviewItems([{ studentId: 's1', attemptId: 'a1', feedback: ' 잘했어요 ' }, { studentId: 's2', attemptId: 'a2' }]), [{ studentId: 's1', attemptId: 'a1', feedback: '잘했어요' }, { studentId: 's2', attemptId: 'a2', feedback: '' }]);
+  assert.throws(() => batchReviewItems([]));
+  assert.throws(() => batchReviewItems(Array.from({ length: BATCH_REVIEW_LIMIT + 1 }, (_, i) => ({ studentId: `s${i}`, attemptId: 'a' }))));
+  assert.throws(() => batchReviewItems([{ studentId: 's1', attemptId: 'a1' }, { studentId: 's1', attemptId: 'a2' }]));
+  assert.throws(() => batchReviewItems([{ studentId: 's1' }]));
   assert.equal(nextReview('done', true).reward, 0);
   assert.equal(nextReview('revision', true).reward, 0);
   assert.throws(() => nextReview('anything', false));
