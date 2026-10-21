@@ -4,12 +4,15 @@ import {NextResponse} from 'next/server';
 import {db} from '@/lib/server/admin';
 import {assertOrigin, getContext} from '@/lib/server/auth';
 import {ApiError, id, isAdmin} from '@/lib/server/policy';
-import {checkQuizAnswer, DAILY_REWARD_HALF_UNITS, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, QuizError, quizAddDays, quizPackId, quizRanking, quizScope, quizWeekStart, QUIZ_VERSION, seoulQuizDate, validQuizCronSecret} from './engine';
-import {quizLearners, quizModes, type QuizLabState, type QuizMode, type QuizPack, type QuizScope, type QuizSession, type QuizSkill, type QuizSubject, type QuizWalletRow, type Understanding} from './types';
+import {checkQuizAnswer, DAILY_REWARD_HALF_UNITS, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, QuizError, quizAddDays, quizDate, quizPackId, quizRange, quizRangePackId, quizRanking, quizScope, quizWeekStart, QUIZ_VERSION, seoulQuizDate, validQuizCronSecret} from './engine';
+import {quizCalendar} from './curriculum';
+import {quizLearners, quizModes, type QuizEnglishRange, type QuizLabState, type QuizMode, type QuizPack, type QuizRange, type QuizRangeDoc, type QuizScope, type QuizSession, type QuizSkill, type QuizSubject, type QuizWalletRow, type Understanding} from './types';
 
 type Input = Record<string, unknown>;
 const json = (value: unknown, status = 200) => NextResponse.json(value, {status, headers: {'Cache-Control': 'private, no-store'}});
-const packRef = (scope: QuizScope, subject: QuizSubject) => db().doc(`dailyQuizPacks/${quizPackId(scope, subject)}`);
+type ClassRange = {classId: string; english: QuizEnglishRange};
+const packRef = (scope: QuizScope, subject: QuizSubject, range?: ClassRange) => db().doc(`dailyQuizPacks/${subject === 'english' && range ? quizRangePackId(scope, range.classId, range.english) : quizPackId(scope, subject)}`);
+const rangeRef = (classId: string, date: string) => db().doc(`dailyQuizRanges/${classId}_${date}`);
 const learnerRef = (uid: string, scope: QuizScope, learner: string) => db().doc(`dailyQuizLabs/${uid}/learners/g${scope.grade}_s${scope.semester}_${learner}`);
 const sessionId = (scope: QuizScope, mode: QuizMode) => `${QUIZ_VERSION}_${scope.date}_${mode}`;
 const modeFor = (value: unknown): QuizMode => {if (!quizModes.includes(value as QuizMode)) throw new QuizError('학습 종류를 확인해 주세요.'); return value as QuizMode;};
@@ -19,12 +22,29 @@ export async function input(request: Request): Promise<Input> {
   try {const data = JSON.parse(raw); if (data && typeof data === 'object' && !Array.isArray(data)) return data;} catch {}
   throw new QuizError('입력 내용을 확인해 주세요.');
 }
-export async function ensurePack(scope: QuizScope, subject: QuizSubject) {
-  const ref = packRef(scope, subject), previous = await ref.get();
+export async function ensurePack(scope: QuizScope, subject: QuizSubject, range?: ClassRange) {
+  const ref = packRef(scope, subject, range), previous = await ref.get();
   if (previous.exists) return {pack: previous.data() as QuizPack, created: false};
-  const pack = generateQuizPack(scope, subject);
+  const pack = generateQuizPack(scope, subject, range);
   try {await ref.create({...pack, createdAt: new Date().toISOString()}); return {pack, created: true};}
   catch (error) {if ((error as {code?: number}).code !== 6) throw error; return {pack: (await ref.get()).data() as QuizPack, created: false};}
+}
+/** A saved range applies only while the class grade still matches the grade it was chosen for. */
+export async function loadQuizRange(classId: string, scope: QuizScope): Promise<QuizRange | null> {
+  const data = (await rangeRef(classId, scope.date).get()).data() as QuizRangeDoc | undefined;
+  if (!data || data.grade !== scope.grade) return null;
+  try {return quizRange(data, scope.grade);} catch {return null;}
+}
+/** Teachers may set only today or tomorrow (Seoul); an all-default range removes the document. */
+export async function saveQuizRange(classId: string, grade: number, data: Input, uid: string) {
+  const today = seoulQuizDate(), date = quizDate(data.date);
+  if (date !== today && date !== quizAddDays(today, 1)) throw new QuizError('오늘이나 내일의 범위만 정할 수 있어요.');
+  const range = quizRange(data, grade), ref = rangeRef(classId, date);
+  if (!range.english && !range.math) {await ref.delete(); return null;}
+  // Prepare the immutable class pack first so an invalid range never reaches students.
+  if (range.english) await ensurePack(quizScope({grade, semester: quizCalendar(date).semester, date}), 'english', {classId, english: range.english});
+  const doc: QuizRangeDoc = {...range, classId, date, grade, updatedAt: new Date().toISOString(), updatedBy: uid};
+  await ref.set(doc); return doc;
 }
 export async function prepareQuizDays(date: string, scopes: {grade: number; semester: number}[], source: string) {
   let created = 0, existing = 0;

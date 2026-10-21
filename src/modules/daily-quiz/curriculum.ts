@@ -30,6 +30,11 @@ export function quizMathStage(date: string, index: number) {
   if (index < 9) return Math.max(0, plan.stage - 1);
   return plan.day % plan.stage;
 }
+/** The word indices a calendar stage opens, matching the blocks used by quizWordIndices. */
+export function quizStageWordIndices(stage: number, count: number) {
+  const block = Math.ceil(count / ANNUAL_STAGES);
+  return Array.from({length: Math.max(0, Math.min(block, count - stage * block))}, (_, i) => stage * block + i);
+}
 export function quizWordIndices(date: string, count: number) {
   const plan = quizCalendar(date), block = Math.ceil(count / ANNUAL_STAGES);
   const current = Array.from({length: Math.min(block, count - plan.stage * block)}, (_, i) => plan.stage * block + i);

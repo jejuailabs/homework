@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
-import {ANNUAL_QUIZ_VERSION, MATH_PRACTICE_VERSION, quizPracticeMathStage, quizMathStage, quizWordIndices} from './curriculum';
+import {ANNUAL_QUIZ_VERSION, ANNUAL_STAGES, MATH_PRACTICE_VERSION, quizCalendar, quizPracticeMathStage, quizMathStage, quizStageWordIndices, quizWordIndices} from './curriculum';
 import {quizVocabulary} from './vocabulary';
-import type {QuizAnswer, QuizPack, QuizPublicSession, QuizQuestion, QuizScope, QuizSession, QuizSkill, QuizSubject, Understanding} from './types';
+import type {QuizAnswer, QuizEnglishRange, QuizPack, QuizPublicSession, QuizQuestion, QuizRange, QuizScope, QuizSession, QuizSkill, QuizSubject, Understanding} from './types';
 export const QUIZ_VERSION = 'pilot-v1';
 export const ENGLISH_PACK_VERSION = ANNUAL_QUIZ_VERSION;
 export const DAILY_REWARD_HALF_UNITS = 10; // 5 Bomal per completed common subject.
@@ -21,6 +21,63 @@ export function quizScope(value: {grade?: unknown; semester?: unknown; date?: un
   return {grade, semester, date: quizDate(value.date)};
 }
 export function quizPackId(scope: QuizScope, subject: QuizSubject) {return `${ANNUAL_QUIZ_VERSION}_${scope.date}_g${scope.grade}_${subject}`;}
+export const QUIZ_RANGE_MIN_WORDS = 5, QUIZ_RANGE_MAX_WORDS = 30;
+const stageOf = (value: unknown, message: string) => {const stage = Number(value); if (typeof value !== 'number' || !Number.isInteger(stage) || stage < 0 || stage >= ANNUAL_STAGES) throw new QuizError(message); return stage;};
+/** Validates a teacher range against the class grade; word ranges keep vocabulary order so equal choices share one pack. */
+export function quizRange(value: {english?: unknown; math?: unknown}, grade: number): QuizRange {
+  let english: QuizEnglishRange | null = null, math: QuizRange['math'] = null;
+  const rawEnglish = value.english as Record<string, unknown> | null | undefined, rawMath = value.math as Record<string, unknown> | null | undefined;
+  if (rawEnglish !== null && rawEnglish !== undefined) {
+    if (typeof rawEnglish !== 'object' || Array.isArray(rawEnglish)) throw new QuizError('영어 범위를 확인해 주세요.');
+    if (rawEnglish.kind === 'stages') {
+      const from = stageOf(rawEnglish.from, '영어 단계를 확인해 주세요.'), to = stageOf(rawEnglish.to, '영어 단계를 확인해 주세요.');
+      if (from > to) throw new QuizError('영어 시작 단계가 끝 단계보다 뒤에 있어요.');
+      english = {kind: 'stages', from, to};
+    } else if (rawEnglish.kind === 'words') {
+      if (!Array.isArray(rawEnglish.words) || rawEnglish.words.some(word => typeof word !== 'string')) throw new QuizError('영어 단어를 선택해 주세요.');
+      const chosen = new Set(rawEnglish.words as string[]), words = quizVocabulary(grade).map(word => word.id).filter(id => chosen.has(id));
+      if (words.length !== chosen.size) throw new QuizError('이 학년 단어 목록에 없는 단어가 있어요.');
+      if (words.length < QUIZ_RANGE_MIN_WORDS || words.length > QUIZ_RANGE_MAX_WORDS) throw new QuizError(`영어 단어는 ${QUIZ_RANGE_MIN_WORDS}~${QUIZ_RANGE_MAX_WORDS}개를 골라 주세요.`);
+      english = {kind: 'words', words};
+    } else throw new QuizError('영어 범위 종류를 확인해 주세요.');
+  }
+  if (rawMath !== null && rawMath !== undefined) {
+    if (typeof rawMath !== 'object' || Array.isArray(rawMath)) throw new QuizError('연산 단계를 확인해 주세요.');
+    math = {stage: stageOf(rawMath.stage, '연산 단계를 확인해 주세요.')};
+  }
+  return {english, math};
+}
+export function quizRangePackId(scope: QuizScope, classId: string, english: QuizEnglishRange) {
+  return `${quizPackId(scope, 'english')}_c${classId}_${createHash('sha256').update(JSON.stringify(english)).digest('hex').slice(0, 12)}`;
+}
+/** Ten English slots for a teacher range: 6 from the last stage and 4 from earlier stages, or rotated chosen words.
+ * Fewer than ten chosen words are each asked once as a choice, then the remaining slots become spelling. */
+export function quizRangeWordPicks(english: QuizEnglishRange, date: string, grade: number): {index: number; spell: boolean}[] {
+  const words = quizVocabulary(grade), day = Math.max(0, quizCalendar(date).day), selected: number[] = [];
+  const take = (pool: number[], amount: number, offset: number) => {
+    for (let n = 0; n < pool.length && amount; n++) {const value = pool[(offset + n) % pool.length]; if (!selected.includes(value)) {selected.push(value); amount--;}}
+  };
+  if (english.kind === 'words') {
+    const pool = english.words.map(id => words.findIndex(word => word.id === id));
+    if (pool.length < 10) return [...pool.map(index => ({index, spell: false})), ...pool.slice(0, 10 - pool.length).map(index => ({index, spell: true}))];
+    take(pool, 10, day * 10 % pool.length);
+  } else {
+    const last = quizStageWordIndices(english.to, words.length), earlier = Array.from({length: english.to - english.from}, (_, i) => quizStageWordIndices(english.from + i, words.length)).flat();
+    take(last, earlier.length ? 6 : 10, day % (last.length || 1));
+    take(earlier, 10 - selected.length, day * 4 % (earlier.length || 1));
+    take([...earlier, ...last], 10 - selected.length, 0);
+  }
+  return selected.map((index, i) => ({index, spell: i >= selected.length - 2}));
+}
+/** Per-grade content index shown to teachers. */
+export function quizEnglishIndex(grade: number) {
+  const words = quizVocabulary(grade);
+  return Array.from({length: ANNUAL_STAGES}, (_, stage) => ({stage, words: quizStageWordIndices(stage, words.length).map(index => words[index])}));
+}
+export function quizMathIndex(grade: number) {
+  const scope = {grade, semester: 1, date: '2026-03-02'};
+  return Array.from({length: ANNUAL_STAGES}, (_, stage) => ({stage, labels: [...new Set([0, 1].map(index => mathQuestion(scope, index, `index_${grade}_${stage}_${index}`, undefined, undefined, stage).skillLabel))]}));
+}
 export function seededRandom(seed: string) {
   let value = 2166136261;
   for (let i = 0; i < seed.length; i++) value = Math.imul(value ^ seed.charCodeAt(i), 16777619) >>> 0;
@@ -56,17 +113,18 @@ export function checkQuizAnswer(question: QuizQuestion, raw: unknown): {answer: 
   }
   return {answer, correct: answer.normalize('NFKC').toLowerCase() === question.answer.normalize('NFKC').toLowerCase()};
 }
-function englishQuestion(scope: QuizScope, index: number, seed: string, skillId?: string, spell = false): QuizQuestion {
+function englishQuestion(scope: QuizScope, index: number, seed: string, skillId?: string, spell = false, wordIndex?: number): QuizQuestion {
   const words = quizVocabulary(scope.grade), random = seededRandom(seed);
-  const word = skillId ? words.find(word => word.id === skillId)! : words[quizWordIndices(scope.date, words.length)[index]];
+  const word = skillId ? words.find(word => word.id === skillId)! : words[wordIndex ?? quizWordIndices(scope.date, words.length)[index]];
   if (!word) throw new QuizError('복습할 단어를 찾을 수 없어요.');
   const choices = spell ? [] : shuffle([word.meaning, ...shuffle(words.filter(item => item.id !== word.id), random).slice(0, 3).map(item => item.meaning)], random);
   return {id: questionId(seed, index), subject: 'english', skillId: word.id, skillLabel: `${word.word} · ${word.meaning}`, prompt: spell ? `‘${word.meaning}’에 해당하는 영어 단어를 쓰세요.` : `‘${word.word}’의 뜻을 고르세요.`, choices, answer: spell ? word.word : word.meaning, explanation: `${word.word} = ${word.meaning}`, kind: spell ? 'text' : 'choice'};
 }
-function mathQuestion(scope: QuizScope, index: number, seed: string, skillId?: string, practiceDays?: number): QuizQuestion {
+/** teacherStage replaces personal progress for one day: 7 questions at that stage and 3 from the stage before it. */
+function mathQuestion(scope: QuizScope, index: number, seed: string, skillId?: string, practiceDays?: number, teacherStage?: number): QuizQuestion {
   const random = seededRandom(seed), grade = scope.grade;
   const retained = skillId?.match(/^annual-g\d-t(\d+)-(add|sub|mul|div)$/);
-  const stage = retained ? Number(retained[1]) : practiceDays === undefined ? quizMathStage(scope.date, index) : quizPracticeMathStage(practiceDays, index);
+  const stage = retained ? Number(retained[1]) : teacherStage !== undefined ? index < 7 || !teacherStage ? teacherStage : teacherStage - 1 : practiceDays === undefined ? quizMathStage(scope.date, index) : quizPracticeMathStage(practiceDays, index);
   let operation = retained?.[2] || (index % 2 ? 'sub' : 'add'), prompt = '', answer = '', label = '';
   let family: 'whole' | 'product' | 'fraction-sum' | 'fraction-product' | 'decimal-sum' | 'decimal-product' = 'whole';
   if (grade === 2 && stage >= 9 || grade === 3 && stage >= 3 || grade === 4) family = 'product';
@@ -89,7 +147,7 @@ function mathQuestion(scope: QuizScope, index: number, seed: string, skillId?: s
     let a = pickInt(random, 1, denominator - 1), b = pickInt(random, 1, other - 1), d1 = denominator, d2 = other;
     if (operation === 'sub' && a * d2 < b * d1) {[a, b] = [b, a]; [d1, d2] = [d2, d1];}
     prompt = `${a}/${d1} ${operation === 'sub' ? '−' : '+'} ${b}/${d2}`; answer = rational(operation === 'sub' ? a * d2 - b * d1 : a * d2 + b * d1, d1 * d2);
-    label = other === denominator ? '같은 분모 분수의 덧셈·뺄셈' : '분수의 덧셈·뺄셈';
+    label = grade === 5 && stage < 6 ? '같은 분모 분수의 덧셈·뺄셈' : '분수의 덧셈·뺄셈';
   } else if (family === 'decimal-sum') {
     const places = stage < 11 ? 10 : 100;
     let a = pickInt(random, 1, 99), b = pickInt(random, 1, 99);
@@ -104,24 +162,26 @@ function mathQuestion(scope: QuizScope, index: number, seed: string, skillId?: s
   }
   return {id: questionId(seed, index), subject: 'math', skillId: `annual-g${grade}-t${stage}-${operation}`, skillLabel: label, prompt: `${prompt} = ?`, choices: [], answer, explanation: `${prompt} = ${answer}${grade >= 5 ? ' (같은 값의 분수·소수도 정답으로 인정해요.)' : ''}`, kind: 'number'};
 }
-export function generateQuizPack(scope: QuizScope, subject: QuizSubject): QuizPack {
+/** A class range yields its own English pack ID; without one the shared grade pack is unchanged. */
+export function generateQuizPack(scope: QuizScope, subject: QuizSubject, range?: {classId: string; english: QuizEnglishRange}): QuizPack {
   quizScope(scope);
-  const id = quizPackId(scope, subject), questions: QuizQuestion[] = [];
+  const custom = subject === 'english' && range ? quizRangeWordPicks(range.english, scope.date, scope.grade) : null;
+  const id = custom ? quizRangePackId(scope, range!.classId, range!.english) : quizPackId(scope, subject), questions: QuizQuestion[] = [];
   const spelling = spellingSlots(Array.from({length: 10}, (_, i) => i), `${id}_spelling`);
   for (let i = 0; i < 10; i++) {
     let question: QuizQuestion, attempt = 0;
-    do {const seed = `${id}_${i}_${attempt++}`; question = subject === 'english' ? englishQuestion(scope, i, seed, undefined, spelling.has(i)) : mathQuestion(scope, i, seed);} while (questions.some(previous => previous.prompt === question.prompt) && attempt < 100);
+    do {const seed = `${id}_${i}_${attempt++}`; question = subject === 'english' ? englishQuestion(scope, i, seed, undefined, custom ? custom[i].spell : spelling.has(i), custom?.[i].index) : mathQuestion(scope, i, seed);} while (questions.some(previous => previous.prompt === question.prompt) && attempt < 100);
     if (questions.some(previous => previous.prompt === question.prompt)) throw new QuizError('중복 없는 문제 준비에 실패했어요.', 'QUIZ_GENERATION', 500);
     questions.push(question);
   }
   return {...scope, id, subject, version: ANNUAL_QUIZ_VERSION, questions};
 }
-export function generatePracticeMathPack(scope: QuizScope, completedDays: number): QuizPack {
+export function generatePracticeMathPack(scope: QuizScope, completedDays: number, teacherStage?: number): QuizPack {
   quizScope(scope);
-  const id = `${MATH_PRACTICE_VERSION}_${scope.date}_g${scope.grade}_d${completedDays}`, questions: QuizQuestion[] = [];
+  const id = `${MATH_PRACTICE_VERSION}_${scope.date}_g${scope.grade}_d${completedDays}${teacherStage === undefined ? '' : `_t${teacherStage}`}`, questions: QuizQuestion[] = [];
   for (let i = 0; i < 10; i++) {
     let question: QuizQuestion, attempt = 0;
-    do {question = mathQuestion(scope, i, `${id}_${i}_${attempt++}`, undefined, completedDays);} while (questions.some(q => q.prompt === question.prompt) && attempt < 100);
+    do {question = mathQuestion(scope, i, `${id}_${i}_${attempt++}`, undefined, completedDays, teacherStage);} while (questions.some(q => q.prompt === question.prompt) && attempt < 100);
     if (questions.some(q => q.prompt === question.prompt)) throw new QuizError('중복 없는 연산 준비에 실패했어요.', 'QUIZ_GENERATION', 500);
     questions.push(question);
   }

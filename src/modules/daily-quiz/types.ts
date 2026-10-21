@@ -5,7 +5,11 @@ export type QuizScope = {grade: number; semester: number; date: string};
 export type QuizQuestion = {id: string; subject: QuizSubject; skillId: string; skillLabel: string; prompt: string; choices: string[]; answer: string; explanation: string; kind: 'choice' | 'text' | 'number'};
 export type QuizPack = QuizScope & {id: string; version: string; subject: QuizSubject; questions: QuizQuestion[]};
 export type QuizAnswer = {answer: string; correct: boolean; understanding: Understanding | null; submittedAt: string; completedAt?: string; nextDue?: string};
-export type QuizSession = QuizScope & {id: string; mode: QuizMode; questions: QuizQuestion[]; answers: Record<string, QuizAnswer>; completed: boolean; createdAt: string; mathPractice?: {version: string; completedBefore: number}};
+export type QuizSession = QuizScope & {id: string; mode: QuizMode; questions: QuizQuestion[]; answers: Record<string, QuizAnswer>; completed: boolean; createdAt: string; mathPractice?: {version: string; completedBefore: number; teacherStage?: number}};
+/** Teacher-chosen study range for one class and date; stages are 0-based. */
+export type QuizEnglishRange = {kind: 'stages'; from: number; to: number} | {kind: 'words'; words: string[]};
+export type QuizRange = {english: QuizEnglishRange | null; math: {stage: number} | null};
+export type QuizRangeDoc = QuizRange & {classId: string; date: string; grade: number; updatedAt: string; updatedBy: string};
 export type QuizSkill = {id: string; subject: QuizSubject; label: string; dueDate: string; interval: number; attempts: number; correctStreak: number; lastDate: string; lastQuestionId: string};
 export type QuizPublicQuestion = Omit<QuizQuestion, 'answer' | 'explanation' | 'skillId'> & {result?: QuizAnswer & {expected: string; explanation: string}};
 export type QuizPublicSession = Omit<QuizSession, 'questions' | 'answers'> & {questions: QuizPublicQuestion[]};

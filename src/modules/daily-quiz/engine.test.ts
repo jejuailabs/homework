@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {checkQuizAnswer, generatePracticeMathPack, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, quizAddDays, quizNumber, quizRanking, quizScope, quizWeekStart, seoulQuizDate, validQuizCronSecret} from './engine';
+import {checkQuizAnswer, generatePracticeMathPack, generateQuizPack, generateQuizReview, nextQuizSkill, publicQuizSession, quizAddDays, quizEnglishIndex, quizMathIndex, quizNumber, quizPackId, quizRange, quizRangePackId, quizRanking, quizScope, quizWeekStart, seoulQuizDate, validQuizCronSecret} from './engine';
 import {quizVocabulary} from './vocabulary';
 import {quizCalendar, quizWordIndices, quizMathStage, quizMathProgress, quizPracticeMathStage} from './curriculum';
 import type {QuizAnswer, QuizSession, QuizSkill} from './types';
@@ -175,4 +175,62 @@ test('English spelling is always last, including resumed legacy sessions, withou
     assert.equal(session.questions[0].kind, 'text');
     assert(view.questions.filter(q => !q.result).every(q => !('answer' in q) && !('skillId' in q)));
   }
+});
+
+test('teacher ranges validate stages and grade words, and keep a stable vocabulary order', () => {
+  const words = quizVocabulary(3).map(word => word.id);
+  assert.deepEqual(quizRange({english: {kind: 'stages', from: 2, to: 4}, math: {stage: 0}}, 3), {english: {kind: 'stages', from: 2, to: 4}, math: {stage: 0}});
+  assert.deepEqual(quizRange({}, 3), {english: null, math: null});
+  assert.deepEqual(quizRange({english: {kind: 'words', words: [words[9], words[0], words[4], words[2], words[1]]}}, 3).english, {kind: 'words', words: [words[0], words[1], words[2], words[4], words[9]]});
+  for (const value of [
+    {english: {kind: 'stages', from: 5, to: 4}}, {english: {kind: 'stages', from: -1, to: 2}}, {english: {kind: 'stages', from: 0, to: 12}}, {english: {kind: 'stages', from: '1', to: 2}},
+    {english: {kind: 'words', words: words.slice(0, 4)}}, {english: {kind: 'words', words: words.slice(0, 31)}}, {english: {kind: 'words', words: [...words.slice(0, 4), quizVocabulary(6).at(-1)!.id]}},
+    {english: {kind: 'words', words: 'cat'}}, {english: {kind: 'other'}}, {english: 'stages'}, {math: {stage: 12}}, {math: {stage: 1.5}}, {math: []},
+  ]) assert.throws(() => quizRange(value as never, 3), value.toString());
+});
+
+test('English range packs stay inside the chosen stages or words, use a class pack ID, and leave the shared pack unchanged', () => {
+  const index = quizEnglishIndex(3), shared = generateQuizPack(scope, 'english');
+  assert.equal(index.length, 12); assert(index.every(block => block.words.length === 10));
+  assert.equal(new Set(index.flatMap(block => block.words.map(word => word.id))).size, 120);
+  for (let from = 0; from < 12; from++) for (const to of [from, Math.min(11, from + 2), 11]) for (const date of ['2026-03-01', '2026-10-21', '2027-01-15']) {
+    const english = {kind: 'stages' as const, from, to}, pack = generateQuizPack({...scope, date}, 'english', {classId: 'classA', english});
+    const allowed = new Set(index.slice(from, to + 1).flatMap(block => block.words.map(word => word.id))), last = new Set(index[to].words.map(word => word.id));
+    assert.equal(pack.id, quizRangePackId({...scope, date}, 'classA', english)); assert.notEqual(pack.id, quizPackId({...scope, date}, 'english'));
+    assert.equal(new Set(pack.questions.map(q => q.skillId)).size, 10);
+    assert(pack.questions.every(q => allowed.has(q.skillId)));
+    assert.equal(pack.questions.filter(q => last.has(q.skillId)).length, from === to ? 10 : 6);
+    assert.deepEqual(pack.questions.map(q => q.kind), [...Array(8).fill('choice'), 'text', 'text']);
+    assert(pack.questions.every(q => checkQuizAnswer(q, q.answer).correct));
+    assert.deepEqual(pack, generateQuizPack({...scope, date}, 'english', {classId: 'classA', english}));
+  }
+  assert.notEqual(generateQuizPack(scope, 'english', {classId: 'classB', english: {kind: 'stages', from: 0, to: 0}}).id, generateQuizPack(scope, 'english', {classId: 'classA', english: {kind: 'stages', from: 0, to: 0}}).id);
+  assert.deepEqual(generateQuizPack(scope, 'english'), shared);
+  const words = quizVocabulary(3).map(word => word.id);
+  for (const count of [5, 7, 10, 23, 30]) {
+    const chosen = words.slice(30, 30 + count), pack = generateQuizPack(scope, 'english', {classId: 'classA', english: {kind: 'words', words: chosen}});
+    assert.equal(new Set(pack.questions.map(q => q.prompt)).size, 10);
+    assert(pack.questions.every(q => chosen.includes(q.skillId)));
+    const choices = pack.questions.filter(q => q.kind === 'choice');
+    assert.equal(choices.length, count < 10 ? count : 8);
+    if (count < 10) assert.deepEqual(new Set(choices.map(q => q.skillId)), new Set(chosen));
+    assert.deepEqual(pack.questions.map(q => q.kind), [...Array(choices.length).fill('choice'), ...Array(10 - choices.length).fill('text')]);
+  }
+});
+
+test('a teacher math stage replaces personal progress for the day with 7 chosen-stage and 3 previous-stage questions', () => {
+  for (let grade = 1; grade <= 6; grade++) {
+    const index = quizMathIndex(grade);
+    assert.equal(index.length, 12); assert(index.every(row => row.labels.length >= 1 && row.labels.every(Boolean)));
+    for (let stage = 0; stage < 12; stage++) for (const completed of [0, 37, 125]) {
+      const pack = generatePracticeMathPack({...scope, grade}, completed, stage);
+      const stages = pack.questions.map(q => Number(q.skillId.match(/-t(\d+)-/)![1]));
+      assert.deepEqual(stages, [...Array(7).fill(stage), ...Array(3).fill(Math.max(0, stage - 1))]);
+      assert.equal(new Set(pack.questions.map(q => q.prompt)).size, 10);
+      assert(pack.questions.every(q => checkQuizAnswer(q, q.answer).correct));
+      assert.notEqual(pack.id, generatePracticeMathPack({...scope, grade}, completed).id);
+      assert.deepEqual(pack, generatePracticeMathPack({...scope, grade}, completed, stage));
+    }
+  }
+  assert.deepEqual(generatePracticeMathPack(scope, 12), generatePracticeMathPack(scope, 12, undefined));
 });
