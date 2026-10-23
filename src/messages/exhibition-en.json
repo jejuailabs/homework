@@ -203,9 +203,9 @@
   "photoMetadataHint": "Review each photo’s date, artist, title and description. Titles start from filenames and can be edited.",
   "studentSubmitHint": "Upload your own work. It appears in the exhibition and QR view after the teacher approves it.",
   "readAuthor": "Read artist names from photos · AI",
-  "readAuthorHint": "Reads written names only. Photos are checked by AI; you can edit the results.",
+  "readAuthorHint": "Reads written names and suggests a student with a matching name. Check the selected student before uploading.",
   "readingAuthor": "Reading the written name…",
-  "authorReadFallback": "Could not read a clear name. Enter it manually; you can still upload the photo.",
+  "authorReadFallback": "Could not read a clear name. Select a student from the artist list, or upload without a student link.",
   "allowStudentUploads": "Allow students to upload their own work",
   "publicSharingEnabled": "Allow family viewing through a QR link",
   "publicSharingHint": "People with the link can see approved works, artist names and descriptions. Draft exhibitions stay private.",
@@ -222,5 +222,10 @@
   "uploadNetwork": "The photo transfer was interrupted. Check your connection and retry.",
   "cleanupError": "Could not finish cleaning up the transfer. Retrying will continue cleanup.",
   "oneWorkOnly": "Choose one photo. You keep one current work per exhibition.",
-  "studentUploadLimits": "One JPG/PNG/WebP photo · up to 100MB and 40 megapixels"
+  "studentUploadLimits": "One JPG/PNG/WebP photo · up to 100MB and 40 megapixels",
+  "personalTitle": "My gallery",
+  "personalEntryHint": "Find works you upload or your teacher links to you, all in one place",
+  "studentGalleryLinkHint": "The work will also appear in the selected student’s gallery.",
+  "detectedAuthorName": "Written name: {name}. Select the student to link.",
+  "duplicateArtistSelection": "More than one photo is linked to the same student. Each student keeps one work per exhibition; please check your selections."
 }

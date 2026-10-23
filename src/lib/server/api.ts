@@ -21,6 +21,7 @@ import {directoryFields} from '../admin-directory-fields';
 import {handleAdminDirectory} from './admin-directory';
 import {handleAdminConsole} from './admin-console';
 import {companionProfile} from '@/modules/my-space/profile';
+import {personalExhibition} from '@/modules/personal-exhibition/identity';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -179,7 +180,7 @@ async function students(request: Request, classId: string) {
     if (existing.size + results.length > 300) throw new ApiError(400, '한 학급은 최대 300명까지 추가할 수 있어요.');
     for (const row of issued) {
       const { accessCode, ...record } = row;
-      tx.create(collection.doc(row.id), { ...record, classId, character: 'cat', xp: 0, createdAt: now() });
+      tx.create(collection.doc(row.id), { ...record, classId, character: 'cat', xp: 0, personalExhibition: personalExhibition(now()), createdAt: now() });
       tx.create(db().doc(`studentCodes/${hash(accessCode)}`), { classId, studentId: row.id, authUid: row.authUid, authVersion: 0, active: true, createdAt: now(), codeFormat: 'numeric6', encryptedCode: sealStudentCode(accessCode, studentCodeBinding(classId, row.id, hash(accessCode))) });
       tx.create(db().doc(`users/${row.authUid}`), { uid: row.authUid, displayName: row.name, role: 'student', ...directoryFields({role:'student',displayName:row.name},{ownerUid:classDoc.data()!.ownerUid,name:row.name,number:row.number}), classId, directoryYear:classDoc.data()!.year, studentId: row.id, authVersion: 0, disabled: false, createdAt: now() });
     }
@@ -448,7 +449,7 @@ async function resetStudentCode(request: Request, classId: string, studentId: st
     oldCodes.docs.forEach(code => tx.update(code.ref, {active: false, revokedAt: now()}));
     tx.create(db().doc(`studentCodes/${hash(accessCode)}`), { classId, studentId, authUid: uid, authVersion, active: true, createdAt: now(), codeFormat: 'numeric6', encryptedCode: sealStudentCode(accessCode, studentCodeBinding(classId, studentId, hash(accessCode))) });
     tx.update(userRef, { authVersion });
-    tx.update(studentRef, { codeResetAt: now() });
+    tx.update(studentRef, { codeResetAt: now(), ...(!student.data()?.personalExhibition ? {personalExhibition: personalExhibition(student.data()?.createdAt || now())} : {}) });
     return uid;
   });
     return {accessCode, authUid};
