@@ -203,9 +203,9 @@
   "photoMetadataHint": "사진마다 날짜·작가명·작품명·설명을 확인해 주세요. 작품명은 파일명으로 시작하며 모두 수정할 수 있어요.",
   "studentSubmitHint": "자기 작품을 올릴 수 있어요. 선생님이 확인한 뒤 전시와 QR 관람에 공개됩니다.",
   "readAuthor": "사진에서 작가명 읽기 · AI",
-  "readAuthorHint": "작품에 적힌 이름만 읽어요. 사진을 AI로 확인하며 결과는 직접 고칠 수 있어요.",
+  "readAuthorHint": "작품에 적힌 이름을 읽어 같은 이름의 학생을 제안해요. 업로드 전에 선택된 학생을 확인해 주세요.",
   "readingAuthor": "사진의 이름을 읽고 있어요…",
-  "authorReadFallback": "이름을 확실히 읽지 못했어요. 작가명을 직접 입력해 주세요. 사진은 그대로 올릴 수 있어요.",
+  "authorReadFallback": "이름을 확실히 읽지 못했어요. 작가명 목록에서 학생을 선택해 주세요. 학생을 지정하지 않고 올릴 수도 있어요.",
   "allowStudentUploads": "학생이 자기 작품 업로드 허용",
   "publicSharingEnabled": "QR 링크로 학부모 관람 허용",
   "publicSharingHint": "링크를 받은 사람에게 승인된 작품·작가명·설명이 공개돼요. 준비 중인 전시는 공개되지 않아요.",
@@ -222,5 +222,10 @@
   "uploadNetwork": "사진 전송이 끊겼어요. 연결을 확인하고 다시 올리기를 눌러 주세요.",
   "cleanupError": "전송 정리를 마치지 못했어요. 다시 시도하면 정리를 이어갑니다.",
   "oneWorkOnly": "내 작품은 전시실마다 한 개를 보관해요. 사진을 한 장 선택해 주세요.",
-  "studentUploadLimits": "JPG·PNG·WebP · 사진 1장 · 100MB·4천만 화소 이하"
+  "studentUploadLimits": "JPG·PNG·WebP · 사진 1장 · 100MB·4천만 화소 이하",
+  "personalTitle": "나의 전시실",
+  "personalEntryHint": "내가 올리거나 선생님이 연결한 작품을 한곳에서 만나요",
+  "studentGalleryLinkHint": "선택한 학생의 개인 전시실에도 함께 모여요.",
+  "detectedAuthorName": "사진에서 읽은 이름: {name} · 연결할 학생을 선택해 주세요.",
+  "duplicateArtistSelection": "같은 학생에게 사진이 두 장 이상 연결됐어요. 전시실마다 학생별 한 작품을 보관하므로 학생 선택을 확인해 주세요."
 }
