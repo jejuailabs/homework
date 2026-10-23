@@ -1,56 +1,30 @@
 'use client';
-
-import {useEffect, useRef, useState, type PointerEvent} from 'react';
+import {useEffect,useRef,useState,type PointerEvent} from 'react';
 import {useLocale} from 'next-intl';
-import {Check, Eraser, Pencil, RotateCcw, Trash2, X} from 'lucide-react';
+import {Check,Eraser,Pencil,Redo2,RotateCcw,Trash2,X} from 'lucide-react';
+import {validCanvasObject,type CanvasObject} from '@/lib/canvas-document';
+import {appendInkSample,eraseStroke,inkChunks,strokeHit,type InkPoint,type Point} from '@/lib/canvas-geometry';
+import {paintCanvasInk} from '@/lib/canvas-render';
 
-type Stroke = {color: string; width: number; points: [number, number][]};
-const colors = ['#374c43', '#f08890', '#eeb445', '#79b794', '#78aadd', '#b899d0'];
-
-export default function BoardDrawingPad({onAttach, onClose}: {onAttach: (file: File) => void; onClose: () => void}) {
-  const ko = useLocale() === 'ko';
-  const canvas = useRef<HTMLCanvasElement>(null), strokes = useRef<Stroke[]>([]), active = useRef<Stroke | null>(null);
-  const [color, setColor] = useState(colors[0]), [width, setWidth] = useState(5), [eraser, setEraser] = useState(false), [count, setCount] = useState(0), [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  function paint() {
-    const ctx = canvas.current?.getContext('2d'); if (!ctx) return;
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 1000, 700);
-    for (const stroke of [...strokes.current, ...(active.current ? [active.current] : [])]) {
-      ctx.strokeStyle = stroke.color; ctx.lineWidth = stroke.width; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath();
-      stroke.points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
-      if (stroke.points.length === 1) ctx.lineTo(stroke.points[0][0] + .1, stroke.points[0][1]);
-      ctx.stroke();
-    }
-  }
-  useEffect(() => {paint();}, []);
-  function position(event: PointerEvent<HTMLCanvasElement>): [number, number] {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return [(event.clientX - rect.left) * 1000 / rect.width, (event.clientY - rect.top) * 700 / rect.height];
-  }
-  function finish() {
-    if (!active.current) return;
-    strokes.current.push(active.current); active.current = null; setCount(strokes.current.length); paint();
-  }
-  async function attach() {
-    if (busy || !count) return;
-    setBusy(true); setError('');
-    canvas.current?.toBlob(blob => {
-      if (!blob) {setError(ko ? '그림을 저장하지 못했어요. 다시 눌러 주세요.' : 'Could not save your drawing. Please try again.'); setBusy(false); return;}
-      onAttach(new File([blob], 'my-drawing.png', {type: 'image/png'}));
-      setBusy(false); onClose();
-    }, 'image/png');
-  }
-  return <section className="pb-drawing" aria-label={ko ? '그림 그리기' : 'Draw a picture'}>
-    <div className="pb-flex"><strong>{ko ? '그림으로 이야기해요' : 'Tell it with a drawing'}</strong><button type="button" className="pb-icon" onClick={onClose} disabled={busy} aria-label={ko ? '그림판 닫기' : 'Close drawing'}><X size={18}/></button></div>
-    <div className="pb-drawing-tools">
-      {colors.map((value, index) => <button type="button" key={value} aria-label={`${ko ? '색상' : 'Color'} ${index + 1}`} aria-pressed={color === value && !eraser} style={{background: value, outline: color === value && !eraser ? '3px solid var(--accent)' : undefined}} onClick={() => {setColor(value); setEraser(false);}}/>)}
-      <button type="button" aria-label={ko ? '지우개' : 'Eraser'} aria-pressed={eraser} onClick={() => setEraser(value => !value)}>{eraser ? <Eraser size={18}/> : <Pencil size={18}/>}</button>
-      <select aria-label={ko ? '펜 굵기' : 'Brush size'} value={width} onChange={event => setWidth(Number(event.target.value))}><option value={5}>{ko ? '가는 펜' : 'Fine'}</option><option value={12}>{ko ? '굵은 펜' : 'Bold'}</option><option value={24}>{ko ? '붓' : 'Brush'}</option></select>
-      <button type="button" disabled={!count || busy} aria-label={ko ? '마지막 선 되돌리기' : 'Undo stroke'} onClick={() => {strokes.current.pop(); setCount(strokes.current.length); paint();}}><RotateCcw size={18}/></button>
-      <button type="button" disabled={!count || busy} aria-label={ko ? '그림 모두 지우기' : 'Clear drawing'} onClick={() => {if (window.confirm(ko ? '그린 내용을 모두 지울까요?' : 'Clear this drawing?')) {strokes.current = []; setCount(0); paint();}}}><Trash2 size={18}/></button>
-    </div>
-    <canvas ref={canvas} width={1000} height={700} aria-label={ko ? '손가락이나 마우스로 그리는 영역' : 'Draw with a finger or mouse'} style={{width: '100%', aspectRatio: '10 / 7', background: '#fff', borderRadius: 14, touchAction: 'none', border: '1px solid var(--border)'}} onPointerDown={event => {if (busy) return; event.currentTarget.setPointerCapture(event.pointerId); active.current = {color: eraser ? '#ffffff' : color, width: eraser ? width * 4 : width, points: [position(event)]}; paint();}} onPointerMove={event => {if (active.current) {active.current.points.push(position(event)); paint();}}} onPointerUp={finish} onPointerCancel={finish}/>
-    {error && <p role="alert">{error}</p>}
-    <button type="button" className="pb-button primary" disabled={!count || busy} onClick={() => void attach()}><Check size={17}/>{ko ? '그림 첨부하기' : 'Attach drawing'}</button>
-  </section>;
+const colors=['#374c43','#f08890','#eeb445','#79b794','#78aadd','#b899d0'];
+export default function BoardDrawingPad({onAttach,onClose}:{onAttach:(file:File)=>void;onClose:()=>void}) {
+  const ko=useLocale()==='ko',canvas=useRef<HTMLCanvasElement>(null),backing=useRef<HTMLCanvasElement|null>(null),strokes=useRef<CanvasObject[]>([]),active=useRef<{points:InkPoint[];pen:boolean}|null>(null),pointer=useRef<number|null>(null),before=useRef<CanvasObject[]|null>(null),last=useRef<Point|null>(null),frame=useRef(0),past=useRef<CanvasObject[][]>([]),future=useRef<CanvasObject[][]>([]);
+  const[color,setColor]=useState(colors[0]),[width,setWidth]=useState(5),[eraser,setEraser]=useState(false),[finger,setFinger]=useState(true),[state,setState]=useState({count:0,undo:false,redo:false}),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const makeStroke=(points:InkPoint[],pen:boolean)=>validCanvasObject({id:crypto.randomUUID(),type:'stroke',color,width,brush:'pen',...inkChunks(points,Math.max(2,points.length))[0],pressure:pen?points.map(p=>p[2]):[]})!;
+  const update=()=>setState({count:strokes.current.length,undo:!!past.current.length,redo:!!future.current.length});
+  function rebuild(){if(!backing.current)backing.current=document.createElement('canvas');const node=backing.current;node.width=1000;node.height=700;const ctx=node.getContext('2d')!;ctx.fillStyle='#fff';ctx.fillRect(0,0,1000,700);strokes.current.forEach(s=>paintCanvasInk(ctx,s));}
+  function paint(){frame.current=0;const ctx=canvas.current?.getContext('2d');if(!ctx)return;if(!backing.current)rebuild();ctx.clearRect(0,0,1000,700);ctx.drawImage(backing.current!,0,0);if(active.current){for(const c of inkChunks(active.current.points))paintCanvasInk(ctx,validCanvasObject({id:'preview',type:'stroke',color,width,brush:'pen',...c,pressure:active.current.pen?c.pressure:[]})!);}}
+  function schedule(){if(!frame.current)frame.current=requestAnimationFrame(paint);}
+  useEffect(()=>{paint();return()=>cancelAnimationFrame(frame.current);},[]);
+  function point(event:{clientX:number;clientY:number}):Point{const r=canvas.current!.getBoundingClientRect();return{x:Math.max(0,Math.min(1000,(event.clientX-r.left)*1000/r.width)),y:Math.max(0,Math.min(700,(event.clientY-r.top)*700/r.height))};}
+  function erase(p:Point){strokes.current=strokes.current.flatMap(s=>s.locked||!strokeHit(s,p,width*2)?[s]:eraseStroke(s,p,width*2).map(c=>({...s,...c,id:crypto.randomUUID()})));rebuild();schedule();}
+  function down(event:PointerEvent<HTMLCanvasElement>){if(busy||event.button!==0||pointer.current!==null||event.pointerType==='touch'&&!finger)return;event.preventDefault();event.currentTarget.setPointerCapture(event.pointerId);pointer.current=event.pointerId;before.current=strokes.current;const p=point(event);last.current=p;if(event.pointerType==='pen')setFinger(false);if(eraser)erase(p);else{active.current={points:[[p.x,p.y,event.pointerType==='pen'?event.pressure:.5]],pen:event.pointerType==='pen'};schedule();}}
+  function move(event:PointerEvent<HTMLCanvasElement>){if(pointer.current!==event.pointerId)return;const p=point(event);if(eraser){const a=last.current||p,steps=Math.max(1,Math.ceil(Math.hypot(p.x-a.x,p.y-a.y)/Math.max(2,width)));for(let i=1;i<=steps;i++)erase({x:a.x+(p.x-a.x)*i/steps,y:a.y+(p.y-a.y)*i/steps});last.current=p;}else if(active.current){const samples=event.nativeEvent.getCoalescedEvents?.()||[];for(const e of samples.length?samples:[event.nativeEvent]){const q=point(e);appendInkSample(active.current.points,[q.x,q.y,active.current.pen?e.pressure:.5]);}schedule();}}
+  function finish(event:PointerEvent<HTMLCanvasElement>,cancelled=false){if(pointer.current!==event.pointerId)return;cancelAnimationFrame(frame.current);frame.current=0;if(cancelled){strokes.current=before.current||strokes.current;}else if(active.current){const a=active.current,p=point(event);appendInkSample(a.points,[p.x,p.y,a.points.at(-1)![2]]);strokes.current=[...strokes.current,...inkChunks(a.points).map(c=>makeStroke(c.pressure.map((v,i)=>[c.points[i*2],c.points[i*2+1],v]),a.pen))];}if(!cancelled&&before.current&&strokes.current!==before.current){past.current=[...past.current.slice(-99),before.current];future.current=[];}active.current=null;before.current=null;pointer.current=null;last.current=null;rebuild();paint();update();if(event.currentTarget.hasPointerCapture(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);}
+  function undo(redo=false){if(pointer.current!==null)return;const from=redo?future:past,to=redo?past:future,next=from.current.pop();if(!next)return;to.current.push(strokes.current);strokes.current=next;rebuild();paint();update();}
+  function clear(){if(!window.confirm(ko?'그린 내용을 모두 지울까요? 되돌리기로 복원할 수 있어요.':'Clear the drawing? You can undo this.'))return;past.current.push(strokes.current);future.current=[];strokes.current=[];rebuild();paint();update();}
+  function attach(){if(busy||!state.count||pointer.current!==null)return;setBusy(true);setError('');canvas.current?.toBlob(blob=>{if(!blob){setError(ko?'그림을 저장하지 못했어요. 다시 눌러 주세요.':'Could not save your drawing. Please try again.');setBusy(false);return;}onAttach(new File([blob],'my-drawing.png',{type:'image/png'}));setBusy(false);onClose();},'image/png');}
+  return <section className="pb-drawing" aria-label={ko?'그림 그리기':'Draw a picture'}><div className="pb-flex"><strong>{ko?'그림으로 이야기해요':'Tell it with a drawing'}</strong><button type="button" className="pb-icon" onClick={onClose} disabled={busy} aria-label={ko?'그림판 닫기':'Close drawing'}><X size={18}/></button></div><div className="pb-drawing-tools">
+    {colors.map((value,index)=><button type="button" key={value} disabled={busy} aria-label={`${ko?'색상':'Color'} ${index+1}`} aria-pressed={color===value&&!eraser} style={{background:value,outline:color===value&&!eraser?'3px solid var(--accent)':undefined}} onClick={()=>{setColor(value);setEraser(false);}}/>)}<button type="button" disabled={busy} aria-label={ko?'지우개':'Eraser'} aria-pressed={eraser} onClick={()=>setEraser(v=>!v)}>{eraser?<Eraser size={18}/>:<Pencil size={18}/>}</button><select aria-label={ko?'펜 굵기':'Brush size'} value={width} disabled={busy} onChange={e=>setWidth(Number(e.target.value))}><option value={5}>{ko?'가는 펜':'Fine'}</option><option value={12}>{ko?'굵은 펜':'Bold'}</option><option value={24}>{ko?'붓':'Brush'}</option></select><button type="button" disabled={!state.undo||busy} aria-label={ko?'마지막 선 되돌리기':'Undo stroke'} onClick={()=>undo()}><RotateCcw size={18}/></button><button type="button" disabled={!state.redo||busy} aria-label={ko?'다시 실행':'Redo'} onClick={()=>undo(true)}><Redo2 size={18}/></button><button type="button" disabled={!state.count||busy} aria-label={ko?'그림 모두 지우기':'Clear drawing'} onClick={clear}><Trash2 size={18}/></button></div>
+    <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,margin:'8px 0'}}><input type="checkbox" checked={finger} onChange={e=>setFinger(e.target.checked)}/>{ko?'손가락으로 그리기 · 펜을 쓰면 손가락 입력은 자동으로 꺼져요':'Draw with a finger · switches off when using a pen'}</label><canvas ref={canvas} width={1000} height={700} aria-label={ko?'펜·손가락·마우스로 그리는 영역':'Draw with a pen, finger or mouse'} style={{width:'100%',aspectRatio:'10 / 7',background:'#fff',borderRadius:14,touchAction:'none',border:'1px solid var(--border)'}} onPointerDown={down} onPointerMove={move} onPointerUp={e=>finish(e)} onPointerCancel={e=>finish(e,true)} onLostPointerCapture={e=>finish(e,true)}/>{error&&<p role="alert">{error}</p>}<button type="button" className="pb-button primary" disabled={!state.count||busy} onClick={attach}><Check size={17}/>{ko?'그림 첨부하기':'Attach drawing'}</button></section>;
 }

@@ -8,6 +8,8 @@ const materialsUrl = moduleUrl(compile('../assignment-materials.ts'));
 await import(moduleUrl(compile('../assignment-materials.test.ts').replace("'./assignment-materials'", JSON.stringify(materialsUrl))));
 const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));
 await import(moduleUrl(compile('../canvas-document.test.ts').replace("'./canvas-document'", JSON.stringify(canvasUrl))));
+const geometryUrl=moduleUrl(compile('../canvas-geometry.ts').replace("'perfect-freehand'",JSON.stringify(import.meta.resolve('perfect-freehand'))));
+await import(moduleUrl(compile('../canvas-geometry.test.ts').replace("'./canvas-geometry'",JSON.stringify(geometryUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));
 const studentCodesUrl = moduleUrl(compile('./student-codes.ts'));
 const studentEntryUrl = moduleUrl(compile('../student-entry-code.ts'));
 await import(moduleUrl(compile('./student-codes.test.ts').replace("'./student-codes'", JSON.stringify(studentCodesUrl)).replace("'../student-entry-code'", JSON.stringify(studentEntryUrl))));

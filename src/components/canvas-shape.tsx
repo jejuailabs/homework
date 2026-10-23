@@ -1,0 +1,20 @@
+'use client';
+import {memo,useEffect,useRef} from 'react';
+import type {CanvasModel,CanvasObject} from '@/lib/canvas-document';
+import {TEXT_PADDING,inkPath} from '@/lib/canvas-geometry';
+import {fontFamily,measuredTextLayout,textBaseline} from '@/lib/canvas-render';
+
+export const CanvasShape=memo(function CanvasShape({object,src,editing,english,fontsReady}:{object:CanvasObject;src?:string;editing:boolean;english:boolean;fontsReady:boolean}) {
+  void fontsReady;
+  const layout=object.type==='text'?measuredTextLayout(object):null;
+  return <g data-object-id={object.id} transform={`translate(${object.x},${object.y})`} opacity={object.opacity??1}>
+    {object.type==='stroke'?(object.brush&&object.brush!=='legacy'?<path d={inkPath(object)} fill={object.color}/>:object.points.length===2?<circle cx={object.points[0]} cy={object.points[1]} r={object.width/2} fill={object.color}/>:<polyline points={object.points.reduce((out,value,i)=>out+(i%2?',':' ')+value,'')} stroke={object.color} strokeWidth={object.width} fill="none" strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke"/>):object.type==='image'?(src?<image href={src} width={object.w} height={object.h} preserveAspectRatio="none"/>:<><rect width={object.w} height={object.h} fill="#eef0e7"/><text x="10" y="30" fill="#778174">{english?'Loading image':'이미지 불러오는 중'}</text></>):<><rect width={object.w} height={object.h} fill="transparent"/>{!editing&&<text fill={object.text?object.color:'#82918b'} fontFamily={fontFamily(object)} fontSize={object.fontSize} fontWeight={object.fontWeight} fontStyle={object.fontStyle} textAnchor={object.align==='right'?'end':object.align==='center'?'middle':'start'} xmlSpace="preserve" style={{whiteSpace:'pre'}}>{(object.text?layout!.lines:[english?'Double-click to type':'두 번 눌러 글을 입력하세요']).map((line,i)=><tspan key={i} x={object.align==='right'?object.w-TEXT_PADDING:object.align==='center'?object.w/2:TEXT_PADDING} y={textBaseline(object)+i*layout!.lineHeight}>{line||' '}</tspan>)}</text>}</>}
+    {object.type==='stroke'&&<polyline points={object.points.reduce((out,value,i)=>out+(i%2?',':' ')+value,'')} fill="none" stroke="transparent" strokeWidth={Math.max(14,object.width+10)} strokeLinecap="round" strokeLinejoin="round" pointerEvents="stroke"/>}
+  </g>;
+});
+
+export function CanvasTextInput({model,object,english,onFinish}:{model:CanvasModel;object:CanvasObject;english:boolean;onFinish:()=>void}) {
+  const input=useRef<HTMLTextAreaElement>(null);
+  useEffect(()=>{const node=input.current;if(!node)return;const unbind=model.bindText(node,object.id);node.focus({preventScroll:true});node.setSelectionRange(node.value.length,node.value.length);let inner=0;const frame=requestAnimationFrame(()=>{inner=requestAnimationFrame(()=>{const viewport=node.closest<HTMLElement>('.canvas-viewport');if(viewport){const box=node.getBoundingClientRect(),outer=viewport.getBoundingClientRect();viewport.scrollLeft+=box.left-outer.left-20;viewport.scrollTop+=box.top-outer.top-24;viewport.scrollIntoView({block:'nearest'});}});});return()=>{cancelAnimationFrame(frame);cancelAnimationFrame(inner);unbind();};},[model,object.id]);
+  return <foreignObject x={object.x} y={object.y} width={object.w} height={object.h} className="canvas-inline-editor"><textarea ref={input} aria-label={english?'Text content':'텍스트 내용'} placeholder={english?'Type here':'여기에 글을 입력하세요'} maxLength={5000} spellCheck={false} autoCapitalize="off" className="canvas-inline-text" style={{color:object.color,fontFamily:fontFamily(object),fontSize:object.fontSize,fontWeight:object.fontWeight,fontStyle:object.fontStyle,textAlign:object.align,lineHeight:object.lineHeight||1.4,padding:TEXT_PADDING}} onPointerDown={event=>event.stopPropagation()} onPointerMove={event=>event.stopPropagation()} onDoubleClick={event=>event.stopPropagation()} onKeyDown={event=>{event.stopPropagation();if(!event.nativeEvent.isComposing&&(event.key==='Escape'||event.key==='Enter'&&(event.ctrlKey||event.metaKey))){event.preventDefault();onFinish();}}}/></foreignObject>;
+}
