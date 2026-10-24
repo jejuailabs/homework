@@ -4,6 +4,9 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+const windowLayoutUrl=moduleUrl(compile('../tool-window-layout.ts'));
+const toolCatalogUrl=moduleUrl(compile('../tool-catalog.ts'));
+await import(moduleUrl(compile('../tool-window-layout.test.ts').replace("'./tool-window-layout'",JSON.stringify(windowLayoutUrl)).replace("'./tool-catalog'",JSON.stringify(toolCatalogUrl))));
 const materialsUrl = moduleUrl(compile('../assignment-materials.ts'));
 await import(moduleUrl(compile('../assignment-materials.test.ts').replace("'./assignment-materials'", JSON.stringify(materialsUrl))));
 const canvasTextUrl=moduleUrl(compile('../canvas-text.ts'));

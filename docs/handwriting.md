@@ -8,6 +8,7 @@
 - Known limitation verified with two real-provider calls on 2026-10-24: the corrected text fixed the sample's spelling and spacing, but the model also normalized misspellings in the original field despite explicit preservation instructions. The UI states this limitation and allows both fields to be checked against the enlarged photo and edited. This feature is for preparing corrected text, not grading dictation or reliably counting the pupil's original spelling mistakes. No additional live calls were made after the two-call approval was exhausted. Token-based total estimate: $0.0006046, excluding other services and taxes.
 - Pictures, transcriptions and corrections are not written to Firebase or application storage. Existing AI quota/job records contain identifiers, status and numeric usage metadata (see `ai-usage.md`). The provider's own data retention conditions apply independently of `store=false`.
 - Results are editable in memory. Changes are compared locally, and copy/download uses the current reviewed text. The comparison download also includes the original and uncertainty notes. Photo enlargement and rotation run locally and make no AI requests.
+- The floating tool uses a document-sized window instead of the generic small modal. Photo and text panels share the space on wide windows; narrow windows switch panels with tabs. Read/correct and copy/download actions remain outside the scrolling result content. See `tool-windows.md`.
 
 ## Activation and billing
 

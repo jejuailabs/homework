@@ -1,16 +1,18 @@
 'use client';
 import {clearClassMetadata} from '@/lib/class-metadata-cache';
-import {createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode} from 'react';
+import {createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type CSSProperties} from 'react';
 import {useLocale} from 'next-intl';
 import Link from 'next/link';
 import {onAuthStateChanged} from 'firebase/auth';
 import {ExternalLink, Maximize2, Minimize2, Minus, Plus, X} from 'lucide-react';
 import {auth} from '@/lib/firebase-client';
 import {toolCatalog} from '@/lib/tool-catalog';
+import {initialToolWindow,toolWindowLayout} from '@/lib/tool-window-layout';
 import type {ClassroomRosterEntry} from './classroom-shared';
 import ToolRunner from './tool-runner';
 import '@/styles/tool-windows.css';
 import '@/styles/tools.css';
+import '@/styles/tool-window-sizes.css';
 
 export type ToolWindowContext = {uid: string; classId: string; className: string; roster: ClassroomRosterEntry[]};
 type ToolWindow = {id: string; toolId: string; context: ToolWindowContext; slot: number; minimized: boolean; maximized: boolean; x: number; y: number; order: number};
@@ -31,7 +33,7 @@ export default function ToolWindowsProvider({children}: {children: ReactNode}) {
       const mine = previous.filter(win => win.context.uid === context.uid);
       let slot = 1; while (mine.some(win => win.toolId === toolId && win.context.classId === context.classId && win.slot === slot)) slot++;
       const offset = mine.length % 5 * 24;
-      return [...mine, {id, toolId, context: {...context, roster: [...context.roster]}, slot, minimized: false, maximized: toolId==='canvas', x: Math.max(8, Math.min(innerWidth - (toolId==='canvas'?1120:680) - 12, 110 + offset)), y: 96 + offset, order: nextOrder}];
+      return [...mine, {id, toolId, context: {...context, roster: [...context.roster]}, slot, minimized: false, ...initialToolWindow(toolId,{width:innerWidth,height:innerHeight},offset), order: nextOrder}];
     });
   }, []);
   function patch(id: string, changes: Partial<ToolWindow>) {setWindows(old => old.map(win => win.id === id ? {...win, ...changes} : win));}
@@ -39,7 +41,8 @@ export default function ToolWindowsProvider({children}: {children: ReactNode}) {
   const active = windows.filter(win => !win.minimized).sort((a,b) => b.order - a.order)[0]?.id;
   function external(win: ToolWindow) {
     const url = new URL(`/teacher/tools/${win.toolId}`, location.origin); url.searchParams.set('classId', win.context.classId); url.searchParams.set('instance', `${win.slot}-external-${Date.now()}`);
-    const popup = window.open(url, '_blank', 'popup,width=900,height=760,noopener,noreferrer');
+    const layout=toolWindowLayout(win.toolId);
+    const popup = window.open(url, '_blank', `popup,width=${Math.min(layout.width,screen.availWidth)},height=${Math.min(layout.height,screen.availHeight)},noopener,noreferrer`);
     // noopener browsers may return null even when a window opens; offer a normal link either way.
     if (!popup) setNotice(en ? 'A new window was requested. If it did not open, allow pop-ups or use the link below.' : '새 창을 요청했어요. 열리지 않았다면 팝업을 허용하거나 아래 링크를 눌러 주세요.');
   }
@@ -52,10 +55,17 @@ export default function ToolWindowsProvider({children}: {children: ReactNode}) {
   </WindowContext.Provider>;
 }
 export function FloatingTool({win, mobile, visible, title, en, children, activate, patch, close, duplicate, external}: {win: ToolWindow; mobile: boolean; visible: boolean; title: string; en: boolean; children: ReactNode; activate: () => void; patch: (changes: Partial<ToolWindow>) => void; close: () => void; duplicate: () => void; external: () => void}) {
-  const root = useRef<HTMLElement>(null), drag = useRef<{id: number; dx: number; dy: number} | null>(null);
+  const layout=toolWindowLayout(win.toolId);
+  const root = useRef<HTMLElement>(null), userSized=useRef(false), [fittedHeight,setFittedHeight]=useState<number|null>(null), drag = useRef<{id: number; dx: number; dy: number} | null>(null);
   useEffect(() => {if (visible) root.current?.focus({preventScroll: true});}, [visible]);
-  return <section ref={root} role="dialog" aria-modal="false" aria-labelledby={`tool-window-${win.id}`} tabIndex={-1} className={`tool-floating-window${win.maximized ? ' is-maximized' : ''}`} data-tool={win.toolId} data-instance={win.slot} style={{display: visible ? undefined : 'none', left: win.x, top: win.y, zIndex: 100 + win.order}} onPointerDownCapture={activate}>
-    <header className="tool-window-titlebar" onDoubleClick={event=>{if(!(event.target as HTMLElement).closest('button'))patch({maximized:!win.maximized});}} onPointerDown={event => {if (mobile || win.maximized || (event.target as HTMLElement).closest('button')) return; const rect = root.current!.getBoundingClientRect(); drag.current = {id:event.pointerId,dx:event.clientX-rect.left,dy:event.clientY-rect.top}; event.currentTarget.setPointerCapture(event.pointerId);}} onPointerMove={event => {if (drag.current?.id !== event.pointerId) return;const width=root.current!.getBoundingClientRect().width;patch({x:Math.max(0,Math.min(innerWidth-width,event.clientX-drag.current.dx)),y:Math.max(0,Math.min(innerHeight-110,event.clientY-drag.current.dy))});}} onPointerUp={() => {drag.current=null;}} onPointerCancel={() => {drag.current=null;}} onLostPointerCapture={() => {drag.current=null;}}>
+  useEffect(()=>{if(!visible||win.maximized)return;const node=root.current;if(!node)return;const contain=()=>{const rect=node.getBoundingClientRect(),x=Math.max(0,Math.min(innerWidth-rect.width,win.x)),y=Math.max(0,Math.min(innerHeight-rect.height,win.y));if(x!==win.x||y!==win.y)patch({x,y});};const observer=new ResizeObserver(contain);observer.observe(node);window.addEventListener('resize',contain);return()=>{observer.disconnect();window.removeEventListener('resize',contain);};},[visible,win.maximized,win.x,win.y,patch]);
+  // Grow short content when it needs room; never override a deliberate manual resize.
+  useEffect(()=>{if(!visible||win.maximized)return;const node=root.current,body=node?.querySelector<HTMLElement>('.tool-window-body'),content=body?.firstElementChild;if(!node||!body||!content)return;
+    const fit=()=>{if(userSized.current)return;const rect=node.getBoundingClientRect(),extra=body.scrollHeight-body.clientHeight,ceiling=Math.max(260,innerHeight-rect.top-68);if(extra>3&&rect.height<ceiling-2)setFittedHeight(Math.min(ceiling,rect.height+extra));};
+    const observer=new ResizeObserver(fit);observer.observe(content);observer.observe(body);window.addEventListener('resize',fit);fit();return()=>{observer.disconnect();window.removeEventListener('resize',fit);};
+  },[visible,win.maximized]);
+  return <section ref={root} role="dialog" aria-modal="false" aria-labelledby={`tool-window-${win.id}`} tabIndex={-1} className={`tool-floating-window${win.maximized ? ' is-maximized' : ''}`} data-tool={win.toolId} data-layout={layout.kind} data-instance={win.slot} style={{'--tool-width':layout.width+'px','--tool-height':(fittedHeight??layout.height)+'px',display: visible ? undefined : 'none', left: win.x, top: win.y, zIndex: 100 + win.order} as CSSProperties} onPointerDownCapture={event=>{const rect=root.current!.getBoundingClientRect();if(event.clientX>rect.right-20&&event.clientY>rect.bottom-20)userSized.current=true;activate();}}>
+    <header className="tool-window-titlebar" onDoubleClick={event=>{if(!(event.target as HTMLElement).closest('button'))patch({maximized:!win.maximized});}} onPointerDown={event => {if (mobile || win.maximized || (event.target as HTMLElement).closest('button')) return; const rect = root.current!.getBoundingClientRect(); drag.current = {id:event.pointerId,dx:event.clientX-rect.left,dy:event.clientY-rect.top}; event.currentTarget.setPointerCapture(event.pointerId);}} onPointerMove={event => {if (drag.current?.id !== event.pointerId) return;const {width,height}=root.current!.getBoundingClientRect();patch({x:Math.max(0,Math.min(innerWidth-width,event.clientX-drag.current.dx)),y:Math.max(0,Math.min(innerHeight-height,event.clientY-drag.current.dy))});}} onPointerUp={() => {drag.current=null;}} onPointerCancel={() => {drag.current=null;}} onLostPointerCapture={() => {drag.current=null;}}>
       <div><strong id={`tool-window-${win.id}`}>{title}</strong><small>{win.context.className || (en ? 'Manual input' : '직접 입력')}</small></div><div className="tool-window-controls"><button type="button" onClick={duplicate} aria-label={en ? 'Open another instance' : '같은 도구 하나 더 열기'} title={en ? 'Open another instance' : '같은 도구 하나 더 열기'}><Plus size={15}/></button><button type="button" onClick={external} aria-label={en ? 'Open a new browser window' : '새 브라우저 창에서 열기'}><ExternalLink size={15}/></button><button type="button" onClick={() => patch({minimized:true})} aria-label={en ? 'Minimize' : '최소화'}><Minus size={16}/></button><button type="button" onClick={() => patch({maximized:!win.maximized})} aria-label={en?(win.maximized?'Restore window':'Fill screen'):(win.maximized?'이전 창 크기로':'화면 가득 확대')} title={en?(win.maximized?'Restore window':'Fill screen'):(win.maximized?'이전 창 크기로':'화면 가득 확대')}>{win.maximized ? <Minimize2 size={15}/> : <Maximize2 size={15}/>}</button><button type="button" onClick={close} aria-label={en ? 'Close tool' : '도구 닫기'}><X size={17}/></button></div>
     </header><div className="tool-window-body">{children}</div>
   </section>;
