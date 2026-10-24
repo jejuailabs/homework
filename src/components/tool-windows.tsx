@@ -31,7 +31,7 @@ export default function ToolWindowsProvider({children}: {children: ReactNode}) {
       const mine = previous.filter(win => win.context.uid === context.uid);
       let slot = 1; while (mine.some(win => win.toolId === toolId && win.context.classId === context.classId && win.slot === slot)) slot++;
       const offset = mine.length % 5 * 24;
-      return [...mine, {id, toolId, context: {...context, roster: [...context.roster]}, slot, minimized: false, maximized: false, x: Math.max(8, Math.min(innerWidth - (toolId==='canvas'?1120:680) - 12, 110 + offset)), y: 96 + offset, order: nextOrder}];
+      return [...mine, {id, toolId, context: {...context, roster: [...context.roster]}, slot, minimized: false, maximized: toolId==='canvas', x: Math.max(8, Math.min(innerWidth - (toolId==='canvas'?1120:680) - 12, 110 + offset)), y: 96 + offset, order: nextOrder}];
     });
   }, []);
   function patch(id: string, changes: Partial<ToolWindow>) {setWindows(old => old.map(win => win.id === id ? {...win, ...changes} : win));}
@@ -51,7 +51,7 @@ export default function ToolWindowsProvider({children}: {children: ReactNode}) {
     {notice && <aside className="tool-window-notice" role="status"><p>{notice}</p><a href={windows.length ? `/teacher/tools/${windows.at(-1)!.toolId}` : '/teacher/tools'} target="_blank" rel="noopener noreferrer">{en ? 'Open tool in a new tab' : '새 탭으로 도구 열기'}</a><button type="button" onClick={() => setNotice('')} aria-label={en ? 'Close' : '닫기'}><X size={16}/></button></aside>}
   </WindowContext.Provider>;
 }
-function FloatingTool({win, mobile, visible, title, en, children, activate, patch, close, duplicate, external}: {win: ToolWindow; mobile: boolean; visible: boolean; title: string; en: boolean; children: ReactNode; activate: () => void; patch: (changes: Partial<ToolWindow>) => void; close: () => void; duplicate: () => void; external: () => void}) {
+export function FloatingTool({win, mobile, visible, title, en, children, activate, patch, close, duplicate, external}: {win: ToolWindow; mobile: boolean; visible: boolean; title: string; en: boolean; children: ReactNode; activate: () => void; patch: (changes: Partial<ToolWindow>) => void; close: () => void; duplicate: () => void; external: () => void}) {
   const root = useRef<HTMLElement>(null), drag = useRef<{id: number; dx: number; dy: number} | null>(null);
   useEffect(() => {if (visible) root.current?.focus({preventScroll: true});}, [visible]);
   return <section ref={root} role="dialog" aria-modal="false" aria-labelledby={`tool-window-${win.id}`} tabIndex={-1} className={`tool-floating-window${win.maximized ? ' is-maximized' : ''}`} data-tool={win.toolId} data-instance={win.slot} style={{display: visible ? undefined : 'none', left: win.x, top: win.y, zIndex: 100 + win.order}} onPointerDownCapture={activate}>
