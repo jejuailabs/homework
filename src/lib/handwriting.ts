@@ -2,6 +2,8 @@ export const HANDWRITING_TEXT_LIMIT=3000;
 export type HandwritingStatus='ok'|'no_text'|'unreadable'|'too_much_text';
 export type HandwritingResult={status:HandwritingStatus;original:string;corrected:string;uncertainties:string[]};
 export type HandwritingDiff={type:'equal'|'remove'|'add';text:string};
+/** Advisory for a photographed page, not a prediction of recognition accuracy. */
+export function handwritingResolution(width:number,height:number){return{width,height,lowResolution:Math.min(width,height)<600||Math.max(width,height)<1000};}
 
 /** Compare actual strings locally; correction markup never comes from model-generated HTML. */
 export function handwritingDiff(original:string,corrected:string):HandwritingDiff[]{
