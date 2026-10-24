@@ -4,6 +4,8 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext},
 }).outputText;
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+const usageUrl=moduleUrl(compile('../ai-usage.ts'));
+await import(moduleUrl(compile('../ai-usage.test.ts').replace("'./ai-usage'",JSON.stringify(usageUrl))));
 const characterUrl = moduleUrl(compile('../characters.ts'));
 const submissionUrl = moduleUrl(compile('../assignment-submission.ts'));
 const policyUrl = moduleUrl(compile('./policy.ts').replace("'../characters'", JSON.stringify(characterUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl)));

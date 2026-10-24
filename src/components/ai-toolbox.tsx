@@ -19,7 +19,7 @@ const errorKeys: Record<string, string> = {
   UNAUTHENTICATED: 'sessionExpired', FORBIDDEN: 'forbidden'
 };
 
-export default function AiToolbox({initialTool = 'resource'}: {initialTool?: Tool}) {
+export default function AiToolbox({initialTool = 'resource',classId=''}: {initialTool?: Tool;classId?:string}) {
   const t = useTranslations('common.toolbox');
   const locale = useLocale();
   const [tool, setTool] = useState<Tool>(initialTool);
@@ -81,7 +81,7 @@ export default function AiToolbox({initialTool = 'resource'}: {initialTool?: Too
     try {
       const response = await fetch('/api/ai/generate', {
         method: 'POST', headers: {'Content-Type': 'application/json'}, signal: controller.signal,
-        body: JSON.stringify({tool, source: content, ...(grade.trim() ? {grade: grade.trim()} : {}), locale: locale === 'en' ? 'en' : 'ko'})
+        body: JSON.stringify({tool,...(classId?{classId}:{}), source: content, ...(grade.trim() ? {grade: grade.trim()} : {}), locale: locale === 'en' ? 'en' : 'ko'})
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {

@@ -1,0 +1,12 @@
+# Administrator API usage
+
+- Administrator page: `/admin/api-usage`. It uses the existing administrator authorization boundary; teachers and students cannot read site-wide usage.
+- Shows whole-site, teacher, class and feature summaries for a Korea-time date range of up to 31 days. Teacher/class filters retain the whole-site summary for comparison. Teacher summaries can be downloaded as CSV locally.
+- Existing `aiJobs` records now include validated class attribution, provider input/output/cache tokens, audio duration, web-search calls, processing tier, duration and an estimated USD amount where a confirmed rate is available. No images, audio, prompts, transcriptions or generated text are copied into usage records. No new collection or migration is required.
+- Class ownership is checked on the server before attribution or a paid request. Calls with no class context and historical calls remain under “학급 미지정”; the teacher's overall total includes them. Existing AI quotas and cached responses retain their behavior. Cache reuse is not counted as another provider call.
+- A provider response's usage is captured before result validation, including paid responses that later fail validation. Transport failures without usage and older records have unknown tokens/cost, not a fabricated zero. App-recorded attempts are not an invoice or a guaranteed count of provider-billed requests.
+- Rate snapshot: 2026-10-24. Confirmed GPT-6 Luna and gpt-transcribe rates and web-search fees are applied only to matching models and processing tiers. Unknown models/tiers remain “미집계”. The estimate excludes tax, foreign exchange, Firebase, Vercel and unrelated services; reconcile the provider invoice separately.
+- Reads use the existing `createdAt` field index. Results are cached for 30 seconds, without polling. More than 50,000 jobs in a range gives an explicit partial-results notice; reduce the date range for a complete result. Opening the report incurs existing Firestore reads under the approved operating scope.
+- Accounting starts when this release is deployed. Historical request counts remain visible, but missing token, cost or class metadata is not reconstructed.
+
+Pricing sources: [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Firestore pricing](https://firebase.google.com/docs/firestore/pricing).

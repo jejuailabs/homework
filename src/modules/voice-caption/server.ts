@@ -104,12 +104,12 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
             return { cached: v.caption }; if (v.transcription === 'running' && v.leaseUntil > Date.now())
             throw new ApiError(409, '음성을 변환하고 있어요.'); if (['running', 'failed'].includes(v.transcription) && input.retry !== true)
             throw new ApiError(409, '변환 재시도 버튼을 눌러 주세요.', 'VOICE_RETRY_REQUIRED'); if ((v.attempt || 0) >= 3)
-            throw new ApiError(429, '변환을 여러 번 시도했어요. 캡션을 직접 입력해 주세요.'); const token = crypto.randomUUID(); tx.update(ref, { transcription: 'running', leaseUntil: Date.now() + 90000, attempt: (v.attempt || 0) + 1, lease: token, error: '', version: token }); return { token }; });
+            throw new ApiError(429, '변환을 여러 번 시도했어요. 캡션을 직접 입력해 주세요.'); const token = crypto.randomUUID(); tx.update(ref, { transcription: 'running', leaseUntil: Date.now() + 90000, attempt: (v.attempt || 0) + 1, lease: token, error: '', version: token }); return { token,duration:v.duration }; });
         if ('cached' in attempt)
             return { caption: attempt.cached };
         try {
             const [audio] = await bucket().file(audioPath({ id: recordId })).download();
-            const caption = await transcribeVoice(t.ownerUid, t.key + ':' + recordId + ':' + attempt.token, audio);
+            const caption = await transcribeVoice(t.ownerUid, t.key + ':' + recordId + ':' + attempt.token, audio,{classId:t.classId,audioSeconds:attempt.duration});
             await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const v = (await tx.get(ref)).data(); if (v?.lease !== attempt.token || v.uploadStatus !== 'ready' || v.status !== 'draft')
                 throw new ApiError(409, '녹음이 변경됐어요.'); tx.update(ref, { caption, transcription: 'done', leaseUntil: 0, version: crypto.randomUUID() }); });
             return { caption };

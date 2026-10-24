@@ -625,7 +625,7 @@ export async function handleExhibitions(request: Request, segments: string[] = [
       if (segments.length === 1 && request.method === 'GET') return await detail(ctx, exhibition);
       if (segments.length === 1 && request.method === 'PATCH') return await edit(ctx, exhibition, request);
       if (segments.length === 2 && section === 'share' && request.method === 'GET') return await shareExhibition(ctx, exhibition, request);
-      if (segments.length === 2 && section === 'read-authors' && request.method === 'POST') {owner(ctx, exhibition); const input = await readBoundedJson(request, 3_300_000) as {images?: unknown}; return json({names: await readArtworkAuthors(ctx.uid, artworkAuthorImages(input.images))});}
+      if (segments.length === 2 && section === 'read-authors' && request.method === 'POST') {owner(ctx, exhibition); const input = await readBoundedJson(request, 3_300_000) as {images?: unknown}; return json({names: await readArtworkAuthors(ctx.uid, artworkAuthorImages(input.images),exhibition.classId)});}
       if (segments.length === 2 && section === 'uploads' && request.method === 'POST') return await initUpload(ctx, exhibition, request);
       if (segments.length === 3 && section === 'uploads' && request.method === 'DELETE') return await cancelUpload(ctx, exhibition, artworkId);
       if (section === 'artworks') {

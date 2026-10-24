@@ -2,9 +2,9 @@ import 'server-only';
 import { runMeteredAi } from '@/lib/server/ai';
 import { ApiError } from '@/lib/server/policy';
 import { providerFailure, readBoundedJson } from '@/lib/server/ai-policy';
-export async function transcribeVoice(ownerUid: string, key: string, audio: Uint8Array) {
+export async function transcribeVoice(ownerUid: string, key: string, audio: Uint8Array,scope:{classId?:string;audioSeconds?:number}={}) {
     const model = process.env.OPENAI_TRANSCRIBE_MODEL?.trim() || 'gpt-transcribe';
-    return runMeteredAi(ownerUid, 'voice-caption', model, key, async () => {
+    return runMeteredAi(ownerUid, 'voice-caption', model, key, async observe => {
         const form = new FormData();
         form.set('file', new Blob([Uint8Array.from(audio)], { type: 'audio/wav' }), 'artwork-voice.wav');
         form.set('model', model);
@@ -24,8 +24,9 @@ export async function transcribeVoice(ownerUid: string, key: string, audio: Uint
         const body = await readBoundedJson(response, 20000) as {
             text?: unknown;
         };
+        observe(body,{audioSeconds:scope.audioSeconds});
         if (typeof body.text !== 'string' || !body.text.trim() || body.text.length > 3000)
             throw new ApiError(502, '음성을 알아듣지 못했어요. 캡션을 직접 입력하거나 다시 녹음해 주세요.', 'VOICE_EMPTY');
         return body.text.trim();
-    });
+    },scope.classId);
 }
