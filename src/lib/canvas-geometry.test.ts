@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validCanvasObject} from './canvas-document';
-import {appendInkSample,eraseStroke,inkChunks,inkPath,objectBounds,strokeHit,textLayout,wrapCanvasText,type InkPoint} from './canvas-geometry';
+import {appendInkSample,canvasObjectAtPoint,eraseStroke,inkChunks,inkPath,objectBounds,strokeHit,textLayout,wrapCanvasText,type InkPoint} from './canvas-geometry';
 
 test('long strokes split with a shared endpoint and lose no fractional or pressure sample',()=>{
   const points:InkPoint[]=Array.from({length:5501},(_,i)=>[i/10,(i%200)/10,i%100/100]);const chunks=inkChunks(points);
@@ -35,4 +35,12 @@ test('text layout keeps Korean, emoji graphemes, explicit empty lines and styled
   const measure=(s:string)=>[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(s)].length*10;
   assert.deepEqual(wrapCanvasText('한글설명\n\n끝',20,measure),['한글','설명','','끝']);assert.deepEqual(wrapCanvasText('👨‍👩‍👧‍👦🙂🙂',20,measure),['👨‍👩‍👧‍👦🙂','🙂']);
   const object=validCanvasObject({id:'text',type:'text',w:56,fontSize:20,lineHeight:1.6,text:'one two'})!;const layout=textLayout(object,measure);assert.deepEqual(layout.lines,['one ','two']);assert.equal(layout.height,80);
+});
+test('captured clicks resolve moved text including padding at its current location',()=>{
+  const object=validCanvasObject({id:'text',type:'text',x:420,y:230,w:340,h:100,text:'이동한 글'})!;
+  assert.equal(canvasObjectAtPoint([object],{x:455,y:250})?.id,'text');assert.equal(canvasObjectAtPoint([object],{x:750,y:300})?.id,'text');assert.equal(canvasObjectAtPoint([object],{x:210,y:140}),null);
+});
+test('captured click resolution respects covering layers and uses actual ink geometry',()=>{
+  const text=validCanvasObject({id:'text',type:'text',x:100,y:100,w:340,h:150,text:'뒤쪽 글'})!,image=validCanvasObject({id:'photo',type:'image',x:150,y:120,w:200,h:100})!,ink=validCanvasObject({id:'ink',type:'stroke',points:[160,160,300,160]})!;
+  assert.equal(canvasObjectAtPoint([text,image],{x:180,y:140})?.id,'photo');assert.equal(canvasObjectAtPoint([text,ink],{x:180,y:200})?.id,'text');assert.equal(canvasObjectAtPoint([text,ink],{x:180,y:160})?.id,'ink');
 });

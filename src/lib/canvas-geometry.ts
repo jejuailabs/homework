@@ -47,6 +47,8 @@ export function groupBounds(objects:CanvasObject[]):Bounds|null {if(!objects.len
 export function containsPoint(box:Bounds,p:Point,pad=0) {return p.x>=box.x-pad&&p.x<=box.x+box.w+pad&&p.y>=box.y-pad&&p.y<=box.y+box.h+pad;}
 export function segmentDistance(p:Point,a:Point,b:Point) {const dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);}
 export function strokeHit(object:CanvasObject,p:Point,radius:number) {if(object.type!=='stroke'||!containsPoint(objectBounds(object),p,radius))return false;const q={x:p.x-object.x,y:p.y-object.y},r=radius+widestRadius(object);for(let i=0;i<object.points.length;i+=2){const a={x:object.points[i],y:object.points[i+1]},b=i?{x:object.points[i-2],y:object.points[i-1]}:a;if(segmentDistance(q,a,b)<=r)return true;}return false;}
+/** Pointer capture can retarget click events to the SVG, so resolve the visible layer by position. */
+export function canvasObjectAtPoint(objects:CanvasObject[],point:Point) {for(let i=objects.length-1;i>=0;i--){const object=objects[i];if(object.type==='stroke'?strokeHit(object,point,4):containsPoint(objectBounds(object),point))return object;}return null;}
 
 /** Cut at circle intersections, so a fast eraser cannot leave a bridge across a sparse line. */
 export function eraseStroke(object:CanvasObject,world:Point,radius:number) {
