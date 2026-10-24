@@ -21,9 +21,9 @@ export function inkPath(object:CanvasObject, complete=true) {
 }
 
 /** Keep pressure changes even on a straight stroke, and preserve fractional samples. */
-export function appendInkSample(points:InkPoint[], sample:InkPoint) {
+export function appendInkSample(points:InkPoint[], sample:InkPoint, immutablePoints=0) {
   const last=points.at(-1);if(last&&Math.hypot(last[0]-sample[0],last[1]-sample[1])<.35&&Math.abs(last[2]-sample[2])<.025)return;
-  if(points.length>=3){const a=points[points.length-2],b=points[points.length-1],length=Math.hypot(sample[0]-a[0],sample[1]-a[1]);const distance=length?Math.abs((sample[1]-a[1])*b[0]-(sample[0]-a[0])*b[1]+sample[0]*a[1]-sample[1]*a[0])/length:Infinity;
+  if(points.length>=3&&points.length>immutablePoints){const a=points[points.length-2],b=points[points.length-1],length=Math.hypot(sample[0]-a[0],sample[1]-a[1]);const distance=length?Math.abs((sample[1]-a[1])*b[0]-(sample[0]-a[0])*b[1]+sample[0]*a[1]-sample[1]*a[0])/length:Infinity;
     const expected=(a[2]+sample[2])/2;if(distance<.12&&length<5&&Math.abs(b[2]-expected)<.015){points[points.length-1]=sample;return;}}
   points.push(sample);
 }

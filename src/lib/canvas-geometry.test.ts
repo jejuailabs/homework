@@ -13,6 +13,9 @@ test('sample filtering preserves pressure changes and pen curves produce finite 
   const object=validCanvasObject({id:'ink',type:'stroke',...inkChunks(points)[0],brush:'pen',width:12})!;const path=inkPath(object);assert(path.startsWith('M'));assert(path.endsWith('Z'));assert(!/NaN|Infinity/.test(path));
   const thin=inkPath({...object,points:[10,10,20,20,30,30],pressure:[.1,.1,.1]}),heavy=inkPath({...object,points:[10,10,20,20,30,30],pressure:[.9,.9,.9]});assert.notEqual(thin,heavy);
 });
+test('sample reduction never changes an ink prefix already streamed to collaborators',()=>{
+  const points:InkPoint[]=[[0,0,.5],[1,0,.5],[2,0,.5]],sent=structuredClone(points);appendInkSample(points,[3,0,.5],sent.length);appendInkSample(points,[4,0,.5],sent.length);assert.deepEqual(points.slice(0,sent.length),sent);assert.equal(points.at(-1)![0],4);
+});
 test('partial eraser cuts sparse segments at intersections and interpolates pressure',()=>{
   const object=validCanvasObject({id:'ink',type:'stroke',x:20,y:30,points:[0,10,100,10],pressure:[.2,.8],brush:'ballpoint',width:2})!;
   const parts=eraseStroke(object,{x:70,y:40},9);assert.equal(parts.length,2);assert.deepEqual(parts[0].points,[0,10,40,10]);assert.deepEqual(parts[1].points,[60,10,100,10]);assert(Math.abs(parts[0].pressure[1]-.44)<1e-8);assert(Math.abs(parts[1].pressure[0]-.56)<1e-8);
