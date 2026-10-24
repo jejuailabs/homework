@@ -7,7 +7,10 @@ const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toS
 const materialsUrl = moduleUrl(compile('../assignment-materials.ts'));
 await import(moduleUrl(compile('../assignment-materials.test.ts').replace("'./assignment-materials'", JSON.stringify(materialsUrl))));
 const canvasTextUrl=moduleUrl(compile('../canvas-text.ts'));
-const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));
+const cameraUrl=moduleUrl(compile('../canvas-camera.ts'));
+const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'./canvas-camera'",JSON.stringify(cameraUrl)).replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));
+const activitiesUrl=moduleUrl(compile('../canvas-activities.ts'));
+await import(moduleUrl(compile('../canvas-camera.test.ts').replace("'./canvas-camera'",JSON.stringify(cameraUrl)).replace("'./canvas-activities'",JSON.stringify(activitiesUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));
 const canvasLayoutUrl=moduleUrl(compile('../canvas-text-layout.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)));
 await import(moduleUrl(compile('../canvas-text.test.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'./canvas-text-layout'",JSON.stringify(canvasLayoutUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));
 await import(moduleUrl(compile('../canvas-document.test.ts').replace("'./canvas-document'", JSON.stringify(canvasUrl))));

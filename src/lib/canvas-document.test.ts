@@ -23,7 +23,7 @@ test('concurrent pen and image additions survive reconnection and editable seria
 test('canvas objects reject executable image sources and bound untrusted geometry', () => {
   for(const src of ['javascript:alert(1)','data:image/svg+xml;base64,PHN2Zz4=','https://evil.example/image'])assert.equal(validCanvasObject({id:'safe',type:'image',src})?.src,'');
   const safe=validCanvasObject({id:'safe',type:'text',x:-1,y:Infinity,w:90000,text:'<script>plain text</script>'})!;
-  assert.equal(safe.x,0);assert.equal(safe.y,0);assert.equal(safe.w,1200);assert.equal(safe.text,'<script>plain text</script>');
+  assert.equal(safe.x,-1);assert.equal(safe.y,0);assert.equal(safe.w,90000);assert.equal(safe.text,'<script>plain text</script>');
   assert.equal(validCanvasObject({id:'../bad',type:'image'}),null);
 });
 

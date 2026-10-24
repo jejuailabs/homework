@@ -26,7 +26,6 @@ export const toolCatalog: ToolDefinition[] = [
   {id:'matching',ko:'같은 그림 찾기',en:'Picture match',category:'play',icon:'ScanEye',color:'peach',ai:true,kind:'matching'},
   {id:'memo',ko:'메모',en:'Memo',category:'materials',icon:'StickyNote',color:'yellow'},
   {id:'board',ko:'판서',en:'Whiteboard',category:'materials',icon:'Presentation',color:'sky',ai:true},
-  {id:'pencils',ko:'색연필',en:'Color pencils',category:'materials',icon:'PencilRuler',color:'pink'},
   {id:'notes',ko:'노트',en:'Notebook',category:'materials',icon:'NotebookPen',color:'lavender',ai:true},
   {id:'handwriting',ko:'사진 글 정리',en:'Photo writing',category:'materials',icon:'FileText',color:'mint',ai:true,kind:'handwriting'},
   {id:'qr',ko:'QR 코드',en:'QR code',category:'materials',icon:'QrCode',color:'mint'},
@@ -50,6 +49,6 @@ export type ToolPreferences = {favorites: string[]; hidden: string[]; recent: st
 export const defaultToolPreferences: ToolPreferences = {favorites: ['timer','draw','sounds','matching','neighborhood','report'], hidden: [], recent: []};
 export function normalizeToolPreferences(value: unknown): ToolPreferences {
   const input = value && typeof value === 'object' ? value as Partial<ToolPreferences> : {};
-  const list = (v: unknown, fallback: string[], limit: number) => Array.isArray(v) ? [...new Set(v.filter((id): id is string => typeof id === 'string' && toolIds.includes(id)))].slice(0,limit) : [...fallback];
-  return {favorites:list(input.favorites,defaultToolPreferences.favorites,toolCatalog.length),hidden:list(input.hidden,[],toolCatalog.length),recent:list(input.recent,[],8)};
+  const list = (v: unknown, fallback: string[], limit: number, legacy=false) => Array.isArray(v) ? [...new Set(v.map(id=>id==='pencils'&&legacy?'board':id).filter((id): id is string => typeof id === 'string' && toolIds.includes(id)))].slice(0,limit) : [...fallback];
+  return {favorites:list(input.favorites,defaultToolPreferences.favorites,toolCatalog.length,true),hidden:list(input.hidden,[],toolCatalog.length),recent:list(input.recent,[],8,true)};
 }

@@ -12,7 +12,7 @@ export function inkPoints(object:CanvasObject):InkPoint[] {const result:InkPoint
 export function inkPath(object:CanvasObject, complete=true) {
   if(!object.points.length)return '';
   const points=inkPoints(object);
-  const outline=getStroke(points,{size:object.width,thinning:object.brush==='pen'?(object.thinning??.5):0,smoothing:object.smoothing??.5,streamline:(object.smoothing??.5)*.55,simulatePressure:object.brush==='pen'&&!object.pressure?.length,last:complete,start:{cap:true},end:{cap:true}});
+  const outline=getStroke(points,{size:object.width,thinning:object.brush==='pen'||object.brush==='pencil'?(object.thinning??.5):0,smoothing:object.smoothing??.5,streamline:(object.smoothing??.5)*.55,simulatePressure:(object.brush==='pen'||object.brush==='pencil')&&!object.pressure?.length,last:complete,start:{cap:object.brush!=='marker'},end:{cap:object.brush!=='marker'}});
   if(!outline.length)return '';
   const n=(v:number)=>Math.round(v*100)/100;
   let path=`M${n(outline[0][0])},${n(outline[0][1])}Q`;
@@ -34,7 +34,7 @@ export function inkChunks(points:InkPoint[], maxPoints=2000) {
   return chunks;
 }
 /** Match perfect-freehand's default linear pressure-to-radius mapping. */
-const inkRadius=(object:CanvasObject,pressure=.5)=>Math.max(.01,object.width*(object.brush==='pen'?.5+(object.thinning??.5)*(pressure-.5):.5));
+const inkRadius=(object:CanvasObject,pressure=.5)=>Math.max(.01,object.width*(object.brush==='pen'||object.brush==='pencil'?.5+(object.thinning??.5)*(pressure-.5):.5));
 const widestRadius=(object:CanvasObject)=>inkRadius(object,object.pressure?.length?Math.max(...object.pressure):1);
 export function objectBounds(object:CanvasObject):Bounds {
   if(object.type!=='stroke'||!object.points.length)return {x:object.x,y:object.y,w:object.w,h:object.h};

@@ -1,0 +1,19 @@
+'use client';
+import {useMemo,useRef,useState} from 'react';
+import {LocateFixed,Map,Search,Users} from 'lucide-react';
+import type {CanvasObject} from '@/lib/canvas-document';
+import {groupBounds,objectBounds,type Bounds} from '@/lib/canvas-geometry';
+import {cameraBox,type CanvasCamera,type CanvasSize} from '@/lib/canvas-camera';
+import type {CanvasPeer} from './canvas-editor';
+export default function CanvasNavigator({objects,camera,size,peers,english,onBox,onPoint,onFollow,following}:{objects:CanvasObject[];camera:CanvasCamera;size:CanvasSize;peers:CanvasPeer[];english:boolean;onBox:(box:Bounds)=>void;onPoint:(x:number,y:number)=>void;onFollow:(id:string)=>void;following:string}){
+  const w=(ko:string,en:string)=>english?en:ko,[query,setQuery]=useState(''),mini=useRef<SVGSVGElement>(null),view=cameraBox(camera,size),frames=objects.filter(o=>o.type==='shape'&&o.shape==='frame');
+  const mapBox=useMemo(()=>{const all=groupBounds(objects),x=Math.min(all?.x??0,view.x),y=Math.min(all?.y??0,view.y),right=Math.max(all?all.x+all.w:1200,view.x+view.w),bottom=Math.max(all?all.y+all.h:720,view.y+view.h),pad=Math.max(right-x,bottom-y)*.08;return{x:x-pad,y:y-pad,w:right-x+pad*2,h:bottom-y+pad*2};},[objects,view.x,view.y,view.w,view.h]);
+  const matches=query.trim()?objects.filter(o=>o.text.toLowerCase().includes(query.trim().toLowerCase())).slice(0,30):[];
+  return <div className="canvas-navigator"><div className="canvas-navigation-panels">
+    {!!frames.length&&<details className="canvas-nav-panel"><summary><Map size={15}/>{w('활동 구역','Activity areas')} <span>{frames.length}</span></summary><div>{frames.map((o,i)=><button type="button" key={o.id} onClick={()=>onBox(objectBounds(o))}><span className="canvas-area-swatch" style={{background:o.fill}}/>{o.text||w(`구역 ${i+1}`,`Area ${i+1}`)}</button>)}</div></details>}
+    <details className="canvas-nav-panel"><summary><Search size={15}/>{w('글 찾기','Find text')}</summary><div><input aria-label={w('보드에서 글 찾기','Find text on board')} placeholder={w('어떤 생각을 찾을까요?','Find an idea…')} value={query} onChange={e=>setQuery(e.target.value)}/>{matches.map(o=><button key={o.id} type="button" onClick={()=>onBox(objectBounds(o))}>{o.text.slice(0,70)}</button>)}{query&&!matches.length&&<small>{w('찾은 글이 없어요.','No matching text.')}</small>}</div></details>
+    {!!peers.length&&<details className="canvas-nav-panel"><summary><Users size={15}/>{w('친구 찾기','Find a collaborator')} <span>{peers.length}</span></summary><div>{peers.map(peer=><button type="button" key={peer.id} disabled={peer.x===undefined||peer.y===undefined} aria-pressed={following===peer.id} onClick={()=>onFollow(following===peer.id?'':peer.id)}><span className="canvas-area-swatch" style={{background:peer.color}}/>{peer.name}{peer.role==='teacher'?w(' · 선생님',' · Teacher'):''}{following===peer.id?w(' · 따라가는 중',' · Following'):''}</button>)}</div></details>}
+  </div><details className="canvas-minimap" open><summary><LocateFixed size={14}/>{w('작은 지도','Minimap')}</summary><svg ref={mini} viewBox={`${mapBox.x} ${mapBox.y} ${mapBox.w} ${mapBox.h}`} role="button" tabIndex={0} aria-label={w('작은 지도에서 위치 이동','Navigate with the minimap')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onBox(groupBounds(objects)||{x:0,y:0,w:1200,h:720});}}} onPointerDown={e=>{e.preventDefault();const matrix=mini.current?.getScreenCTM();if(matrix){const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(matrix.inverse());onPoint(p.x,p.y);}}}>
+    {objects.map(o=>{const b=objectBounds(o);return <rect key={o.id} x={b.x} y={b.y} width={b.w} height={b.h} fill={o.fill||o.color} opacity={o.shape==='frame'?.22:.6}/>;})}<rect x={view.x} y={view.y} width={view.w} height={view.h} fill="#32876e18" stroke="#28765e" strokeWidth="1.5" vectorEffect="non-scaling-stroke"/>
+  </svg></details></div>;
+}

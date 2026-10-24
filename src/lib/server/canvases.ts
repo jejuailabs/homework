@@ -8,6 +8,7 @@ import {bucket,db} from './admin';
 import {assertOrigin,getContext,type Context} from './auth';
 import {ApiError,canManageClass,id,text} from './policy';
 import {decodeCanvasUpdate,encodeCanvasUpdate} from '../canvas-document';
+import {CANVAS_WORLD_LIMIT} from '../canvas-camera';
 type Data=Record<string,any>;
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const now=()=>new Date().toISOString();
@@ -69,8 +70,8 @@ async function sync(ctx:Context,request:Request,canvasId:string){const value=awa
   });return json({acked:true,...result});}catch(error){if(!(error instanceof CompactNeeded))throw error;const result=await compact(ctx,canvasId,{incoming:update,generation:value.generation,updateId,actions});return json({acked:true,...result});}
 }
 async function presence(ctx:Context,request:Request,canvasId:string){const value=await readBody(request),doc=await load(ctx,canvasId),key=actorKey(ctx),ref=doc.ref.collection('canvasPresence').doc(key);if(value.leave===true){await ref.delete();return json({ok:true});}
-  const cursor=value.cursor;let point:Data={};if(cursor){if(typeof cursor.x!=='number'||typeof cursor.y!=='number'||!Number.isFinite(cursor.x)||!Number.isFinite(cursor.y))throw new ApiError(400,'커서 위치를 확인해 주세요.');point={x:Math.max(0,Math.min(1200,cursor.x)),y:Math.max(0,Math.min(720,cursor.y)),selected:typeof cursor.selected==='string'&&/^[A-Za-z0-9_-]{0,100}$/.test(cursor.selected)?cursor.selected:''};}
-  await ref.set({name:await name(ctx),color:['#4b8e74','#a36c98','#a27b3f','#5685b3','#a65f59'][parseInt(key.slice(0,4),16)%5],...point,lastSeen:now()});await grant(ctx,canvasId);return json({ok:true});
+  const cursor=value.cursor;let point:Data={};if(cursor){if(typeof cursor.x!=='number'||typeof cursor.y!=='number'||!Number.isFinite(cursor.x)||!Number.isFinite(cursor.y))throw new ApiError(400,'커서 위치를 확인해 주세요.');point={x:Math.max(-CANVAS_WORLD_LIMIT,Math.min(CANVAS_WORLD_LIMIT,cursor.x)),y:Math.max(-CANVAS_WORLD_LIMIT,Math.min(CANVAS_WORLD_LIMIT,cursor.y)),selected:typeof cursor.selected==='string'&&/^[A-Za-z0-9_-]{0,100}$/.test(cursor.selected)?cursor.selected:''};}
+  await ref.set({name:await name(ctx),role:ctx.role,color:['#4b8e74','#a36c98','#a27b3f','#5685b3','#a65f59'][parseInt(key.slice(0,4),16)%5],...point,lastSeen:now()});await grant(ctx,canvasId);return json({ok:true});
 }
 async function image(ctx:Context,request:Request,canvasId:string){const value=await readBody(request),parent=await load(ctx,canvasId);access(ctx,parent.data(),true);if(typeof value.src!=='string'||value.src.length>500000||!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(value.src))throw new ApiError(400,'사진을 다시 골라 주세요.');
   const bytes=Buffer.from(value.src.split(',')[1],'base64');let output:Buffer;try{output=await sharp(bytes,{limitInputPixels:40_000_000}).rotate().resize({width:1600,height:1600,fit:'inside',withoutEnlargement:true}).webp({quality:82}).toBuffer();}catch{throw new ApiError(400,'사진을 읽을 수 없어요.');}
