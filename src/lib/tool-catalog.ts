@@ -1,5 +1,5 @@
 export type ToolCategory = 'focus' | 'random' | 'play' | 'materials' | 'class' | 'prepare';
-export type ToolDefinition = {id: string; ko: string; en: string; category: ToolCategory; icon: string; color: string; ai?: boolean; kind?: 'ai' | 'matching' | 'neighborhood' | 'report' | 'poll' | 'canvas'};
+export type ToolDefinition = {id: string; ko: string; en: string; category: ToolCategory; icon: string; color: string; ai?: boolean; kind?: 'ai' | 'matching' | 'neighborhood' | 'report' | 'poll' | 'canvas' | 'handwriting'};
 export const toolCategories: {id: ToolCategory; ko: string; en: string}[] = [
   {id: 'focus', ko: '시간·집중', en: 'Time & focus'}, {id: 'random', ko: '뽑기·모둠', en: 'Pick & group'},
   {id: 'play', ko: '놀이·활동', en: 'Games & activities'}, {id: 'materials', ko: '판서·자료', en: 'Board & materials'},
@@ -28,6 +28,7 @@ export const toolCatalog: ToolDefinition[] = [
   {id:'board',ko:'판서',en:'Whiteboard',category:'materials',icon:'Presentation',color:'sky',ai:true},
   {id:'pencils',ko:'색연필',en:'Color pencils',category:'materials',icon:'PencilRuler',color:'pink'},
   {id:'notes',ko:'노트',en:'Notebook',category:'materials',icon:'NotebookPen',color:'lavender',ai:true},
+  {id:'handwriting',ko:'사진 글 정리',en:'Photo writing',category:'materials',icon:'FileText',color:'mint',ai:true,kind:'handwriting'},
   {id:'qr',ko:'QR 코드',en:'QR code',category:'materials',icon:'QrCode',color:'mint'},
   {id:'video',ko:'영상 재생',en:'Video player',category:'materials',icon:'Clapperboard',color:'peach'},
   {id:'thermometer',ko:'학급 온도계',en:'Class check-in',category:'class',icon:'ThermometerSun',color:'peach'},
