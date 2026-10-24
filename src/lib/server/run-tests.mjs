@@ -6,7 +6,10 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
 const materialsUrl = moduleUrl(compile('../assignment-materials.ts'));
 await import(moduleUrl(compile('../assignment-materials.test.ts').replace("'./assignment-materials'", JSON.stringify(materialsUrl))));
-const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));
+const canvasTextUrl=moduleUrl(compile('../canvas-text.ts'));
+const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));
+const canvasLayoutUrl=moduleUrl(compile('../canvas-text-layout.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)));
+await import(moduleUrl(compile('../canvas-text.test.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'./canvas-text-layout'",JSON.stringify(canvasLayoutUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));
 await import(moduleUrl(compile('../canvas-document.test.ts').replace("'./canvas-document'", JSON.stringify(canvasUrl))));
 const geometryUrl=moduleUrl(compile('../canvas-geometry.ts').replace("'perfect-freehand'",JSON.stringify(import.meta.resolve('perfect-freehand'))));
 await import(moduleUrl(compile('../canvas-geometry.test.ts').replace("'./canvas-geometry'",JSON.stringify(geometryUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));

@@ -1,9 +1,11 @@
 import * as Y from 'yjs';
+import {CANVAS_TEXT_STYLE_KEYS,cleanCanvasTextStyle,normalizeCanvasTextRuns,portableCanvasTextRuns,type CanvasTextRun,type CanvasTextStyle} from './canvas-text';
 
 export type CanvasBrush = 'legacy'|'pen'|'ballpoint'|'highlighter';
 export type CanvasObject = {id: string; type: 'stroke'|'text'|'image'; x: number; y: number; w: number; h: number; color: string; width: number; fontSize: number; text: string; points: number[]; src: string; assetId: string; locked: boolean;
   pressure?: number[]; brush?: CanvasBrush; smoothing?: number; thinning?: number; opacity?: number;
   fontFamily?: 'sans'|'serif'|'mono'; fontWeight?: 'normal'|'bold'; fontStyle?: 'normal'|'italic'; align?: 'left'|'center'|'right'; lineHeight?: number; autoHeight?: boolean;
+  textRuns?: CanvasTextRun[];
 };
 export const CANVAS_WIDTH = 1200, CANVAS_HEIGHT = 720, CANVAS_OBJECT_LIMIT = 400;
 export const CANVAS_STROKE_VALUES = 4000;
@@ -18,6 +20,7 @@ export function validCanvasObject(raw: unknown): CanvasObject | null {
     pressure: Array.isArray(value.pressure) ? value.pressure.slice(0,points.length/2).map(p=>numeric(p,.5,0,1)) : [],
     brush: ['pen','ballpoint','highlighter'].includes(String(value.brush)) ? value.brush as CanvasBrush : 'legacy', smoothing: numeric(value.smoothing,.5,0,1), thinning: numeric(value.thinning,.5,0,1), opacity: numeric(value.opacity,1,.05,1),
     fontFamily: ['sans','serif','mono'].includes(String(value.fontFamily)) ? value.fontFamily as 'sans'|'serif'|'mono' : 'sans', fontWeight: value.fontWeight==='bold'?'bold':'normal', fontStyle: value.fontStyle==='italic'?'italic':'normal', align: value.align==='center'||value.align==='right'?value.align:'left', lineHeight:numeric(value.lineHeight,1.4,1,2.5), autoHeight:value.autoHeight===true,
+    textRuns:portableCanvasTextRuns(typeof value.text==='string'?value.text.slice(0,5000):'',value.textRuns),
     src, assetId: typeof value.assetId === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(value.assetId) ? value.assetId : '', locked: value.locked === true};
 }
 export function encodeCanvasUpdate(update: Uint8Array) {let raw='';for(let i=0;i<update.length;i+=8192)raw+=String.fromCharCode(...update.subarray(i,i+8192));return btoa(raw);}
@@ -47,7 +50,7 @@ export class CanvasModel {
   read(): CanvasObject[] {
     const ids=[...new Set([...this.order.toArray()].reverse())].reverse();
     for(const id of this.objects.keys())if(!ids.includes(id))ids.push(id);
-    return ids.slice(0,CANVAS_OBJECT_LIMIT).flatMap(id=>{const raw=this.objects.get(id);if(!(raw instanceof Y.Map))return [];if(this.dirty.has(id)||!this.cache.has(id)){const value=validCanvasObject({id,...raw.toJSON()});this.dirty.delete(id);if(value)this.cache.set(id,value);else this.cache.delete(id);}const value=this.cache.get(id);return value?[value]:[];});
+    return ids.slice(0,CANVAS_OBJECT_LIMIT).flatMap(id=>{const raw=this.objects.get(id);if(!(raw instanceof Y.Map))return [];if(this.dirty.has(id)||!this.cache.has(id)){const text=raw.get('text'),textRuns=text instanceof Y.Text?text.toDelta().filter((part:{insert:unknown})=>typeof part.insert==='string').map((part:{insert:string;attributes?:unknown})=>({text:part.insert,style:cleanCanvasTextStyle(part.attributes)})):[];const value=validCanvasObject({id,...raw.toJSON(),textRuns});this.dirty.delete(id);if(value)this.cache.set(id,value);else this.cache.delete(id);}const value=this.cache.get(id);return value?[value]:[];});
   }
   add(input: Partial<CanvasObject> & {type: CanvasObject['type']}) {
     if(this.objects.size>=CANVAS_OBJECT_LIMIT)throw Error('이 화면에는 객체를 400개까지 담을 수 있어요.');
@@ -55,8 +58,8 @@ export class CanvasModel {
     if(!this.gestureDepth)this.undo.stopCapturing();this.doc.transact(()=>this.insert(value),this.origin);return value.id;
   }
   private insert(value: CanvasObject) {
-    const map=new Y.Map<unknown>();for(const [key,field]of Object.entries(value))if(!['id','text','points','pressure'].includes(key))map.set(key,field);
-    const text=new Y.Text();text.insert(0,value.text);map.set('text',text);
+    const map=new Y.Map<unknown>();for(const [key,field]of Object.entries(value))if(!['id','text','textRuns','points','pressure'].includes(key))map.set(key,field);
+    const text=new Y.Text();let offset=0;for(const run of normalizeCanvasTextRuns(value.text,value.textRuns)){text.insert(offset,run.text,run.style);offset+=run.text.length;}map.set('text',text);
     const points=new Y.Array<number>();points.push(value.points);map.set('points',points);
     const pressure=new Y.Array<number>();pressure.push(value.pressure||[]);map.set('pressure',pressure);
     this.objects.set(value.id,map);this.order.push([value.id]);
@@ -73,6 +76,19 @@ export class CanvasModel {
   back(id: string) {this.doc.transact(()=>{for(let i=this.order.length-1;i>=0;i--)if(this.order.get(i)===id)this.order.delete(i,1);this.order.insert(0,[id]);},this.origin);}
   replace(input: unknown[]) {const values=input.slice(0,CANVAS_OBJECT_LIMIT).map(validCanvasObject).filter((value):value is CanvasObject=>!!value);this.undo.stopCapturing();this.doc.transact(()=>{this.objects.clear();this.order.delete(0,this.order.length);for(const value of values)this.insert({...value,id:crypto.randomUUID()});},this.origin);}
   setText(id: string, value: string) {const text=this.objects.get(id)?.get('text');if(!(text instanceof Y.Text))return;const difference=textDifference(text.toString(),value.slice(0,5000));this.doc.transact(()=>{if(difference.remove)text.delete(difference.start,difference.remove);if(difference.insert)text.insert(difference.start,difference.insert);},this.origin);}
+  textType(id:string) {const text=this.objects.get(id)?.get('text');return text instanceof Y.Text?text:null;}
+  textRuns(id:string):CanvasTextRun[] {const text=this.textType(id);return text?normalizeCanvasTextRuns(text.toString(),text.toDelta().filter((part:{insert:unknown})=>typeof part.insert==='string').map((part:{insert:string;attributes?:unknown})=>({text:part.insert,style:cleanCanvasTextStyle(part.attributes)}))):[];}
+  replaceTextRange(id:string,start:number,end:number,runs:CanvasTextRun[]) {
+    const text=this.textType(id);if(!text||!Number.isFinite(start)||!Number.isFinite(end))return;start=Math.max(0,Math.min(text.length,Math.floor(start)));end=Math.max(start,Math.min(text.length,Math.floor(end)));
+    const available=5000-text.length+end-start;let remaining=available;const input=runs.flatMap(run=>{const value=run.text.slice(0,remaining);remaining-=value.length;return value?[{text:value,style:cleanCanvasTextStyle(run.style)}]:[];});
+    this.doc.transact(()=>{if(end>start)text.delete(start,end-start);let offset=start;for(const run of input){text.insert(offset,run.text,run.style);offset+=run.text.length;}},this.origin);return start+input.reduce((count,run)=>count+run.text.length,0);
+  }
+  formatTextRange(id:string,start:number,end:number,style:CanvasTextStyle) {const text=this.textType(id);if(!text)return;start=Math.max(0,Math.min(text.length,Math.floor(start)));end=Math.max(start,Math.min(text.length,Math.floor(end)));if(end<=start)return;const attributes=cleanCanvasTextStyle(style);if(!Object.keys(attributes).length)return;this.undo.stopCapturing();this.doc.transact(()=>text.format(start,end-start,attributes),this.origin);this.undo.stopCapturing();}
+  formatTextBox(id:string,style:CanvasTextStyle) {const attributes=cleanCanvasTextStyle(style),text=this.textType(id);if(!text)return;this.undo.stopCapturing();this.doc.transact(()=>{this.patch(id,attributes);const clear=Object.fromEntries(CANVAS_TEXT_STYLE_KEYS.filter(key=>key in attributes).map(key=>[key,null]));if(text.length&&Object.keys(clear).length)text.format(0,text.length,clear);},this.origin);this.undo.stopCapturing();}
+  scaleText(id:string,source:CanvasObject,factor:number) {const text=this.textType(id);if(!text||!Number.isFinite(factor))return;this.doc.transact(()=>{this.patch(id,{fontSize:source.fontSize*factor});let offset=0;for(const run of normalizeCanvasTextRuns(source.text,source.textRuns)){const length=Math.min(run.text.length,text.length-offset);if(length>0&&run.style.fontSize!==undefined)text.format(offset,length,{fontSize:Math.max(12,Math.min(120,run.style.fontSize*factor))});offset+=run.text.length;}},this.origin);}
+  startTextComposition() {this.composing=true;}
+  endTextComposition() {this.composing=false;const pending=this.waiting;this.waiting=[];for(const update of pending)this.applyRemote(update);}
+  registerTextEditor(flush:()=>void) {this.finishBoundInput=flush;return()=>{if(this.finishBoundInput===flush)this.finishBoundInput=null;};}
   applyRemote(update: Uint8Array) {if(this.composing)this.waiting.push(update);else Y.applyUpdate(this.doc,update,'remote');}
   serialize() {return encodeCanvasUpdate(Y.encodeStateAsUpdate(this.doc));}
   /** Uncontrolled textarea binding preserves selections; defer remote changes during Korean IME composition. */
