@@ -22,25 +22,120 @@ const classGroup=b.id==='classes',isGroup=b.kind==='group';
 const foot={class:'우리 반에서',school:'우리 학교에서',local:'제주에서',classes:'우리 반',schools:'우리 학교',regions:'우리 지역'}[b.id];
 return `<section class="sh-board ${isGroup?'group':''}" aria-label="${boardTitles[b.id]} 랭킹"><div class="sh-board-head"><span class="sh-board-icon"><i data-lucide="${boardIcons[b.id]}" aria-hidden="true"></i></span><div><h3>${boardTitles[b.id]}</h3><small>${esc(isGroup?(b.id==='classes'?me.school:b.id==='schools'?'제주 3개 학교':'전국 4개 지역'):(b.id==='class'?me.school+' 4-2':b.id==='school'?me.school+' 4학년':'같은 학년 · 같은 과목'))}</small></div><span class="sh-count">${b.count}${isGroup?'팀':'명'}</span></div><div class="sh-rows">${chosen.map((r,i)=>`${i===2&&r.rank>3?'<div class="sh-row-gap" aria-hidden="true">···</div>':''}<div class="sh-row ${r.ours?'me':''}"><span class="sh-position ${r.rank===1?'first':''}">${r.rank}</span>${isGroup?crest(r.crest):character(r.character)}<div class="sh-identity"><div class="sh-nickname">${esc(classGroup?r.classId.split('-')[0]+'학년 '+r.classId.split('-')[1]+'반':r.name)}${r.ours?`<span class="sh-you">${isGroup?'우리':'나'}</span>`:''}</div>${badge(r)}</div><div class="sh-points"><b>${number(r.score)}</b><small>${isGroup?r.participants+'명 평균':number(r.accuracy)+'% · '+r.averageSeconds.toFixed(2)+'초'}</small></div></div>`).join('')}</div><div class="sh-board-foot"><span>${foot} <strong>${b.myRank}위</strong></span><span>${isGroup?'참여 '+b.myRow.participants+'/'+b.myRow.rosterCount+'명':'내 점수 '+b.myRow.score+'점'}</span></div></section>`;
 }
-function livePanel(){const l=state.live;if(!l)return '';const total=R.questions[l.subject].length;if(l.status==='done'){const r=R.score(l.answers),best=state.best[l.subject],improved=l.recordUpdated===true;return `<section class="sh-live" aria-label="솔로 도전 결과"><div class="sh-live-head"><span>${subjectNames[l.subject]} 기록 도착!</span><small>${l.timedOut?'제한 시간 종료':'5문제 도전 완료'}</small></div><div class="sh-result-summary"><div class="sh-result-number">${r.score}<span style="font-size:14px;letter-spacing:0">점</span></div><p><strong>정확도 ${r.accuracy}% · ${r.correct}/5 정답</strong><br>풀이 합계 ${r.totalSeconds.toFixed(1)}초 · 문항 평균 ${r.averageSeconds.toFixed(2)}초<br>정확도 ${r.accuracyPoints}점 + 속도 ${Math.round(r.speedPoints)}점</p></div><p style="font-size:11px;color:var(--teal);margin-top:12px">${improved?'내 기록이 여섯 순위에 반영됐어요.':'이번 체험 기록을 반영했어요. 랭킹에는 더 높은 대표 기록 '+best.score+'점을 유지해요.'}</p><div class="sh-result-actions">${button('바뀐 순위 보기 ↓','data-see-ranks','sh-primary')}${button('다시 도전','data-start')}${button('접기','data-close-live')}</div><details class="sh-results-list"><summary class="cursor-interaction">문항별 시간과 풀이 확인</summary><ol>${l.answers.map((a,i)=>{const q=R.questions[l.subject][i];return `<li><b>${esc(q.q)}</b><br>${a.answer===null?'미응답':(a.correct?'정답':'오답')+' · '+esc(a.answer)} · ${a.seconds.toFixed(1)}초<br>${esc(q.explanation)}</li>`;}).join('')}</ol></details></section>`;}
-const index=l.answers.length,q=R.questions[l.subject][index];if(!q)return '';
-return `<section class="sh-live" aria-label="진행 중인 솔로 도전"><div class="sh-live-head"><span>${subjectNames[l.subject]} · SOLO RUN <small>${index+1} / ${total}</small></span><div class="sh-dots" aria-label="${index}문제 답안 기록">${R.questions[l.subject].map((_,i)=>`<span class="${i<index?'done':i===index?'active':''}"></span>`).join('')}</div><span class="sh-clock" data-clock aria-label="남은 시간">${remainingText()}</span></div><div class="sh-live-grid"><div class="sh-q"><h2>${esc(q.q)}</h2><div class="sh-options">${q.answers.map(a=>button(esc(a),`data-answer="${esc(a)}" data-question-id="${q.id}"`,'sh-answer'+(a.length>8?' long':''))).join('')}</div><div class="sh-q-footer"><span role="status">${index?index+'번 답안 저장 · 다음 문제에 집중해요':'문제가 보인 순간부터 시간을 재고 있어요'}</span>${button('그만하기','data-cancel','sh-link')}</div></div><div class="sh-live-guide">${character('popo')}<div><strong>정확하게, 나의 속도로!</strong><p>첫 답이 기록되고 다음 문제로 넘어가요. 정답과 풀이는 다 푼 뒤에 보여요.</p></div></div></div></section>`;
+function remainingText(){
+  const elapsed=state.live?.status==='playing'?Date.now()-state.live.startedAt:0;
+  return (Math.max(0,120000-elapsed)/1000).toFixed(1)+'초';
 }
-function remainingText(){const ms=Math.max(0,120000-(Date.now()-(state.live?.startedAt||Date.now())));return (ms/1000).toFixed(1)+'초';}
-function render(){badgeLookup=new Map();const playing=state.live?.status==='playing';const boards=R.boards(state.subject,state.best[state.subject]);main.innerHTML=`<div class="sh-page-head"><div><h1>기록의 전당</h1><p>혼자 쌓은 기록, 우리 모두의 순위.</p></div><div class="sh-filters"><div class="sh-subjects" role="group" aria-label="랭킹 과목">${Object.entries(subjectNames).map(([key,label])=>button((key==='math'?'× ':'Aa ')+label,`data-subject="${key}" aria-pressed="${state.subject===key}" ${playing?'disabled':''}`,'' )).join('')}</div><span class="sh-grade">초4 · 이번 주</span></div></div>${hero()}${livePanel()}${affiliationDetail()}<div class="sh-overview"><h2>우리의 여섯 가지 리그</h2><span>상위 2개 + 나의 순위</span>${button(state.method?'점수 기준 접기':'점수는 어떻게 정해질까?',`data-method aria-expanded="${state.method}"`,'sh-link')}</div>${state.method?method():''}<div class="sh-boards" data-rankings>${boards.map(board).join('')}</div><p class="sh-privacy">소속 배지를 누르면 지역·학교·학급이 펼쳐져요. 순위는 닉네임으로 표시해요.</p>`;if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:16,height:16}});}
-function finish(timedOut=false){const l=state.live;if(!l||l.status!=='playing')return;if(timedOut){while(l.answers.length<5){l.answers.push({answer:null,correct:false,seconds:l.answers.length===R.questions[l.subject].findIndex(q=>q.id===l.currentId)?Math.max(0,Math.min(120,(Math.min(Date.now(),l.startedAt+120000)-l.questionAt)/1000)):0});}}const r=R.score(l.answers);state.latest[l.subject]=r;const best=state.best[l.subject];l.recordUpdated=!best||r.score>best.score||(r.score===best.score&&r.totalSeconds<best.totalSeconds);if(l.recordUpdated)state.best[l.subject]=r;l.status='done';l.timedOut=timedOut;state.subject=l.subject;render();}
-function start(){if(state.live?.status==='playing')return;const now=Date.now();acceptAfter=now+350;state.live={subject:state.subject,startedAt:now,questionAt:now,currentId:R.questions[state.subject][0].id,answers:[],status:'playing',timedOut:false};render();root.querySelector('.sh-live')?.scrollIntoView({block:'nearest',behavior:'instant'});}
-function answer(value,questionId){if(busy||Date.now()<acceptAfter)return;const l=state.live;if(!l||l.status!=='playing')return;busy=true;const now=Date.now();if(now-l.startedAt>=120000){finish(true);busy=false;return;}const q=R.questions[l.subject][l.answers.length];if(q?.id!==questionId||!q?.answers.includes(value)){busy=false;return;}l.answers.push({answer:value,correct:value===q.correct,seconds:Math.max(0,(now-l.questionAt)/1000)});if(l.answers.length===5)finish();else{l.questionAt=Date.now();acceptAfter=l.questionAt+350;l.currentId=R.questions[l.subject][l.answers.length].id;render();}busy=false;}
-root.addEventListener('click',event=>{const b=event.target.closest('button');if(!b||b.disabled||!root.contains(b))return;
-if(b.hasAttribute('data-answer')){answer(b.dataset.answer,b.dataset.questionId);return;}
-if(b.hasAttribute('data-start')){start();return;}
-if(b.dataset.subject){state.subject=b.dataset.subject;if(state.live?.status==='done')state.live=null;state.affiliation=null;}
-else if(b.hasAttribute('data-method'))state.method=!state.method;
-else if(b.dataset.aff){state.affiliation=badgeLookup.get(b.dataset.aff)||null;render();root.querySelector('.sh-detail')?.scrollIntoView({block:'nearest',behavior:'instant'});return;}
-else if(b.hasAttribute('data-close-aff'))state.affiliation=null;
-else if(b.hasAttribute('data-close-live')||b.hasAttribute('data-cancel'))state.live=null;
-else if(b.hasAttribute('data-see-ranks')){root.querySelector('[data-rankings]')?.scrollIntoView({block:'start',behavior:'instant'});return;}
-render();});
-function tick(){if(state.live?.status!=='playing')return;if(Date.now()-state.live.startedAt>=120000){finish(true);return;}const clock=root.querySelector('[data-clock]');if(clock)clock.textContent=remainingText();}
-render();tick();setInterval(tick,200);
+function updateClock(){
+  const clock=root.querySelector('[data-clock]');
+  if(clock)clock.textContent=remainingText();
+}
+function toTop(){window.scrollTo({top:0,behavior:'instant'});}
+function render(){
+  badgeLookup=new Map();
+  const live=state.live;
+  root.dataset.scene=live?(live.status==='done'?'result':live.status):'lobby';
+  if(live){
+    main.innerHTML=globalThis.LearningKingGame.render({live,model:R,best:state.best[live.subject],subjectNames});
+    updateClock();
+    root.querySelector('[data-question], [data-result-title]')?.focus({preventScroll:true});
+    return;
+  }
+  const boards=R.boards(state.subject,state.best[state.subject]);
+  main.innerHTML=`<div class="sh-page-head"><div><h1>기록의 전당</h1><p>혼자 쌓은 기록, 우리 모두의 순위.</p></div><div class="sh-filters"><div class="sh-subjects" role="group" aria-label="랭킹 과목">${Object.entries(subjectNames).map(([key,label])=>button((key==='math'?'× ':'Aa ')+label,`data-subject="${key}" aria-pressed="${state.subject===key}"`,'' )).join('')}</div><span class="sh-grade">초4 · 이번 주</span></div></div>${hero()}${affiliationDetail()}<div class="sh-overview"><h2>우리의 여섯 가지 리그</h2><span>상위 2개 + 나의 순위</span>${button(state.method?'점수 기준 접기':'점수는 어떻게 정해질까?',`data-method aria-expanded="${state.method}"`,'sh-link')}</div>${state.method?method():''}<div class="sh-boards" data-rankings>${boards.map(board).join('')}</div><p class="sh-privacy">소속 배지를 누르면 지역·학교·학급이 펼쳐져요. 순위는 닉네임으로 표시해요.</p>`;
+  if(globalThis.lucide)globalThis.lucide.createIcons({attrs:{width:16,height:16}});
+}
+function finish(timedOut=false){
+  const live=state.live;
+  if(!live||live.status!=='playing')return;
+  if(timedOut){
+    const elapsed=Math.max(0,(Math.min(Date.now(),live.startedAt+120000)-live.questionAt)/1000);
+    live.answers.push({answer:null,correct:false,seconds:elapsed});
+    while(live.answers.length<5)live.answers.push({answer:null,correct:false,seconds:0});
+  }
+  const record=R.score(live.answers),best=state.best[live.subject];
+  state.latest[live.subject]=record;
+  live.recordUpdated=!best||record.score>best.score||(record.score===best.score&&record.totalSeconds<best.totalSeconds);
+  if(live.recordUpdated)state.best[live.subject]=record;
+  live.status='done';
+  live.timedOut=timedOut;
+  state.subject=live.subject;
+  render();
+  toTop();
+}
+function start(){
+  if(state.live&&state.live.status!=='done')return;
+  state.affiliation=null;
+  state.live={subject:state.subject,prepareAt:Date.now(),startedAt:0,questionAt:0,currentId:R.questions[state.subject][0].id,answers:[],status:'countdown',timedOut:false};
+  render();
+  toTop();
+}
+function begin(){
+  const live=state.live;
+  if(!live||live.status!=='countdown')return;
+  live.status='playing';
+  live.startedAt=live.questionAt=Date.now();
+  acceptAfter=live.questionAt+350;
+  render();
+}
+function answer(value,questionId){
+  if(busy||Date.now()<acceptAfter)return;
+  const live=state.live;
+  if(!live||live.status!=='playing')return;
+  const now=Date.now();
+  if(now-live.startedAt>=120000){finish(true);return;}
+  const question=R.questions[live.subject][live.answers.length];
+  if(question?.id!==questionId||!question.answers.includes(value))return;
+  busy=true;
+  live.answers.push({answer:value,correct:value===question.correct,seconds:Math.max(0,(now-live.questionAt)/1000)});
+  if(live.answers.length===5)finish();
+  else{
+    live.currentId=R.questions[live.subject][live.answers.length].id;
+    live.questionAt=Date.now();
+    acceptAfter=live.questionAt+350;
+    render();
+  }
+  busy=false;
+}
+root.addEventListener('click',event=>{
+  const b=event.target.closest('button');
+  if(!b||b.disabled||!root.contains(b))return;
+  if(b.hasAttribute('data-answer')){answer(b.dataset.answer,b.dataset.questionId);return;}
+  if(b.hasAttribute('data-start')){start();return;}
+  if(b.hasAttribute('data-cancel')||b.hasAttribute('data-see-ranks')){
+    state.live=null;
+    render();
+    toTop();
+    root.querySelector('[data-start]')?.focus({preventScroll:true});
+    return;
+  }
+  if(state.live)return;
+  if(b.dataset.subject){state.subject=b.dataset.subject;state.affiliation=null;}
+  else if(b.hasAttribute('data-method'))state.method=!state.method;
+  else if(b.dataset.aff){state.affiliation=badgeLookup.get(b.dataset.aff)||null;render();root.querySelector('.sh-detail')?.scrollIntoView({block:'nearest',behavior:'instant'});return;}
+  else if(b.hasAttribute('data-close-aff'))state.affiliation=null;
+  render();
+});
+root.addEventListener('keydown',event=>{
+  if(event.repeat||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||!['1','2','3'].includes(event.key))return;
+  const live=state.live;
+  if(!live||live.status!=='playing')return;
+  const question=R.questions[live.subject][live.answers.length];
+  event.preventDefault();
+  answer(question.answers[Number(event.key)-1],question.id);
+});
+function tick(){
+  const live=state.live;
+  if(!live)return;
+  if(live.status==='countdown'){
+    if(Date.now()-live.prepareAt>=3000){begin();return;}
+    const countdown=root.querySelector('[data-countdown]');
+    if(countdown)countdown.textContent=String(Math.max(1,Math.ceil((live.prepareAt+3000-Date.now())/1000)));
+  }else if(live.status==='playing'){
+    if(Date.now()-live.startedAt>=120000){finish(true);return;}
+    updateClock();
+  }
+}
+render();
+setInterval(tick,200);
 })();

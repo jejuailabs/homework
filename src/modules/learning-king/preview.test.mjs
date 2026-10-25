@@ -24,11 +24,12 @@ test('학습왕 beta assembles a complete private document with working inline c
   assert.doesNotMatch(html, /<script\b[^>]*\bsrc\s*=/i, 'scripts must not load from another service');
 
   const embeddedImages = [...html.matchAll(/data:image\/webp;base64,([A-Za-z0-9+/=]+)/g)];
-  assert.equal(embeddedImages.length, 6);
-  for (const [index, name] of ['observatory', 'comet', 'moa', 'loop', 'popo', 'crests'].entries()) {
-    const actual = Buffer.from(embeddedImages[index][1], 'base64');
+  const imageBytes = embeddedImages.map(([, data]) => Buffer.from(data, 'base64'));
+  assert.equal(embeddedImages.length, 7);
+  for (const name of ['observatory', 'comet', 'moa', 'loop', 'popo', 'crests', 'starlight-arena']) {
     const expected = fs.readFileSync(new URL(`./demo/assets/${name}.webp`, import.meta.url));
-    assert.ok(actual.equals(expected), `${name} image must survive assembly unchanged`);
+    const actual = imageBytes.find(image => image.equals(expected));
+    assert.ok(actual, `${name} image must survive assembly unchanged`);
     assert.equal(actual.subarray(0, 4).toString(), 'RIFF');
     assert.equal(actual.subarray(8, 12).toString(), 'WEBP');
   }
@@ -38,6 +39,8 @@ test('학습왕 beta assembles a complete private document with working inline c
   for (const [index, script] of scripts.entries()) {
     assert.doesNotThrow(() => new vm.Script(script[1], { filename: `learning-king-inline-${index}.js` }));
   }
+  assert.match(html, /LearningKingGame/, 'the game renderer must be included in the private preview');
+  assert.match(html, /data-scene/, 'the assembled game must include the scene styles');
 
   const iconExpression = scripts[0][1].match(/^const betaIcons=(.+);$/m)?.[1];
   assert.ok(iconExpression, 'embedded icon data must be available to the bootstrap');
