@@ -881,3 +881,157 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* The math journey keeps its question bank and journal in a separate lobby. */
+#solo-hall .jm-lobby {
+  overflow: hidden;
+  margin-bottom: 24px;
+  border: 1px solid #c5d6ce;
+  border-radius: 24px;
+  color: #20454a;
+  background: #fffef7;
+  box-shadow: 0 8px 25px #244b3e0c;
+  font-family: 'Pretendard Variable', Pretendard, sans-serif;
+}
+
+#solo-hall .jm-hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 250px;
+  overflow: hidden;
+  padding: 27px 30px 29px;
+  color: #fff7dc;
+  background: #203d4c var(--arena) center 58% / cover no-repeat;
+}
+
+#solo-hall .jm-hero::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: '';
+  background: linear-gradient(90deg, #163b49f5, #163b49c7 37%, #153d4a30 74%);
+}
+
+#solo-hall .jm-hero-copy { position: relative; z-index: 2; }
+#solo-hall .jm-kicker { color: #e7d59e; font-size: 9px; font-weight: 800; letter-spacing: 3px; }
+#solo-hall .jm-hero h1 { margin: 9px 0 11px; color: #fff5d8; font-size: 34px; line-height: 1.18; letter-spacing: -1px; font-weight: 850; }
+#solo-hall .jm-hero p { color: #daebe0; font-size: 12px; line-height: 1.65; }
+#solo-hall .jm-path { display: flex; align-items: center; gap: 9px; margin-top: 18px; color: #fff0c5; font-size: 10px; font-weight: 700; }
+#solo-hall .jm-path span { padding: 6px 10px; border: 1px solid #e7d79b3b; border-radius: 20px; background: #1035427a; }
+#solo-hall .jm-path i { color: #c7dacf; font-style: normal; }
+#solo-hall .jm-hero-character { position: absolute; z-index: 1; right: 16%; bottom: -4px; width: 195px; height: 239px; background: var(--comet) center bottom / contain no-repeat; filter: drop-shadow(0 10px 15px #143d4b55); }
+#solo-hall .jm-hero-mark { position: absolute; top: 37px; right: 30px; display: block; width: 93px; padding: 13px 7px; border: 1px solid #ffebbc8c; border-radius: 50% 50% 18px 18px; color: #e9edcd; background: #174251a8; font-size: 10px; line-height: 1.5; text-align: center; backdrop-filter: blur(8px); }
+#solo-hall .jm-hero-mark b { display: block; color: #ffdfa0; font-size: 32px; line-height: 1.25; }
+#solo-hall .jm-setup { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 28px; padding: 25px 30px; }
+#solo-hall .jm-options { display: grid; align-content: center; gap: 18px; }
+#solo-hall .jm-options fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+#solo-hall .jm-options legend { padding: 0; margin-bottom: 9px; color: #304d4e; font-size: 12px; font-weight: 800; }
+#solo-hall .jm-grades { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+#solo-hall .jm-grades button,
+#solo-hall .jm-levels button { min-height: 39px; padding: 9px 5px; border: 1px solid #dae3d6; border-radius: 10px; color: #4e6967; background: #f5f7ef; font-family: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+#solo-hall .jm-grades button.selected,
+#solo-hall .jm-levels button.selected { border-color: #558773; color: #1d6557; background: #e3f0de; box-shadow: inset 0 0 0 1px #558773; }
+#solo-hall .jm-grades button:disabled,
+#solo-hall .jm-levels button:disabled { cursor: default; opacity: .7; }
+#solo-hall .jm-grades button:focus-visible,
+#solo-hall .jm-levels button:focus-visible,
+#solo-hall .jm-start:focus-visible,
+#solo-hall .jm-discard:focus-visible { outline: 3px solid #64b9a5; outline-offset: 3px; }
+#solo-hall .jm-levels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#solo-hall .jm-levels button { text-align: left; padding: 10px 12px; }
+#solo-hall .jm-levels small { display: block; margin-top: 3px; color: #6a7f75; font-size: 10px; font-weight: 500; }
+#solo-hall .jm-departure { padding: 18px 19px 15px; border: 1px dashed #c4cbb2; border-radius: 16px; background: linear-gradient(150deg, #f5f6e8, #edf2e7); }
+#solo-hall .jm-ticket-label { display: block; margin-bottom: 7px; color: #7c8b72; font-size: 10px; font-weight: 700; }
+#solo-hall .jm-departure strong { color: #234f4d; font-size: 17px; font-weight: 850; letter-spacing: -.5px; }
+#solo-hall .jm-departure p { margin: 6px 0 13px; color: #718073; font-size: 10px; }
+#solo-hall .jm-start { display: block; width: 100%; min-height: 45px; padding: 11px 12px; border: 1px solid #e1b662; border-radius: 11px; color: #604a23; background: linear-gradient(150deg, #ffe9ac, #ffd080); box-shadow: 0 3px 0 #bc9955; font-family: inherit; font-size: 13px; font-weight: 850; cursor: pointer; }
+#solo-hall .jm-start:hover:not(:disabled) { filter: brightness(1.04); }
+#solo-hall .jm-start:disabled { opacity: .65; cursor: wait; }
+#solo-hall .jm-departure > small { display: block; margin-top: 11px; color: #879080; font-size: 9px; line-height: 1.5; text-align: center; }
+#solo-hall .jm-discard { display: block; margin: 7px auto 0; padding: 2px 6px; border: 0; color: #5f7b6e; background: transparent; font-family: inherit; font-size: 10px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+#solo-hall .jm-journal { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 30px; padding: 17px 0; border-top: 1px solid #e3e6d9; border-bottom: 1px solid #e3e6d9; }
+#solo-hall .jm-stat { min-width: 0; text-align: center; }
+#solo-hall .jm-stat + .jm-stat { border-left: 1px solid #e3e6d9; }
+#solo-hall .jm-stat small { display: block; margin-bottom: 4px; color: #76867b; font-size: 10px; }
+#solo-hall .jm-stat strong { display: block; color: #24534e; font-size: 23px; font-weight: 850; letter-spacing: -.7px; font-variant-numeric: tabular-nums; }
+#solo-hall .jm-stat strong span { margin-left: 4px; color: #7c8a7e; font-size: 10px; font-weight: 650; letter-spacing: 0; }
+#solo-hall .jm-storage { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 13px 30px 15px; color: #5c7b68; font-size: 10px; line-height: 1.6; }
+#solo-hall .jm-storage > span:first-child { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; color: #36775e; background: #e4efdd; font-size: 9px; }
+#solo-hall .jm-storage small { margin-left: auto; color: #8e9789; font-size: 9px; }
+#solo-hall .jm-storage.unavailable { color: #916c32; }
+#solo-hall .jm-history { margin: 0 30px 21px; }
+#solo-hall .jm-history summary { padding: 9px 0; color: #3f675a; font-size: 11px; font-weight: 750; cursor: pointer; }
+#solo-hall .jm-history summary span { margin-left: 5px; color: #98a18f; font-size: 9px; font-weight: 500; }
+#solo-hall .jm-history ol { display: grid; gap: 8px; max-height: 360px; overflow-y: auto; padding: 0; margin: 6px 0 0; list-style: none; }
+#solo-hall .jm-history li { padding: 12px 14px; border: 1px solid #e1e6d9; border-radius: 11px; background: #f8f9f0; }
+#solo-hall .jm-history li > div { display: flex; align-items: baseline; gap: 8px; }
+#solo-hall .jm-history b { color: #365951; font-size: 11px; font-weight: 750; overflow-wrap: anywhere; }
+#solo-hall .jm-history p { margin: 5px 0 0; color: #78897a; font-size: 10px; line-height: 1.6; }
+#solo-hall .jm-history-verdict { flex: 0 0 auto; padding: 3px 6px; border-radius: 5px; color: #976b30; background: #f5e9d0; font-size: 9px; font-weight: 750; }
+#solo-hall .jm-history-verdict.correct { color: #41765d; background: #e1eed8; }
+#solo-hall .jm-history-empty { padding: 10px 0; }
+#solo-hall .gq-journey .gq-question-story { font-size: clamp(24px, 2.7vw, 34px); line-height: 1.45; letter-spacing: -.6px; word-break: keep-all; }
+
+@media (max-width: 800px) {
+  #solo-hall .jm-setup { grid-template-columns: minmax(0, 1fr) 220px; gap: 18px; padding: 22px; }
+  #solo-hall .jm-hero { padding-left: 22px; }
+  #solo-hall .jm-hero-character { right: 7%; width: 160px; height: 210px; }
+  #solo-hall .jm-hero-mark { right: 16px; top: 20px; width: 73px; padding: 10px 5px; }
+  #solo-hall .jm-journal { margin-right: 22px; margin-left: 22px; }
+  #solo-hall .jm-storage, #solo-hall .jm-history { margin-right: 22px; margin-left: 22px; }
+}
+
+@media (max-width: 640px) {
+  #solo-hall .jm-lobby { border-radius: 19px; }
+  #solo-hall .jm-hero { min-height: 239px; padding: 23px 18px 21px; }
+  #solo-hall .jm-hero::before { background: linear-gradient(90deg, #163b49f5, #163b49b8 67%, #153d4a66); }
+  #solo-hall .jm-hero h1 { font-size: 29px; }
+  #solo-hall .jm-hero p { font-size: 11px; }
+  #solo-hall .jm-hero-character { right: -9px; width: 125px; height: 157px; bottom: 9px; opacity: .9; }
+  #solo-hall .jm-hero-mark { display: none; }
+  #solo-hall .jm-path { position: relative; z-index: 2; gap: 5px; font-size: 9px; }
+  #solo-hall .jm-path span { padding: 6px 8px; background: #103542d9; }
+  #solo-hall .jm-setup { grid-template-columns: 1fr; gap: 19px; padding: 20px 18px; }
+  #solo-hall .jm-options { gap: 17px; }
+  #solo-hall .jm-grades { gap: 5px; }
+  #solo-hall .jm-grades button { padding: 9px 2px; font-size: 11px; }
+  #solo-hall .jm-departure { padding: 16px; }
+  #solo-hall .jm-ticket-label { margin-bottom: 5px; }
+  #solo-hall .jm-departure p { margin-bottom: 11px; }
+  #solo-hall .jm-start { min-height: 47px; }
+  #solo-hall .jm-journal { margin-right: 18px; margin-left: 18px; padding: 15px 0; }
+  #solo-hall .jm-stat small { font-size: 9px; }
+  #solo-hall .jm-stat strong { font-size: 20px; }
+  #solo-hall .jm-stat strong span { margin-left: 2px; font-size: 9px; }
+  #solo-hall .jm-storage, #solo-hall .jm-history { margin-right: 18px; margin-left: 18px; }
+  #solo-hall .jm-storage { margin-top: 13px; font-size: 9px; }
+  #solo-hall .jm-storage small { flex-basis: 100%; margin-left: 20px; font-size: 8px; }
+  #solo-hall .gq-journey .gq-hud { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding-top: 10px; }
+  #solo-hall .gq-journey .gq-stage-label { grid-column: 1 / -1; grid-row: 1; }
+  #solo-hall .gq-journey .gq-stage-label small { display: inline; margin-right: 6px; }
+  #solo-hall .gq-journey .gq-stage-label strong { display: inline; }
+  #solo-hall .gq-journey .gq-exit { grid-row: 2; }
+  #solo-hall .gq-journey .gq-clock, #solo-hall .gq-journey .gq-completion { grid-row: 2; }
+  #solo-hall .gq-journey .gq-clock { display: flex; gap: 8px; min-height: 35px; }
+  #solo-hall .gq-journey .gq-question-story { font-size: 23px; line-height: 1.5; }
+  #solo-hall .gq-journey .gq-countdown h1 { font-size: 23px; }
+}
+
+@media (max-width: 360px) {
+  #solo-hall .jm-hero { padding-right: 13px; padding-left: 13px; }
+  #solo-hall .jm-hero h1 { font-size: 27px; }
+  #solo-hall .jm-hero p { font-size: 10px; }
+  #solo-hall .jm-hero-character { right: -30px; opacity: .7; }
+  #solo-hall .jm-path { gap: 4px; font-size: 8px; }
+  #solo-hall .jm-path span { padding: 6px; }
+  #solo-hall .jm-setup { padding-right: 13px; padding-left: 13px; }
+  #solo-hall .jm-grades button { font-size: 10px; }
+  #solo-hall .jm-levels button { padding-right: 8px; padding-left: 8px; }
+  #solo-hall .jm-levels small { font-size: 9px; }
+  #solo-hall .jm-journal { margin-right: 13px; margin-left: 13px; }
+  #solo-hall .jm-stat strong { font-size: 18px; }
+  #solo-hall .jm-storage, #solo-hall .jm-history { margin-right: 13px; margin-left: 13px; }
+  #solo-hall .gq-journey .gq-question-story { font-size: 21px; }
+}
+
+#solo-hall .gq-progress-note.unavailable{color:#ffe5a5;font-weight:700}

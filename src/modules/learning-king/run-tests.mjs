@@ -125,3 +125,5 @@ test('학습왕 beta unexpected authentication failures never read preview or le
 await import('./model.test.mjs');
 await import('./preview.test.mjs');
 await import('./gameplay.test.mjs');
+await import('./math-journey.test.mjs');
+await import('./journey-storage.test.mjs');

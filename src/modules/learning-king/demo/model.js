@@ -186,13 +186,6 @@
   }
 
   const questions = {
-    math: [
-      { id: 'solo-m1', q: '238 + 146 = ?', answers: ['374', '384', '394'], correct: '384', explanation: '200 + 100 = 300, 38 + 46 = 84이므로 384예요.' },
-      { id: 'solo-m2', q: '7 × 8 = ?', answers: ['54', '56', '64'], correct: '56', explanation: '7을 8번 더하면 56이에요.' },
-      { id: 'solo-m3', q: '96 ÷ 8 = ?', answers: ['12', '14', '16'], correct: '12', explanation: '8 × 12 = 96이므로 몫은 12예요.' },
-      { id: 'solo-m4', q: '420 − 175 = ?', answers: ['255', '235', '245'], correct: '245', explanation: '420에서 100, 70, 5를 차례로 빼면 245예요.' },
-      { id: 'solo-m5', q: '24 × 3 = ?', answers: ['62', '72', '82'], correct: '72', explanation: '20 × 3 = 60, 4 × 3 = 12이므로 72예요.' }
-    ],
     english: [
       { id: 'solo-e1', q: '“cloud”의 뜻은?', answers: ['구름', '바람', '파도'], correct: '구름', explanation: 'cloud는 하늘에 떠 있는 구름을 뜻해요.' },
       { id: 'solo-e2', q: '“친구”의 올바른 철자는?', answers: ['freind', 'friend', 'frend'], correct: 'friend', explanation: '친구는 f-r-i-e-n-d, friend라고 써요.' },

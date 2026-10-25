@@ -9,9 +9,10 @@ const imageNames = ['observatory', 'comet', 'moa', 'loop', 'popo', 'crests', 'st
 let documentPromise: Promise<string> | undefined;
 
 async function buildPreview() {
-  const [template, model, dashboard, gameplay, gameplayCss, iconMarkup, ...images] = await Promise.all([
+  const [template, model, journey, dashboard, gameplay, gameplayCss, iconMarkup, ...images] = await Promise.all([
     readFile(join(demoRoot, 'dashboard.html'), 'utf8'),
     readFile(join(demoRoot, 'model.js'), 'utf8'),
+    readFile(join(demoRoot, 'math-journey.js'), 'utf8'),
     readFile(join(demoRoot, 'dashboard.js'), 'utf8'),
     readFile(join(demoRoot, 'gameplay.js'), 'utf8'),
     readFile(join(demoRoot, 'gameplay.css'), 'utf8'),
@@ -19,7 +20,7 @@ async function buildPreview() {
     ...imageNames.map(name => readFile(join(demoRoot, 'assets', name + '.webp'))),
   ]);
   const icons = JSON.stringify(JSON.parse(iconMarkup)).replace(/</g, '\\u003c');
-  let fragment = template.replace('__MODEL__', model).replace('__GAMEPLAY__', gameplay).replace('__GAMEPLAY_CSS__', gameplayCss).replace('__UI__', dashboard);
+  let fragment = template.replace('__MODEL__', model).replace('__JOURNEY__', journey).replace('__GAMEPLAY__', gameplay).replace('__GAMEPLAY_CSS__', gameplayCss).replace('__UI__', dashboard);
   imageNames.forEach((name, index) => {
     fragment = fragment.replace('__' + name.toUpperCase() + '__', 'data:image/webp;base64,' + images[index].toString('base64'));
   });

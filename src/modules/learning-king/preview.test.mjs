@@ -40,6 +40,7 @@ test('학습왕 beta assembles a complete private document with working inline c
     assert.doesNotThrow(() => new vm.Script(script[1], { filename: `learning-king-inline-${index}.js` }));
   }
   assert.match(html, /LearningKingGame/, 'the game renderer must be included in the private preview');
+  assert.match(html, /global\.MathJourney =/, 'the no-API math generator must be included');
   assert.match(html, /data-scene/, 'the assembled game must include the scene styles');
 
   const iconExpression = scripts[0][1].match(/^const betaIcons=(.+);$/m)?.[1];
