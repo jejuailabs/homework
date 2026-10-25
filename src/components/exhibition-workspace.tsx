@@ -2,7 +2,7 @@
 
 import {useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
 import dynamic from "next/dynamic";
-import {useRouter} from "next/navigation";
+import {usePathname, useRouter} from "next/navigation";
 
 import {useLocale, useTranslations} from "next-intl";
 import {ArrowLeft, ArrowRight, Camera, Check, CheckCircle2, ChevronDown, Clock3, Cloud, DoorOpen, Flower2, Heart, ImagePlus, Images, LayoutGrid, Leaf, LoaderCircle, LockKeyhole, Mail, Maximize2, Minimize2, MoreHorizontal, Palette, Plus, RefreshCw, Send, Settings2, Sparkles, Stamp, Trash2, Upload, Users, Waves, X} from "lucide-react";
@@ -14,6 +14,7 @@ import ArtworkModuleSettings from '@/modules/artwork-extensions/settings';
 const DigitalArtbook = dynamic(() => import('@/modules/digital-artbook/panel'), {ssr: false});
 import {moduleOptions} from '@/modules/artwork-extensions/types';
 import {useExhibitionViewport} from './use-exhibition-viewport';
+import {useVerifiedViewer} from './viewer-context';
 import {artworkToday} from '@/lib/exhibition-metadata';
 import '@/styles/exhibition-sharing.css';
 import type {ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionClass, ExhibitionComment, ExhibitionDetailResponse, ExhibitionListResponse, ExhibitionStatus, ExhibitionStudent} from "@/lib/exhibition-types";
@@ -84,7 +85,8 @@ function VisitDialog({title, className, count, actions, children, onClose}: {tit
 }
 
 export default function ExhibitionWorkspace({role}: {role: Role}) {
-  const t = useTranslations("exhibition"), common = useTranslations("common"), locale = useLocale(), router = useRouter(), teacher = role === "teacher";
+  const t = useTranslations("exhibition"), common = useTranslations("common"), locale = useLocale(), router = useRouter(), path = usePathname(), teacher = role === "teacher";
+  const {setVerifiedViewer, clearViewer} = useVerifiedViewer();
   const [home, setHome] = useState<ExhibitionListResponse | null>(null);
   const [forbidden, setForbidden] = useState(false);
   const authorized = home !== null && !forbidden;
@@ -117,10 +119,23 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   const activeBuilding = useRef(""), nextCursor = useRef<string | null>(null);
   const initialClassLink = useRef<string | null>(null);
   const listRequest = useRef(0), homeRequest = useRef(0), pageBusy = useRef(false);
+  const viewerActive = useRef(false);
+  useEffect(() => {
+    viewerActive.current = true;
+    const invalidate = () => {viewerActive.current = false; listRequest.current++; homeRequest.current++; activeId.current = ""; clearViewer();};
+    window.addEventListener('homework-session-ended', invalidate);
+    return () => {window.removeEventListener('homework-session-ended', invalidate); invalidate();};
+  }, [path, clearViewer]);
+  const publishViewer = useCallback((data: ExhibitionListResponse) => {
+    if (viewerActive.current && window.location.pathname === path && data.viewerRole === role && typeof data.viewerId === 'string' && data.viewerId) {
+      setVerifiedViewer({uid: data.viewerId, role: data.viewerRole}, path);
+    }
+  }, [path, role, setVerifiedViewer]);
   const loadErrorText = useRef(t("error"));
   // Preference hydration can replace the translator; it must not restart data reads.
   useEffect(() => {loadErrorText.current = t("error");}, [t]);
   const handleAccessError = useCallback((cause: unknown) => {
+    clearViewer();
     if (!(cause instanceof ExhibitionRequestError) || ![401, 403].includes(cause.status)) return false;
     // Invalidate pending reads so a late response cannot restore a denied view.
     listRequest.current++; homeRequest.current++; activeId.current = ""; pageBusy.current = false;
@@ -129,7 +144,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     if (cause.status === 401) router.replace("/");
     else setForbidden(true);
     return true;
-  }, [router]);
+  }, [router, clearViewer]);
   const loadRooms = useCallback(async (classId: string, append = false) => {
     if (teacher && !classId || append && (!nextCursor.current || pageBusy.current)) return;
     const cursor = append ? nextCursor.current : null;
@@ -142,15 +157,16 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     if (cursor) query.set("cursor", cursor);
     try {
       const data = await request<ExhibitionListResponse>(`/api/exhibitions${query.size ? `?${query}` : ""}`);
-      if (sequence !== listRequest.current || teacher && classId !== activeBuilding.current) return;
+      if (!viewerActive.current || window.location.pathname !== path || sequence !== listRequest.current || teacher && classId !== activeBuilding.current) return;
       if (data.viewerRole !== role) throw new ExhibitionRequestError("FORBIDDEN", 403);
+      publishViewer(data);
       setRooms(previous => append ? [...new Map([...previous, ...data.exhibitions].map(show => [show.id, show])).values()] : data.exhibitions);
       setHasMoreRooms(data.hasMore && !!data.nextCursor); nextCursor.current = data.nextCursor || null;
       setHome(previous => previous ? {...previous, classes: data.classes || previous.classes, profile: data.profile || previous.profile, storageUsage: data.storageUsage || previous.storageUsage} : data);
       setError("");
     } catch (cause) {if (sequence === listRequest.current && (!teacher || classId === activeBuilding.current) && !handleAccessError(cause)) setError(loadErrorText.current);}
     finally {if (sequence === listRequest.current) {setRoomsLoading(false); setMoreLoading(false); pageBusy.current = false;}}
-  }, [teacher, role, handleAccessError]);
+  }, [teacher, role, path, publishViewer, handleAccessError]);
   const loadHome = useCallback(async () => {
     const sequence = ++homeRequest.current;
     const roomSequence = ++listRequest.current;
@@ -175,8 +191,9 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
         query.delete("classId");
         data = await request<ExhibitionListResponse>(`/api/exhibitions?${query}`);
       }
-      if (sequence !== homeRequest.current || roomSequence !== listRequest.current) return;
+      if (!viewerActive.current || window.location.pathname !== path || sequence !== homeRequest.current || roomSequence !== listRequest.current) return;
       if (data.viewerRole !== role) throw new ExhibitionRequestError("FORBIDDEN", 403);
+      publishViewer(data);
       setHome(data); setForbidden(false); setError("");
       const classId = data.selectedClassId || data.profile?.classId || "";
       activeBuilding.current = classId; setBuildingId(classId);
@@ -190,7 +207,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
       if (sequence === homeRequest.current) setLoading(false);
       if (roomSequence === listRequest.current) {setRoomsLoading(false); pageBusy.current = false;}
     }
-  }, [teacher, role, handleAccessError]);
+  }, [teacher, role, path, publishViewer, handleAccessError]);
   const selectBuilding = (id: string) => {const changed = activeBuilding.current !== id; activeBuilding.current = id; setBuildingId(id); if (changed) {setRooms([]); void loadRooms(id);}};
   const enterBuilding = (id: string) => {selectBuilding(id); setPlace("classroom");};
   const loadDetail = useCallback(async (id: string, showLoading = false) => {
@@ -198,10 +215,10 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     if (showLoading) setDetailLoading(true);
     try {
       const data = await request<ExhibitionDetailResponse>(`/api/exhibitions/${id}`);
-      if (activeId.current === id) {setDetail(data); activeBuilding.current = data.exhibition.classId; setBuildingId(data.exhibition.classId); setPlace("classroom"); setError("");}
+      if (viewerActive.current && window.location.pathname === path && activeId.current === id) {setDetail(data); activeBuilding.current = data.exhibition.classId; setBuildingId(data.exhibition.classId); setPlace("classroom"); setError("");}
     } catch (cause) {if (activeId.current === id && !handleAccessError(cause)) setError(loadErrorText.current);}
     finally {if (activeId.current === id) setDetailLoading(false);}
-  }, [handleAccessError]);
+  }, [path, handleAccessError]);
   useEffect(() => {void loadHome();}, [loadHome]);
   useEffect(() => {
     const sync = (refreshRooms: boolean) => {const id = new URL(window.location.href).searchParams.get("exhibition") || ""; activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); if (refreshRooms && !id && (activeBuilding.current || !teacher)) void loadRooms(activeBuilding.current);};

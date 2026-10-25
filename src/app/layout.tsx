@@ -11,6 +11,7 @@ import '@/styles/student-delight.css';
 import '@/styles/teacher-dashboard.css';
 import '@/styles/participation-integration.css';
 import '@/styles/cards-integration.css';
+import '@/styles/learning-king-beta.css';
 
 export const metadata:Metadata={title:'모두의 숙제 · Homework Friends',description:'동물 친구와 함께하는 쉬운 숙제 제출, 선생님을 위한 과제와 검사 도구.',appleWebApp:{capable:true,title:'모두의 숙제',statusBarStyle:'default'},robots:{index:false,follow:false}};
 export const viewport:Viewport={width:'device-width',initialScale:1,themeColor:'#397960'};

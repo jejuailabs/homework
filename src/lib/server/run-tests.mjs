@@ -61,3 +61,4 @@ await import('../../modules/daily-quiz/run-tests.mjs');
 
 const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
 await import(moduleUrl(compile('../admin-console-policy.test.ts').replace("'./admin-console-policy'",JSON.stringify(adminConsolePolicyUrl))));
+await import('../../modules/learning-king/run-tests.mjs');

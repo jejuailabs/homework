@@ -10,12 +10,15 @@ import {auth} from '@/lib/firebase-client';
 import {usePreferences,type Palette} from './providers';
 import InstallShortcut from './install-shortcut';
 import StudentCompanion from '@/modules/my-space/companion';
+import LearningKingBeta from './learning-king-beta';
+import {useVerifiedViewer} from './viewer-context';
 // Card Play is hidden from the top menu for now; its pages still work by direct link.
 const cardsMenuVisible = false;
 
 export default function AppShell({children,mySpaceEnabled=true}:{children:ReactNode;mySpaceEnabled?:boolean}) {
   const t=useTranslations('common'), path=usePathname(), router=useRouter();
   const {locale,appearance,palette,setPreference}=usePreferences();
+  const {viewer}=useVerifiedViewer();
   const [settings,setSettings]=useState(false), [busy,setBusy]=useState(false);
   const [systemDark,setSystemDark]=useState(false);
   useEffect(()=>{
@@ -63,5 +66,6 @@ export default function AppShell({children,mySpaceEnabled=true}:{children:ReactN
     <main id="main" className={isLogin?'login-main':'app-main'}>{children}</main>
     <footer className="app-footer"><span>{t('brand')}</span><InstallShortcut/><span>{t('tagline')}</span></footer>
     {isStudent&&mySpaceEnabled&&<StudentCompanion/>}
+    {viewer&&['teacher','admin','superadmin'].includes(viewer.role)&&/^\/(teacher|admin)(\/|$)/.test(path)&&<LearningKingBeta key={`${path}:${viewer.uid}`}/>}
   </>;
 }

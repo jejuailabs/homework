@@ -1,7 +1,7 @@
 'use client';
 
 import {useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode} from 'react';
-import {useRouter} from 'next/navigation';
+import {usePathname, useRouter} from 'next/navigation';
 import Link from 'next/link';
 import {useLocale, useTranslations} from 'next-intl';
 import {Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Check, ChevronDown, Copy, Download, Eye, EyeOff, FolderOpen, GripVertical, Heart, History, LayoutGrid, Lightbulb, List, LockKeyhole, MapPin, MessageCircle, MoreHorizontal, Pencil, Pin, Plus, RefreshCw, Search, Settings2, Share2, Sparkles, Star, ThumbsUp, Trash2, Users, X} from 'lucide-react';
@@ -9,6 +9,7 @@ import type {BoardDetailResponse, BoardListResponse, BoardPoll, BoardPost, Board
 import type {Character} from '@/lib/characters';
 import {AttachmentView, BoardDialog, BoardRequestError, Friend, Loading, boardRequest, layoutIcons, requestId} from './participation-shared';
 import ParticipationComposer from './participation-composer';
+import {useVerifiedViewer} from './viewer-context';
 import {BoardSettingsDialog, BoardShareDialog, CommentsDialog, CreateBoardDialog, HistoryDialog} from './participation-panels';
 import '@/styles/participation.css';
 
@@ -18,7 +19,8 @@ type Participant = {id: string; name: string; number: number; character: Charact
 const reactionIcons = {heart: Heart, star: Star, clap: ThumbsUp, idea: Lightbulb};
 
 export default function ParticipationWorkspace({role}: {role: Role}) {
-  const t = useTranslations('participation'), locale = useLocale(), router = useRouter(), teacher = role === 'teacher';
+  const t = useTranslations('participation'), locale = useLocale(), router = useRouter(), path = usePathname(), teacher = role === 'teacher';
+  const {setVerifiedViewer, clearViewer} = useVerifiedViewer();
   const [home, setHome] = useState<BoardListResponse | null>(null), [boardId, setBoardId] = useState(''), [classId, setClassId] = useState('');
   const [detail, setDetail] = useState<BoardDetailResponse | null>(null), [loading, setLoading] = useState(true), [detailLoading, setDetailLoading] = useState(false), [moreLoading, setMoreLoading] = useState(false);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [forbidden, setForbidden] = useState(false), [listSearch, setListSearch] = useState(''), [search, setSearch] = useState('');
@@ -26,10 +28,23 @@ export default function ParticipationWorkspace({role}: {role: Role}) {
   const [modal, setModal] = useState<'create' | 'settings' | 'share' | 'section' | 'participants' | null>(null), [composer, setComposer] = useState<ComposerTarget | null>(null), [commentsPostId, setCommentsPostId] = useState(''), [historyPostId, setHistoryPostId] = useState('');
   const [sectionTitle, setSectionTitle] = useState(''), [editingSection, setEditingSection] = useState(''), [busy, setBusy] = useState(false), [participants, setParticipants] = useState<Participant[] | null>(null);
   const activeBoard = useRef(''), activeClass = useRef(''), listSequence = useRef(0), detailSequence = useRef(0), detailFetching = useRef(false), initialized = useRef(false), drag = useRef<{id: string; offsetX: number; offsetY: number} | null>(null);
+  const viewerActive = useRef(false);
+  useEffect(() => {
+    viewerActive.current = true;
+    const invalidate = () => {viewerActive.current = false; listSequence.current++; detailSequence.current++; clearViewer();};
+    window.addEventListener('homework-session-ended', invalidate);
+    return () => {window.removeEventListener('homework-session-ended', invalidate); invalidate();};
+  }, [path, clearViewer]);
+  const publishViewer = useCallback((data: BoardListResponse | BoardDetailResponse) => {
+    if (viewerActive.current && window.location.pathname === path && data.viewerRole === role && typeof data.viewerId === 'string' && data.viewerId) {
+      setVerifiedViewer({uid: data.viewerId, role: data.viewerRole}, path);
+    }
+  }, [path, role, setVerifiedViewer]);
   const copy = useRef(t); copy.current = t;
   const detailRef = useRef<BoardDetailResponse | null>(null), loadedPages = useRef(1), lastFullRead = useRef(0); detailRef.current = detail;
   const board = detail?.board, viewerId = detail?.viewerId || home?.viewerId || role;
   const handleError = useCallback((cause: unknown) => {
+    clearViewer();
     if (cause instanceof BoardRequestError && [401, 403, 404].includes(cause.status)) {
       listSequence.current++; detailSequence.current++; detailFetching.current = false; activeBoard.current = '';
       setDetail(null); setHome(null); setComposer(null); setCommentsPostId(''); setHistoryPostId(''); setModal(null); setBoardId(''); setLoading(false); setDetailLoading(false); setMoreLoading(false); setForbidden(true);
@@ -37,17 +52,18 @@ export default function ParticipationWorkspace({role}: {role: Role}) {
       setError(copy.current(cause.status === 404 ? 'boardUnavailable' : cause.status === 401 ? 'session' : 'forbidden')); return;
     }
     setError(copy.current(cause instanceof BoardRequestError && cause.status === 404 ? 'boardUnavailable' : 'error'));
-  }, [router]);
+  }, [router, clearViewer]);
   const loadHome = useCallback(async (targetClass = activeClass.current, append = false, cursor?: string | null) => {
     const sequence = ++listSequence.current; if (!append) setLoading(true); else setMoreLoading(true);
     const query = new URLSearchParams(); if (targetClass) query.set('classId', targetClass); if (append && cursor) query.set('cursor', cursor);
     try {
       const result = await boardRequest<BoardListResponse>(`/api/boards${query.size ? `?${query}` : ''}`);
-      if (sequence !== listSequence.current || activeClass.current !== targetClass) return;
-      if (result.viewerRole !== role) {router.replace(`/${result.viewerRole}/boards${activeBoard.current ? `?board=${encodeURIComponent(activeBoard.current)}` : ''}`); return;}
+      if (!viewerActive.current || window.location.pathname !== path || sequence !== listSequence.current || activeClass.current !== targetClass) return;
+      if (result.viewerRole !== role) {clearViewer();router.replace(`/${result.viewerRole}/boards${activeBoard.current ? `?board=${encodeURIComponent(activeBoard.current)}` : ''}`); return;}
+      publishViewer(result);
       setHome(previous => append && previous ? {...result, boards: [...new Map([...previous.boards, ...result.boards].map(item => [item.id, item])).values()]} : result); setError(''); setForbidden(false);
     } catch (cause) {if (sequence === listSequence.current) handleError(cause);} finally {if (sequence === listSequence.current) {setLoading(false); setMoreLoading(false);}}
-  }, [handleError, role, router]);
+  }, [handleError, role, router, path, publishViewer, clearViewer]);
   const loadDetail = useCallback(async (id: string, showLoading = false, append = false, cursor?: string | null, conditional = false) => {
     if (!id) return; const sequence = ++detailSequence.current; detailFetching.current = true;
     if (showLoading) setDetailLoading(true); if (append) setMoreLoading(true);
@@ -57,7 +73,7 @@ export default function ParticipationWorkspace({role}: {role: Role}) {
       if (append && cursor) query.set('cursor', cursor);
       else if (conditional && before && Date.now() - lastFullRead.current < 10 * 60 * 1000) query.set('since', before.board.updatedAt);
       let result = await boardRequest<BoardDetailResponse>(`/api/boards/${encodeURIComponent(id)}${query.size ? `?${query}` : ''}`);
-      if (sequence !== detailSequence.current || activeBoard.current !== id) return;
+      if (!viewerActive.current || window.location.pathname !== path || sequence !== detailSequence.current || activeBoard.current !== id) return;
       if (!result.unchanged && !append) {
         const targetPages = showLoading ? 1 : loadedPages.current;
         let fetchedPages = 1;
@@ -69,13 +85,14 @@ export default function ParticipationWorkspace({role}: {role: Role}) {
         loadedPages.current = fetchedPages; lastFullRead.current = Date.now();
       } else if (append) loadedPages.current++;
 
-      if (sequence !== detailSequence.current || activeBoard.current !== id) return;
-      if (result.viewerRole !== role) {router.replace(`/${result.viewerRole}/boards?board=${encodeURIComponent(id)}`); return;}
+      if (!viewerActive.current || window.location.pathname !== path || sequence !== detailSequence.current || activeBoard.current !== id) return;
+      if (result.viewerRole !== role) {clearViewer();router.replace(`/${result.viewerRole}/boards?board=${encodeURIComponent(id)}`); return;}
+      publishViewer(result);
       setDetail(previous => result.unchanged && previous?.board.id === id ? {...previous, board: result.board} : append && previous?.board.id === id ? {...result, posts: [...new Map([...previous.posts, ...result.posts].map(item => [item.id, item])).values()]} : result); setError(''); setForbidden(false);
       if (showLoading) setSort(result.board.sort);
       setHome(previous => previous ? {...previous, boards: previous.boards.map(item => item.id === id ? result.board : item)} : previous);
     } catch (cause) {if (sequence === detailSequence.current && activeBoard.current === id) handleError(cause);} finally {if (sequence === detailSequence.current) {setDetailLoading(false); setMoreLoading(false); detailFetching.current = false;}}
-  }, [handleError, role, router]);
+  }, [handleError, role, router, path, publishViewer, clearViewer]);
   useEffect(() => {
     const sync = () => {
       const query = new URLSearchParams(window.location.search), requestedBoard = query.get('board') || '', requestedClass = query.get('classId') || '';

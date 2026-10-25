@@ -3,7 +3,10 @@ import type { NextConfig } from 'next';
 const config: NextConfig = {
   distDir: process.env.QA_NEXT_DIST_DIR || '.next',
   poweredByHeader: false,
-  outputFileTracingIncludes: {'/api/artbooks/**/*': ['./src/modules/digital-artbook/assets/*.ttf']},
+  outputFileTracingIncludes: {
+    '/api/artbooks/**/*': ['./src/modules/digital-artbook/assets/*.ttf'],
+    '/api/learning-king-beta': ['./src/modules/learning-king/demo/**/*'],
+  },
   // jwks-rsa loads ESM-only jose from CommonJS. Bundle this chain so serverless
   // runtimes with require(ESM) disabled can load Firebase Auth without downgrades.
   transpilePackages: ['firebase-admin', 'jwks-rsa', 'jose'],
