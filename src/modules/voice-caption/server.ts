@@ -12,6 +12,7 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
         throw new ApiError(404, '음성 도슨트가 꺼져 있어요.', 'MODULE_DISABLED');
     const root = db().doc('moduleVoices/' + t.key), records = root.collection('recordings'), quota = db().doc('moduleVoiceStorage/' + t.ownerUid), recordId = segments[0] ? id(segments[0]) : '', ref = recordId ? records.doc(recordId) : null;
     const canEdit = (v: Data) => t.manage || t.record && v.actorKey === t.actor.key;
+    const canTranscribe = t.manage && process.env.VOICE_AI_TRANSCRIPTION_ENABLED === 'true';
     const audioPath = (v: Data) => `module-voice/${t.ownerUid}/${t.key}/${v.id}.wav`;
     const view = (v: Data) => ({ id: v.id, caption: v.caption || '', duration: v.duration, status: v.status, transcription: v.transcription === 'running' && v.leaseUntil <= Date.now() ? 'failed' : v.transcription || 'idle', uploadStatus: v.uploadStatus, version: v.version, error: v.error || '', audioUrl: new URL(request.url).pathname.replace(/\/voice(?:\/.*)?$/, '/voice/' + v.id + '/audio') + new URL(request.url).search });
     if (request.method === 'GET') {
@@ -37,7 +38,7 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
         }
         const snapshots = await Promise.all((state.recordIds || []).map((key: string) => records.doc(key).get()));
         const all = snapshots.filter((d: any) => d.exists).map((d: any) => d.data() as Data), active = all.find((v: Data) => v.id === state.activeId && v.status === 'approved'), draft = all.find((v: Data) => v.id === state.draftId && canEdit(v) && v.uploadStatus !== 'deleted');
-        return { active: active ? view(active) : null, draft: draft ? view(draft) : null, history: all.filter((v: Data) => canEdit(v) && v.id !== state.activeId && v.id !== state.draftId && v.uploadStatus !== 'deleted').map(view), viewer: { manage: t.manage, record: t.record }, publicAudio: t.options.voice.publicAudio };
+        return { active: active ? view(active) : null, draft: draft ? view(draft) : null, history: all.filter((v: Data) => canEdit(v) && v.id !== state.activeId && v.id !== state.draftId && v.uploadStatus !== 'deleted').map(view), viewer: { manage: t.manage, record: t.record, transcribe: canTranscribe }, publicAudio: t.options.voice.publicAudio };
     }
     if (!ref)
         throw new ApiError(400, '녹음 번호를 확인해 주세요.');
@@ -97,6 +98,9 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
         }
         return { recording: view((await ref.get()).data()!) };
     }
+    // Audio storage and manual captions never implicitly enable a paid AI call.
+    if (request.method === 'POST' && segments[1] === 'transcribe' && !canTranscribe)
+        throw new ApiError(403, 'AI 자동 캡션은 별도 비용 승인 후 선생님만 사용할 수 있어요. 캡션을 직접 입력해 주세요.', 'VOICE_AI_DISABLED');
     const input = request.method === 'DELETE' ? {} : await moduleJson(request);
     if (request.method === 'POST' && segments[1] === 'transcribe') {
         const attempt = await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const snapshot = await tx.get(ref), v = snapshot.data(); if (!v || !canEdit(v) || v.status !== 'draft' || v.uploadStatus !== 'ready')

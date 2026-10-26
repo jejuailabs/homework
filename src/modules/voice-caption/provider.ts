@@ -3,6 +3,8 @@ import { runMeteredAi } from '@/lib/server/ai';
 import { ApiError } from '@/lib/server/policy';
 import { providerFailure, readBoundedJson } from '@/lib/server/ai-policy';
 export async function transcribeVoice(ownerUid: string, key: string, audio: Uint8Array,scope:{classId?:string;audioSeconds?:number}={}) {
+    if (process.env.VOICE_AI_TRANSCRIPTION_ENABLED !== 'true')
+        throw new ApiError(403, 'AI 자동 캡션이 꺼져 있어요. 캡션을 직접 입력해 주세요.', 'VOICE_AI_DISABLED');
     const model = process.env.OPENAI_TRANSCRIBE_MODEL?.trim() || 'gpt-transcribe';
     return runMeteredAi(ownerUid, 'voice-caption', model, key, async observe => {
         const form = new FormData();
