@@ -1,4 +1,5 @@
 'use client';
+import {lockBodyScroll} from '@/lib/body-scroll-lock';
 import {useEffect, useRef, useState} from 'react';
 import {FlaskConical, LoaderCircle, RotateCcw, ShieldAlert, X} from 'lucide-react';
 import {useVerifiedViewer} from './viewer-context';
@@ -19,12 +20,11 @@ export default function LearningKingBeta() {
   useEffect(() => {
     if (!open) return;
     const element = dialog.current!;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const releaseScroll = lockBodyScroll();
     element.showModal();
     return () => {
       element.close();
-      document.body.style.overflow = previousOverflow;
+      releaseScroll();
       trigger.current?.focus();
     };
   }, [open]);

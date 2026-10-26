@@ -1,5 +1,6 @@
 "use client";
 
+import {lockBodyScroll, lockBodyScrollWhen} from '@/lib/body-scroll-lock';
 import {useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
 import dynamic from "next/dynamic";
 import {usePathname, useRouter} from "next/navigation";
@@ -70,12 +71,11 @@ function VisitDialog({title, className, count, actions, children, onClose}: {tit
   const [expanded, setExpanded] = useState(false),[menuOpen,setMenuOpen]=useState(false);
   useExhibitionViewport(dialog);
   useEffect(() => {
-    const previous = document.body.style.overflow;
+    const releaseScroll = lockBodyScroll();
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const node = dialog.current;
-    document.body.style.overflow = "hidden";
     node?.showModal();
-    return () => {node?.close(); document.body.style.overflow = previous; restoreDialogFocus(previousFocus);};
+    return () => {node?.close(); releaseScroll(); restoreDialogFocus(previousFocus);};
   }, []);
   return <dialog ref={dialog} className={`ex-visit-dialog ${expanded ? "is-expanded" : ""}${menuOpen?" is-menu-open":""}`} aria-labelledby={id} onCancel={event => {event.preventDefault();if(menuOpen)setMenuOpen(false);else onClose();}}>
     <header className="ex-visit-head"><button className="ex-button" onClick={onClose}><ArrowLeft size={17}/><span>{className || t("visit.classroom")}</span></button><div className="ex-visit-title"><h2 id={id}><Flower2 size={22}/>{title}</h2><span>{t("artworkCount", {count})}</span></div><div className="ex-visit-controls">{actions&&<button className="ex-icon-btn ex-visit-menu-toggle" aria-label={english?"Gallery menu":"전시실 관리 메뉴"} aria-expanded={menuOpen} onClick={()=>setMenuOpen(value=>!value)}><MoreHorizontal size={21}/></button>}<button className="ex-icon-btn ex-visit-expand" onClick={() => setExpanded(value => !value)} aria-label={t(expanded ? "visit.restore" : "visit.expand")}>{expanded ? <Minimize2 size={20}/> : <Maximize2 size={20}/>}</button><button className="ex-icon-btn" onClick={onClose} aria-label={t("close")}><X size={22}/></button></div></header>
@@ -105,10 +105,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   useEffect(() => {
     if (loading || !authorized || manage) return;
     const query = matchMedia('(max-width:760px),(max-height:520px) and (pointer:coarse)');
-    const previous = document.body.style.overflow;
-    const update = () => { document.body.style.overflow = query.matches ? 'hidden' : previous; };
-    update(); query.addEventListener('change', update);
-    return () => { query.removeEventListener('change', update); document.body.style.overflow = previous; };
+    return lockBodyScrollWhen(query);
   }, [loading, authorized, manage]);
   const [place, setPlace] = useState<"campus" | "classroom">("campus");
   useEffect(() => {setLobbyMenu(false);}, [manage, place]);

@@ -1,5 +1,6 @@
 "use client";
 
+import {lockBodyScroll} from '@/lib/body-scroll-lock';
 import Link from 'next/link';
 import {useEffect, useId, useRef, useState} from 'react';
 import {useLocale, useTranslations} from 'next-intl';
@@ -23,9 +24,9 @@ export default function TeacherDashboardDetails({kind, classId, className, perio
   const remote = !['students', 'assignments', 'rooms'].includes(kind) && !!classId;
   useEffect(() => {
     const node = dialog.current, previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden'; node?.showModal();
-    return () => {node?.close(); document.body.style.overflow = overflow; if (previous?.isConnected) previous.focus({preventScroll: true});};
+    const releaseScroll = lockBodyScroll();
+    node?.showModal();
+    return () => {node?.close(); releaseScroll(); if (previous?.isConnected) previous.focus({preventScroll: true});};
   }, []);
   useEffect(() => {
     if (!remote) return;

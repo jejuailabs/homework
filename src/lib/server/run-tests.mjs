@@ -4,6 +4,8 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+const bodyScrollLockUrl = moduleUrl(compile('../body-scroll-lock.ts'));
+await import(moduleUrl(compile('../body-scroll-lock.test.ts').replace("'./body-scroll-lock'", JSON.stringify(bodyScrollLockUrl))));
 const windowLayoutUrl=moduleUrl(compile('../tool-window-layout.ts'));
 const toolCatalogUrl=moduleUrl(compile('../tool-catalog.ts'));
 await import(moduleUrl(compile('../tool-window-layout.test.ts').replace("'./tool-window-layout'",JSON.stringify(windowLayoutUrl)).replace("'./tool-catalog'",JSON.stringify(toolCatalogUrl))));

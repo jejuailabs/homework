@@ -1,4 +1,5 @@
 'use client';
+import {lockBodyScrollWhen} from '@/lib/body-scroll-lock';
 import {useEffect, useRef, useState} from 'react';
 import Link from 'next/link';
 import {useLocale} from 'next-intl';
@@ -29,7 +30,7 @@ export default function PublicExhibition({token}: {token: string}) {
     return () => {document.removeEventListener('keydown', onKey); previous?.focus();};
   }, [selected]);
   useExhibitionViewport(root,scene);
-  useEffect(()=>{if(!scene)return;const media=matchMedia("(max-width:760px), (max-height:520px) and (pointer:coarse)"),previous=document.body.style.overflow;const sync=()=>{document.body.style.overflow=media.matches?"hidden":previous;};sync();media.addEventListener("change",sync);return()=>{document.body.style.overflow=previous;media.removeEventListener("change",sync);};},[scene]);
+  useEffect(()=>{if(scene)return lockBodyScrollWhen(matchMedia("(max-width:760px), (max-height:520px) and (pointer:coarse)"));},[scene]);
   if (error) return <div className="public-exhibition-empty"><img src="/characters/otter-moa.webp" alt=""/><p role="alert">{error}</p></div>;
   if (!data) return <div className="center-state"><LoaderCircle className="spin"/>{en ? 'Opening the exhibition…' : '전시실을 열고 있어요…'}</div>;
   return <div ref={root} className={`public-exhibition${scene?" is-immersive":""}`}><header><div><p className="page-kicker">OUR LITTLE GALLERY</p><h1>{data.exhibition.title}</h1><p>{data.exhibition.description}</p></div><img src="/characters/otter-moa.webp" alt=""/></header><div className="public-exhibition-actions"><button className="button" onClick={() => setScene(!scene)}><Images size={17}/>{scene ? (en ? 'Picture list' : '작품 목록') : (en ? 'Walk through the gallery' : '전시실 둘러보기')}</button>{data.exhibition.allowStudentUploads && <Link className="button primary" href={`/?next=${encodeURIComponent(`/student/exhibitions?exhibition=${data.exhibition.id}`)}`}><Upload size={17}/>{en ? 'Student: exhibit my work' : '학생 입장 · 내 작품 올리기'}</Link>}</div>

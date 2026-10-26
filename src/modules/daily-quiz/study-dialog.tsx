@@ -1,4 +1,5 @@
 'use client';
+import {lockBodyScroll} from '@/lib/body-scroll-lock';
 import {useEffect, useRef, type FormEvent} from 'react';
 import {ArrowRight, Check, LoaderCircle, Shell, Sparkles, X} from 'lucide-react';
 import {understandingLabels, type QuizMode, type QuizPublicSession, type Understanding} from './types';
@@ -12,9 +13,9 @@ export default function QuizStudyDialog({mode, session, grade, answer, busy, err
   const dialog = useRef<HTMLDialogElement>(null), prompt = useRef<HTMLHeadingElement>(null), friend = friends[mode];
   const question = session?.questions.find(q => !q.result?.understanding), finished = session?.questions.filter(q => q.result?.understanding).length || 0, total = session?.questions.length || (mode === 'review' ? 5 : 10);
   useEffect(() => {
-    const node = dialog.current, overflow = document.body.style.overflow;
-    node?.showModal(); document.body.style.overflow = 'hidden';
-    return () => {node?.close(); document.body.style.overflow = overflow;};
+    const node = dialog.current, releaseScroll = lockBodyScroll();
+    node?.showModal();
+    return () => {node?.close(); releaseScroll();};
   }, []);
   useEffect(() => {if (question) prompt.current?.focus();}, [question?.id]);
   const message = !session ? '여행 가방에 문제를 담고 있어!' : !question ? '끝까지 해냈구나! 정말 멋진 여행이었어.' : question.result ? question.result.correct ? '잘했어! 어떻게 풀었는지 같이 살펴보자.' : '괜찮아! 이번에 배우면 다음엔 더 잘할 수 있어.' : question.kind === 'text' ? '마지막 단어 도전! 천천히 떠올려 봐.' : '서두르지 않아도 괜찮아. 하나씩 풀어 보자!';
