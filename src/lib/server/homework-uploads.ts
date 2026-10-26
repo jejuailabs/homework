@@ -4,6 +4,7 @@ import {Timestamp} from 'firebase-admin/firestore';
 import {bucket, db} from './admin';
 import {ApiError, id} from './policy';
 import {awaitUploadTransfer, createUploadTransfer, cancelUploadTransfer} from './upload-transfer';
+import {assertAssignmentVisible} from './assignment-visibility-policy';
 
 export async function discardHomeworkUpload(uploadId: string, uid?: string, expiredOnly = false) {
   const ref = db().doc(`uploads/${id(uploadId)}`), token = randomUUID();
@@ -27,7 +28,9 @@ export async function prepareHomeworkUpload(uid: string, data: {studentId: strin
   // The phone-made list preview: lists download ~30KB instead of the full photo.
   const thumbnailPath = data.thumbnailSize ? `uploads/${uid}/${uploadId}/thumb.jpg` : undefined;
   let previous = await db().runTransaction(async tx => {
-    const snapshot = await tx.get(ref);
+    const [snapshot, task] = await Promise.all([tx.get(ref), tx.get(db().doc(`assignments/${data.assignmentId}`))]);
+    if (!task.exists || task.data()?.classId !== data.classId || !task.data()?.targetStudentIds?.includes(data.studentId)) throw new ApiError(404, '배부된 과제를 찾을 수 없어요.', 'NOT_FOUND');
+    assertAssignmentVisible(task.data());
     if (snapshot.exists) {
       const value = snapshot.data()!;
       if (value.userUid !== uid || value.size !== data.size || value.contentType !== data.contentType || value.fileName !== data.fileName || (value.thumbnailSize ?? null) !== (data.thumbnailSize ?? null)) throw new ApiError(409, '전송 정보가 바뀌었어요.', 'UPLOAD_MISMATCH');

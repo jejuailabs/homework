@@ -22,12 +22,13 @@ import {handleAdminDirectory} from './admin-directory';
 import {handleAdminConsole} from './admin-console';
 import {companionProfile} from '@/modules/my-space/profile';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
+import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const mapped = (snap: FirebaseFirestore.DocumentSnapshot) => ({ id: snap.id, ...snap.data() }) as Data;
-const mappedAssignment = (snap: FirebaseFirestore.DocumentSnapshot) => ({ ...mapped(snap), submissionType: assignmentSubmissionType(snap.data()?.submissionType) }) as Data;
+const mappedAssignment = (snap: FirebaseFirestore.DocumentSnapshot) => ({ ...mapped(snap), submissionType: assignmentSubmissionType(snap.data()?.submissionType), ...assignmentVisibility(snap.data()) }) as Data;
 const sorted = (items: Data[]) => items.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
 async function body(request: Request): Promise<Data> {
   const value = await request.json().catch(() => { throw new ApiError(400, '입력 내용을 다시 확인해 주세요.'); });
@@ -45,6 +46,7 @@ async function assignmentForStudent(ctx: Context, assignmentId: string) {
   const doc = await db().doc(`assignments/${id(assignmentId)}`).get();
   const value = doc.data();
   if (!doc.exists || value?.classId !== ctx.classId || !value?.targetStudentIds?.includes(ctx.studentId)) throw new ApiError(404, '배부된 과제를 찾을 수 없어요.', 'NOT_FOUND');
+  assertAssignmentVisible(value);
   return mappedAssignment(doc);
 }
 async function studentProfile(ctx: Context) {
@@ -255,8 +257,9 @@ async function assignments(request: Request) {
     const collection = db().collection('assignments');
     const query = classId ? collection.where('classId', '==', classId) : collection.where('ownerUid', '==', ctx.uid);
     const summary = new URL(request.url).searchParams.get('summary') === '1';
-    const list = summary ? query.select('classId', 'title', 'submissionType', 'dueAt', 'targetCount', 'submittedCount', 'reviewedCount', 'createdAt') : query;
-    return json({ assignments: sorted((await list.limit(200).get()).docs.map(mappedAssignment)) });
+    const list = summary ? query.select('classId', 'title', 'submissionType', 'dueAt', 'targetCount', 'submittedCount', 'reviewedCount', 'createdAt', 'visibility', 'visibilityVersion', 'hiddenAt', 'hiddenBy') : query;
+    // Include the complete class history: archived records must never displace current work.
+    return json({ assignments: sorted((await list.get()).docs.map(mappedAssignment)) });
   }
   const input = await body(request);
   const submissionType = requiredSubmissionType(input.submissionType);
@@ -266,7 +269,7 @@ async function assignments(request: Request) {
   const targetStudentIds = roster.docs.filter(doc => !doc.data().disabled).map(doc => doc.id);
   if (!targetStudentIds.length) throw new ApiError(400, '학생을 먼저 추가해 주세요.');
   const dueAt = input.dueAt ? new Date(input.dueAt).toISOString() : null;
-  const value = { classId, className: cls.name, ownerUid: cls.ownerUid, title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), submissionType, dueAt, targetStudentIds, targetCount: targetStudentIds.length, submittedCount: 0, reviewedCount: 0, createdAt: now() };
+  const value = { classId, className: cls.name, ownerUid: cls.ownerUid, title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), submissionType, dueAt, targetStudentIds, targetCount: targetStudentIds.length, submittedCount: 0, reviewedCount: 0, createdAt: now(), ...assignmentVisibility() };
   const ref = db().collection('assignments').doc();
   const materials = await db().runTransaction(async tx => {
     const materials = await bindAssignmentMaterials(tx, ctx, classId, ref.id, input.materialIds ?? []);
@@ -281,10 +284,12 @@ async function assignmentDetail(request: Request, assignmentId: string) {
   const assignment = mappedAssignment(snap);
   await managedClass(ctx, assignment.classId);
   if (request.method === 'PATCH') {
+    assertAssignmentVisible(assignment);
     const input = await body(request);
     const changes = {title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), dueAt: input.dueAt ? new Date(input.dueAt).toISOString() : null};
     const materials = await db().runTransaction(async tx => {
       const fresh = await tx.get(snap.ref); if (!fresh.exists) throw new ApiError(404, '과제를 찾을 수 없어요.');
+      assertAssignmentVisible(fresh.data());
       const materials = await bindAssignmentMaterials(tx, ctx, assignment.classId, assignmentId, input.materialIds ?? (fresh.data()?.materials ?? []).map((material: Data) => material.id), fresh.data()?.materials ?? []);
       tx.update(snap.ref, {...changes, materials, updatedAt: now()}); return materials;
     });
@@ -299,10 +304,17 @@ async function assignmentDetail(request: Request, assignmentId: string) {
 }
 async function home(request: Request) {
   const ctx = await requireStudent(request);
-  const [profile, tasks, submitted] = await Promise.all([studentProfile(ctx), db().collection('assignments').where('classId', '==', ctx.classId).limit(200).get(), db().collection('submissions').where('studentId', '==', ctx.studentId).limit(200).get()]);
-  const byAssignment = new Map(submitted.docs.map(doc => [doc.data().assignmentId, mapped(doc)]));
-  const jobs=new Map((await studentVideoJobs(ctx)).map(job=>[job.assignmentId,job]));
-  const assignments = await Promise.all(sorted(tasks.docs.map(mappedAssignment).filter(task => task.targetStudentIds.includes(ctx.studentId))).map(async task => {
+  const [profile, metadata] = await Promise.all([studentProfile(ctx), db().collection('assignments').where('classId', '==', ctx.classId).select('visibility', 'targetStudentIds').get()]);
+  const visibleRefs = metadata.docs.filter(task => assignmentVisibility(task.data()).visibility === 'visible' && task.data().targetStudentIds?.includes(ctx.studentId)).map(task => task.ref);
+  const tasks: FirebaseFirestore.DocumentSnapshot[] = [];
+  // Fetch bodies only for currently visible work, in bounded batches with no history cutoff.
+  for (let offset = 0; offset < visibleRefs.length; offset += 100) tasks.push(...await db().getAll(...visibleRefs.slice(offset, offset + 100)));
+  const visible = sorted(tasks.filter(task => task.exists).map(mappedAssignment).filter(task => task.visibility === 'visible' && task.classId === ctx.classId && task.targetStudentIds?.includes(ctx.studentId)));
+  const submitted: FirebaseFirestore.DocumentSnapshot[] = [];
+  for (let offset = 0; offset < visible.length; offset += 100) submitted.push(...await db().getAll(...visible.slice(offset, offset + 100).map(task => db().doc(`submissions/${task.id}_${ctx.studentId}`))));
+  const byAssignment = new Map(submitted.filter(doc => doc.exists && doc.data()?.classId === ctx.classId && doc.data()?.studentId === ctx.studentId).map(doc => [doc.data()!.assignmentId, mapped(doc)]));
+  const jobs=new Map((await studentVideoJobs(ctx, new Set(visible.map(task => task.id)))).map(job=>[job.assignmentId,job]));
+  const assignments = await Promise.all(visible.map(async task => {
     const submission = byAssignment.get(task.id);
     const { targetStudentIds: _targets, ownerUid: _owner, ...visibleTask } = task;
     return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission) : null,videoJob:jobs.get(task.id)||null };
@@ -360,7 +372,9 @@ async function finalize(request: Request) {
   const profile = await studentProfile(ctx);
   const attemptId = randomUUID();
   const result = await db().runTransaction(async tx => {
-    const [oldDoc, ...freshUploads] = await Promise.all([tx.get(ref), ...uploadDocs.map(doc => tx.get(doc.ref))]);
+    const [freshTask, oldDoc, ...freshUploads] = await Promise.all([tx.get(db().doc(`assignments/${assignmentId}`)), tx.get(ref), ...uploadDocs.map(doc => tx.get(doc.ref))]);
+    if (!freshTask.exists || freshTask.data()?.classId !== ctx.classId || !freshTask.data()?.targetStudentIds?.includes(ctx.studentId)) throw new ApiError(404, '배부된 과제를 찾을 수 없어요.', 'NOT_FOUND');
+    assertAssignmentVisible(freshTask.data());
     const old = oldDoc.data();
     if (old?.fingerprint === fingerprint && old?.status !== 'revision') return mapped(oldDoc);
     if (freshUploads.some(doc => doc.data()?.status !== 'pending')) throw new ApiError(409, '이미 사용된 첨부파일이에요.', 'UPLOAD_USED');
@@ -379,13 +393,16 @@ async function reviewTask(request: Request, assignmentId: string) {
   const task = await db().doc(`assignments/${id(assignmentId)}`).get();
   if (!task.exists) throw new ApiError(404, '과제를 찾을 수 없어요.');
   await managedClass(ctx, task.data()!.classId);
+  assertAssignmentVisible(task.data());
   return { ctx, task };
 }
 /** One student's review in its own transaction, shared by single and batch checks. */
 async function reviewSubmission(ctx: Context, task: FirebaseFirestore.DocumentSnapshot, studentId: string, attemptId: unknown, status: unknown, feedback: string) {
   const assignmentId = task.id, ref = db().doc(`submissions/${assignmentId}_${studentId}`);
   return db().runTransaction(async tx => {
-    const doc = await tx.get(ref);
+    const [freshTask, doc] = await Promise.all([tx.get(task.ref), tx.get(ref)]);
+    if (!freshTask.exists) throw new ApiError(404, '과제를 찾을 수 없어요.', 'NOT_FOUND');
+    assertAssignmentVisible(freshTask.data());
     if (!doc.exists) throw new ApiError(404, '아직 제출하지 않은 학생이에요.', 'NOT_SUBMITTED');
     const value = doc.data()!;
     if (!attemptId || attemptId !== value.attemptId) throw new ApiError(409, '새 제출물이 있어요. 새로 확인한 뒤 검사해 주세요.', 'STALE_ATTEMPT');

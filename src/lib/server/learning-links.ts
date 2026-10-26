@@ -6,6 +6,7 @@ import {bucket,db} from './admin';
 import {assertOrigin,getContext,type Context} from './auth';
 import {ApiError,canManageClass,id,text} from './policy';
 import {BOARD_POST_LIMIT,changedReaction} from './participation-policy';
+import {assertAssignmentVisible} from './assignment-visibility-policy';
 type Data=Record<string,any>;
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const now=()=>new Date().toISOString();
@@ -35,6 +36,7 @@ async function candidates(ctx:Context,request:Request){const query=new URL(reque
 async function publish(ctx:Context,request:Request){
   if(ctx.role==='student')throw new ApiError(403,'선생님만 게시할 수 있어요.');const value=await input(request),assignmentId=id(value.assignmentId),boardId=id(value.boardId);
   const assignmentDoc=await db().doc(`assignments/${assignmentId}`).get(),assignment=assignmentDoc.data();if(!assignmentDoc.exists)throw new ApiError(404,'숙제를 찾을 수 없어요.');await managed(ctx,assignment!.classId);
+  assertAssignmentVisible(assignment);
   const boardRef=db().doc(`participationBoards/${boardId}`),board=await boardRef.get();if(!board.exists||board.data()?.ownerUid!==ctx.uid||board.data()?.classId!==assignment!.classId||board.data()?.status==='archived')throw new ApiError(403,'같은 학급의 참여보드를 선택해 주세요.');
   if(!Array.isArray(value.submissions)||value.submissions.length>50||typeof value.includeGuide!=='boolean'||typeof value.hideNames!=='boolean')throw new ApiError(400,'게시할 자료를 다시 선택해 주세요.');
   const selections=value.submissions.map((item:Data)=>({id:id(item.id),version:id(item.version)}));if(new Set(selections.map((item:Data)=>item.id)).size!==selections.length)throw new ApiError(400,'같은 답안을 중복 선택했어요.');
@@ -52,7 +54,9 @@ async function publish(ctx:Context,request:Request){
     const guideDocs:FirebaseFirestore.DocumentSnapshot[]=row.guide?await Promise.all((assignment!.materials||[]).map((item:Data)=>db().doc(`assignmentMaterials/${id(item.id)}`).get())):[];
     const attachments:Data[]=row.guide?guideDocs.map(doc=>{const item=doc.data();if(!item||item.assignmentId!==assignmentId||item.status!=='attached')throw new ApiError(409,'참고 자료가 변경됐어요. 새로 불러와 주세요.');return{id:doc.id,name:item.fileName,contentType:item.contentType,size:item.size,kind:item.contentType.startsWith('image/')?'image':'video',path:item.path};}):(source!.uploads||[]).map((item:Data)=>({id:item.id,name:item.fileName,contentType:item.contentType,size:item.size||0,kind:['image/jpeg','image/png','image/webp'].includes(item.contentType)?'image':item.contentType.startsWith('video/')?'video':'file',path:item.path}));
     const wasCreated=await db().runTransaction(async tx=>{
-      const [freshBoard,previous,freshSource,participation,...materials]=await Promise.all([tx.get(boardRef),tx.get(postRef),tx.get(sourceDoc.ref),tx.get(boardRef.collection('participants').doc(hash(person.authorUid))),...guideDocs.map(doc=>tx.get(doc.ref))]);
+      const [freshBoard,previous,freshSource,participation,freshAssignment,...materials]=await Promise.all([tx.get(boardRef),tx.get(postRef),tx.get(sourceDoc.ref),tx.get(boardRef.collection('participants').doc(hash(person.authorUid))),tx.get(assignmentDoc.ref),...guideDocs.map(doc=>tx.get(doc.ref))]);
+      if(!freshAssignment.exists||freshAssignment.data()?.classId!==assignment!.classId)throw new ApiError(404,'숙제를 찾을 수 없어요.');
+      assertAssignmentVisible(freshAssignment.data());
       const fresh=freshBoard.data();if(!fresh||fresh.ownerUid!==ctx.uid||fresh.classId!==assignment!.classId||fresh.status==='archived')throw new ApiError(403,'보드 권한이 변경됐어요.');
       if(previous.exists){if(previous.data()?.deleted)throw new ApiError(409,'이 버전은 보드에서 삭제했어요. 보드의 기록을 확인해 주세요.');if(previous.data()?.sourceAnonymous!==value.hideNames){tx.update(postRef,{sourceAnonymous:value.hideNames,updatedAt:now()});tx.update(boardRef,{updatedAt:now()});}return false;}
       if(fresh.postCount>=BOARD_POST_LIMIT)throw new ApiError(409,'참여보드가 가득 찼어요.');

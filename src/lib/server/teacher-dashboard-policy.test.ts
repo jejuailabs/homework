@@ -84,3 +84,16 @@ test('a full-year dashboard preserves more than 200 assignments with determinist
   assert.equal(result.exhibitions[0].artworkCount, 25);
   assert.equal(result.exhibitions[0].approvedCount, 25);
 });
+
+test('current dashboard excludes hidden tasks while legacy and restored tasks retain their submission counts', () => {
+  const input = {classes: [classroom], assignments: [assignment], submissions: [submission('a', 'done')], exhibitions: []};
+  const original = summarizeTeacherDashboard(teacher, input, now);
+  const hidden = summarizeTeacherDashboard(teacher, {...input, assignments: [{...assignment, visibility: 'hidden'}]}, now);
+  assert.deepEqual(hidden.assignments, []);
+  assert.equal(hidden.classes[0].studentCount, original.classes[0].studentCount);
+  const restored = summarizeTeacherDashboard(teacher, {...input, assignments: [{...assignment, visibility: 'visible'}]}, now);
+  assert.deepEqual(restored.assignments, original.assignments);
+  assert.equal(restored.assignments[0].done, 1);
+  assert.equal(restored.assignments[0].pending, 3);
+  assert.equal(input.submissions.length, 1);
+});

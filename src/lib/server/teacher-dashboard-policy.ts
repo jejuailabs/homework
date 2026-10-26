@@ -29,7 +29,7 @@ export function summarizeTeacherDashboard(actor: DashboardActor, records: Dashbo
 
   for (const row of records.assignments) {
     const classroom = classById.get(label(row.classId));
-    if (row.ownerUid !== actor.uid || !classroom) continue;
+    if (row.ownerUid !== actor.uid || !classroom || row.visibility === 'hidden') continue;
     const targets = new Set<string>(Array.isArray(row.targetStudentIds) ? row.targetStudentIds.filter((id): id is string => typeof id === 'string' && !!id) : []);
     // The snapshot remains authoritative after roster additions or student deactivation.
     const targetCount = Array.isArray(row.targetStudentIds) ? targets.size : count(row.targetCount);

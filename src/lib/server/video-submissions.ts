@@ -5,6 +5,7 @@ import {cloudAccessToken,bucket,db} from './admin';
 import {assertOrigin,requireStudent,type Context} from './auth';
 import {ApiError,id,text,canUseUpload} from './policy';
 import {videoSelectionError,type VideoJobView} from '../video-submission';
+import {assertAssignmentVisible, assignmentVisibility} from './assignment-visibility-policy';
 
 type Data=FirebaseFirestore.DocumentData;
 const now=()=>new Date().toISOString();
@@ -53,6 +54,7 @@ export async function cleanupVideoJobs() {
   return {expired,requeued,hasMore:candidates.length===100};
 }
 export async function createVideoSubmission(ctx:Context,assignment:Data,answer:string,uploadIds:string[]) {
+  assertAssignmentVisible(assignment);
   if(!await videoConfig())throw new ApiError(503,'영상 처리 서버를 준비하고 있어요. 잠시 뒤 제출해 주세요.','VIDEO_NOT_CONFIGURED');
   if(uploadIds.length!==1)throw new ApiError(400,'영상은 한 개만 제출해 주세요.','VIDEO_COUNT');
   const uploadId=id(uploadIds[0]),jobRef=db().doc(`videoJobs/${uploadId}`),uploadRef=db().doc(`uploads/${uploadId}`),slot=db().doc(`videoSubmissionSlots/${assignment.id}_${ctx.studentId}`);
@@ -70,23 +72,46 @@ export async function createVideoSubmission(ctx:Context,assignment:Data,answer:s
     if(currentJob?.exists&&['queued','processing'].includes(currentJob.data()!.status))throw new ApiError(409,'이미 보낸 영상을 준비하고 있어요.','VIDEO_ALREADY_PROCESSING');
     if(previous.exists&&previous.data()?.status!=='revision')throw new ApiError(409,'이미 제출한 숙제예요.','ALREADY_SUBMITTED');
     if(upload.data()?.status!=='pending'||student.data()?.disabled||student.data()?.authUid!==ctx.uid||task.data()?.classId!==ctx.classId||!task.data()?.targetStudentIds?.includes(ctx.studentId))throw new ApiError(409,'숙제와 학생 정보를 다시 확인해 주세요.','UPLOAD_INVALID');
+    assertAssignmentVisible(task.data());
     const data={id:uploadId,assignmentId:assignment.id,classId:ctx.classId,studentId:ctx.studentId,userUid:ctx.uid,ownerUid:task.data()!.ownerUid,studentName:student.data()!.name,answer,attemptId:randomUUID(),fingerprint:createHash('sha256').update(JSON.stringify({answer,uploadIds})).digest('hex'),input:{path:value.path,size:value.size,contentType:value.contentType,fileName:value.fileName,generation:String(metadata.generation)},status:'queued',stage:'queued',createdAt:now(),updatedAt:now(),retryVersion:0,attempts:0,retryable:false,originalCleanupPending:false,sourceRetained:true};
     tx.create(jobRef,data);tx.set(slot,{jobId:uploadId,userUid:ctx.uid,assignmentId:assignment.id,classId:ctx.classId,studentId:ctx.studentId});tx.update(uploadRef,{status:'video-processing',videoJobId:uploadId,expiresAt:Timestamp.fromMillis(Date.now()+7*86400000)});return data;
   });
   await dispatchVideoJob(job);return publicVideoJob(job);
 }
-export async function studentVideoJobs(ctx:Context) {
+export async function studentVideoJobs(ctx:Context, visibleAssignmentIds?: Set<string>) {
   const slots=await db().collection('videoSubmissionSlots').where('userUid','==',ctx.uid).get();
-  const records=slots.size?await db().getAll(...slots.docs.map(doc=>db().doc(`videoJobs/${doc.data().jobId}`))):[];
+  const eligibleSlots=slots.docs.filter(doc=>doc.data().classId===ctx.classId&&(!visibleAssignmentIds||visibleAssignmentIds.has(doc.data().assignmentId)));
+  if(!visibleAssignmentIds){
+    visibleAssignmentIds=new Set<string>();
+    const ids=[...new Set(eligibleSlots.map(doc=>doc.data().assignmentId as string))];
+    for(let offset=0;offset<ids.length;offset+=100){
+      const tasks=await db().getAll(...ids.slice(offset,offset+100).map(taskId=>db().doc(`assignments/${id(taskId)}`)));
+      tasks.forEach(task=>{if(task.exists&&task.data()?.classId===ctx.classId&&task.data()?.targetStudentIds?.includes(ctx.studentId)&&assignmentVisibility(task.data()).visibility==='visible')visibleAssignmentIds!.add(task.id);});
+    }
+  }
+  const refs=eligibleSlots.filter(doc=>visibleAssignmentIds!.has(doc.data().assignmentId)).map(doc=>db().doc(`videoJobs/${doc.data().jobId}`));
+  const records:FirebaseFirestore.DocumentSnapshot[]=[];
+  for(let offset=0;offset<refs.length;offset+=100)records.push(...await db().getAll(...refs.slice(offset,offset+100)));
   return records.filter(doc=>doc.exists&&doc.data()?.userUid===ctx.uid&&doc.data()?.classId===ctx.classId).map(doc=>publicVideoJob(doc.data()!));
 }
 export async function handleVideoJob(request:Request,jobId:string) {
   try {
     const ctx=await requireStudent(request),ref=db().doc(`videoJobs/${id(jobId)}`),snapshot=await ref.get(),value=snapshot.data();
     if(!value||value.userUid!==ctx.uid||value.classId!==ctx.classId)throw new ApiError(404,'영상 처리 내역을 찾을 수 없어요.');
+    const task=await db().doc(`assignments/${id(value.assignmentId)}`).get();
+    if(!task.exists||task.data()?.classId!==ctx.classId||!task.data()?.targetStudentIds?.includes(ctx.studentId))throw new ApiError(404,'배부된 과제를 찾을 수 없어요.','NOT_FOUND');
+    assertAssignmentVisible(task.data());
     if(request.method==='POST'){
       assertOrigin(request);
-      const job=await db().runTransaction(async tx=>{const current=await tx.get(ref),v=current.data()!;if((v.status==='complete'&&!v.originalCleanupPending)||(v.status==='processing'&&Date.parse(v.leaseExpiresAt||'')>Date.now()))return v;if(v.status==='failed'&&!v.retryable)throw new ApiError(409,'다른 영상을 선택해 주세요.',v.errorCode);const version=(v.retryVersion||0)+1,patch={status:v.status==='complete'?'complete':'queued',stage:v.status==='complete'?'complete':'queued',retryVersion:version,retryable:false,errorCode:null,updatedAt:now(),dispatchError:false};tx.update(ref,patch);return {...v,...patch};});
+      const job=await db().runTransaction(async tx=>{
+        const [current,freshTask]=await Promise.all([tx.get(ref),tx.get(task.ref)]),v=current.data();
+        if(!v||v.userUid!==ctx.uid||v.classId!==ctx.classId||v.assignmentId!==task.id)throw new ApiError(404,'영상 처리 내역을 찾을 수 없어요.');
+        if(!freshTask.exists||freshTask.data()?.classId!==ctx.classId||!freshTask.data()?.targetStudentIds?.includes(ctx.studentId))throw new ApiError(404,'배부된 과제를 찾을 수 없어요.','NOT_FOUND');
+        assertAssignmentVisible(freshTask.data());
+        if((v.status==='complete'&&!v.originalCleanupPending)||(v.status==='processing'&&Date.parse(v.leaseExpiresAt||'')>Date.now()))return v;
+        if(v.status==='failed'&&!v.retryable)throw new ApiError(409,'다른 영상을 선택해 주세요.',v.errorCode);
+        const version=(v.retryVersion||0)+1,patch={status:v.status==='complete'?'complete':'queued',stage:v.status==='complete'?'complete':'queued',retryVersion:version,retryable:false,errorCode:null,updatedAt:now(),dispatchError:false};tx.update(ref,patch);return {...v,...patch};
+      });
       await dispatchVideoJob(job);
     }
     return Response.json({videoJob:publicVideoJob((await ref.get()).data()!)},{headers:{'Cache-Control':'private,no-store'}});

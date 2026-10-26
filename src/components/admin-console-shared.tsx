@@ -2,7 +2,7 @@
 import {useEffect,useState,type ReactNode} from 'react';
 import {CheckCircle2,LoaderCircle} from 'lucide-react';
 export type AdminData=Record<string,any>;
-export const states:Record<string,string>={active:'활성',suspended:'정지',archived:'보관',open:'열림',closed:'닫힘',published:'배부됨',pending:'대기',running:'진행 중',done:'완료',failed:'실패',paused:'일시 정지',success:'성공',partial:'일부 적용',read:'조회',change:'변경',managed:'관리 중',expired:'만료 전송',quarantined:'격리 보관',restored:'복원됨',unverified:'참조 확인 필요','recovery-copy':'복구 사본'};
+export const states:Record<string,string>={active:'활성',suspended:'정지',archived:'보관',open:'열림',closed:'닫힘',published:'배부됨',hidden:'학생 화면에서 숨김',pending:'대기',running:'진행 중',done:'완료',failed:'실패',paused:'일시 정지',success:'성공',partial:'일부 적용',read:'조회',change:'변경',managed:'관리 중',expired:'만료 전송',quarantined:'격리 보관',restored:'복원됨',unverified:'참조 확인 필요','recovery-copy':'복구 사본'};
 export const adminStatus=(value:string)=>states[value]||value||'—';
 export const adminDate=(value:string)=>value?new Date(value).toLocaleString('ko-KR'):'—';
 export const adminBytes=(value:number)=>value>=1024**3?(value/1024**3).toFixed(2)+' GB':value>=1024**2?(value/1024**2).toFixed(1)+' MB':(value/1024).toFixed(1)+' KB';

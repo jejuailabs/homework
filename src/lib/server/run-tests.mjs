@@ -9,6 +9,8 @@ const toolCatalogUrl=moduleUrl(compile('../tool-catalog.ts'));
 await import(moduleUrl(compile('../tool-window-layout.test.ts').replace("'./tool-window-layout'",JSON.stringify(windowLayoutUrl)).replace("'./tool-catalog'",JSON.stringify(toolCatalogUrl))));
 const materialsUrl = moduleUrl(compile('../assignment-materials.ts'));
 await import(moduleUrl(compile('../assignment-materials.test.ts').replace("'./assignment-materials'", JSON.stringify(materialsUrl))));
+const studentAssignmentViewUrl = moduleUrl(compile('../student-assignment-view.ts'));
+await import(moduleUrl(compile('../student-assignment-view.test.ts').replace("'./student-assignment-view'", JSON.stringify(studentAssignmentViewUrl))));
 const canvasTextUrl=moduleUrl(compile('../canvas-text.ts'));
 const cameraUrl=moduleUrl(compile('../canvas-camera.ts'));
 const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'./canvas-camera'",JSON.stringify(cameraUrl)).replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));
@@ -37,6 +39,7 @@ const testCode = compile('./policy.test.ts').replace("'./policy'", JSON.stringif
 await import('data:text/javascript;base64,' + Buffer.from(testCode).toString('base64'));
 await import('./run-ai-tests.mjs');
 await import('./run-upload-transfer-tests.mjs');
+await import('./run-assignment-visibility-tests.mjs');
 await import('./run-video-tests.mjs');
 await import('./run-exhibition-tests.mjs');
 await import('./run-teacher-dashboard-tests.mjs');

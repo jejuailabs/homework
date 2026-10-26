@@ -58,3 +58,13 @@ test('missing student records stay in the original task count and legacy missing
   assert.equal(result.total, 4); assert.equal(result.unavailableCount, 3);
   assert.equal(result.rows.length, 1); assert.equal(result.rows[0].student.id, 'd'); assert.equal(result.rows[0].student.name, null);
 });
+
+test('hidden task detail counts and rows disappear together and reappear on restoration', () => {
+  for (const status of ['pending', 'submitted', 'done', 'revision'] as const) {
+    const original = dashboardSubmissionDetails(teacher, records, {...scope, status}, now);
+    const hidden = dashboardSubmissionDetails(teacher, {...records, assignments: [{...task, visibility: 'hidden'}]}, {...scope, status}, now);
+    assert.deepEqual(hidden, {rows: [], total: 0, unavailableCount: 0});
+    const restored = dashboardSubmissionDetails(teacher, {...records, assignments: [{...task, visibility: 'visible'}]}, {...scope, status}, now);
+    assert.deepEqual(restored, original);
+  }
+});

@@ -1,0 +1,33 @@
+.ws-teacher .av-tabs{display:flex;gap:5px;margin:0 14px 12px;padding:4px;border-radius:13px;background:color-mix(in srgb,var(--border) 45%,var(--surface))}
+.ws-teacher .av-tabs>button{display:flex;flex:1;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:8px 10px;border:0;border-radius:10px;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer}
+.ws-teacher .av-tabs>button[aria-pressed=true]{background:var(--surface);color:var(--accent-strong);box-shadow:0 2px 6px #00000008;font-weight:750}
+.ws-teacher .av-tabs b{font-size:11px}
+.ws-teacher .av-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 15px 13px}
+.ws-teacher .av-toolbar .ws-button{font-size:11px;min-height:34px;padding:7px 10px}
+.ws-teacher .av-text-button{border:0;background:transparent;color:var(--accent-strong);font:inherit;font-size:11px;padding:7px 0;cursor:pointer}
+.ws-teacher .av-selection-count{font-size:11px;font-weight:700}
+.ws-teacher .av-selection-limit{flex-basis:100%;font-size:10px;color:var(--muted)}
+.ws-teacher .av-list-hint{font-size:11px;line-height:1.65;color:var(--muted);margin:0 17px 13px}
+.ws-teacher .av-panel .av-list{display:grid;grid-template-columns:minmax(0,1fr);gap:9px;padding:0 12px 12px;overflow-x:visible;max-height:650px}
+.ws-teacher .td-list-first .av-panel .av-list{grid-template-columns:repeat(2,minmax(0,1fr));padding:0 18px 18px;gap:12px;max-height:none}
+.ws-teacher .av-assignment-row{display:flex;flex-wrap:wrap;align-items:center;min-width:0;border:1px solid var(--border);border-radius:14px;background:color-mix(in srgb,var(--surface) 75%,transparent);overflow:hidden}
+.ws-teacher .av-assignment-row.is-current{border-color:var(--accent);background:var(--accent-soft)}
+.ws-teacher .av-assignment-row .ws-assignment-item{flex:1;min-width:0;width:auto;margin:0;border:0;border-radius:0;background:transparent;padding:12px 10px;min-height:84px}
+.ws-teacher .td-list-first .av-assignment-row .ws-assignment-item{padding:15px;min-height:110px;border:0;background:transparent}
+.ws-teacher .av-assignment-row .ws-assignment-item>span:not(.ws-assignment-item-icon){min-width:0}
+.ws-teacher .av-assignment-row .ws-assignment-item strong{white-space:normal;overflow-wrap:anywhere}
+.ws-teacher .av-row-action{display:flex;justify-content:flex-end;align-items:center;gap:5px;width:100%;padding:8px 12px;background:color-mix(in srgb,var(--surface) 65%,transparent);border:0;border-top:1px solid var(--border);color:var(--muted);font:inherit;font-size:11px;cursor:pointer}
+.ws-teacher .av-row-action:hover{color:var(--accent-strong);background:var(--accent-soft)}
+.ws-teacher .av-select{display:grid;place-items:center;width:35px;align-self:stretch;cursor:pointer}
+.ws-teacher .av-select input{width:18px;height:18px;accent-color:var(--accent)}
+.ws-teacher .av-load-more{display:flex;justify-content:center;align-items:center;gap:6px;width:calc(100% - 28px);margin:0 14px 13px;padding:11px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;cursor:pointer}
+.av-readonly-note{display:flex;align-items:flex-start;gap:9px;padding:13px 14px;margin:0 0 16px;border:1px solid var(--border);border-radius:12px;background:var(--accent-soft);font-size:12px;line-height:1.6;color:var(--text)}
+.av-readonly-note svg{flex:none;margin-top:2px}
+.av-detail-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0}
+.av-confirm-description{font-size:14px;line-height:1.75;margin:0 0 15px;color:var(--text)}
+.av-confirm-tasks{list-style:none;margin:0 0 16px;padding:0;max-height:230px;overflow:auto;border:1px solid var(--border);border-radius:12px}
+.av-confirm-tasks li{display:flex;flex-direction:column;gap:5px;padding:11px 13px;border-bottom:1px solid var(--border);font-size:13px}
+.av-confirm-tasks li:last-child{border-bottom:0}.av-confirm-tasks small{color:var(--muted);font-size:11px}
+.av-confirm-warning{padding:11px 13px;margin:0 0 15px;border-radius:12px;background:var(--play-yellow,#fff2c8);color:var(--text);font-size:12px;line-height:1.7}
+@media(max-width:760px){.ws-teacher .td-list-first .av-panel .av-list{grid-template-columns:minmax(0,1fr);padding:0 12px 12px}.ws-teacher .av-panel .av-list{max-height:400px}.ws-teacher .td-list-first .av-panel .av-list{max-height:none}.ws-teacher .av-tabs{margin:0 12px 10px}.ws-teacher .av-tabs>button{font-size:12px}.ws-teacher .av-row-action{min-height:36px}}
+@media(max-width:380px){.ws-teacher .av-tabs>button{padding:8px 5px;gap:5px}.ws-teacher .av-tabs svg{width:14px}.ws-teacher .av-toolbar{padding:0 12px 11px}.ws-teacher .av-assignment-row .ws-assignment-item-icon{display:none}}

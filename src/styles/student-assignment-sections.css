@@ -1,0 +1,33 @@
+.sd-task-history {
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-alt);
+}
+.sd-task-history > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 19px 21px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+}
+.sd-task-history > summary::-webkit-details-marker { display: none; }
+.sd-task-history > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 18px; }
+.sd-history-icon { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 13px; color: var(--accent-strong); background: var(--accent-soft); }
+.sd-history-label { min-width: 0; flex: 1; }
+.sd-history-label strong { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 16px; }
+.sd-history-label strong > span { border-radius: 99px; padding: 3px 8px; background: var(--accent-soft); font-size: 12px; }
+.sd-history-label small { display: block; margin-top: 4px; color: var(--muted); line-height: 1.5; }
+.sd-history-chevron { flex-shrink: 0; transition: transform .15s ease; }
+.sd-task-history[open] .sd-history-chevron { transform: rotate(180deg); }
+.sd-history-body { border-top: 1px solid var(--border); padding: 20px; }
+.sd-tasks-more { display: flex; margin: 18px auto 0; }
+@media (max-width: 520px) {
+  .sd-task-history > summary { gap: 9px; padding: 16px 13px; }
+  .sd-history-body { padding: 12px; }
+  .sd-history-label strong { font-size: 14px; }
+  .sd-history-label small { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .sd-history-chevron { transition: none; } }

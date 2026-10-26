@@ -30,7 +30,7 @@ export async function teacherDashboardDetails(request: Request) {
       return json({students, submissions: [], total: students.length, unavailableCount: 0, nextOffset: null, generatedAt: now.toISOString()} satisfies TeacherDashboardDetailsResponse);
     }
     const [roster, assignments, submissions] = await Promise.all([rosterPromise,
-      db().collection('assignments').where('classId', '==', classId).select('ownerUid', 'classId', 'title', 'submissionType', 'createdAt', 'dueAt', 'targetStudentIds', 'targetCount').get(),
+      db().collection('assignments').where('classId', '==', classId).select('ownerUid', 'classId', 'title', 'submissionType', 'createdAt', 'dueAt', 'targetStudentIds', 'targetCount', 'visibility').get(),
       db().collection('submissions').where('classId', '==', classId).select('assignmentId', 'classId', 'studentId', 'status', 'submittedAt', 'reviewedAt').get(),
     ]);
     const result = dashboardSubmissionDetails(ctx, {classroom: {...classroom.data(), id: classroom.id}, students: records(roster), assignments: records(assignments), submissions: records(submissions)},

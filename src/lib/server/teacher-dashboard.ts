@@ -14,7 +14,7 @@ export async function teacherDashboard(request: Request) {
     // Project only summary fields. No child names, answers, photos, or signed URLs are read.
     const [classes, assignments, exhibitions] = await Promise.all([
       db().collection('classes').where('ownerUid', '==', ctx.uid).select('ownerUid', 'name', 'grade', 'year', 'studentCount').get(),
-      db().collection('assignments').where('ownerUid', '==', ctx.uid).select('ownerUid', 'classId', 'title', 'submissionType', 'dueAt', 'createdAt', 'targetStudentIds', 'targetCount').get(),
+      db().collection('assignments').where('ownerUid', '==', ctx.uid).select('ownerUid', 'classId', 'title', 'submissionType', 'dueAt', 'createdAt', 'targetStudentIds', 'targetCount', 'visibility').get(),
       db().collection('exhibitions').where('ownerUid', '==', ctx.uid).select('ownerUid', 'classId', 'title', 'status', 'artworkCount', 'approvedCount', 'createdAt').get(),
     ]);
     const classIds = classes.docs.map(doc => doc.id);

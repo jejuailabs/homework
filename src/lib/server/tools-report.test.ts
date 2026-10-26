@@ -22,6 +22,14 @@ test('snapshot honors original target roster, period and exact deterministic sub
  const result=summarizeClassReport({...base(),assignments:[task,{...task,id:'other-owner',ownerUid:'teacher-b'},{...task,id:'before',createdAt:'2026-10-13T14:59:59Z'}],submissions:[{id:'task_one',classId:'class-a',assignmentId:'task',studentId:'one',status:'done'},{id:'wrong',classId:'class-a',assignmentId:'task',studentId:'old',status:'done'},{id:'task_new',classId:'class-a',assignmentId:'task',studentId:'new',status:'done'}]});
  assert.equal(result.metrics.assignments,1);assert.equal(result.metrics.targets,2);assert.equal(result.metrics.done,1);assert.equal(result.metrics.pending,1);assert.equal(result.metrics.students,2);assert.equal(result.students.find(s=>s.id==='new')!.assignments,0);
 });
+
+test('historical reports and student point totals are unchanged when an assignment is hidden or restored',()=>{
+ const assignment={id:'task',classId:'class-a',ownerUid:'teacher-a',title:'지난 숙제',createdAt:'2026-10-14T00:00:00Z',targetStudentIds:['one']};
+ const input={...base(),roster:[{id:'one',name:'하나',number:1,points:35}],assignments:[assignment],submissions:[{id:'task_one',classId:'class-a',assignmentId:'task',studentId:'one',status:'done'}]};
+ const original=summarizeClassReport(input);
+ for(const visibility of ['hidden','visible'])assert.deepEqual(summarizeClassReport({...input,assignments:[{...assignment,visibility}]}),original);
+ assert.equal(original.metrics.done,1);assert.equal(original.students[0].points,35);
+});
 test('completed tests count server-measured submissions, not started attempts or outsider states',()=>{
  const result=summarizeClassReport({...base(),cards:[{id:'deck',classId:'class-a',ownerUid:'teacher-a',title:'카드',createdAt:'2026-10-14T00:00:00Z',targetStudentIds:['one']}],progress:[{id:'deck_one',classId:'class-a',ownerUid:'teacher-a',distributionId:'deck',studentId:'one',attempts:7,submittedAttempts:2,latestScore:80},{id:'deck_new',classId:'class-a',ownerUid:'teacher-a',distributionId:'deck',studentId:'new',submittedAttempts:5,latestScore:100}]});
  assert.equal(result.metrics.cardAttempts,2);assert.deepEqual(result.students[0].latestScores,[80]);assert.equal(result.students[1].cardAttempts,0);assert.equal(result.scope,'created-in-period-current-status');

@@ -4,7 +4,7 @@ import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode
 import Link from "next/link";
 import {useLocale, useTranslations} from "next-intl";
 import {sendUpload, discardUpload, type UploadTransfer} from "@/lib/upload-transfer";
-import {ArrowRight, BookOpen, Camera, Check, CheckCircle2, Clock3, Cloud, Flower2, Heart, Images, LoaderCircle, MessageCircleHeart, Palette, PanelsTopLeft, Paperclip, PencilLine, RefreshCw, Send, Sparkles, Star, Video, X} from "lucide-react";
+import {ArrowRight, BookOpen, Camera, Check, CheckCircle2, ChevronDown, Clock3, Cloud, Flower2, Heart, Images, LoaderCircle, MessageCircleHeart, Palette, PanelsTopLeft, Paperclip, PencilLine, RefreshCw, Send, Sparkles, Star, Video, X} from "lucide-react";
 import {characterCatalog as friends, type Character} from "@/lib/characters";
 import {acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes, type AssignmentSubmissionType} from "@/lib/assignment-submission";
 import type {PointSettings, WardrobeOutfit} from "@/lib/points-types";
@@ -18,11 +18,13 @@ import {compressImage} from "@/lib/image-compression";
 import {countUsage, countUsageOnce} from "@/lib/usage-beacon";
 import {compressionCounter} from "@/lib/usage-events";
 import type {AssignmentMaterial} from "@/lib/assignment-materials";
+import {missingActiveVideoJobIds, studentAssignmentSections, videoReconciliationDue} from "@/lib/student-assignment-view";
+import "@/styles/student-assignment-sections.css";
 
 type Status = "pending" | "submitted" | "done" | "revision";
 type Upload = {id: string; fileName: string; contentType: string; url?: string; thumbnailUrl?:string; size: number};
 type Submission = {id: string; text: string; uploads: Upload[]; feedback?: string; status: Status};
-type Assignment = {materials?: AssignmentMaterial[]; id: string; title: string; description: string; dueAt?: string | null; status: Status; submissionType?: AssignmentSubmissionType; submission?: Submission;videoJob?:VideoJobView|null};
+type Assignment = {materials?: AssignmentMaterial[]; id: string; title: string; description: string; dueAt?: string | null; status: Status; visibility?: 'visible' | 'hidden'; submissionType?: AssignmentSubmissionType; submission?: Submission;videoJob?:VideoJobView|null};
 type Home = {profile: {id: string; name: string; number: number; classId: string; className: string; character: Character; xp: number; points?: number; pointSettings?: PointSettings; wardrobeOutfit?: WardrobeOutfit; mySpaceEnabled?:boolean;spaceCompanion?:{pet:string;art:string;name:string;outfit:Partial<Record<'body'|'bag',string>>}}; assignments: Assignment[]};
 const fileTypes: Record<string, string> = {jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", heic: "image/heic", heif: "image/heif", pdf: "application/pdf", mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime"};
 function contentType(file: File) {return file.type || fileTypes[file.name.split(".").pop()?.toLowerCase() || ""] || "application/octet-stream";}
@@ -100,25 +102,79 @@ export default function StudentWorkspace() {
   // Shown right under the upload button: on a phone the form-level error sits below the fold.
   const [pickError, setPickError] = useState("");
   const [celebrate, setCelebrate] = useState(false);
+  const [todoLimit, setTodoLimit] = useState(24), [historyLimit, setHistoryLimit] = useState(24);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadCache = useRef<Map<File, string>>(new Map());
   // Keyed by the chosen original so a retry re-sends the same resized photo instead of re-encoding it.
   const resizedImages = useRef(new WeakMap<File, {file: File; thumbnail?: File}>());
   const uploadKeys = useRef(new WeakMap<File,string>()), stagedUploads = useRef(new Set<string>()), transferAbort = useRef<AbortController|null>(null), sendingRef = useRef(false);
+  const draftVersion = useRef(0), loadVersion = useRef(0), lastRefresh = useRef(0);
+  const latestHome = useRef(home), currentTaskId = useRef(selectedId);
+  latestHome.current = home; currentTaskId.current = selectedId;
   useEffect(()=>()=>{transferAbort.current?.abort(); stagedUploads.current.forEach(uploadId=>{void discardUpload(`/api/uploads/${uploadId}`).catch(()=>{});});},[]);
 
+  const clearTaskDraft = useCallback(() => {
+    draftVersion.current++;
+    currentTaskId.current = null;
+    setSelectedId(null); setMessage(""); setFiles([]); setFormError(""); setPickError(""); setProgress(0); setSelectingVideo(false);
+    uploadCache.current.clear(); resizedImages.current = new WeakMap(); uploadKeys.current = new WeakMap();
+    stagedUploads.current.forEach(uploadId => {void discardUpload(`/api/uploads/${uploadId}`).catch(() => {});});
+    stagedUploads.current.clear();
+  }, []);
+
   const load = useCallback(async (initial = false) => {
+    const version = ++loadVersion.current;
+    lastRefresh.current = Date.now();
     if (initial) setLoading(true);
     setError("");
-    try {setHome(await request<Home>("/api/student/home"));}
-    catch {setError(t("common.networkError"));}
-    finally {setLoading(false);}
+    try {const result = await request<Home>("/api/student/home"); if (version === loadVersion.current) setHome(result);}
+    catch {if (version === loadVersion.current) setError(t("common.networkError"));}
+    finally {if (version === loadVersion.current) setLoading(false);}
   }, [t]);
   useEffect(() => {void load(true);}, [load]);
+  useEffect(() => {
+    const refreshOnReturn = () => {
+      if (document.visibilityState === 'visible' && !sendingRef.current && Date.now() - lastRefresh.current >= 15_000) void load();
+    };
+    window.addEventListener('focus', refreshOnReturn);
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    return () => {window.removeEventListener('focus', refreshOnReturn); document.removeEventListener('visibilitychange', refreshOnReturn);};
+  }, [load]);
+  useEffect(() => {
+    if (home && selectedId && !sending && !home.assignments.some(task => task.id === selectedId && task.visibility !== 'hidden')) {
+      clearTaskDraft(); setNotice(t('student.hiddenTaskNotice'));
+    }
+  }, [home, selectedId, sending, clearTaskDraft, t]);
   const processingVideos=home?.assignments.some(task=>task.videoJob&&(['queued','processing'].includes(task.videoJob.status)||(task.videoJob.status==='failed'&&task.videoJob.retryable)));
   const observedComplete=useRef(new Set<string>());
-  useEffect(()=>{if(!processingVideos)return;let active=true;const poll=async()=>{if(document.visibilityState!=='visible')return;try{const result=await request<{videoJobs:VideoJobView[]}>('/api/video-submissions');if(!active)return;const jobs=new Map(result.videoJobs.map(job=>[job.assignmentId,job]));setHome(previous=>previous?{...previous,assignments:previous.assignments.map(task=>({...task,videoJob:jobs.get(task.id)||task.videoJob}))}:previous);if(result.videoJobs.some(job=>job.status==='complete'&&!observedComplete.current.has(job.id))){result.videoJobs.filter(job=>job.status==='complete').forEach(job=>observedComplete.current.add(job.id));void load();}}catch{/* Keep the last durable state; the next poll can reconnect. */}};const timer=setInterval(()=>void poll(),4000),resume=()=>{if(document.visibilityState==='visible')void load();};document.addEventListener('visibilitychange',resume);return()=>{active=false;clearInterval(timer);document.removeEventListener('visibilitychange',resume);};},[processingVideos,load]);
+  const missingJobRefreshes = useRef(new Map<string, number>());
+  useEffect(() => {
+    if (!processingVideos) return;
+    let active = true, polling = false;
+    const poll = async () => {
+      if (document.visibilityState !== 'visible' || polling) return;
+      polling = true;
+      try {
+        const result = await request<{videoJobs: VideoJobView[]}>('/api/video-submissions');
+        if (!active) return;
+        const jobs = new Map(result.videoJobs.map(job => [job.assignmentId, job]));
+        const missing = missingActiveVideoJobIds(latestHome.current?.assignments || [], result.videoJobs);
+        const now = Date.now(), refreshMissing = videoReconciliationDue(missing, missingJobRefreshes.current, now);
+        refreshMissing.forEach(id => missingJobRefreshes.current.set(id, now));
+        setHome(previous => previous ? {...previous, assignments: previous.assignments.map(task => ({...task, videoJob: jobs.get(task.id) || task.videoJob}))} : previous);
+        const completed = result.videoJobs.filter(job => job.status === 'complete' && !observedComplete.current.has(job.id));
+        completed.forEach(job => observedComplete.current.add(job.id));
+        // Preserve the last durable job until the authoritative task list arrives.
+        // A hidden task then disappears and its polling stops with it.
+        if (refreshMissing.length || completed.length) await load();
+      } catch {/* Keep the last durable state; the next poll can reconnect. */}
+      finally {polling = false;}
+    };
+    const timer = setInterval(() => void poll(), 4000);
+    return () => {active = false; clearInterval(timer);};
+  }, [processingVideos, load]);
   usePointSync(value => setHome(current => current ? {...current, profile: {...current.profile, points: value.points, pointSettings: value.settings}} : current), !!home);
   useEffect(() => {
     const urls = files.map(file => ["image/jpeg", "image/png", "image/webp"].includes(contentType(file)) || contentType(file).startsWith("video/") ? URL.createObjectURL(file) : "");
@@ -131,14 +187,15 @@ export default function StudentWorkspace() {
     return () => clearTimeout(timer);
   }, [celebrate]);
 
-  const selected = home?.assignments.find(assignment => assignment.id === selectedId);
+  const selected = home?.assignments.find(assignment => assignment.id === selectedId && assignment.visibility !== 'hidden');
   const submissionType = assignmentSubmissionType(selected?.submissionType);
   const imageAccept = [...imageSubmissionMimeTypes, ".heic", ".heif"].join(",");
   const videoAccept = [...videoSubmissionMimeTypes, ".mov"].join(",");
   const uploadAccept = submissionType === "video" ? videoAccept : submissionType === "image" ? imageAccept : `${imageAccept},application/pdf,${videoAccept}`;
   const character = friends.find(friend => friend.id === home?.profile.character) || friends[0];
   const companions = [1, 2].map(offset => friends[(friends.indexOf(character) + offset) % friends.length]);
-  const nextTask = home?.assignments.find(assignment => assignment.status === "pending" || assignment.status === "revision");
+  const {todo: todoTasks, history: historyTasks} = studentAssignmentSections(home?.assignments || []);
+  const nextTask = todoTasks[0];
   const xp = Math.max(0, home?.profile.xp || 0);
   const flowers = Math.floor(xp / 10);
   const videoBlocked=!!selected?.videoJob&&(['queued','processing'].includes(selected.videoJob.status)||(selected.videoJob.status==='failed'&&selected.videoJob.retryable));
@@ -147,6 +204,8 @@ export default function StudentWorkspace() {
   const date = (value?: string | null) => value && !Number.isNaN(Date.parse(value)) ? t("common.due", {date: new Intl.DateTimeFormat(locale, {month: "short", day: "numeric"}).format(new Date(value))}) : t("common.noDue");
 
   function openTask(assignment: Assignment) {
+    draftVersion.current++;
+    currentTaskId.current = assignment.id;
     setSelectedId(assignment.id); setMessage(assignment.status === "revision" ? assignment.submission?.text || "" : ""); setFiles([]); setFormError(""); setPickError(""); setProgress(0); uploadCache.current.clear();
   }
   function addFiles(incoming: FileList | null) {
@@ -155,9 +214,9 @@ export default function StudentWorkspace() {
       const chosen=Array.from(incoming);const reason=videoSelectionError([...files,...chosen].map(file=>({type:contentType(file),size:file.size})));
       if(reason){if(reason==='FILE_SIZE')countUsage('videoRejectSize');setPickError(t(reason==='VIDEO_COUNT'?'student.videoOneOnly':reason==='FILE_SIZE'?'student.fileTooLarge':'student.wrongSubmissionType'));return;}
       setSelectingVideo(true);setPickError('');setFormError('');
-      const candidate=chosen[0],url=URL.createObjectURL(candidate),video=document.createElement('video');video.preload='metadata';
+      const version=draftVersion.current,candidate=chosen[0],url=URL.createObjectURL(candidate),video=document.createElement('video');video.preload='metadata';
       let finished=false;
-      const finish=(duration?:number)=>{if(finished)return;finished=true;clearTimeout(timer);video.onloadedmetadata=null;video.onerror=null;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);setSelectingVideo(false);if(videoSelectionError([{type:contentType(candidate),size:candidate.size}],duration)==='VIDEO_DURATION'){countUsage('videoRejectDuration');setPickError(t('student.videoTooLong'));}else setFiles([candidate]);};
+      const finish=(duration?:number)=>{if(finished)return;finished=true;clearTimeout(timer);video.onloadedmetadata=null;video.onerror=null;video.removeAttribute('src');video.load();URL.revokeObjectURL(url);if(version!==draftVersion.current)return;setSelectingVideo(false);if(videoSelectionError([{type:contentType(candidate),size:candidate.size}],duration)==='VIDEO_DURATION'){countUsage('videoRejectDuration');setPickError(t('student.videoTooLong'));}else setFiles([candidate]);};
       const timer=setTimeout(()=>finish(),10000);video.onloadedmetadata=()=>finish(Number.isFinite(video.duration)?video.duration:undefined);video.onerror=()=>finish();video.src=url;return;
     }
     if (files.length + incoming.length > 10) {setPickError(t("student.tooManyFiles")); return;}
@@ -218,9 +277,16 @@ export default function StudentWorkspace() {
       setNotice(t("student.sendSuccess")); setCelebrate(true);
       void load();
     } catch (cause) {
+      const code = cause instanceof Error ? cause.message : "";
+      if (code === 'ASSIGNMENT_HIDDEN') {
+        clearTaskDraft();
+        setHome(previous => previous ? {...previous, assignments: previous.assignments.filter(task => task.id !== selected.id)} : previous);
+        setNotice(t('student.hiddenTaskNotice'));
+        await load();
+        return;
+      }
       if(submissionType==='video'){try{const fresh=await request<Home>('/api/student/home');setHome(fresh);const job=fresh.assignments.find(task=>task.id===selected.id)?.videoJob;if(job&&['queued','processing','complete'].includes(job.status)){stagedUploads.current.clear();uploadCache.current.clear();setFiles([]);return;}}catch{}}
       await Promise.allSettled([...stagedUploads.current].map(uploadId=>discardUpload(`/api/uploads/${uploadId}`)));stagedUploads.current.clear();uploadCache.current.clear();
-      const code = cause instanceof Error ? cause.message : "";
       if(code==='VIDEO_NOT_CONFIGURED'||code==='VIDEO_ALREADY_PROCESSING'||code==='VIDEO_COUNT'){setFormError(t(code==='VIDEO_COUNT'?'student.videoOneOnly':code==='VIDEO_NOT_CONFIGURED'?'student.videoUnavailable':'student.videoPreparing'));return;}
       if (["UPLOAD_INVALID", "UPLOAD_USED", "UPLOAD_MISMATCH"].includes(code)) {
         // Expired or consumed upload IDs cannot be finalized again. Keep the
@@ -236,7 +302,17 @@ export default function StudentWorkspace() {
       }
     } finally {sendingRef.current=false;transferAbort.current=null;setSending(false);setVideoHandoff(false);setPreparing(null);}
   }
-  async function retryVideo(job:VideoJobView){const result=await request<{videoJob:VideoJobView}>(`/api/video-submissions/${job.id}`,{method:'POST',body:'{}'});setHome(previous=>previous?{...previous,assignments:previous.assignments.map(task=>task.id===job.assignmentId?{...task,videoJob:result.videoJob}:task)}:previous);void load();}
+  async function retryVideo(job:VideoJobView){try{const result=await request<{videoJob:VideoJobView}>(`/api/video-submissions/${job.id}`,{method:'POST',body:'{}'});setHome(previous=>previous?{...previous,assignments:previous.assignments.map(task=>task.id===job.assignmentId?{...task,videoJob:result.videoJob}:task)}:previous);void load();}catch(cause){if(cause instanceof Error&&cause.message==='ASSIGNMENT_HIDDEN'){if(currentTaskId.current===job.assignmentId)clearTaskDraft();setHome(previous=>previous?{...previous,assignments:previous.assignments.filter(task=>task.id!==job.assignmentId)}:previous);setNotice(t('student.hiddenTaskNotice'));await load();return;}throw cause;}}
+
+  function taskCard(assignment: Assignment) {
+    return <article className={`ws-task-card ws-task-${assignment.status}`} key={assignment.id}>
+      <div className="ws-task-top"><span className="sd-task-icon" aria-hidden="true">{assignment.status === "done" ? <CheckCircle2 size={26}/> : assignment.status === "submitted" ? <Send size={24}/> : assignment.status === "revision" ? <RefreshCw size={25}/> : <PencilLine size={26}/>}</span><span className={`ws-status ws-status-${assignment.status}`}>{assignment.status === "done" ? <CheckCircle2 size={14}/> : assignment.status === "submitted" ? <Clock3 size={14}/> : <BookOpen size={14}/>}{assignment.videoJob&&["queued","processing"].includes(assignment.videoJob.status)?t("student.videoPending"):t(`common.${assignment.status}`)}</span></div>
+      <h3>{assignment.title}</h3><SubmissionTypeBadge type={assignmentSubmissionType(assignment.submissionType)}/>
+      {assignment.videoJob&&assignment.status!=="revision"&&<VideoSubmissionStatus compact job={assignment.videoJob} onRetry={()=>retryVideo(assignment.videoJob!)}/>}
+      <p className="ws-task-description">{assignment.description}</p><span className="ws-small ws-task-due"><Clock3 size={13}/>{date(assignment.dueAt)}</span>
+      <button className="ws-task-button" onClick={() => openTask(assignment)}><span>{t(assignment.status === "done" ? "student.viewFeedback" : assignment.status === "submitted" ? "student.viewSent" : assignment.status === "revision" ? "student.revisionAction" : "student.taskAction")}</span><ArrowRight size={17}/></button>
+    </article>;
+  }
 
   if (loading) return <section className="ws-loading" role="status"><img src="/characters/cat-mochi.webp" alt=""/><LoaderCircle className="ws-spin" size={23}/><p>{t("common.loading")}</p></section>;
   if (!home) return <section className="ws-empty"><BookOpen size={34}/><p role="alert">{error || t("common.error")}</p><button className="ws-button" onClick={() => void load(true)}><RefreshCw size={17}/>{t("common.retry")}</button></section>;
@@ -251,13 +327,18 @@ export default function StudentWorkspace() {
     <Link href="/student/my-exhibition" className="sd-gallery-entry"><span className="sd-gallery-icon"><Palette size={26}/></span><span className="sd-gallery-copy"><strong>{exhibition('personalTitle')}<Sparkles size={17}/></strong><span>{exhibition('personalEntryHint')}</span></span><span className="sd-gallery-art" aria-hidden="true"><img src="/characters/otter-moa.webp" alt=""/></span><span className="sd-gallery-arrow"><ArrowRight size={20}/></span></Link>
     <Link href="/student/boards" className="sd-gallery-entry sd-board-entry"><span className="sd-gallery-icon"><PanelsTopLeft size={26}/></span><span className="sd-gallery-copy"><strong>{common("boards")}<MessageCircleHeart size={17}/></strong><span>{locale === "ko" ? "내 생각을 올리고 친구들의 생각도 만나봐요" : "Share your ideas and discover your friends' thoughts"}</span></span><span className="sd-gallery-art" aria-hidden="true"><img src="/characters/rabbit-tori.webp" alt=""/></span><span className="sd-gallery-arrow"><ArrowRight size={20}/></span></Link>
     <Link href="/student/exhibitions" className="sd-gallery-entry"><span className="sd-gallery-icon"><Images size={26}/></span><span className="sd-gallery-copy"><strong>{common("exhibitions")}<Sparkles size={17}/></strong><span>{exhibition("subtitle")}</span></span><span className="sd-gallery-art" aria-hidden="true"><span className="sd-mini-frame"><Palette size={22}/></span><img src="/characters/otter-moa.webp" alt=""/></span><span className="sd-gallery-arrow"><ArrowRight size={20}/></span></Link>
-    <section className="ws-tasks-section" aria-labelledby="tasks-heading"><div className="ws-section-heading"><div className="sd-section-label"><span className="sd-section-icon"><PencilLine size={24}/></span><div><span className="ws-eyebrow">{t("student.tasksSubtitle")}</span><h2 id="tasks-heading">{t("student.tasksTitle")}</h2></div></div><div className="ws-row"><span className="ws-count-pill">{t("student.tasksCount", {count: home.assignments.filter(assignment => assignment.status === "pending" || assignment.status === "revision").length})}</span><button className="ws-icon-btn" onClick={() => void load()} aria-label={t("common.refresh")}><RefreshCw size={17}/></button></div></div>
-      {!home.assignments.length ? <div className="ws-empty ws-student-empty"><div className="sd-rest-scene" aria-hidden="true"><Cloud size={50}/><img src={`/characters/${character.file}.webp`} alt=""/><Star size={23}/></div><h3>{t("student.noTasksTitle")}</h3><p>{t("student.noTasksBody")}</p></div> : <div className="ws-task-grid">{home.assignments.map(assignment => <article className={`ws-task-card ws-task-${assignment.status}`} key={assignment.id}><div className="ws-task-top"><span className="sd-task-icon" aria-hidden="true">{assignment.status === "done" ? <CheckCircle2 size={26}/> : assignment.status === "submitted" ? <Send size={24}/> : assignment.status === "revision" ? <RefreshCw size={25}/> : <PencilLine size={26}/>}</span><span className={`ws-status ws-status-${assignment.status}`}>{assignment.status === "done" ? <CheckCircle2 size={14}/> : assignment.status === "submitted" ? <Clock3 size={14}/> : <BookOpen size={14}/>}{assignment.videoJob&&["queued","processing"].includes(assignment.videoJob.status)?t("student.videoPending"):t(`common.${assignment.status}`)}</span></div><h3>{assignment.title}</h3><SubmissionTypeBadge type={assignmentSubmissionType(assignment.submissionType)}/>{assignment.videoJob&&assignment.status!=="revision"&&<VideoSubmissionStatus compact job={assignment.videoJob} onRetry={()=>retryVideo(assignment.videoJob!)}/>}<p className="ws-task-description">{assignment.description}</p><span className="ws-small ws-task-due"><Clock3 size={13}/>{date(assignment.dueAt)}</span><button className="ws-task-button" onClick={() => openTask(assignment)}><span>{t(assignment.status === "done" ? "student.viewFeedback" : assignment.status === "submitted" ? "student.viewSent" : assignment.status === "revision" ? "student.revisionAction" : "student.taskAction")}</span><ArrowRight size={17}/></button></article>)}</div>}
+    <section className="ws-tasks-section" aria-labelledby="tasks-heading"><div className="ws-section-heading"><div className="sd-section-label"><span className="sd-section-icon"><PencilLine size={24}/></span><div><span className="ws-eyebrow">{t("student.tasksSubtitle")}</span><h2 id="tasks-heading">{t("student.activeTasksTitle")}</h2></div></div><div className="ws-row"><span className="ws-count-pill">{t("student.tasksCount", {count: todoTasks.length})}</span><button className="ws-icon-btn" onClick={() => void load()} aria-label={t("common.refresh")}><RefreshCw size={17}/></button></div></div>
+      {!todoTasks.length ? <div className="ws-empty ws-student-empty"><div className="sd-rest-scene" aria-hidden="true"><Cloud size={50}/><img src={`/characters/${character.file}.webp`} alt=""/><Star size={23}/></div><h3>{t("student.noTasksTitle")}</h3><p>{t("student.noTasksBody")}</p></div> : <div className="ws-task-grid">{todoTasks.slice(0, todoLimit).map(taskCard)}</div>}
+      {todoTasks.length > todoLimit && <button type="button" className="ws-button ws-button-light sd-tasks-more" onClick={() => setTodoLimit(value => value + 24)}>{t("student.loadMoreTasks", {count: todoTasks.length - todoLimit})}<ChevronDown size={17}/></button>}
+      {historyTasks.length > 0 && <details className="sd-task-history" onToggle={event => setHistoryOpen(event.currentTarget.open)}>
+        <summary><span className="sd-history-icon"><CheckCircle2 size={21}/></span><span className="sd-history-label"><strong>{t("student.completedTasksTitle")}<span>{t("student.completedTasksCount", {count: historyTasks.length})}</span></strong><small>{t("student.completedTasksHint")}</small></span><ChevronDown className="sd-history-chevron" size={19}/></summary>
+        {historyOpen && <div className="sd-history-body"><div className="ws-task-grid">{historyTasks.slice(0, historyLimit).map(taskCard)}</div>{historyTasks.length > historyLimit && <button type="button" className="ws-button ws-button-light sd-tasks-more" onClick={() => setHistoryLimit(value => value + 24)}>{t("student.loadMoreTasks", {count: historyTasks.length - historyLimit})}<ChevronDown size={17}/></button>}</div>}
+      </details>}
     </section>
     <section className="ws-friends-section" aria-labelledby="friends-heading"><div className="ws-friends-copy"><span className="sd-section-icon"><Heart size={24}/></span><div><h2 id="friends-heading">{t("student.pickFriend")}</h2><p>{t("student.pickHint")}</p></div></div><div className="ws-friend-picker" aria-busy={changingFriend}>{friends.map(friend => <button key={friend.id} className="ws-friend" onClick={() => void chooseFriend(friend.id)} aria-pressed={character.id === friend.id} disabled={changingFriend} aria-label={`${t(`characters.${friend.id}`)} · ${t(`characters.${friend.id}Species`)}`}><span className="sd-friend-portrait"><img src={`/characters/${friend.file}.webp`} alt=""/></span><strong>{t(`characters.${friend.id}`)}</strong><span>{t(`characters.${friend.id}Species`)}</span>{character.id === friend.id && <Check className="ws-friend-check" size={13}/>}</button>)}</div></section>
     <section className="ws-growth-strip" aria-label={t("student.growth")}><div className="ws-growth-icon"><Flower2 size={27}/></div><div className="ws-growth-copy"><strong>{t("student.growth")}</strong><span>{t("student.growthHint")}</span></div><div className="ws-growth-right"><div className="ws-flower-stamps" aria-label={t("student.growthPoints", {points: xp})}>{[0,1,2,3,4].map(index => <Flower2 key={index} size={25} className={index < flowers % 5 || flowers >= 5 && flowers % 5 === 0 ? "is-earned" : ""}/>)}</div><span>{t("student.growthPoints", {points: xp})}</span></div></section>
     <div className="ws-kind-footer"><Heart size={14}/>{t("student.tasksSubtitle")}</div>
-    {selected && <TaskDialog title={selected.title} onClose={() => {setSelectedId(null); setFiles([]); uploadCache.current.clear();}} busy={sending||selectingVideo}>
+    {selected && <TaskDialog title={selected.title} onClose={clearTaskDraft} busy={sending||selectingVideo}>
       <div className="ws-dialog-body"><div className="ws-task-detail-meta"><span className={`ws-status ws-status-${selected.status}`}>{selected.videoJob&&["queued","processing"].includes(selected.videoJob.status)?t("student.videoPending"):t(`common.${selected.status}`)}</span><span className="ws-small">{date(selected.dueAt)}</span></div><div className="sd-task-type-heading"><SubmissionTypeBadge type={submissionType}/>{submissionType !== "legacy" && <p>{t(`submissionTypes.${submissionType}Hint`)}</p>}</div><div className="ws-instructions"><h3>{t("student.taskDescription")}</h3><p>{selected.description}</p></div><AssignmentMaterials materials={selected.materials} onRefresh={()=>void load()}/>
         {selected.videoJob&&!(selected.videoJob.status==="complete"&&selected.status==="revision")&&<VideoSubmissionStatus job={selected.videoJob} onRetry={()=>retryVideo(selected.videoJob!)}/>}{selected.submission?.feedback && <div className="ws-feedback"><h3><MessageCircleHeart size={19}/>{t("student.teacherSays")}</h3><p>{selected.submission.feedback}</p></div>}
         {selected.submission && <SubmittedFiles uploads={selected.submission.uploads || []} revision={selected.status === "revision"} onRefresh={() => load()}/>}
