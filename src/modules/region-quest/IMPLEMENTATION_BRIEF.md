@@ -33,7 +33,7 @@
 |---|---|---|---|
 | R0 | 기반 정리 | 모듈 골격, 측정 스크립트 이식, 데이터 소스 확인 | – |
 | R1 | 지역 팩 v2 | 타입·검증·저장·v1 호환 | – |
-| R2 | 수집기 | 학교 검색, OSM, 국가유산, 교사 추가 | – |
+| R2 | 수집기 | 학교 검색, OSM(길·지형), 구글 스팟 수집 + 공공 좌표, 국가유산, 교사 추가 | – |
 | R3 | 검수 큐 | 사실 카드 승인 UI, 출처 화이트리스트 | – |
 | R4 | 약도 엔진 | 백지도 L1~L3 외 5개 스타일, PDF | 그림지도 텍스처 소수 |
 | R5 | 타일 컴파일러 | 좌표 → 타일맵, 도달 검사, 절차적 채우기 | – |
@@ -140,7 +140,9 @@ export type Category = 'culture' | 'history' | 'person' | 'tourism' | 'life' | '
 export type PlaceKind = 'school' | 'office' | 'police' | 'fire' | 'post' | 'library' | 'clinic' | 'heritage' | 'tour' | 'harbour' | 'market' | 'farm' | 'nature' | 'peak' | 'viewpoint' | 'trail' | 'gate' | 'custom';
 export type Place = {
   id: string; kind: PlaceKind; categories: Category[]; name: string; lat: number; lon: number;
-  origin: 'osm' | 'heritage-api' | 'tour-api' | 'school-api' | 'teacher';
+  origin: 'osm' | 'google' | 'heritage-api' | 'tour-api' | 'school-api' | 'teacher';
+  address?: string; googlePlaceId?: string;                       // 구글 좌표는 저장하지 않음(약관)
+  coordSource: 'osm' | 'juso' | 'heritage-api' | 'teacher';      // lat/lon을 어디서 얻었는지
   osmRef?: string; facts: Fact[]; curriculum: string[]; level: 1 | 2 | 3;
   selected: boolean;
   role: 'landmark' | 'support' | 'hidden' | 'issue' | 'gate';   // 핵심 랜드마크 / 보조 / 숨은 스팟 / 동네 고치기 / 지역 관문(향후)
@@ -315,19 +317,34 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
    - 도로를 교차로에서 분할해 그래프 생성
    - 개인 상호(shop, cafe, restaurant, 숙박)는 기본 `selected:false`
 4. **국가유산 수집**: 반경 안 지정유산 좌표 → `heritage` 장소, 사실 1개(지정 명칭·종목·번호·출처)를 `auto` 상태로 생성합니다.
-5. **교사 수동 스팟**: 지도를 클릭해 장소를 추가합니다.
+5. **스팟 수집: 구글 Places + 공공 좌표** (스팟 정보의 1차 출처)
+   - **후보 이름 뽑기**: AI가 지역 이름과 학교를 받아 6분야별로 "아이들이 알아야 할 곳" 후보 이름을 뽑습니다. 화이트리스트 출처 검색 결과에 근거하고, 출처 URL을 함께 남깁니다. OSM·국가유산 API에서 나온 장소도 후보에 합칩니다.
+   - **구글에서 확인**: 후보마다 Places API(Text Search, 위치 편향 = 학교 중심·반경)로 장소를 찾아 이름, 주소, 분류, 짧은 소개, `place_id`를 받습니다. 후보 이름 없이 반경 안 주요 장소 검색(Nearby Search, 분야별 type)도 함께 돌립니다.
+   - **약관 준수(필수)**: Google Maps Platform 서비스 약관에 따라 다음을 지킵니다.
+     - Places API 데이터를 구글이 아닌 지도와 함께 쓰지 않습니다.
+     - 위도·경도는 최대 30일만 캐시할 수 있습니다.
+     - 그래서 **DB에는 `place_id`, 주소, 공공 좌표만 저장**하고, 구글 좌표는 저장하지 않습니다.
+     - 구글 소개 문구는 사실 카드의 원문으로 쓰지 않습니다(출처 표시가 필요한 화면에서 참고용으로만).
+   - **좌표 확정**
+     - 구글에서 받은 주소 → **행정안전부 도로명주소 좌표 API**로 좌표 변환 → `lat/lon` 저장(`coordSource:'juso'`)
+     - 지번·도로명이 없는 장소(해안, 유적, 오름)는 **교사가 지도에서 핀으로 확정**합니다(`coordSource:'teacher'`). 국가유산 API 좌표가 있으면 그것을 씁니다(`coordSource:'heritage-api'`).
+   - **선생님 검토 화면**: 후보 위치를 미리 보여 줄 때는 **구글 지도 임베드** 위에 표시합니다(구글 데이터를 구글 지도와 함께 쓰는 것은 허용). 게임과 백지도 화면은 저장된 공공·교사 좌표만 씁니다.
+   - **비용**: 학교당 수집은 한 번만 하고 결과를 재사용합니다(`place_id` 기준). 교사별 하루 수집 횟수 제한은 기존 `neighborhoodLimits` 패턴을 따릅니다.
+6. **교사 수동 스팟**: 지도를 클릭해 장소를 추가합니다.
    - 입력: 이름, **분야 6종 중 선택**(문화·역사·인물·관광자원·삶·공공기관, 복수 선택 가능), 설명 사실 1~3개, 출처 URL(선택), 교사 사진(선택, Storage `region-quest/{packId}/teacher/`), 역할(핵심 랜드마크/보조/숨은 스팟/동네 고치기).
    - 이미 있는 장소에도 분야 변경, 사실 추가, 역할 변경을 할 수 있습니다.
-6. **자동 분류**: OSM·API 태그로 분야를 추정합니다(예: heritage→역사, townhall·post·police→공공기관, harbour·market·farm→삶, attraction·beach·peak·trail→관광자원). 인물·문화는 자동 추정하지 않고 교사 입력이나 화이트리스트 출처로만 채웁니다.
-6. **품질 배지**: 수집 직후 R0 지표를 요약해서 교사에게 보여 줍니다. 예: "건물 정보가 적어 마을 모습은 자동으로 채워요", "문화유산이 0곳이에요. 직접 추가해 주세요".
+7. **자동 분류**: OSM·구글·API 분류로 분야를 추정합니다(예: heritage→역사, townhall·post·police→공공기관, harbour·market·farm→삶, attraction·beach·peak·trail→관광자원). 인물·문화는 자동 추정하지 않고 AI 후보(출처 포함)나 교사 입력으로만 채웁니다.
+8. **품질 배지**: 수집 직후 R0 지표를 요약해서 교사에게 보여 줍니다. 예: "건물 정보가 적어 마을 모습은 자동으로 채워요", "문화유산이 0곳이에요. 직접 추가해 주세요".
 
 **완료 기준**
 - 애월초로 수집하면 우체국·파출소·보건지소·읍사무소·도서관·애월중이 `selected:true`로 들어옵니다.
 - 상호는 기본 제외됩니다.
 - 국가유산 API로 들어온 장소가 있거나, 없으면 교사가 애월진성을 추가할 수 있습니다.
+- 애월초에서 구글 수집으로 애월항, 한담해안산책로, 장한철 생가 후보가 나오고, 주소가 있는 곳은 공공 좌표로, 없는 곳은 교사 핀으로 확정됩니다.
+- DB와 게임 데이터 어디에도 구글 좌표가 저장되지 않습니다(테스트: 저장 함수가 `coordSource` 없는 좌표나 구글 좌표 필드를 거부).
 - Overpass가 실패하면 캐시 → 대체 미러 → 오류 안내 순서로 동작합니다.
 
-**커밋**: 학교 검색, OSM 확장, 국가유산, 교사 추가를 각각 나눠 커밋합니다.
+**커밋**: 학교 검색, OSM 확장, 국가유산, 구글 스팟 수집·공공 좌표, 교사 추가를 각각 나눠 커밋합니다.
 
 ### R3. 검수 큐 (교사 10분 목표)
 
@@ -690,6 +707,9 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
 |---|---|---|
 | `DATA_GO_KR_SERVICE_KEY` | 학교 위치 표준데이터, 국가유산 위치 API | 학교 검색은 Nominatim, 국가유산은 교사 추가만 |
 | `TOUR_API_KEY` | 관광지(선택) | 관광지 자동 수집 생략 |
+| `GOOGLE_PLACES_API_KEY` | 스팟 검색·정보 확인(서버 전용, 결제 계정 필요) | OSM·국가유산·교사 추가만으로 수집 |
+| `NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY` | 교사 검토 화면의 구글 지도 임베드(HTTP 리퍼러 제한 필수) | 검토 화면에서 OSM 미리보기 사용 |
+| `JUSO_COORD_API_KEY` | 행정안전부 도로명주소 좌표 변환 | 모든 좌표를 교사 핀으로 확정 |
 | `NGII_API_KEY` | 국토지리정보원 배경지도(선택) | OSM만 사용 |
 | `REGION_QUEST_OVERPASS_URLS` | 쉼표로 구분한 미러 목록 | 기존 기본값 |
 | `REGION_QUEST_ENABLED` | 교사 미리보기 기능 플래그 | 모듈 전체 숨김, API 404 |
@@ -698,7 +718,7 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
 ---
 
 ## 8. 사용자 결정이 필요한 항목 (작업 시작 전 확인)
-1. 공공데이터포털·TourAPI·국토지리정보원 키 발급 여부(키 발급은 사용자가 직접 진행)
+1. 구글 Maps Platform(Places API, 결제 계정)·도로명주소 좌표 API·공공데이터포털·TourAPI·국토지리정보원 키 발급 여부(키 발급과 결제 설정은 사용자가 직접 진행)
 2. 이미지 생성 사용량·비용 한도(약 70~75요청 + 지역 추가분)
 3. 첫 공개 범위: 교사 미리보기 베타만 할지, 시범 학급(애월초)까지 할지
 4. 포인트 보상 연동 여부(기본 꺼짐 제안)
