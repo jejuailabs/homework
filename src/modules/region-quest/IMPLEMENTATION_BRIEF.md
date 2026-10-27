@@ -8,10 +8,19 @@
 
 ## 0. 한눈에 보기
 
-**만들 것**: 학교를 중심으로 실제 길과 장소를 모은 *지역 팩*을 만듭니다. 이 한 벌의 데이터로 다음 세 가지를 생성합니다.
-1. 교사용 백지도·약도(SVG/PDF, 여러 스타일)
-2. 아이들이 걸어 다니는 귀여운 2D 픽셀 RPG(안개 = 백지도, 걸으면 지도가 되살아남)
-3. 수업 결과물(내가 완성한 지도, 장소 일기, 성취기준별 평가 근거)
+**만들 것**: 아이들이 학교를 중심으로 실제 길을 따라 우리 지역을 RPG처럼 걸으며 **문화·역사·인물·관광자원·삶·공공기관**을 배우는 2D 픽셀 게임입니다.
+
+**게임의 뼈대**는 끊기지 않는 미션 루프입니다.
+- 이동 명령 → 구역 진입 시 안개가 걷힘 → 핵심 랜드마크 조사 → 배움 카드 → 다음 이동 명령
+- 이 루프가 반복되며 지역 전체를 한 바퀴 돕니다.
+- 미션은 기본적으로 자동 생성하고, 교사가 순서·내용·스팟을 직접 편집할 수 있습니다.
+- 지역과 지역은 나중에 연결할 수 있게 설계합니다.
+
+같은 *지역 팩* 데이터로 다음도 함께 만듭니다.
+- 교사용 백지도·약도(SVG/PDF)
+- 수업 결과물(우리 지역 이야기책, 장소 기록, 평가 근거)
+
+설계 근거는 [docs/strategy.md](docs/strategy.md) **6장(게임 설계 최종)**입니다. 구현 중 설계 판단이 필요하면 6장을 기준으로 합니다.
 
 **첫 시범 학교**: 제주 애월초등학교(OSM way 371530161, 33.46512, 126.32235). 실측 결과는 다음과 같습니다.
 - 도로·해안선·공공기관: 충분함
@@ -29,10 +38,11 @@
 | R4 | 약도 엔진 | 백지도 L1~L3 외 5개 스타일, PDF | 그림지도 텍스처 소수 |
 | R5 | 타일 컴파일러 | 좌표 → 타일맵, 도달 검사, 절차적 채우기 | – |
 | R6 | 아트 파이프라인 | 스타일 바이블, 아틀라스 생성·후처리·검수 | **대량** |
-| R7 | 게임 런타임 | 이동, 충돌, 안개, 대화, 미니맵, 저장 | 사용 |
-| R8 | 퀘스트 엔진 | 템플릿 퀘스트, 이야기 체인, 능력 성장 | 카드 일러스트 |
-| R9 | 교실 연동 | 학생 배정, 교사 통제, 학급 공동 지도, 리포트 | – |
-| R10 | 출력·평가 | 내 지도 PDF, 포트폴리오, 성취기준 리포트 | – |
+| R7 | 게임 런타임 | 이동, 충돌, 구역 안개, 길 안내, 대화, 조사, 저장 | 사용 |
+| R8 | 캠페인·미션 엔진 | 구역 나누기, 자동 캠페인, 6분야 미션 템플릿, 흐름 검사, 교사 덮어쓰기 층 | 카드·인물 일러스트 |
+| R9 | 교실 연동·교사 편집기 | 미션·구역·스팟 편집기, 학생 배정, 교사 통제, 학급 진행률 | – |
+| R10 | 출력·평가 | 우리 지역 이야기책 PDF, 분야별 리포트 | – |
+| R12 | (향후) 지역 연결 | 월드 그래프, 관문 스팟, 여권 | 관문 소품 |
 | R11 | QA·출시 | 기기, 접근성, 보안 규칙, 성능 | – |
 
 각 단계는 **기능 단위로 검증 → 커밋 → 푸시**합니다(§1).
@@ -64,7 +74,7 @@
 | 지역 데이터 타입·OSM 파싱·SVG | `src/lib/neighborhood.ts` | `MapCenter`, `NeighborhoodPlace`, `overpassQuery`, `parseOverpassMap`, `neighborhoodSvg`, `simplifyMapLine`을 v2 모듈로 일반화 |
 | 지도 수집 API·캐시·한도 | `src/lib/server/neighborhood.ts`, `src/app/api/neighborhood/{map,packs}` | 캐시(`neighborhoodMapCache`), 교사별 일일 한도(`neighborhoodLimits`), 팩 저장(`users/{uid}/neighborhoodPacks`) 패턴 유지 |
 | 교사 도구 UI | `src/components/neighborhood-tool.tsx`, `src/styles/neighborhood.css`, `src/lib/tool-catalog.ts`(`kind:'neighborhood'`) | 도구 창 안에서 단계형 UI로 확장 |
-| 인쇄 | `src/lib/neighborhood-print.ts`, `pdf-lib`, `@pdf-lib/fontkit` | 백지도·내 지도 PDF |
+| 인쇄 | `src/lib/neighborhood-print.ts`, `pdf-lib`, `@pdf-lib/fontkit` | 백지도·이야기책 PDF |
 | 출처 인용 AI | `CitedText`, `src/lib/ai-citations.ts`, `src/lib/ai-usage.ts` | 사실 요약·NPC 대사 초안, 사용량 집계 |
 | iframe 게임 + 이어하기 | `src/components/learning-king-beta.tsx`, `src/app/api/learning-king-beta/route.ts`, `src/modules/learning-king/{demo,server,journey-storage.ts}` | 같은 격리 구조(`postMessage` 로드/저장, 교사 인증 후 HTML 제공) |
 | 학급·학생 | `classes/{classId}/students/...`, `src/lib/roster.ts`, `class-students-link.ts` | 학생 배정, 진도 저장 |
@@ -90,7 +100,7 @@ src/modules/region-quest/
   review/                 # 사실 상태 전이, 출처 화이트리스트
   maps/                   # 약도 스타일 엔진 (SVG), PDF 출력
   tiles/                  # 타일 컴파일러, 오토타일, 절차적 채우기, 도달 검사
-  content/                # 퀘스트 템플릿, 이야기 체인 스키마, 능력 정의, 성취기준
+  content/                # 미션 템플릿, 캠페인 생성·흐름 검사, 분야 등급, 성취기준
   runtime/                # iframe 게임 (Canvas2D) — 서버가 인증 후 제공
   server/                 # 라우트 핸들러 본체, 권한, 캐시, Firestore 접근
   ui/                     # 교사·학생 React 컴포넌트와 CSS (작성·검수·출력·수업 통제·진입)
@@ -126,21 +136,28 @@ src/modules/region-quest/
 export type FactStatus = 'auto' | 'draft' | 'verified' | 'rejected';
 export type SourceRef = {title: string; url: string; license: string; retrievedAt: string};
 export type Fact = {id: string; text: string; source: SourceRef; status: FactStatus; verifiedBy?: string; verifiedAt?: string; audience: 'student' | 'teacher'};
-export type PlaceKind = 'school' | 'office' | 'police' | 'fire' | 'post' | 'library' | 'clinic' | 'heritage' | 'tour' | 'harbour' | 'market' | 'nature' | 'peak' | 'viewpoint' | 'trail' | 'custom';
+export type Category = 'culture' | 'history' | 'person' | 'tourism' | 'life' | 'public';   // 문화·역사·인물·관광자원·삶·공공기관
+export type PlaceKind = 'school' | 'office' | 'police' | 'fire' | 'post' | 'library' | 'clinic' | 'heritage' | 'tour' | 'harbour' | 'market' | 'farm' | 'nature' | 'peak' | 'viewpoint' | 'trail' | 'gate' | 'custom';
 export type Place = {
-  id: string; kind: PlaceKind; name: string; lat: number; lon: number;
+  id: string; kind: PlaceKind; categories: Category[]; name: string; lat: number; lon: number;
   origin: 'osm' | 'heritage-api' | 'tour-api' | 'school-api' | 'teacher';
   osmRef?: string; facts: Fact[]; curriculum: string[]; level: 1 | 2 | 3;
-  selected: boolean; hidden?: boolean;                 // hidden: 숨은 장소(안개 속 '?')
-  game?: {role: 'npc' | 'landmark' | 'collectible' | 'quest-hub' | 'issue'; spriteKey?: string; npcKey?: string};
+  selected: boolean;
+  role: 'landmark' | 'support' | 'hidden' | 'issue' | 'gate';   // 핵심 랜드마크 / 보조 / 숨은 스팟 / 동네 고치기 / 지역 관문(향후)
+  teacherPhoto?: {storagePath: string; alt: string};             // 교사 수동 스팟 사진(교사 소유)
+  spriteKey?: string; npcKey?: string;
 };
+export type Zone = {id: string; name: string; polygon: [number, number][]; landmarkId: string; placeIds: string[]; origin: 'auto' | 'teacher'};
 export type RoadNode = {id: string; lat: number; lon: number};
 export type RoadEdge = {id: string; a: string; b: string; kind: 'major' | 'minor' | 'path' | 'cycle' | 'steps'; name?: string; points: [number, number][]};
 export type Area = {id: string; kind: 'building' | 'water' | 'sea' | 'green' | 'farmland' | 'orchard' | 'beach' | 'sports' | 'industrial'; points: [number, number][]; name?: string; buildingUse?: string};
 export type RegionPack = {
   version: 2; id: string; title: string; ownerUid: string; classIds: string[];
   school: {code?: string; name: string; lat: number; lon: number; osmRef?: string};
-  extent: {radiusM: number; polygon?: [number, number][]; zones?: {id: string; name: string; polygon: [number, number][]}[]};
+  extent: {radiusM: number; polygon?: [number, number][]};
+  zones: Zone[];
+  campaign: Campaign;                 // §4.5
+  links: WorldLink[];                 // §4.6, 향후 지역 연결(지금은 빈 배열)
   projection: {originLat: number; originLon: number; metersPerTile: number};   // 기본 5
   network: {nodes: RoadNode[]; edges: RoadEdge[]};
   areas: Area[]; coastline: [number, number][][];
@@ -153,6 +170,8 @@ export type RegionPack = {
 - `validateRegionPack`은 기존 `validateNeighborhoodPack`처럼 길이와 범위를 제한합니다(좌표 범위, 문자열 길이, 배열 상한). 상한 예시: places ≤ 300, edges ≤ 20,000, areas ≤ 10,000.
 - `fromNeighborhoodPackV1(pack)`로 v1을 변환합니다. 변환 결과의 사실은 모두 `draft` 상태로 시작합니다.
 - 학생용 직렬화 함수 `toStudentPack(pack)`은 `status==='verified' && audience==='student'`인 사실만 남기고, 교사 메모와 출처 원문 외 필드를 제거합니다. **서버에서만** 호출합니다.
+- 교사가 수동으로 입력한 스팟의 사실은 입력과 동시에 `verified`(verifiedBy = 입력 교사)로 저장합니다. 교사가 고른 분야(`categories`)는 자동 분류보다 우선합니다.
+- 상한 예시: zones ≤ 20, 구역당 places ≤ 15.
 
 ### 4.2 TileMap (컴파일 결과)
 
@@ -169,9 +188,72 @@ export type TileMap = {
 ### 4.3 진도(학생) / 수업 세션(교사)
 
 ```ts
-export type QuestProgress = {packId: string; revealed: string /* fog bitset RLE */; places: Record<string, {visitedAt?: string; doneAt?: string}>; abilities: ('compass' | 'symbols' | 'scale' | 'height' | 'oldmap')[]; quests: Record<string, {step: number; doneAt?: string}>; diary: {placeId: string; mood: string; text: string; snapshotKey?: string; at: string}[]; ideas: {issueId: string; choice: string; text: string; at: string}[]; minutesPlayed: number; updatedAt: string};
-export type ClassSession = {packId: string; status: 'idle' | 'live' | 'paused' | 'recall' | 'ended'; openZones: string[]; todayQuests: string[]; sunsetAt?: string; updatedAt: string};
+export type RegionProgress = {
+  packId: string; campaignVersion: string;
+  current: {missionId: string; stepIndex: number; startedAt: string} | null;   // null은 캠페인 완료일 때만 허용
+  zonesRevealed: string[]; revealedTiles: string /* 이동 경로 비트셋 RLE */;
+  missions: Record<string, {doneAt: string; answers: {stepId: string; correct: boolean; tries: number}[]}>;
+  cards: {placeId: string; category: Category; at: string}[];                  // 배움 카드
+  stamps: string[]; storyPieces: string[]; items: string[];
+  records: {placeId: string; mood: string; text: string; snapshotKey?: string; at: string}[];   // 장소 기록
+  ideas: {issueId: string; choice: string; text: string; at: string}[];
+  minutesPlayed: number; finishedAt?: string; updatedAt: string;
+};
+export type ExplorerProfile = {categoryXp: Record<Category, number>; passport: {packId: string; finishedAt: string}[]; updatedAt: string};   // 학생 계정 단위 누적(지역 간 공유)
+export type ClassSession = {packId: string; status: 'idle' | 'live' | 'paused' | 'recall' | 'ended'; openZones: string[]; startMissionId?: string; sunsetAt?: string; updatedAt: string};
 ```
+
+### 4.5 캠페인·미션
+
+```ts
+export type StepType = 'go' | 'talk' | 'inspect' | 'check' | 'record' | 'help' | 'idea';
+// go: 목적지 도착 / talk: NPC·인물 대화 / inspect: 장면 속 단서 클릭 / check: 확인 문제 / record: 장소 사진기·한 줄 느낌 / help: 짧은 체험(그물 정리 등) / idea: 동네 고치기
+export type MissionStep = {
+  id: string; type: StepType; placeId?: string; zoneId?: string;
+  lines?: {speaker: string; text: string; factIds: string[]}[];          // 대사. 사실 문장은 반드시 factIds가 있어야 함
+  clues?: {id: string; x: number; y: number; text: string; factIds: string[]}[];
+  question?: {prompt: string; choices: string[]; answer: number; explain: string; factIds: string[]};
+  hint: {afterSec: number; text: string}[];                             // 단계적 힌트(30초·2분 등)
+};
+export type Mission = {
+  id: string; zoneId: string; landmarkId: string; categories: Category[]; title: string;
+  order: number; kind: 'main' | 'side' | 'hidden' | 'issue';
+  command: {speaker: string; text: string; direction?: string};          // 이 미션으로 보내는 이동 명령
+  steps: MissionStep[];
+  reward: {card: true; stamp?: string; storyPiece?: string; item?: string; xp: Partial<Record<Category, number>>};
+  bridge: string;                                                        // 완료 대화의 마지막 줄 = 다음 미션 연결 문장
+  templateId: string; origin: 'auto' | 'teacher'; curriculum: string[];
+};
+export type Campaign = {
+  version: string; generatedAt: string; storyTemplate: string;
+  intro: {lines: {speaker: string; text: string}[]};
+  missions: Mission[];               // 자동 생성 결과
+  overrides: MissionOverride[];      // 교사 수정 층. 재생성해도 보존
+  finale: {placeId: string; lines: {speaker: string; text: string; factIds: string[]}[]};
+};
+export type MissionOverride =
+  | {op: 'reorder'; missionIds: string[]}
+  | {op: 'edit'; missionId: string; patch: Partial<Pick<Mission, 'title' | 'command' | 'bridge' | 'steps' | 'reward'>>}
+  | {op: 'add'; mission: Mission}          // origin:'teacher'
+  | {op: 'remove'; missionId: string}
+  | {op: 'pin-landmark'; zoneId: string; placeId: string};
+```
+
+- `resolveCampaign(campaign)`은 자동 미션에 overrides를 순서대로 적용해 실제 진행 순서를 만듭니다. 순수 함수입니다.
+- `validateCampaignFlow(pack, resolved)`는 아래 중 하나라도 있으면 실패로 반환합니다(교사 저장·게시 시 실행).
+  - 목표 공백: 완료 후 다음 명령이 없는 미션(마지막 제외)
+  - 도달 불가 구역·장소(TileMap reach 기준)
+  - `factIds`가 미승인 사실을 가리킴
+  - 이동 시간이 2분을 넘는데 경유 스팟이 없음
+  - 같은 분야 3연속
+
+### 4.6 지역 연결 (향후, 형식만 지금 확정)
+
+```ts
+export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; toGatePlaceId?: string; unlock: 'campaign-complete' | 'teacher'; label: string};
+```
+- 팩 ID는 전역에서 고유해야 합니다. 원점 좌표와 함께 위경도를 보존합니다.
+- 진도(`RegionProgress`)는 지역별 문서로, `ExplorerProfile`은 학생당 1문서로 저장합니다.
 
 ### 4.4 Firestore 경로 (제안)
 
@@ -181,6 +263,7 @@ export type ClassSession = {packId: string; status: 'idle' | 'live' | 'paused' |
 | `regionPacksPublished/{packId}` | 서버만(`toStudentPack` 결과 + TileMap 참조) | 배정 학급 학생·교사 |
 | `classes/{classId}/regionSessions/{packId}` | 담임 교사 | 학급 학생(읽기 전용) |
 | `classes/{classId}/students/{studentId}/regionProgress/{packId}` | 서버 API(학생 본인 인증) | 본인, 담임 |
+| `classes/{classId}/students/{studentId}/regionProfile/main` | 서버 API | 본인, 담임 |
 | `regionMapCache/{hash}` | 서버만 | 서버만 |
 
 - TileMap과 큰 지오메트리는 Storage `region-quest/{packId}/{packUpdatedAt}/tilemap.json`에 둡니다. 읽기 권한은 배정 학급으로 제한합니다.
@@ -232,7 +315,10 @@ export type ClassSession = {packId: string; status: 'idle' | 'live' | 'paused' |
    - 도로를 교차로에서 분할해 그래프 생성
    - 개인 상호(shop, cafe, restaurant, 숙박)는 기본 `selected:false`
 4. **국가유산 수집**: 반경 안 지정유산 좌표 → `heritage` 장소, 사실 1개(지정 명칭·종목·번호·출처)를 `auto` 상태로 생성합니다.
-5. **교사 추가**: 지도를 클릭해 장소를 추가하고 이름·종류·출처 URL을 입력합니다. 지점을 '불편 신호'(`game.role:'issue'`)나 '숨은 장소'로 지정할 수 있습니다.
+5. **교사 수동 스팟**: 지도를 클릭해 장소를 추가합니다.
+   - 입력: 이름, **분야 6종 중 선택**(문화·역사·인물·관광자원·삶·공공기관, 복수 선택 가능), 설명 사실 1~3개, 출처 URL(선택), 교사 사진(선택, Storage `region-quest/{packId}/teacher/`), 역할(핵심 랜드마크/보조/숨은 스팟/동네 고치기).
+   - 이미 있는 장소에도 분야 변경, 사실 추가, 역할 변경을 할 수 있습니다.
+6. **자동 분류**: OSM·API 태그로 분야를 추정합니다(예: heritage→역사, townhall·post·police→공공기관, harbour·market·farm→삶, attraction·beach·peak·trail→관광자원). 인물·문화는 자동 추정하지 않고 교사 입력이나 화이트리스트 출처로만 채웁니다.
 6. **품질 배지**: 수집 직후 R0 지표를 요약해서 교사에게 보여 줍니다. 예: "건물 정보가 적어 마을 모습은 자동으로 채워요", "문화유산이 0곳이에요. 직접 추가해 주세요".
 
 **완료 기준**
@@ -326,7 +412,7 @@ export type ClassSession = {packId: string; status: 'idle' | 'live' | 'paused' |
 - 러닝킹과 같이 **iframe 격리**로 만듭니다.
   - 교사 미리보기: 교사 인증 후 HTML을 제공합니다.
   - 학생 실행: 학생 인증과 학급 배정을 확인한 뒤 HTML을 제공합니다.
-- 부모 창과는 `postMessage`로만 통신합니다. 메시지 종류: `load-pack`, `progress-load`, `progress-save`, `session-update`, `close`, `export-map`.
+- 부모 창과는 `postMessage`로만 통신합니다. 메시지 종류: `load-pack`, `progress-load`, `progress-save`, `session-update`, `close`, `export-book`.
 - Canvas2D 자체 렌더러를 씁니다. 외부 게임 엔진은 넣지 않습니다(번들 경량화). `image-rendering: pixelated`, 정수 배율(×2~×4) 확대.
 
 **필수 시스템**
@@ -337,54 +423,126 @@ export type ClassSession = {packId: string; status: 'idle' | 'live' | 'paused' |
 | 이동 | 키보드(방향키/WASD), 화면 조이스틱(기존 전시실 조이스틱 구현 참고), **클릭/탭 이동**(A* 경로, 걸을 수 있는 칸만) |
 | 충돌 | collision 레이어. 대각선 이동 속도 보정 |
 | 카메라 | 플레이어 추적, 맵 경계 고정, 확대 2단계 |
-| 안개 = 백지도 | 처음에는 `blank-l3` 모습(길 윤곽만 흐리게). 플레이어 주변 반경 6칸이 드러나고 `revealed` 비트셋에 기록. 장소 임무를 완료하면 그 장소 아이콘과 이름이 색으로 돌아옴 |
-| 상호작용 | `door` 칸에 닿으면 말풍선 아이콘 → 대화. NPC는 2~3줄씩, 읽어 주기(TTS, 기존 음성 기능 재사용 가능 여부 확인) |
-| 미니맵 | 능력 단계별로 변화: 없음 → 방위표 → 지도 기호 → 축척 막대 → 등고 → 옛 지도 레이어 |
-| 해넘이 | 수업 세션 `sunsetAt` 5분 전부터 하늘색 변화, 도달하면 "학교로 돌아가자" → 학교로 자동 경로 안내 → 정리 화면 |
-| 저장 | 30초마다, 그리고 장소 완료 시 `progress-save`. 실패해도 메모리로 계속 진행 |
-| 정리 화면 | 내 지도(드러난 길 + 완료 장소) 미리보기, 장소 일기, `export-map` |
+| 구역 안개 | 열리지 않은 구역은 안개로 덮습니다(길 윤곽만 흐리게). **구역 경계에 들어가면 그 구역 전체가 걷히는 연출 + 구역 이름 카드.** 교사가 닫은 구역은 "아직 갈 수 없는 곳"으로 막습니다. 지나간 길은 `revealedTiles`에 기록합니다 |
+| 목표 고정 HUD | 화면 위에 현재 메인 목표 1줄(어디로·무엇을)이 항상 보입니다. 목표가 없는 상태가 되면 개발 모드에서 오류를 냅니다 |
+| 길 안내 | 목적지까지 A* 경로를 발자국으로 표시하고, 화면 가장자리에 방위 화살표를 둡니다(교사 설정으로 끌 수 있음). 30초 경로 이탈 시 강조, 2분 무진행 시 힌트, 3분이면 "같이 가 줄까?"(자동 이동) |
+| 대화 | 2~3줄씩, 말하는 사람 초상, 읽어 주기(TTS, 기존 음성 기능 재사용 가능 여부 확인), 어려운 말 사전. 완료 대화의 마지막 줄(`bridge`)이 끝나면 다음 목표가 바로 HUD에 표시됩니다 |
+| 조사(inspect) | 랜드마크 장면 확대 → 단서 2~3개 클릭 → 단서 문장(사실 기반) |
+| 확인(check) | 보기 3개 문제, 틀리면 관련 단서를 다시 보여 주고 재도전(실패 상태 없음) |
+| 기록(record) | 장소 사진기: 현재 픽셀 장면 캡처 + 감정 스티커 + 한 줄 느낌 |
+| 배움 카드 | 미션 완료 시 카드 획득 연출 → 도감(6분야 탭)에 등록, 분야 경험치 증가와 등급 표시 |
+| 미니맵 | 처음부터 방위표와 지도 기호를 표시합니다. 열린 구역, 현재 목표, 완료 도장을 표시합니다 |
+| 해넘이 | 수업 세션 `sunsetAt` 5분 전부터 하늘색 변화. 도달하면 진행 중 미션을 저장하고 "학교로 돌아가자" → 정리 화면 |
+| 이어하기 | 다시 들어오면 "지난 이야기" 30초 회상(완료 미션 요약) → 저장된 `current` 미션 단계에서 재개 |
+| 저장 | 30초마다, 그리고 단계 완료 시 `progress-save`. 실패해도 메모리로 계속 진행 |
+| 정리 화면 | 오늘 얻은 배움 카드, 도장, 장소 기록, 다녀온 지도 미리보기 |
 
 **성능**: 저사양 크롬북·태블릿에서 60fps(최소 30fps). 첫 화면까지 3초 이내(학교 주변 청크 우선). 아틀라스 총 4MB 이하.
-**완료 기준**: 애월초 팩으로 학교 출발 → 우체국 도착 → 대화 → 안개 복원 → 저장 → 새로고침 후 이어하기까지 동작합니다. 키보드·터치·클릭 이동을 모두 확인합니다.
-**커밋**: 렌더러, 이동·충돌, 안개, 상호작용·대화, 미니맵·해넘이, 저장을 나눠 커밋합니다.
+**완료 기준**: 애월초 팩으로 다음이 끊김 없이 동작해야 합니다. 키보드·터치·클릭 이동을 모두 확인합니다.
+- 인트로 → 첫 명령 → 학교 구역 조사 → 배움 카드
+- 다음 명령 → 우체국 구역 진입(안개 걷힘) → 조사·확인·기록 → 다음 명령
+- 저장 → 새로고침 → 회상 → 같은 단계에서 재개
 
-### R8. 퀘스트 엔진과 콘텐츠
+**커밋**: 렌더러, 이동·충돌, 구역 안개, HUD·길 안내, 대화·조사·확인·기록, 카드·도감, 해넘이·이어하기를 나눠 커밋합니다.
 
-**퀘스트는 데이터(JSON)로 정의**하고, 엔진은 상태 기계로 만듭니다.
+### R8. 캠페인·미션 엔진 (게임의 중심)
 
-```ts
-type QuestStep = {id: string; goal: {type: 'reach' | 'talk' | 'answer' | 'collect' | 'photo' | 'diary' | 'idea'; placeId?: string; itemKey?: string; question?: {prompt: string; choices: string[]; answer: number; skill?: 'direction' | 'symbol' | 'scale'}}; hint: {direction: boolean; text: string}; reward?: {ability?: string; card?: string; mapPiece?: number}};
-type Quest = {id: string; kind: 'story' | 'daily-life' | 'collect' | 'explore' | 'issue'; title: string; steps: QuestStep[]; curriculum: string[]; requiresVerifiedFacts: string[]};
-```
+**목표**: 어느 학교든 자동으로 "지역 한 바퀴" 캠페인이 만들어지고, 교사가 일부를 고쳐도 흐름이 끊기지 않게 합니다. 설계 기준은 전략 문서 6.2~6.5입니다.
 
-- **템플릿 자동 생성**(장소 종류별): post→편지 배달(주소·방위), police→잃어버린 물건, office→주민 부탁, library→우리 동네 책, clinic→건강 지키는 곳, harbour/market→동네 사람들이 하는 일, peak/viewpoint→높이 눈 방위 퀘스트, heritage→옛 지도 조각, issue→동네 고치기.
-- **능력 성장**: compass(학교 전망 퀴즈) → symbols(기호 맞히기) → scale(학교→우체국 걸음 수 추정, 애월 실측 약 285m) → height → oldmap(이야기 체인 완료).
-- **세 갈래 목표판**: 이야기·수집·탐험 중 미완료를 하나씩 추천합니다. 2분 동안 진행이 없으면 *방위 힌트*를 줍니다.
-- **이야기 체인 「성담의 비밀」(애월초 fixture)**: 학교 담장(애월진성 성벽) → 우체국 → 애월항 → 애월환해장성 → 한담 산책로·장한철 생가와 표해록 기적비 → 학교 귀환 후 옛 지도 레이어. 대사는 검수된 사실만 참조해서 만듭니다. fixture 사실은 모두 `draft`로 넣고 "교사 검수 필요"를 표시합니다.
-- **AI 대사 생성**: 입력은 해당 장소의 `verified` 사실 목록뿐입니다. 출력은 대사 2~3줄과 사용한 사실 ID입니다. 사실 ID가 없는 문장은 버립니다.
-- **이미지 생성**: 장소 카드 일러스트(§6.6 `place-cards`), 옛 지도 조각 4장(`oldmap-pieces`).
+**1) 구역 나누기 `buildZones(pack, tileMap)`**
+- 핵심 랜드마크 후보 점수 = 분야 가중치 + 검수 사실 수 + 교사 지정 여부 − 학교 거리 보정. 교사가 고정한 랜드마크(`pin-landmark`)가 최우선입니다.
+- 후보를 중심으로 반경 150~300m씩 묶고, 경계는 큰길·해안·하천에 맞춥니다(보로노이 분할 후 도로 경계로 스냅).
+- 구역 수 기본 5~8개, 구역마다 보조 스팟 0~4개, 숨은 스팟 0~2개를 둡니다.
+- 교사가 구역 경계를 드래그하거나 구역을 합치고 나누면 `origin:'teacher'`로 저장합니다.
 
-**완료 기준**: 애월 fixture로 체인 6단계를 끝까지 진행할 수 있습니다. 미승인 사실만 있는 장소의 퀘스트는 생성되지 않습니다(테스트). 템플릿 퀘스트가 장소 종류마다 1개 이상 생성됩니다.
+**2) 순서 정하기 `orderZones(zones)`**
+- 학교 구역에서 시작합니다.
+- 비용 = 이동 거리 + 이야기 단절 벌점(같은 시대·인물·주제가 떨어져 있으면 벌점) + 같은 분야 3연속 벌점. 최근접 이웃으로 시작해 2-opt로 개선합니다.
+- 끝은 학교 근처 또는 교사가 지정한 피날레 장소입니다.
 
-### R9. 교실 연동
+**3) 미션 템플릿 적용 `applyTemplates`** (`content/templates/*.json`, 템플릿마다 단계 구성과 문장 틀)
 
-- **팩 배정**: 교사가 팩을 학급에 배정하면 서버가 `toStudentPack` + TileMap을 게시합니다(`regionPacksPublished`).
-- **학생 진입**: 학생 홈의 배정 활동 목록에서 시작합니다. 기존 학생 인증을 그대로 쓰고, 별도 가입은 없습니다.
-- **수업 통제**(교사 화면): 시작, 모두 멈춤, 모두 학교로 귀환, 구역 열기/닫기, 오늘 퀘스트 지정, 해넘이 시각 설정(기본 시작 후 25분). `classes/{classId}/regionSessions/{packId}` 문서를 실시간 구독하고, iframe에는 `session-update`로 전달합니다.
-- **교사 진행 보기**: 학생별 *완료 장소 수, 막힘 여부(5분 무진행)*만 보여 줍니다. 실시간 위치는 표시하지 않습니다. 막힌 학생에게 힌트 1회를 보낼 수 있습니다.
-- **학급 공동 지도**: 학생 `revealed`의 합집합과 학급 복원률(%)을 전자칠판용 전체 화면으로 보여 줍니다. 순위표는 기본으로 끕니다.
-- **장소 일기 → 갤러리**: 장소 사진기 스냅샷(픽셀 장면 캡처)과 한 줄 일기를 기존 전시·갤러리 흐름에 학급 단위로 게시합니다(교사 승인).
-- **동네 고치기 → 투표**: 학생 아이디어를 모아 기존 `class-poll`로 투표를 만듭니다.
+| 템플릿 | 분야 | 단계 구성 |
+|---|---|---|
+| `history-clue` | 역사 | go → inspect(옛 흔적 단서) → talk(옛날 이야기) → check → 이야기 조각 |
+| `person-meet` | 인물 | go → talk(인물, "상상해서 그린 모습") → inspect(남긴 기록·건물) → check → 인물 카드 |
+| `culture-use` | 문화 | go → inspect(전통 물건·건축) → help(쓰임 체험, 예: 정낭 걸기) → check |
+| `tourism-view` | 관광자원 | go → inspect(전망 지점 찾기) → record(사진기) → check |
+| `life-help` | 삶 | go → talk(일하는 사람) → help(짧은 체험: 그물 정리, 귤 따기) → check |
+| `public-errand` | 공공기관 | go → talk(주민 부탁) → help(편지 배달, 잃어버린 물건, 민원 접수) → check(기관이 하는 일) |
+| `teacher-custom` | 교사 선택 | 교사가 단계를 고르고 문장·문제를 직접 입력 |
+| `issue-idea` | 동네 고치기(선택) | go → inspect(불편한 점) → idea |
+
+- `help` 체험은 10~20초짜리 미니 상호작용입니다(클릭·드래그 3~5회). 템플릿마다 1종씩, 총 6종을 런타임에 구현합니다.
+- 이동 시간이 2분을 넘으면 경로 위의 보조 스팟으로 `side` 미션 또는 길 위의 발견을 자동으로 끼워 넣습니다.
+
+**4) 문장 생성 `writeLines`**
+- 입력: 해당 장소의 `verified` 사실, 템플릿 문장 틀, 세계관 템플릿(`wind-spirit` 등)
+- 출력: 명령, 대사, 단서, 문제, 해설, `bridge` 문장
+- **사실을 말하는 문장에는 반드시 `factIds`를 붙이고, 없는 문장은 버립니다.** 감탄·안내 문장("좋아, 가 보자!")은 `factIds` 없이 허용하되, 고유명사·숫자·연도를 포함하면 버립니다.
+- AI를 쓸 수 없을 때는 문장 틀 + 사실 원문 인용으로 대체합니다(오프라인 생성 보장).
+
+**5) 교사 덮어쓰기 층**: `MissionOverride`를 저장하고 `resolveCampaign`으로 적용합니다. 자동 재생성 뒤에도 교사 수정분은 유지됩니다. 수정한 미션이 가리키던 장소가 삭제되면 "확인 필요" 표시를 합니다.
+
+**6) 흐름 검사**: §4.5 `validateCampaignFlow`를 실행합니다. 저장·게시 시 실패 항목을 교사에게 "고칠 곳" 목록으로 보여 줍니다. 게시는 실패가 0일 때만 허용합니다.
+
+**7) 성장·보상**
+- 미션 보상 xp를 분야별로 누적합니다. 등급 Lv.1~5(카드 1·3·6·10·15장).
+- 칭호는 "{지역} {분야} 탐험가 Lv.N"입니다.
+- 구역 도장, 이야기 조각, 이야기 아이템은 미션 정의에 따릅니다.
+
+**8) 애월초 fixture** (`fixtures/aewol/`): 전략 문서 6.2의 7구역 + 피날레를 만듭니다.
+- 「성담의 비밀」 흐름: 학교·애월진성 → 우체국 → 애월항 → 환해장성 → 한담 해안·장한철 → 읍사무소·도서관 → 밭담·오름 → 학교
+- 사실은 모두 `draft`로 넣고 "교사 검수 필요"를 표시합니다. 좌표는 근사값입니다.
+
+**이미지 생성**: 배움 카드 일러스트(§6.6 `place-cards`), 인물·주민 초상(`portraits`), 이야기 장면(`story-scenes`), 구역 이름 카드 틀.
+
+**테스트(필수)**
+- `resolveCampaign` 덮어쓰기 적용 순서
+- `validateCampaignFlow`의 각 실패 조건 5종
+- 미승인 사실만 있는 랜드마크의 미션 미생성
+- `factIds` 없는 사실 문장 제거
+- 같은 분야 3연속 방지
+- 2분 초과 이동 시 경유 미션 삽입
+- 애월 fixture 전체 진행 시 "목표 공백" 0
+
+**완료 기준**: 애월 fixture 캠페인이 자동 생성되고 흐름 검사를 통과합니다. 교사가 순서를 바꾸고 미션 1개를 추가한 뒤 재생성해도 수정이 보존됩니다. 시뮬레이터(`scripts/simulate-campaign.mjs`, 모든 미션을 자동으로 정답 처리하며 진행)로 인트로부터 피날레까지 목표가 끊기지 않음을 확인합니다.
+**커밋**: 구역 나누기, 순서, 템플릿, 문장 생성, 덮어쓰기·흐름 검사, fixture·시뮬레이터를 나눠 커밋합니다.
+
+### R9. 교실 연동과 교사 편집기
+
+**교사 편집기** (모듈 `ui/`, 도구 창 안의 단계형 화면)
+- **스팟 편집**: 지도 클릭 추가와 6분야 선택(R2-5), 역할 지정, 사진 첨부
+- **구역 편집**: 구역 경계 드래그, 합치기·나누기, 핵심 랜드마크 지정
+- **미션 편집**
+  - 캠페인을 세로 목록(구역 순서)과 지도 경로로 함께 보여 줍니다.
+  - 드래그로 순서를 바꿉니다.
+  - 미션을 열면 명령·대사·단서·문제·정답·힌트·연결 문장을 수정할 수 있습니다.
+  - "미션 추가"(템플릿 선택 → 스팟 → 문장)로 중간에 끼워 넣을 수 있습니다.
+  - "자동/선생님" 배지를 표시합니다.
+- **미리 플레이**: 편집 화면에서 특정 미션부터 게임을 열어 확인합니다.
+- **흐름 검사 결과**: 고칠 곳 목록에서 클릭하면 해당 미션으로 이동합니다.
+
+**배정과 수업**
+- **팩 배정**: 교사가 학급에 배정하면 서버가 `toStudentPack` + 해결된 캠페인 + TileMap을 게시합니다(`regionPacksPublished`). 게시 시점의 캠페인 버전을 고정해서, 수업 중 편집이 진행 중인 학생에게 영향을 주지 않게 합니다.
+- **학생 진입**: 학생 홈의 배정 활동 목록에서 시작합니다. 기존 학생 인증을 쓰고, 별도 가입은 없습니다.
+- **수업 통제**: 시작, 모두 멈춤, 모두 학교로 귀환, 구역 열기/닫기, 오늘 시작 미션 지정, 해넘이 시각(기본 시작 후 25분), 힌트 보내기. `regionSessions` 실시간 구독 → iframe `session-update`.
+- **진행 보기**: 학생별 현재 미션, 완료 구역 수, 막힘 여부(3분 무진행)만 보여 줍니다. 실시간 위치는 없습니다.
+- **학급 진행률**: 학급 전체의 완료 구역·분야 카드 합계를 전자칠판용 전체 화면으로 보여 줍니다. 순위표는 기본으로 끕니다.
+- **장소 기록 → 갤러리**, **동네 고치기 → `class-poll` 투표**: 기존 API를 호출하는 방식으로 연결합니다(교사 승인).
 - **포인트 연동**: 교사 설정으로만 켭니다. 기본은 꺼짐입니다.
 
-**완료 기준**: 교사 1명과 학생 계정 3개로 배정 → 동시 플레이 → 멈춤/귀환 → 공동 지도 갱신 → 일기 게시 → 투표 생성까지 동작합니다. 다른 학급 학생은 접근이 거부됩니다(규칙 테스트).
+**완료 기준**
+- 교사가 스팟 1개 추가, 순서 변경, 미션 1개 수정 후 게시합니다.
+- 학생 계정 3개로 동시 플레이 → 멈춤/귀환 → 진행 보기 갱신 → 기록 게시 → 투표 생성까지 동작합니다.
+- 다른 학급 학생은 접근이 거부됩니다(규칙 테스트).
 
 ### R10. 출력·평가
 
-- **내 지도 PDF**: 드러난 길, 완료 장소 기호, 이름 칸(손으로 쓰도록 빈칸 옵션), 방위표, 축척, 출처, 학생 이름(선택).
-- **개인 포트폴리오**: 내 지도, 장소 일기, 능력 획득 기록, 동네 고치기 아이디어.
-- **성취기준 리포트**: `class-report`에 항목 추가(§전략 문서 6.7 매핑). 예: [4사01-01] 장소 일기 작성률, [4사01-02] 아이디어 제출률, 지도 능력 퀴즈 정답률, 방위 힌트 없이 도착한 비율.
-- 성취기준 코드와 문구는 NCIC 원문으로 확인한 뒤 `content/curriculum.ts`에 출처와 함께 둡니다. 원문을 확인하지 못한 항목은 코드 없이 표시합니다.
+- **우리 지역 이야기책 PDF**(학생): 표지(지역 이름, 탐험가 칭호), 구역별 페이지(랜드마크 그림, 배움 카드 문장, 출처, 내 장소 기록), 다녀온 지역 지도, 동네 고치기 아이디어.
+- **교사 출력**: 백지도 L1~L3, 약도 스타일, 미션 목록 인쇄본(수업 준비용).
+- **분야별 리포트**: 기존 `class-report` API에 항목을 추가하는 방식으로 연결합니다. 학생별·학급별로 6분야 카드 수, 분야별 확인 문제 정답률, 완주 구역 수, 장소 기록 작성률([4사01-01]), 아이디어 제출률([4사01-02])을 보여 줍니다.
+- 성취기준 코드와 문구는 NCIC 원문으로 확인한 뒤 `content/curriculum.ts`에 출처와 함께 둡니다. 원문을 확인하지 못한 항목은 코드 없이 분야 이름으로만 표시합니다.
 
 ### R11. QA·출시
 
@@ -394,6 +552,14 @@ type Quest = {id: string; kind: 'story' | 'daily-life' | 'collect' | 'explore' |
 - **개인정보 안내 1장**: 수집 항목(진도, 일기 텍스트, 장면 스냅샷)과 미수집 항목(GPS, 사진, 채팅)을 정리합니다. 교사가 학교에 제출할 수 있는 형태로 만듭니다(전략 문서 P7).
 - **출시 방식**: 처음에는 교사 미리보기 전용 베타로 엽니다(러닝킹과 같은 방식). 학생 배정 기능은 시범 학급 검증 후 플래그로 엽니다.
 - **보고**: 단계마다 *커밋 해시, 푸시 여부, 자동 배포 상태(확인한 시각), 검증한 것, 검증하지 못한 것*을 분리해서 보고합니다.
+
+### R12. (향후) 지역과 지역 연결
+
+이번 범위에서는 **형식과 저장 구조만** 반영하고(§4.6), 기능은 시범 학급 검증 뒤에 엽니다.
+- **관문 스팟**(`role:'gate'`): 버스정류장, 길 끝, 항구, 고개. 열리는 조건은 캠페인 완료 또는 교사 개방입니다.
+- **지역 이동**: 관문에서 "다음 지역으로" 연출 → 대상 팩 로드 → 대상 관문에서 시작합니다.
+- **여권**: `ExplorerProfile.passport`에 지역 완주 도장을 쌓고, 분야 등급은 지역을 넘어 누적합니다.
+- **넓혀 가는 단계**: 학교 주변 → 읍·면·동 → 시·군 → 도. 다른 교사의 팩과 연결하는 것은 공유 정책과 ODbL 검토 후에 합니다.
 
 ---
 
@@ -455,17 +621,21 @@ Reference image 1 is the style bible: match its palette, outline weight and prop
 | `nature` | 4×4 | 16 | 오름(작은 언덕) 2, 바위 3, 해송 2, 동백, 억새, 꽃 2, 갈매기, 물웅덩이, 표지판(글자 없음) 등 | |
 | `player-avatars` | 프레임 시트 | 12캐릭터 × 4방향 × 3프레임 | 기존 12캐릭터 픽셀화 | 캐릭터 1명당 1요청(4×3 셀) |
 | `npcs` | 4×3 프레임 | 10명 | 우체부, 경찰관, 소방관, 주민센터 직원, 사서, 보건소 간호사, 어부, 해녀 할망, 시장 상인, 옛 선비(장한철 상징형) | 4방향 대기 프레임만 |
-| `spirit` | 4×4 | 1세트 | 바람 정령 '지움이' 대기·날기·웃음·놀람 | 세계관 템플릿별로 추가 |
-| `items-icons` | 4×4 | 16 | 나침반, 기호 렌즈, 발걸음 자, 높이 눈, 옛 지도 돋보기, 편지, 잃어버린 물건 3, 지도 조각, 도감 카드, 별, 하트, 물음표, 느낌표, 카메라 | 12×12도 가능 |
+| `spirit` | 4×4 | 1세트 | 안내자 바람 정령 '지움이' 대기·날기·웃음·놀람·가리키기 | 세계관 템플릿별로 추가 |
+| `portraits` | 4×4 | 16 | 대화창 초상(48×48): 안내자, 우체부, 경찰관, 소방관, 주민센터 직원, 사서, 간호사, 어부, 해녀 할망, 상인, 농부, 마을 어르신, 옛 병사, 옛 선비(장한철 상징형), 학생 2 | 인물은 "상상해서 그린 모습" |
+| `category-icons` | 2×3 | 6 | 6분야 아이콘: 문화, 역사, 인물, 관광자원, 삶, 공공기관 | 도감 탭, 카드, 미니맵 공용 |
+| `items-icons` | 4×4 | 16 | 편지, 잃어버린 물건 3, 옛 편지, 표해록 조각, 그물, 귤, 테왁, 구역 도장, 이야기 조각, 배움 카드, 물음표, 느낌표, 카메라, 발자국 | 12×12도 가능 |
+| `help-minigames` | 4×4 | 16 | 체험 6종 소품: 정낭 기둥, 편지 묶음, 그물 매듭, 귤 바구니, 민원 서류(글자 없음), 망원경 등 | R8 `help` 단계 |
 | `map-symbols` | 4×4 | 16 | 학교, 관공서, 우체국, 경찰, 소방, 도서관, 병원, 문화유산, 관광지, 항구, 시장, 산, 공원, 버스, 다리, 화장실 | 교과서식 단순 지도 기호, R4 symbols 스타일과 공유 |
 | `ui-kit` | 9-slice | 1세트 | 대화창, 목표판, 버튼 3상태, 미니맵 프레임, 해넘이 하늘 그라데이션 띠(팔레트 단계), 진행 막대 | |
-| `fx` | 4×4 | 16 | 안개 경계 4비트, 발자국, 반짝임 3프레임, 지도 복원 물감 번짐 4프레임 | |
-| `place-cards` | 일러스트 | 장소 종류 16 + 애월 특별 6 | 도감 카드 그림(픽셀 64×64) | 장소 종류별 공용 + 시범 지역 특별 |
-| `oldmap-pieces` | 2×2 | 4 | 옛 지도 조각(합치면 1장) | 옛 지도 레이어 텍스처 포함 |
+| `fx` | 4×4 | 16 | 안개 경계 4비트, 안개 걷힘 4프레임, 발자국, 반짝임 3프레임, 카드 획득 빛 3프레임, 도장 찍기 2프레임 | |
+| `zone-title` | 9-slice + 장식 | 1세트 | 구역 이름 카드 틀, 6분야별 색 띠 | 글자는 런타임에서 렌더링 |
+| `place-cards` | 일러스트 | 6분야 × 공용 3 + 애월 특별 8 | 배움 카드 그림(픽셀 64×64) | 분야 공용 그림 + 시범 지역 특별 |
+| `story-scenes` | 일러스트 | 애월 4 | 이야기 조각을 모으면 열리는 장면(픽셀 160×90): 옛 애월진성, 옛 포구, 표류하는 배, 오늘의 애월 | 지역별 추가 |
 | `picture-icons` | 4×4 | 16 | R4 그림지도용 수채·크레용풍 아이콘(픽셀 아님) | 별도 머리말: watercolor crayon children's map icon style |
 | `paper-textures` | – | 2 | 그림지도 종이, 옛 지도 종이 | 무늬 반복 가능(tileable) |
 
-**대략적인 생성 횟수**: 아틀라스 약 40요청 + 재생성 여유 30% → **약 50~60요청**입니다. 지역 타일셋을 추가할 때는 1세트에 약 3~4요청이 듭니다.
+**대략적인 생성 횟수**: 아틀라스·일러스트 약 55요청 + 재생성 여유 30% → **약 70~75요청**입니다. 지역 타일셋을 추가할 때는 1세트에 약 3~4요청이 듭니다.
 
 ### 6.7 프롬프트 예시
 
@@ -529,7 +699,7 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
 
 ## 8. 사용자 결정이 필요한 항목 (작업 시작 전 확인)
 1. 공공데이터포털·TourAPI·국토지리정보원 키 발급 여부(키 발급은 사용자가 직접 진행)
-2. 이미지 생성 사용량·비용 한도(약 50~60요청 + 지역 추가분)
+2. 이미지 생성 사용량·비용 한도(약 70~75요청 + 지역 추가분)
 3. 첫 공개 범위: 교사 미리보기 베타만 할지, 시범 학급(애월초)까지 할지
 4. 포인트 보상 연동 여부(기본 꺼짐 제안)
 5. 교사 간 지역 팩 공유(ODbL 공유 의무 검토 필요): 이번 범위에서 제외할지
@@ -538,12 +708,13 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
 
 ## 9. 최종 완료 정의
 - 교사가 애월초를 검색해 10분 안에 팩을 검수하고, 백지도 L1~L3 PDF를 출력합니다.
+- 교사가 수동 스팟을 6분야 중 하나로 추가하고, 자동 생성된 캠페인의 순서와 미션 1개를 수정해 게시합니다(흐름 검사 통과).
 - 같은 팩으로 학생 3명이 동시에 게임을 진행합니다.
-  - 안개가 걷히며 지도가 복원됩니다.
-  - 「성담의 비밀」 체인을 완주할 수 있습니다.
-  - 해넘이로 수업이 정리됩니다.
-  - 내 지도 PDF와 장소 일기가 남습니다.
-  - 학급 리포트에 성취기준별 근거가 표시됩니다.
+  - 이동 명령 → 구역 진입(안개 걷힘) → 랜드마크 조사 → 배움 카드 → 다음 명령이 **목표 공백 없이** 이어집니다.
+  - 애월 7구역 캠페인을 인트로부터 피날레까지 완주할 수 있습니다.
+  - 해넘이로 수업이 정리되고, 다음 시간에 같은 단계에서 이어집니다.
+  - 우리 지역 이야기책 PDF와 장소 기록이 남습니다.
+  - 학급 리포트에 6분야별 근거가 표시됩니다.
 - 미승인 사실은 학생 화면과 학생 API 어디에도 나오지 않습니다.
 - 모든 출력물에 출처와 기준일이 표시됩니다.
 - `npm test`, `npm run typecheck`, `npm run build`가 통과하고, 기능별로 커밋·푸시하며, 자동 배포 상태를 확인해서 보고합니다.
