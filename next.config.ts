@@ -6,6 +6,7 @@ const config: NextConfig = {
   outputFileTracingIncludes: {
     '/api/artbooks/**/*': ['./src/modules/digital-artbook/assets/*.ttf'],
     '/api/learning-king-beta': ['./src/modules/learning-king/demo/**/*'],
+    '/api/region-quest/beta': ['./src/modules/region-quest/continuous/**/*', './src/modules/region-quest/prototype/assets/player.png', './src/modules/region-quest/prototype/assets/guide.png'],
   },
   // jwks-rsa loads ESM-only jose from CommonJS. Bundle this chain so serverless
   // runtimes with require(ESM) disabled can load Firebase Auth without downgrades.
