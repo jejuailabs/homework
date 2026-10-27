@@ -103,7 +103,7 @@ test('weekly ranks share ties without mutating inputs and empty scores share no 
   const first = emptyScore(), second = emptyScore(); first.days.push('2026-10-27'); assert.deepEqual(second.days,[]);
 });
 test('initial bank has unique permanent IDs and prompts, one correct choice, explanations and playable grade pools', () => {
-  assert.equal(playBank.length,210);
+  assert.equal(playBank.length,660);
   assert.equal(new Set(playBank.map(row => row.id)).size,playBank.length);
   assert.equal(new Set(playBank.map(row => row.prompt)).size,playBank.length);
   for (const row of playBank) {
