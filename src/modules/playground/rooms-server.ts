@@ -68,7 +68,7 @@ async function createRoom(ctx: Context, data: Data) {
       let items = (await loadItems(classId, student?.gradeBand || gradeBand(cls.data()?.grade),tx)).filter(item=>kinds.includes(item.kind)&&item.choices&&item.choices.length>=2);
       if (ctx.role === 'student' && data.itemIds !== undefined) throw new ApiError(400,'학생 방은 서버가 문제를 골라요.');
       if (Array.isArray(data.itemIds) && data.itemIds.length) {const selected = new Set(data.itemIds);items=items.filter(item=>selected.has(item.id));}
-      if (data.range === 'week') {const list=await tx.get(cls.ref.collection('playgroundLists').doc(weekStart(playDate())));const selected=new Set(list.data()?.itemIds||[]);items=items.filter(item=>item.kind==='spelling'&&selected.has(item.id));}
+      if (data.range === 'week') {const list=await tx.get(cls.ref.collection('playgroundLists').doc(weekStart(playDate())));const selected=new Set(list.data()?.itemIds||[]);items=items.filter(item=>selected.has(item.id));}
       if (data.range === 'mistakes') {const pupils=await tx.get(cls.ref.collection('students')),counts=new Map<string,number>();for(const pupil of pupils.docs.filter(row=>!row.data().disabled)){const skills=await tx.get(pupil.ref.collection('playgroundYears').doc(String(schoolYear(playDate()))).collection('spelling'));for(const skill of skills.docs)counts.set(skill.id,(counts.get(skill.id)||0)+Number(skill.data().errors||0));}const top=new Set([...counts].filter(([,count])=>count>0).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([key])=>key));items=items.filter(item=>item.kind==='spelling'&&top.has(item.id));}
       if (items.length<rounds) throw new ApiError(409, `선택한 범위에 보기 문제가 ${rounds}개 이상 있어야 해요.`);
       items.sort((a,b)=>digest(`${ref.id}:${a.id}`).localeCompare(digest(`${ref.id}:${b.id}`)));
