@@ -1,6 +1,10 @@
 import ts from 'typescript';import{readFileSync}from'node:fs';
 const compile=p=>ts.transpileModule(readFileSync(new URL(p,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText,url=s=>'data:text/javascript;base64,'+Buffer.from(s).toString('base64');
-const chars=url(compile('../../lib/characters.ts')),catalog=url(compile('./catalog.ts').replace("'@/lib/characters'",JSON.stringify(chars))),policy=url(compile('./policy.ts').replace("'./catalog'",JSON.stringify(catalog)));
+const diaryStickers=url(compile('./diary-stickers.ts'));
+const chars=url(compile('../../lib/characters.ts')),catalog=url(compile('./catalog.ts').replace("'./diary-stickers'",JSON.stringify(diaryStickers)).replace("'@/lib/characters'",JSON.stringify(chars))),policy=url(compile('./policy.ts').replace("'./catalog'",JSON.stringify(catalog)));
 await import(url(compile('./policy.test.ts').replace("'./catalog'",JSON.stringify(catalog)).replace("'./policy'",JSON.stringify(policy))));
 const assets=url(compile('./attachment-assets.ts')),rig=url(compile('./attachment-rig.ts').replace("'./attachment-assets'",JSON.stringify(assets))),appearance=url(compile('./appearance.ts').replace("'@/lib/characters'",JSON.stringify(chars)).replace("'./attachment-assets'",JSON.stringify(assets)).replace("'./attachment-rig'",JSON.stringify(rig))),points=url(compile('../../lib/points-types.ts'));
 await import(url(compile('./appearance.test.ts').replace("'@/lib/characters'",JSON.stringify(chars)).replace("'@/lib/points-types'",JSON.stringify(points)).replace("'./catalog'",JSON.stringify(catalog)).replace("'./policy'",JSON.stringify(policy)).replace("'./appearance'",JSON.stringify(appearance)).replace("'./attachment-rig'",JSON.stringify(rig)).replace("'./attachment-assets'",JSON.stringify(assets))));
+
+const diaryCalendar=url(compile('./diary-calendar.ts'));
+await import(url(compile('./diary-policy.test.ts').replace("'./catalog'",JSON.stringify(catalog)).replace("'./policy'",JSON.stringify(policy)).replace("'./diary-calendar'",JSON.stringify(diaryCalendar))));
