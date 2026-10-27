@@ -12,6 +12,18 @@ import './styles.css';
 const ExhibitionWorld = dynamic(() => import('@/components/exhibition-world'), {ssr: false});
 const artworkKey = (work: PersonalArtwork) => `${work.exhibitionId}:${work.id}`;
 
+/** Where and when the work was shown, from the exhibition's own snapshot. */
+function exhibitionRecord(work: PersonalArtwork, en: boolean) {
+  const grade = work.exhibitionGrade && work.exhibitionGrade !== work.exhibitionClassName ? work.exhibitionGrade : '';
+  const gradeText = /^\d+$/.test(grade) ? (en ? `Grade ${grade}` : `${grade}학년`) : grade;
+  const shown = work.status === 'approved';
+  return {
+    place: [gradeText, work.exhibitionClassName].filter(Boolean).join(' '),
+    year: work.exhibitionYear ? (en ? `${work.exhibitionYear} school year` : `${work.exhibitionYear}학년도`) : '',
+    dateLabel: shown ? (en ? 'Exhibited' : '전시된 날짜') : (en ? 'Uploaded' : '올린 날짜'),
+  };
+}
+
 function ArtworkPicture({work, full = false}: {work: PersonalArtwork; full?: boolean}) {
   const t = useTranslations('exhibition'), [failed, setFailed] = useState(false);
   const url = full ? work.url : work.thumbnailUrl || work.url;
@@ -19,9 +31,18 @@ function ArtworkPicture({work, full = false}: {work: PersonalArtwork; full?: boo
   return failed || !url ? <span className="pe-image-fallback"><Images size={30}/>{t('fileUnavailable')}</span> : <img src={url} alt={work.title} loading={full ? 'eager' : 'lazy'} onError={() => setFailed(true)}/>;
 }
 
+function CardRecord({work, en}: {work: PersonalArtwork; en: boolean}) {
+  const record = exhibitionRecord(work, en);
+  return <dl className="pe-card-record">
+    <div><dt>{en ? 'Theme' : '전시 주제'}</dt><dd>{work.exhibitionTitle}</dd></div>
+    {record.place && <div><dt>{en ? 'Class' : '학년·반'}</dt><dd>{record.place}{record.year && ` · ${record.year}`}</dd></div>}
+    <div><dt>{record.dateLabel}</dt><dd><time dateTime={work.exhibitedOn}>{work.exhibitedOn}</time></dd></div>
+  </dl>;
+}
+
 function ArtworkDialog({work, onClose}: {work: PersonalArtwork; onClose: () => void}) {
   const t = useTranslations('exhibition'), en = useLocale().startsWith('en');
-  const dialog = useRef<HTMLDialogElement>(null), titleId = useId();
+  const dialog = useRef<HTMLDialogElement>(null), titleId = useId(), record = exhibitionRecord(work, en);
   useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null, node = dialog.current;
     node?.showModal();
@@ -29,7 +50,13 @@ function ArtworkDialog({work, onClose}: {work: PersonalArtwork; onClose: () => v
   }, []);
   return <dialog ref={dialog} className="ex-dialog ex-dialog-wide pe-dialog" aria-labelledby={titleId} onCancel={event => {event.preventDefault(); onClose();}}>
     <header className="ex-dialog-head"><h2 id={titleId}>{work.title}</h2><button type="button" className="ex-icon-btn" aria-label={t('close')} onClick={onClose}><X size={21}/></button></header>
-    <div className="pe-detail"><ArtworkPicture work={work} full/><div className="pe-detail-meta"><strong>{work.artistName || work.studentName}</strong><time dateTime={work.artworkDate}>{work.artworkDate}</time><span className={`ex-status ex-status-${work.status}`}>{t(work.status)}</span></div>
+    <div className="pe-detail"><ArtworkPicture work={work} full/><div className="pe-detail-meta"><strong>{work.artistName || work.studentName}</strong><span className={`ex-status ex-status-${work.status}`}>{t(work.status)}</span></div>
+      <dl className="pe-record">
+        <div><dt>{en ? 'Exhibition theme' : '전시 주제'}</dt><dd>{work.exhibitionTitle}{work.exhibitionDescription && <small>{work.exhibitionDescription}</small>}</dd></div>
+        {record.place && <div><dt>{en ? 'Class' : '학년·반'}</dt><dd>{record.place}{record.year && <small>{record.year}</small>}</dd></div>}
+        <div><dt>{record.dateLabel}</dt><dd><time dateTime={work.exhibitedOn}>{work.exhibitedOn}</time></dd></div>
+        {work.artworkDate && <div><dt>{en ? 'Made on' : '그린 날짜'}</dt><dd><time dateTime={work.artworkDate}>{work.artworkDate}</time></dd></div>}
+      </dl>
       {work.description && <p>{work.description}</p>}{work.feedback && <section className="ex-feedback"><h3>{t('teacherFeedback')}</h3><p>{work.feedback}</p></section>}
       <Link className="ex-button" href={`/student/exhibitions?exhibition=${encodeURIComponent(work.exhibitionId)}`}>{en ? 'From' : '작품이 있는 전시'} · {work.exhibitionTitle}<ArrowRight size={16}/></Link>
     </div>
@@ -76,7 +103,7 @@ export default function PersonalExhibitionWorkspace() {
     {loading && !data ? <div className="ex-loading" role="status"><LoaderCircle size={24} className="spin"/><p>{t('loading')}</p></div> : data && <>
       {view === 'room' && <ExhibitionWorld stage="gallery" buildings={[]} rooms={[]} artworks={worldArtworks} roomTitle={title} buildingName={data.student.className} locale={en ? 'en' : 'ko'} paused={!!current} onEnterBuilding={() => {}} onEnterRoom={() => {}} onSelectArtwork={setSelected} onExit={() => router.push('/student')}/>}
       {!data.artworks.length && <section className="pe-empty"><Images size={35}/><h2>{data.hasMore ? (en ? 'There are earlier exhibitions to explore' : '이전 전시의 작품도 찾아볼까요?') : (en ? 'Your gallery is ready' : '나만의 전시실이 준비됐어요')}</h2><p>{data.hasMore ? (en ? 'Load more to find your works from earlier class exhibitions.' : '내 작품 더 불러오기를 누르면 이전 학급 전시의 작품도 찾아와요.') : (en ? 'Works you upload or your teacher links to you will appear here when their exhibition opens.' : '내가 올리거나 선생님이 연결한 작품은 학급 전시가 열리면 여기에 함께 모여요.')}</p><Link className="ex-button" href="/student/exhibitions">{en ? 'Visit class exhibitions' : '우리 반 전시실 보기'}<ArrowRight size={16}/></Link></section>}
-      {view === 'grid' && !!data.artworks.length && <div className="pe-grid">{data.artworks.map(work => <button type="button" key={artworkKey(work)} className="pe-artwork" onClick={() => setSelected(artworkKey(work))}><div className="pe-artwork-image"><ArtworkPicture work={work}/></div><div className="pe-artwork-caption"><strong>{work.title}</strong><span>{work.exhibitionTitle}</span><time dateTime={work.artworkDate}>{work.artworkDate}</time>{work.status !== 'approved' && <small className={`ex-status ex-status-${work.status}`}>{t(work.status)}</small>}</div></button>)}</div>}
+      {view === 'grid' && !!data.artworks.length && <div className="pe-grid">{data.artworks.map(work => <button type="button" key={artworkKey(work)} className="pe-artwork" onClick={() => setSelected(artworkKey(work))}><div className="pe-artwork-image"><ArtworkPicture work={work}/></div><div className="pe-artwork-caption"><strong>{work.title}</strong><CardRecord work={work} en={en}/>{work.status !== 'approved' && <small className={`ex-status ex-status-${work.status}`}>{t(work.status)}</small>}</div></button>)}</div>}
       {data.hasMore && <div className="ex-more-rooms"><button type="button" className="ex-button" disabled={loading} onClick={() => void load(data.nextCursor)}>{loading && <LoaderCircle className="spin" size={17}/>} {en ? 'Load more of my works' : '내 작품 더 불러오기'}</button></div>}
     </>}
     {current && <ArtworkDialog key={artworkKey(current)} work={current} onClose={() => setSelected(null)}/>}
