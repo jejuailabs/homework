@@ -1,0 +1,34 @@
+{
+  "generatedOn": "2026-10-27",
+  "provider": "Codex built-in image generation",
+  "purpose": "Local toy-town 2D prototype; fictional map, not Aewol geography.",
+  "reference": "User-selected toy-town concept (local ignored concept source)",
+  "assets": [
+    {
+      "id": "village",
+      "transparent_background": false,
+      "prompt": "Use case: stylized-concept. Production game asset: a CLEAN EMPTY PLAYABLE BACKGROUND for a fixed-camera 2D toy-town prototype. Use supplied image ONLY as style reference for matte pastel toy materials. REMOVE ALL people, animals, UI, text, panels, labels, logos. Output landscape 1600x1000 aspect ratio 8:5, a fixed high 3/4 overhead view with NO blur anywhere. A friendly miniature seaside village in aqua/lavender/butter yellow/peach, softly chamfered toy shapes and baked soft shadows.\nCRITICAL COMPOSITION for gameplay: ALL buildings and large obstacles in the UPPER 45% of image. Small cream school with mint roof and open door at x25% y35%; small peach post office with blue roof at x55% y35%; yellow bus shelter at x82% y38%; turquoise sea and white tiny boat behind them at extreme top right. School and post office doors face the foreground. The LOWER 50% is a large WIDE EMPTY continuous softly tiled plaza, broad enough to walk in every direction, small tiles, very subtle square tile pattern. Empty plaza from x8%-92%, y48%-88%. No obstacles/flower beds/fountain in the central plaza. Small round trees, flower pots and low grass only along extreme outer borders. Soft scalloped grass edge along bottom 8%. A little low mint bench at far left edge (x4%,y60%) and a red toy mailbox near far right edge (x94%,y65%). No foreground objects covering walkable plaza. Maintain a fixed world scale, buildings around 3x player-height even though no player is drawn. Crisp modular forms, clear door thresholds, warm daylight, no atmospheric blur. Do not retain the reference's UI or characters. This image will be used directly as the static backdrop with animated separate sprites."
+    },
+    {
+      "id": "player",
+      "transparent_background": true,
+      "prompt": "Use case: stylized-concept. Production game SPRITE SHEET with true transparent background. Reference image is STYLE AND CHARACTER REFERENCE ONLY: reproduce its adorable LAVENDER RABBIT-HOOD child explorer, round toy head, bead black eyes, peach cheeks, lavender bunny hood with two long upright ears, small cream drawstrings, matching lilac outfit, white rounded shoes, small pale lavender backpack. Same identity, proportions and size in every frame. Matte clay/plastic toy 3D-looking shading, no dark outlines. Fixed elevated camera looking down about 20 degrees, orthographic, key light upper left.\nEXACT LAYOUT: 3 equal columns by 4 equal rows, 12 separate full-body figures total. Portrait sprite-sheet canvas. Equal cells; generous transparent padding inside each cell, nothing touching another cell. Each figure perfectly centered with feet on same baseline relative to its cell. No captions, no labels, no grid lines, no decorations, no background, no cast ground shadow.\nROW 1 = FRONT FACING CAMERA (down movement): column1 idle feet together, column2 walking left foot forward, column3 walking right foot forward.\nROW 2 = PROFILE FACING IMAGE LEFT: column1 idle, column2 walking one foot forward, column3 opposite foot forward.\nROW 3 = PROFILE FACING IMAGE RIGHT: column1 idle, column2 walking one foot forward, column3 opposite foot forward.\nROW 4 = BACK FACING AWAY (up movement): column1 idle, column2 walking one foot forward, column3 opposite foot forward. BACK ROW MUST SHOW BACK OF HOOD and small backpack, NO FACE/EYES.\nUse tiny charming steps and gentle arm swings, matching shoulder/head size across every frame. Two rounded ears and hood NEVER change shape. Every frame same zoom. Not a scene, not a collage, not a concept board: only the 12 animation sprites with clean alpha."
+    },
+    {
+      "id": "guide",
+      "transparent_background": true,
+      "prompt": "Use case: stylized-concept. Production character asset on true transparent background. Using reference image ONLY for toy-world style, make one single exceptionally adorable friendly village post worker full body facing toward camera slightly to left, matte soft toy 3D appearance. Huge round head, tiny round nose, black bead eyes, rosy peach cheeks, warm smile, teal-blue short-brim cap, pastel cream short-sleeve shirt, blue overalls, tiny brown mail satchel, round brown shoes. He holds one cream envelope with a lavender circular sticker (no text or logo). Fixed orthographic slightly elevated game camera, soft light from upper left, no outline, no ground shadow. One figure centered, complete feet visible, roomy padding, no duplicate figures, no background, no UI. Match proportions and gentle pastel materials of the lavender bunny hood character in reference. Friendly and safe for children."
+    }
+  ],
+  "cleanup": {
+    "asset": "player",
+    "transparent_background": true,
+    "prompt": "Edit this sprite sheet ONLY to clean its transparency for actual game use. Keep all 12 lavender bunny-hood character sprites, positions, exact 3-column x 4-row arrangement, directions, outfits, faces and poses unchanged. Remove EVERY purple/gray gradient, background glow, haze, floor, cast shadow and color cloud between and behind the figures. All space outside the actual solid character silhouettes must be completely transparent alpha=0, including between legs and ears. Preserve smooth antialiased character silhouette edges and all character colors. Do not draw checkerboard or any colored background. Do not crop, rearrange, merge, add or delete sprites. Production sprite atlas cleanup, not a redesign."
+  },
+  "processing": "prepare-prototype-assets.mjs crops alpha-connected sprite silhouettes and packs common-scale frames at foot anchor (80,192); resizes background and NPC. No 3D model.",
+  "outputs": {
+    "village": "village.webp",
+    "player": "player.png",
+    "guide": "guide.png"
+  }
+}

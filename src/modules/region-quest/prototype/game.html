@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>바람마을 · 첫 번째 산책</title><style>__STYLE__</style></head>
+<body>
+<main id="game" aria-label="장난감 마을 탐험">
+  <canvas id="world" tabindex="0" aria-label="마을. 방향키 또는 WASD로 이동하고 E 키로 대화하세요."></canvas>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">✿</span><div><small>REGION QUEST · PLAY TEST</small><h1>바람마을의 작은 심부름</h1></div></div>
+    <button id="help" class="icon-button" aria-label="조작 방법">?</button>
+  </header>
+  <section class="quest" aria-label="현재 미션">
+    <div class="quest-top"><span id="quest-step">첫 번째 이야기</span><span id="progress-label">1 / 4</span></div>
+    <h2 id="quest-title">우체부 모모를 만나 봐요</h2><p id="quest-description">파란 모자를 쓴 모모에게 다가가세요.</p>
+    <div class="quest-bottom"><div class="progress-track"><i id="progress-fill"></i></div><button id="guide-button">길 안내 <span>↗</span></button></div>
+  </section>
+  <button id="minimap-button" class="minimap" aria-label="마을 지도 열기"><canvas id="minimap" width="240" height="150"></canvas><span>바람마을 <b>⌖</b></span></button>
+  <div class="local-note">조작을 시험하는 가상 마을 · 실제 애월 지도는 다음 단계</div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <button id="interact" class="interact" hidden><span class="key">E</span><span id="interact-label">모모와 이야기하기</span></button>
+  <div class="dpad" aria-label="화면 방향키"><button data-direction="up" aria-label="위로 이동">↑</button><button data-direction="left" aria-label="왼쪽으로 이동">←</button><button data-direction="down" aria-label="아래로 이동">↓</button><button data-direction="right" aria-label="오른쪽으로 이동">→</button></div>
+  <nav class="dock" aria-label="탐험 도구"><button id="character-button"><span>♧</span>캐릭터 보기</button><button id="book-button"><span>▤</span>이야기 카드 <b id="card-count">0</b></button><button id="home-button"><span>⌂</span><span id="home-label">학교로</span></button></nav>
+  <div class="footnote"><span id="save-status">이어하기 준비 중</span><span>방향키 / WASD · 클릭 이동 · E 대화</span></div>
+  <div id="loading"><div class="loading-bunny">♧</div><h2>작은 마을을 준비하고 있어요</h2><p>이 화면은 2D 이미지로 움직입니다.</p></div>
+</main>
+<dialog id="conversation" aria-labelledby="dialogue-name"><div class="dialogue-inner"><div class="portrait-wrap"><img id="portrait" alt="우체부 모모"></div><div class="speech"><div class="speaker-row"><span id="dialogue-name">우체부 모모</span><button id="close-dialogue" aria-label="대화 닫기">×</button></div><p id="dialogue-text"></p><div id="choices"></div></div></div></dialog>
+<dialog id="panel" aria-labelledby="panel-title"><header><div><small>바람마을 탐험 수첩</small><h2 id="panel-title"></h2></div><button id="close-panel" aria-label="닫기">×</button></header><div id="panel-content"></div></dialog>
+<script>globalThis.RQ_ASSETS=__ASSETS__;</script><script>__MODEL__</script><script>__GAME__</script>
+</body></html>
