@@ -10,3 +10,6 @@ const personality=url(compile('./personality.ts').replace("'./new-pets'",JSON.st
 await import(url(compile('./new-pets.test.ts').replace("'./new-pets'",JSON.stringify(newPets)).replace("'./catalog'",JSON.stringify(catalog)).replace("'./policy'",JSON.stringify(policy)).replace("'./appearance'",JSON.stringify(appearance)).replace("'./personality'",JSON.stringify(personality))));
 
 await import(url(compile('./junior-wardrobe.test.ts').replace("'./new-pets'",JSON.stringify(newPets)).replace("'./junior-assets'",JSON.stringify(juniorAssets)).replace("'./junior-wardrobe'",JSON.stringify(juniorWardrobe)).replace("'@/lib/points-types'",JSON.stringify(points)).replace("'./appearance'",JSON.stringify(appearance)).replace("'./catalog'",JSON.stringify(catalog)).replace("'./policy'",JSON.stringify(policy))));
+
+const groups=url(compile('./wardrobe-groups.ts').replace("'./catalog'",JSON.stringify(catalog)).replace("'./new-pets'",JSON.stringify(newPets)));
+await import(url(compile('./wardrobe-groups.test.ts').replace("'./wardrobe-groups'",JSON.stringify(groups))));
