@@ -69,3 +69,8 @@ await import('../../modules/teacher-notebook/run-tests.mjs');
 const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
 await import(moduleUrl(compile('../admin-console-policy.test.ts').replace("'./admin-console-policy'",JSON.stringify(adminConsolePolicyUrl))));
 await import('../../modules/learning-king/run-tests.mjs');
+
+// Secret diary suites use memory substitutes, with no external service calls.
+await import('../../modules/my-space/run-diary-server-tests.mjs');
+await import('../../modules/my-space/run-diary-export-tests.mjs');
+await import('../../modules/my-space/run-diary-editor-tests.mjs');

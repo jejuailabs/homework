@@ -1,100 +1,99 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ImagePlus, Plus, Trash2, Type } from 'lucide-react';
-import { spaceCatalog, type DiaryPage, type DiaryLayer } from './catalog';
-import { spaceRequest } from './client';
-import Scene, { ItemArt } from './scene';
-import { useDraft } from './use-draft';
-import { preparePhoto } from './photo';
-import { SaveStatus, LayerTools } from './editor-tools';
-type Photo = {
-    id: string;
-    url: string;
-    status?: string;
-};
-type Work = {
-    id: string;
-    title: string;
-    url: string;
-};
-function DiaryEditor({ page, owned, enabled, onSaved, onBack }: {
-    page: DiaryPage;
-    owned: string[];
-    enabled: boolean;
-    onSaved: (page: DiaryPage) => void;
-    onBack: () => void;
-}) {
-    const editor = useDraft(page, async (value) => { const r = await spaceRequest<{
-        page: DiaryPage;
-    }>('/diary/' + page.id, 'PUT', value); onSaved(r.page); return r.page; }, enabled), [selected, setSelected] = useState(''), [photos, setPhotos] = useState<Photo[]>([]), [works, setWorks] = useState<Work[]>([]), [artCursor, setArtCursor] = useState(''), [error, setError] = useState(''), [uploading, setUploading] = useState(false), input = useRef<HTMLInputElement>(null), d = editor.draft;
-    async function loadPhotos() { setPhotos((await spaceRequest<{
-        photos: Photo[];
-    }>('/images')).photos); }
-    async function loadArt(cursor = '') { const value = await spaceRequest<{
-        works: Work[];
-        cursor: string;
-    }>('/art?cursor=' + encodeURIComponent(cursor)); setWorks(old => cursor ? [...old, ...value.works] : value.works); setArtCursor(value.cursor); }
-    useEffect(() => { void Promise.all([loadPhotos(), loadArt()]).catch(e => setError(e.message)); }, []);
-    function add(kind: DiaryLayer['kind'], itemId = '', assetId = '') { if (!enabled || d.layers.length >= 50)
-        return; const id = crypto.randomUUID(), n = d.layers.filter(l => l.kind === kind).length % 3, anchor = kind === 'text' ? [50, 18] : kind === 'sticker' ? [80, 30] : kind === 'photo' ? [32, 48] : [68, 73]; editor.edit({ ...d, layers: [...d.layers, { id, kind, itemId, x: anchor[0] - n * 4, y: anchor[1] + n * 4, size: kind === 'text' ? 60 : kind === 'sticker' ? 18 : 40, rotation: 0, flip: false, ...(kind === 'text' ? { text: '오늘 나의 작은 발견', color: '#355147' } : {}), ...(['photo', 'art'].includes(kind) ? { assetId } : {}) }] }); setSelected(id); }
-    async function upload(file: File) { if (uploading)
-        return; setUploading(true); setError(''); try {
-        const prepared = await preparePhoto(file);
-        const r = await fetch('/api/my-space/images/' + crypto.randomUUID(), { method: 'POST', headers: { 'Content-Type': prepared.type }, body: prepared });
-        const data = await r.json();
-        if (!r.ok)
-            throw new Error(data.error);
-        await loadPhotos();
-        add('photo', '', data.id);
-    }
-    catch (e) {
-        setError((e as Error).message);
-    }
-    finally {
-        setUploading(false);
-        void loadPhotos().catch(() => { });
-    } }
-    const active = d.layers.find(l => l.id === selected);
-    return <><div className="ms-actions"><button disabled={editor.saving || uploading} onClick={() => void (async () => { if (await editor.flush())
-        onBack(); })()}><ArrowLeft size={15}/>노트 목록</button><span className="ms-private">나만 보는 비밀 노트</span></div><SaveStatus editor={editor} onReload={() => { if (confirm('저장하지 않은 내용을 내려놓고 다시 불러올까요?')) {
-        editor.discard();
-        location.reload();
-    } }}/><fieldset className="ms-diary-meta" disabled={!enabled}><label>제목<input maxLength={60} value={d.title} onChange={e => editor.edit({ ...d, title: e.target.value })}/></label><label>날짜<input type="date" value={d.date} onChange={e => editor.edit({ ...d, date: e.target.value })}/></label><label>노트 종이<select aria-label="노트 종이" value={d.paper} onChange={e => editor.edit({ ...d, paper: e.target.value })}>{spaceCatalog.filter(i => i.kind === 'paper' && owned.includes(i.id)).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</select></label></fieldset><div className="ms-room-layout"><div><Scene onGestureStart={editor.begin} onGestureEnd={editor.end} diary paper={d.paper} layers={d.layers} selected={selected} onSelect={setSelected} onChange={layers => editor.edit({ ...d, layers })} disabled={!enabled}/><LayerTools layers={d.layers} selected={selected} onChange={layers => editor.edit({ ...d, layers })} disabled={!enabled}/>{active?.kind === 'text' && <label>선택한 글 조각<textarea aria-label="선택한 글 조각" value={active.text} maxLength={300} rows={3} disabled={!enabled} onChange={e => editor.edit({ ...d, layers: d.layers.map(l => l.id === active.id ? { ...l, text: e.target.value } : l) })}/><input type="color" value={active.color || '#355147'} disabled={!enabled} onChange={e => editor.edit({ ...d, layers: d.layers.map(l => l.id === active.id ? { ...l, color: e.target.value } : l) })} aria-label="글자 색"/></label>}</div><aside className="ms-inventory"><h2>오늘의 조각 붙이기</h2><div className="ms-actions"><button disabled={!enabled} onClick={() => add('text')}><Type size={16}/>글 쓰기</button><button disabled={!enabled || uploading} onClick={() => input.current?.click()}><ImagePlus size={16}/>{uploading ? '사진 보관 중…' : '사진 올리기'}</button><input ref={input} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e => { const f = e.target.files?.[0]; if (f)
-        void upload(f); e.target.value = ''; }}/></div><p className="ms-hint">사진은 JPG·PNG·WebP, 8MB까지. 내 사진 40장까지 보관해요.</p><div className="ms-tiles ms-sticker-tray">{spaceCatalog.filter(i => i.kind === 'sticker' && owned.includes(i.id)).map(i => <button key={i.id} disabled={!enabled} aria-label={i.name + ' 붙이기'} onClick={() => add('sticker', i.id)}><ItemArt id={i.id}/><span>{i.name}</span></button>)}</div><h3>내 사진 상자</h3><div className="ms-photo-tray">{photos.map(p => <div key={p.id}><button disabled={!enabled || p.status !== 'ready'} onClick={() => add('photo', '', p.id)} aria-label="내 사진 붙이기">{p.url ? <img src={p.url} alt="내 사진"/> : <span>미완료 사진</span>}</button><button disabled={!enabled} aria-label="사진 보관함에서 삭제" onClick={() => void (async () => { try {
-        await spaceRequest('/images/' + p.id, 'DELETE');
-        await loadPhotos();
-    }
-    catch (e) {
-        setError((e as Error).message);
-    } })()}><Trash2 size={13}/></button></div>)}</div><h3>내 전시 작품</h3><div className="ms-tiles">{works.map(w => <button key={w.id} disabled={!enabled} onClick={() => add('art', '', w.id)}><img src={w.url} alt=""/><span>{w.title}</span></button>)}</div>{artCursor && <button onClick={() => void loadArt(artCursor).catch(e => setError(e.message))}>작품 더 보기</button>}<p className="ms-hint">스티커는 여러 번 붙여도 보말이 들지 않아요. 노트당 50조각까지 꾸밀 수 있어요.</p></aside></div>{error && <p className="ms-error" role="alert">{error}</p>}</>;
-}
-export default function Diary({ owned, enabled }: {
-    owned: string[];
-    enabled: boolean;
-}) {
-    const [pages, setPages] = useState<DiaryPage[]>([]), [cursor, setCursor] = useState(''), [selected, setSelected] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-    async function load(cursor = '') { const r = await spaceRequest<{
-        pages: DiaryPage[];
-        cursor: string;
-    }>('/diary?cursor=' + encodeURIComponent(cursor)); setPages(old => cursor ? [...old, ...r.pages] : r.pages); setCursor(r.cursor); }
-    useEffect(() => { void load().catch(e => setError(e.message)); }, []);
-    async function create() { if (busy)
-        return; setBusy(true); setError(''); try {
-        const id = crypto.randomUUID(), r = await spaceRequest<{
-            page: DiaryPage;
-        }>('/diary/' + id, 'PUT', { version: 0, title: '오늘의 작은 이야기', date: new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10), paper: 'paper-cream', layers: [] });
-        setPages(old => [r.page, ...old]);
-        setSelected(id);
-    }
-    catch (e) {
-        setError((e as Error).message);
-    }
-    finally {
-        setBusy(false);
-    } }
-    const page = pages.find(p => p.id === selected);
-    if (page)
-        return <DiaryEditor key={page.id} page={page} owned={owned} enabled={enabled} onSaved={value => setPages(old => old.map(p => p.id === value.id ? value : p))} onBack={() => setSelected('')}/>;
-    return <section><div className="ms-section-intro"><h2>토리의 다꾸 노트</h2><p>한 줄의 발견도, 그림 한 조각도. 오늘의 나를 예쁘게 남겨요.</p><button className="ms-primary" disabled={!enabled || busy} onClick={() => void create()}><Plus size={17}/>새 노트 펼치기</button></div>{error && <p role="alert" className="ms-error">{error}</p>}<div className="ms-diary-grid">{pages.map(p => <article key={p.id}><button className={'ms-note-cover ' + p.paper} onClick={() => setSelected(p.id)}><span>MY LITTLE STORY</span><strong>{p.title}</strong><small>{p.date}</small><span aria-hidden="true">✿</span></button><button className="ms-note-delete" disabled={!enabled} aria-label={p.title + ' 삭제'} onClick={() => { if (confirm('이 노트를 삭제할까요? 사진 보관함의 원본은 남아요.'))
-        void spaceRequest('/diary/' + p.id + '?version=' + p.version, 'DELETE').then(() => load()).catch(e => setError(e.message)); }}><Trash2 size={15}/></button></article>)}</div>{!pages.length && <div className="ms-empty"><img src="/characters/rabbit-tori.webp" alt=""/><p>아직 빈 노트예요. 토리와 첫 이야기를 적어 볼까요?</p></div>}{cursor && <button onClick={() => void load(cursor).catch(e => setError(e.message))}>노트 더 보기</button>}</section>;
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {ArrowRight, BookHeart, LockKeyhole, ShieldCheck, X} from 'lucide-react';
+import type {DiaryPage} from './catalog';
+import DiaryEditor from './diary-editor';
+import DiaryCalendar from './diary-calendar-view';
+import {diaryRequest, DiaryRequestError, type DiaryStatus} from './diary-client';
+import {diaryToday} from './diary-calendar';
+import './diary.css';
+type Exit = () => Promise<boolean>;
+const blankStatus: DiaryStatus = {available: true, configured: true, unlocked: false};
+const problem = (error: unknown) => error instanceof Error ? error.message : '다시 시도해 주세요.';
+
+export default function Diary({owned, registerBeforeLeave}: {owned: string[]; enabled?: boolean; registerBeforeLeave?: (fn: Exit | null) => void}) {
+  const [status, setStatus] = useState<DiaryStatus | null>(null), [selected, setSelected] = useState<DiaryPage | null>(null);
+  const [calendarMonth,setCalendarMonth]=useState(()=>diaryToday().slice(0,7));
+  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), [curtain, setCurtain] = useState(false);
+  const [pin, setPin] = useState(''), [confirmation, setConfirmation] = useState(''), [recover, setRecover] = useState(false), [ticket, setTicket] = useState(''), [claim, setClaim] = useState(false);
+  const saveBeforeLeave = useRef<Exit | null>(null), statusRef = useRef(status), inLock = useRef(false), dirty = useRef(false);
+  const exportJob=useRef<AbortController|null>(null);
+  statusRef.current = status;
+  const registerSave = useCallback((fn: Exit | null) => {saveBeforeLeave.current = fn;}, []);
+  const markDirty = useCallback((value: boolean) => {dirty.current = value;}, []);
+  const lock = useCallback(async (automatic = false): Promise<boolean> => {
+    if (inLock.current) return false;
+    inLock.current = true;
+    exportJob.current?.abort();
+    if (automatic) setCurtain(true);
+    try {
+      const saved = await saveBeforeLeave.current?.() ?? true;
+      if (!saved && !automatic) return false;
+      await diaryRequest('/lock', 'POST', {});
+      setStatus(current => ({...(current || blankStatus), unlocked: false}));
+      if (saved) setSelected(null);
+      else setNotice('저장하지 못한 글이 이 화면에 남아 있어요. 잠금을 다시 열고 저장해 주세요.');
+      setPin(''); setCurtain(false); return saved;
+    } catch (e) {
+      setError(problem(e));
+      if (automatic) {setStatus(current => ({...(current || blankStatus), unlocked: false})); setNotice('화면을 잠갔어요. 연결이 돌아오면 다시 열고 저장해 주세요.'); setCurtain(false);}
+      return false;
+    } finally {inLock.current = false;}
+  }, []);
+  useEffect(() => {let alive = true; void diaryRequest<DiaryStatus>('/status').then(value => {if (alive) {setStatus(value);if(value.unlocked&&document.visibilityState==='hidden'){statusRef.current=value;void lock(true);}}}).catch(e => {if (alive) setError(problem(e));}); return () => {alive = false;};}, [lock]);
+  useEffect(() => {registerBeforeLeave?.(() => statusRef.current?.unlocked ? lock() : Promise.resolve(!dirty.current)); return () => registerBeforeLeave?.(null);}, [lock, registerBeforeLeave]);
+  useEffect(()=>()=>{exportJob.current?.abort();if(statusRef.current?.unlocked)void fetch('/api/secret-diary/lock',{method:'POST',credentials:'same-origin',keepalive:true,headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});},[]);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const activity = () => {clearTimeout(timer); if (statusRef.current?.unlocked) timer = setTimeout(() => void lock(true), 5 * 60 * 1000);};
+    const hidden = () => {if (document.visibilityState === 'hidden' && statusRef.current?.unlocked) void lock(true);};
+    const ended = () => {exportJob.current?.abort();setSelected(null); setStatus({...blankStatus, unlocked: false}); setPin(''); dirty.current = false;};
+    const pageHide = () => {if (statusRef.current?.unlocked) void fetch('/api/secret-diary/lock', {method: 'POST', credentials: 'same-origin', keepalive: true, headers: {'Content-Type': 'application/json'}, body: '{}'}).catch(() => {});};
+    window.addEventListener('pointerdown', activity); window.addEventListener('keydown', activity); document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', pageHide); window.addEventListener('homework-session-ended', ended); activity();
+    return () => {clearTimeout(timer); window.removeEventListener('pointerdown', activity); window.removeEventListener('keydown', activity); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', pageHide); window.removeEventListener('homework-session-ended', ended);};
+  }, [lock, status?.unlocked]);
+  async function unlock() {
+    if (busy) return;
+    if (!/^\d{6}$/.test(pin)) {setError('숫자 6자리로 입력해 주세요.'); return;}
+    if (!claim && (!status?.configured || recover) && pin !== confirmation) {setError('잠금번호 두 개가 같아야 해요.'); return;}
+    setBusy(true); setError('');
+    try {
+      await diaryRequest(claim ? '/transfer/claim' : recover ? '/recover' : status?.configured ? '/unlock' : '/setup', 'POST', claim ? {token: ticket.trim(), pin} : recover ? {ticket: ticket.trim(), pin} : {pin});
+      const value = await diaryRequest<DiaryStatus>('/status'); setStatus(value); setPin(''); setConfirmation(''); setTicket(''); setRecover(false); setClaim(false); if(document.visibilityState==='hidden'){statusRef.current=value;await lock(true);}else setCurtain(false);
+      if (value.recoveredAt) setNotice('잠금번호를 다시 설정한 기록이 있어요. 일기는 그대로 보관되어 있어요.');
+    } catch (e) {setError(problem(e));} finally {setBusy(false);}
+  }
+  async function requestRecovery() {
+    setBusy(true); setError('');
+    try {await diaryRequest('/recovery-request', 'POST', {}); setStatus(current => ({...(current || blankStatus), recoveryPending: true})); setRecover(true); setNotice('복구 요청을 보냈어요. 운영 담당자가 본인을 확인한 뒤 알려주는 복구 코드를 입력해 주세요.');}
+    catch (e) {setError(problem(e));} finally {setBusy(false);}
+  }
+  async function save(page: DiaryPage) {
+    try {const saved=(await diaryRequest<{page: DiaryPage}>('/pages/' + page.id, 'PUT', {...page, schemaVersion: 2})).page;setCalendarMonth(saved.date.slice(0,7));return saved;}
+    catch (e) {if (e instanceof DiaryRequestError && [401, 423].includes(e.status)) {setStatus(current => ({...(current || blankStatus), unlocked: false})); setNotice('잠금을 다시 열면 쓰던 글을 이어서 저장할 수 있어요.');} throw e;}
+  }
+  function newPage(date = diaryToday()) {setError(''); setSelected({id: crypto.randomUUID(), schemaVersion: 2, version: 0, date, title: '오늘의 작은 이야기', paper: 'paper-cream', mood: '', layers: [], updatedAt: ''});}
+  const locked = !status?.unlocked || curtain, allOwned = [...new Set([...owned, ...(status?.owned || [])])];
+  return <section className="sd-diary" aria-label="나만의 비밀일기장">
+    {error && <p className="sd-message sd-error" role="alert">{error}<button type="button" aria-label="오류 안내 닫기" onClick={() => setError('')}><X size={14}/></button></p>}
+    {notice && <p className="sd-message" role="status">{notice}<button type="button" aria-label="안내 닫기" onClick={() => setNotice('')}><X size={14}/></button></p>}
+    {!status ? <div className="sd-loading"><BookHeart size={36}/><p>일기장을 꺼내고 있어요…</p>{error && <button onClick={() => void diaryRequest<DiaryStatus>('/status').then(setStatus).catch(e => setError(problem(e)))}>다시 열기</button>}</div> : locked ? <div className="sd-lock-screen">
+      <div className="sd-lock-book"><img src="/diary/v1/diary-rabbit.svg" alt=""/><span>MY LITTLE DIARY</span><h2>나만의<br/>비밀일기장</h2><LockKeyhole size={28}/></div>
+      <div className="sd-lock-form"><span className="sd-eyebrow">마음을 놓고, 나답게</span><h2>{!status.available ? '일기장을 준비하고 있어요' : recover ? '일기장을 다시 열어요' : status.configured ? '오늘은 어떤 하루였나요?' : '우리만의 잠금번호를 정해요'}</h2>
+      {!status.available ? <p>안전한 보관 설정을 준비 중이에요. 기존 기록은 그대로 남아 있어요. 운영 담당자에게 알려 주세요.</p> : <>
+        <p>{recover ? '담당자에게 받은 복구 코드와 새 잠금번호를 입력해요. 이전 일기는 사라지지 않아요.' : '일기는 기본 비공개예요. 보여주고 싶을 때만 내가 내려받아 전해요. 잠금번호를 잊으면 도움을 받아 다시 열 수 있어요.'}</p>
+        <form onSubmit={e => {e.preventDefault(); void unlock();}}>
+          {(recover || claim) && <label>{claim ? '이전 계정의 연결 코드' : '복구 코드'}<input value={ticket} onChange={e => setTicket(e.target.value)} autoComplete="off" maxLength={200} required/></label>}
+          <label>{claim ? '이전 일기장 잠금번호' : recover ? '새 잠금번호' : '잠금번호'}<input className="sd-pin" type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} minLength={6} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} autoComplete={status.configured && !recover ? 'current-password' : 'new-password'} placeholder="● ● ● ● ● ●" required/></label>
+          {!claim && (!status.configured || recover) && <label>잠금번호 한 번 더<input className="sd-pin" type="password" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={confirmation} onChange={e => setConfirmation(e.target.value.replace(/\D/g, ''))} autoComplete="new-password" required/></label>}
+          <button className="sd-primary" disabled={busy || curtain}>{busy ? '확인하고 있어요…' : claim ? '이전 일기장 이어 쓰기' : recover ? '새 잠금번호로 열기' : status.configured ? '일기장 펼치기' : '내 일기장 만들기'}<ArrowRight size={17}/></button>
+        </form>
+        {status.configured && <div className="sd-lock-help"><button disabled={busy} onClick={() => void requestRecovery()}>{status.recoveryPending ? '복구 요청을 보냈어요 · 코드 입력하기' : '잠금번호가 기억나지 않아요'}</button>{recover && <button onClick={() => {setRecover(false); setPin(''); setConfirmation('');}}>잠금번호로 열기</button>}</div>}
+        {!status.configured && <div className="sd-lock-help"><button disabled={busy} onClick={() => {setClaim(!claim); setPin(''); setTicket(''); setConfirmation('');}}>{claim ? '새 일기장 만들기' : '이전 계정의 일기장 이어 쓰기'}</button></div>}
+        <small><ShieldCheck size={14}/>선생님의 학생 로그인 코드와 다른 잠금번호예요.</small>
+      </>}
+      </div>
+    </div> : !selected && <DiaryCalendar month={calendarMonth} onMonth={setCalendarMonth} owned={allOwned} onOpen={setSelected} onNew={newPage} onLock={() => void lock()} onStatus={setStatus} onError={e => {setError(problem(e)); if (e instanceof DiaryRequestError && [401, 423].includes(e.status)) setStatus(current => ({...(current || blankStatus), unlocked: false}));}} onNotice={setNotice}/>}
+    {selected && <div hidden={locked} inert={locked}><DiaryEditor key={selected.id} page={selected} owned={allOwned} locked={locked} onSave={save} onBack={() => {setSelected(null); dirty.current = false;}} onLock={() => lock()} onContinue={page => newPage(page.date)} onShare={async page => {if(!window.confirm("이 날짜의 일기 한 장을 현재 담임 선생님께 보여줄까요? 나중에 고친 내용은 자동으로 공개되지 않아요. 선생님이 이미 저장한 사본은 회수할 수 없어요.")) return; await diaryRequest("/pages/"+page.id+"/share","POST",{version:page.version}); setNotice("선택한 한 장을 선생님께 보여드렸어요. 기록 보관함에서 공개를 취소할 수 있어요.");}} onExport={async page => {if (window.confirm('내려받는 PDF는 잠겨 있지 않아요. 나만 사용하는 기기에 보관해 주세요. 내려받을까요?')) {exportJob.current?.abort();const controller=new AbortController();exportJob.current=controller;const {exportDiaryPdf} = await import('./diary-export'); await exportDiaryPdf([page], '나의 하루 일기.pdf',controller.signal);}}} registerBeforeLeave={registerSave} onDirtyChange={markDirty}/></div>}
+  </section>;
 }

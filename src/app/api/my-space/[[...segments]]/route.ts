@@ -5,10 +5,11 @@ import {readBoundedJson} from '@/lib/server/ai-policy';
 import {SpaceError} from '@/modules/my-space/policy';
 import {boundedBytes} from '@/modules/artwork-extensions/server-utils';
 import * as space from '@/modules/my-space/server';
+import {requireDiaryUnlocked} from '@/modules/my-space/diary-server';
 export const runtime='nodejs',dynamic='force-dynamic',maxDuration=120;
 const headers={'Cache-Control':'private,no-store'};
 async function input(request:Request,max:number){const value=await readBoundedJson(request,max);if(!value||typeof value!=='object'||Array.isArray(value))throw new ApiError(400,'입력 내용을 확인해 주세요.');return value as Record<string,any>;}
-async function handle(request:Request,{params}:{params:Promise<{segments?:string[]}>}){try{const s=(await params).segments||[],u=new URL(request.url),isImage=s[0]==='images'&&s.length===2&&request.method==='POST';if(request.method!=='GET'){if(isImage){if(request.headers.get('origin')!==u.origin||request.headers.get('sec-fetch-site')==='cross-site')throw new ApiError(403,'이 화면에서 다시 올려 주세요.');}else assertOrigin(request);}const ctx=await space.spaceContext(request);let result:unknown;
+async function handle(request:Request,{params}:{params:Promise<{segments?:string[]}>}){try{const s=(await params).segments||[],u=new URL(request.url),isImage=s[0]==='images'&&s.length===2&&request.method==='POST';if(request.method!=='GET'){if(isImage){if(request.headers.get('origin')!==u.origin||request.headers.get('sec-fetch-site')==='cross-site')throw new ApiError(403,'이 화면에서 다시 올려 주세요.');}else assertOrigin(request);}const ctx=await space.spaceContext(request);if(s[0]==='diary')throw new ApiError(423,'새 비밀일기장에서 잠금을 열어 주세요.','DIARY_LOCKED');if(s[0]==='images'||s[0]==='art')await requireDiaryUnlocked(request,ctx);let result:unknown;
  if(request.method==='GET'&&!s.length)result=await space.bootstrap(ctx);
  else if(s[0]==='purchase'&&s.length===1&&request.method==='POST')result=await space.buy(ctx,await input(request,4000));
  else if(s[0]==='room'&&s.length===1&&request.method==='PUT')result=await space.saveRoom(ctx,await input(request,30000));

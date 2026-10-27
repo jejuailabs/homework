@@ -1,4 +1,5 @@
 import { characterFiles } from '@/lib/characters';
+import { diaryStickers } from './diary-stickers';
 import { newPets } from './new-pets';
 export type SpaceKind = 'pet' | 'furniture' | 'theme' | 'clothes' | 'sticker' | 'paper';
 export type SpaceItem = {
@@ -29,6 +30,7 @@ export const illustratedRoomThemes: SpaceItem[] = [
     {"id":"theme-sweets","kind":"theme","name":"딸기 크림 디저트 공방","en":"Strawberry cream dessert atelier","price":80,"art":"/my-space/v6/rooms/theme-sweets.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-sweets.webp"},
 ];
 export const spaceCatalog: SpaceItem[] = [
+    ...diaryStickers,
     ...illustratedRoomThemes,
     {"id":"junior-body-knit","kind":"clothes","slot":"body","name":"보송 딸기 니트","en":"Fluffy strawberry knit","price":35,"motif":"knit","color":"#e9a6b5"},
     {"id":"junior-body-overalls","kind":"clothes","slot":"body","name":"보송 소풍 멜빵옷","en":"Fluffy picnic overalls","price":50,"motif":"overalls","color":"#9ab6cc"},
@@ -84,12 +86,20 @@ export type Room = {
     placements: Placement[];
 };
 export type DiaryLayer = Placement & {
-    kind: 'text' | 'sticker' | 'photo' | 'art';
+    kind: 'text' | 'sticker' | 'photo' | 'art' | 'ink';
     text?: string;
     assetId?: string;
     color?: string;
+    points?: [number, number, number][];
+    brush?: 'pen' | 'pencil' | 'marker';
+    width?: number;
+    opacity?: number;
+    fontSize?: number;
+    align?: 'left' | 'center' | 'right';
 };
 export type DiaryPage = {
+    schemaVersion?: 2;
+    mood?: string;
     id: string;
     version: number;
     title: string;
