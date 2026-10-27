@@ -1,4 +1,5 @@
 import { characterFiles } from '@/lib/characters';
+import { newPets } from './new-pets';
 export type SpaceKind = 'pet' | 'furniture' | 'theme' | 'clothes' | 'sticker' | 'paper';
 export type SpaceItem = {
     id: string;
@@ -7,6 +8,7 @@ export type SpaceItem = {
     en: string;
     price: number;
     art?: string;
+    previewArt?: string;
     motif?: string;
     color?: string;
     slot?: 'body' | 'bag';
@@ -14,7 +16,27 @@ export type SpaceItem = {
     buddyName?: string;
 };
 const furniture = (id: string, name: string, en: string, price: number): SpaceItem => ({ id, kind: 'furniture', name, en, price, art: `/my-space/v1/${id}.webp` });
+export const illustratedRoomThemes: SpaceItem[] = [
+    {"id":"theme-aegean","kind":"theme","name":"레몬꽃 지중해 바다방","en":"Lemon blossom seaside room","price":80,"art":"/my-space/v6/rooms/theme-aegean.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-aegean.webp"},
+    {"id":"theme-kyoto","kind":"theme","name":"벚꽃 교토의 작은 찻집","en":"Cherry blossom Kyoto tea room","price":80,"art":"/my-space/v6/rooms/theme-kyoto.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-kyoto.webp"},
+    {"id":"theme-paris","kind":"theme","name":"파리 지붕 위 그림 다락방","en":"Paris rooftop artist attic","price":80,"art":"/my-space/v6/rooms/theme-paris.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-paris.webp"},
+    {"id":"theme-riad","kind":"theme","name":"별빛 모로코 타일 리야드","en":"Moroccan lantern riad","price":80,"art":"/my-space/v6/rooms/theme-riad.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-riad.webp"},
+    {"id":"theme-nordic","kind":"theme","name":"눈꽃 북유럽 숲속 오두막","en":"Nordic snowy woodland cabin","price":80,"art":"/my-space/v6/rooms/theme-nordic.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-nordic.webp"},
+    {"id":"theme-lagoon","kind":"theme","name":"조개빛 열대 수상집","en":"Tropical shell lagoon bungalow","price":80,"art":"/my-space/v6/rooms/theme-lagoon.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-lagoon.webp"},
+    {"id":"theme-magic","kind":"theme","name":"달빛이 머무는 마법 도서관","en":"Moonlit little magic library","price":80,"art":"/my-space/v6/rooms/theme-magic.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-magic.webp"},
+    {"id":"theme-space","kind":"theme","name":"별사탕 우주 관측실","en":"Stardust space observatory","price":80,"art":"/my-space/v6/rooms/theme-space.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-space.webp"},
+    {"id":"theme-coral","kind":"theme","name":"산호 궁전의 바닷속 방","en":"Coral palace undersea room","price":80,"art":"/my-space/v6/rooms/theme-coral.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-coral.webp"},
+    {"id":"theme-sweets","kind":"theme","name":"딸기 크림 디저트 공방","en":"Strawberry cream dessert atelier","price":80,"art":"/my-space/v6/rooms/theme-sweets.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-sweets.webp"},
+];
 export const spaceCatalog: SpaceItem[] = [
+    ...illustratedRoomThemes,
+    {"id":"junior-body-knit","kind":"clothes","slot":"body","name":"보송 딸기 니트","en":"Fluffy strawberry knit","price":35,"motif":"knit","color":"#e9a6b5"},
+    {"id":"junior-body-overalls","kind":"clothes","slot":"body","name":"보송 소풍 멜빵옷","en":"Fluffy picnic overalls","price":50,"motif":"overalls","color":"#9ab6cc"},
+    {"id":"junior-body-raincoat","kind":"clothes","slot":"body","name":"보송 노란 비옷","en":"Fluffy yellow raincoat","price":40,"motif":"raincoat","color":"#efcf70"},
+    {"id":"junior-body-sailor","kind":"clothes","slot":"body","name":"보송 바다 세일러복","en":"Fluffy sailor suit","price":45,"motif":"sailor","color":"#96b9d2"},
+    {"id":"junior-body-pajamas","kind":"clothes","slot":"body","name":"보송 별빛 잠옷","en":"Fluffy starlight pajamas","price":40,"motif":"pajamas","color":"#b9a5d3"},
+    {"id":"junior-body-cape","kind":"clothes","slot":"body","name":"보송 숲속 망토","en":"Fluffy forest cape","price":45,"motif":"cape","color":"#a6baa0"},
+    ...newPets.map(pet => ({id: pet.id, kind: 'pet' as const, name: pet.species, en: pet.en, buddyName: pet.name, price: 60, base: pet.base, art: pet.art})),
     ...Object.entries(characterFiles).map(([base, file]) => ({ id: 'friend-' + base, kind: 'pet' as const, name: ({ cat: '모찌', dog: '두부', hamster: '콩이', alpaca: '구름이', rabbit: '토리', otter: '모아' } as Record<string, string>)[base], en: base, price: 0, base, art: `/characters/${file}.webp` })),
     ...[['american', '아메리칸 쇼트헤어', 'American shorthair', '줄이'], ['british', '브리티시 쇼트헤어', 'British shorthair', '포포'], ['siamese', '샴', 'Siamese', '코코'], ['persian', '페르시안', 'Persian', '솜이'], ['ragdoll', '랙돌', 'Ragdoll', '라라'], ['maine', '메인쿤', 'Maine coon', '솔이']].map(([breed, name, en, buddyName]) => ({ id: 'cat-' + breed, kind: 'pet' as const, name, en, buddyName, price: 60, base: 'cat', art: `/my-space/v1/cat-${breed}.webp` })),
     furniture('bed', '포근한 낮잠 침대', 'Cozy little bed', 60), furniture('shelf', '이야기 책장', 'Story bookshelf', 50), furniture('plant', '초록 리본 화분', 'Ribbon plant', 20), furniture('lamp', '반짝 버섯 조명', 'Mushroom lamp', 35),

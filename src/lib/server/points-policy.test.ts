@@ -3,6 +3,19 @@ import assert from 'node:assert/strict';
 import {addPointBalance, equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointRevokeDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
 import {wardrobeCatalog} from '../points-types';
 
+test('shared Fluffy accessories charge once and require ownership for their actual slot', () => {
+  for (const item of wardrobeCatalog.filter(item => item.id.startsWith('junior-'))) {
+    const purchase = pointPurchaseDecision(200, [], item.id);
+    assert.equal(purchase.balance, 200 - item.price);
+    const repeated = pointPurchaseDecision(purchase.balance, purchase.owned, item.id);
+    assert.equal(repeated.purchased, false);
+    assert.equal(repeated.balance, purchase.balance);
+    assert.throws(() => equipWardrobe({}, [], item.slot, item.id));
+    assert.equal(equipWardrobe({}, purchase.owned, item.slot, item.id)[item.slot], item.id);
+    assert.throws(() => equipWardrobe({}, purchase.owned, item.slot === 'head' ? 'neck' : 'head', item.id));
+  }
+});
+
 test('points are disabled by default and old daily limits are ignored', () => {
   assert.equal(pointSettings(undefined).enabled, false);
   assert.equal(pointSettings({enabled: 'true'}).enabled, false);

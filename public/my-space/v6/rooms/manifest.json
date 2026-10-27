@@ -1,0 +1,207 @@
+{
+  "version": 6,
+  "created": "2026-10-27",
+  "generator": "OpenAI built-in ImageGen; ten initial generations; WebP main art and lightweight thumbnails",
+  "assets": [
+    {
+      "id": "theme-aegean",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-aegean.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 395906,
+      "sha256": "9ea5bf16248005422eff8c65d142b3c082bea6ed3084c9ec189968053095bb32",
+      "source": "exec-ca615a06-6e53-4a73-8e39-27fe8773c994.png"
+    },
+    {
+      "id": "theme-aegean",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-aegean.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 49604,
+      "sha256": "6d376d65e1ec06874c603f5a4100c087ec70ad54434ffe0acd2d41a671421274",
+      "source": "exec-ca615a06-6e53-4a73-8e39-27fe8773c994.png"
+    },
+    {
+      "id": "theme-kyoto",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-kyoto.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 321650,
+      "sha256": "3623210235c4793065f0c1a9aee26c6baa870a29aed7bd2b3642f68361e5d166",
+      "source": "exec-4c6825c6-2dc5-4449-94da-9f88417a84a2.png"
+    },
+    {
+      "id": "theme-kyoto",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-kyoto.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 40070,
+      "sha256": "942595c42f1ead084531258048c33a99f947385618111fdf5bc1234e67d64ba0",
+      "source": "exec-4c6825c6-2dc5-4449-94da-9f88417a84a2.png"
+    },
+    {
+      "id": "theme-paris",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-paris.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 355108,
+      "sha256": "28fb716109c6bba0a7725ef37a762ef8c6f94964bd170b5d4b6f8f11a8c8e0dd",
+      "source": "exec-6c1888a7-ef1c-46aa-944a-d28ebb7325ea.png"
+    },
+    {
+      "id": "theme-paris",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-paris.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 43802,
+      "sha256": "210e0199ff663175365c459c6eb38afcf8afb09dfbf8b1c3625d712ad8f4558c",
+      "source": "exec-6c1888a7-ef1c-46aa-944a-d28ebb7325ea.png"
+    },
+    {
+      "id": "theme-riad",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-riad.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 422782,
+      "sha256": "e937b12fa49922b7254201741f8d9ad3089aa037dfcc740cd3df2d332a40e8cb",
+      "source": "exec-4fd83613-a356-414e-89a7-2518c9de452a.png"
+    },
+    {
+      "id": "theme-riad",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-riad.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 48998,
+      "sha256": "d74cc40389606321efbf3ae6316e924653680b2e60da39176457f8c22c16bb8b",
+      "source": "exec-4fd83613-a356-414e-89a7-2518c9de452a.png"
+    },
+    {
+      "id": "theme-nordic",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-nordic.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 344570,
+      "sha256": "17bdc66962666f549193034c1c5c7eb6d5b1e4056260f83a254ccc1728bd1b35",
+      "source": "exec-8ac569e4-5b4d-4b4c-bd0b-caee6ecefbb9.png"
+    },
+    {
+      "id": "theme-nordic",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-nordic.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 42394,
+      "sha256": "33ae7f60d8b53b4a934538adf0c0402be52e621e50d28260216d1e4fc6cef967",
+      "source": "exec-8ac569e4-5b4d-4b4c-bd0b-caee6ecefbb9.png"
+    },
+    {
+      "id": "theme-lagoon",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-lagoon.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 363230,
+      "sha256": "49c59bed7eb56d20b1f69c5281d332475cea05adae0beea881c7bb3da4184bb6",
+      "source": "exec-902c0812-87d9-4855-8944-db2d6f01d363.png"
+    },
+    {
+      "id": "theme-lagoon",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-lagoon.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 44262,
+      "sha256": "d814c7c8625fc6525951659a7b8f1034b1ae3d7fdcb98fcd026db32160ce4c40",
+      "source": "exec-902c0812-87d9-4855-8944-db2d6f01d363.png"
+    },
+    {
+      "id": "theme-magic",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-magic.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 437266,
+      "sha256": "4edd9b2e11048a733d2eac934b6ce02bf7918376ce5093a805610fea4933b02f",
+      "source": "exec-14fbd494-4f8e-4b3b-89bd-d881d4726004.png"
+    },
+    {
+      "id": "theme-magic",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-magic.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 51976,
+      "sha256": "a201bb95911496ebf57eeca2c7868b0bdcfefeb106a2a8f68ad8908a24817131",
+      "source": "exec-14fbd494-4f8e-4b3b-89bd-d881d4726004.png"
+    },
+    {
+      "id": "theme-space",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-space.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 325510,
+      "sha256": "fc70d4c70d334ccac2afa71b4aebb794663847e6b593fb66d9f8883e70b0cf4b",
+      "source": "exec-5ddd9c59-db1c-455e-94b1-ac0b9b5b23d7.png"
+    },
+    {
+      "id": "theme-space",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-space.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 37078,
+      "sha256": "dbe2187e043c12bf2c49d9fcb7f768195121d471076f30c34175ea41daf41184",
+      "source": "exec-5ddd9c59-db1c-455e-94b1-ac0b9b5b23d7.png"
+    },
+    {
+      "id": "theme-coral",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-coral.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 381632,
+      "sha256": "4f334de2395c3599d97a4180e604a585eb9875b1d7528f13b82872c99ad04d6c",
+      "source": "exec-38ec1f5a-346b-4f11-be11-2691dc371b1e.png"
+    },
+    {
+      "id": "theme-coral",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-coral.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 47392,
+      "sha256": "b00e23420ceac2b91b01286d31363376a7da3a1a8194c143f76f97d9da0a52ce",
+      "source": "exec-38ec1f5a-346b-4f11-be11-2691dc371b1e.png"
+    },
+    {
+      "id": "theme-sweets",
+      "role": "room",
+      "src": "/my-space/v6/rooms/theme-sweets.webp",
+      "width": 1440,
+      "height": 1080,
+      "bytes": 305844,
+      "sha256": "f3d0996e7aec2dd0ff9b9faa4e69369e2065a8efd9910b7dd40db9b56041e411",
+      "source": "exec-45fc0fa5-29c9-400b-8194-a9278425c8d2.png"
+    },
+    {
+      "id": "theme-sweets",
+      "role": "thumbnail",
+      "src": "/my-space/v6/rooms/thumbs/theme-sweets.webp",
+      "width": 480,
+      "height": 360,
+      "bytes": 38606,
+      "sha256": "378512c0a7955b48b22fc961758fb1e8c03054bb4bb4c71de744cdc7b692f409",
+      "source": "exec-45fc0fa5-29c9-400b-8194-a9278425c8d2.png"
+    }
+  ]
+}
