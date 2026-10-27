@@ -65,6 +65,7 @@ await import('../../modules/digital-artbook/run-tests.mjs');
 await import('../../modules/my-space/run-tests.mjs');
 await import('../../modules/daily-quiz/run-tests.mjs');
 await import('../../modules/playground/run-tests.mjs');
+await import('../../modules/lesson-review/run-tests.mjs');
 await import('../../modules/teacher-notebook/run-tests.mjs');
 
 const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
