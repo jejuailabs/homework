@@ -49,8 +49,8 @@ export default function Diary({owned, registerBeforeLeave}: {owned: string[]; en
     const hidden = () => {if (document.visibilityState === 'hidden' && statusRef.current?.unlocked) void lock(true);};
     const ended = () => {exportJob.current?.abort();setSelected(null); setStatus({...blankStatus, unlocked: false}); setPin(''); dirty.current = false;};
     const pageHide = () => {if (statusRef.current?.unlocked) void fetch('/api/secret-diary/lock', {method: 'POST', credentials: 'same-origin', keepalive: true, headers: {'Content-Type': 'application/json'}, body: '{}'}).catch(() => {});};
-    window.addEventListener('pointerdown', activity); window.addEventListener('keydown', activity); document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', pageHide); window.addEventListener('homework-session-ended', ended); activity();
-    return () => {clearTimeout(timer); window.removeEventListener('pointerdown', activity); window.removeEventListener('keydown', activity); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', pageHide); window.removeEventListener('homework-session-ended', ended);};
+    window.addEventListener('pointerdown', activity, true); window.addEventListener('keydown', activity, true); window.addEventListener('input', activity, true); document.addEventListener('visibilitychange', hidden); window.addEventListener('pagehide', pageHide); window.addEventListener('homework-session-ended', ended); activity();
+    return () => {clearTimeout(timer); window.removeEventListener('pointerdown', activity, true); window.removeEventListener('keydown', activity, true); window.removeEventListener('input', activity, true); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', pageHide); window.removeEventListener('homework-session-ended', ended);};
   }, [lock, status?.unlocked]);
   async function unlock() {
     if (busy) return;

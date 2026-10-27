@@ -16,6 +16,17 @@ type CanvasProps = {
   onTextOverflow?: (overflowing: boolean) => void;
 };
 
+/** Keep within the saved -180..180 range; settle near upright and diagonal angles, or every 15° with Shift. */
+export function snapRotation(degrees: number, coarse = false): number {
+  let value = ((degrees + 180) % 360 + 360) % 360 - 180;
+  if (coarse) value = Math.round(value / 15) * 15;
+  else {
+    const nearest = Math.round(value / 45) * 45;
+    value = Math.abs(value - nearest) <= 4 ? nearest : Math.round(value);
+  }
+  return value === -180 ? 180 : value;
+}
+
 function DiaryText({layer, editing, disabled, onChange}: {layer: DiaryLayer; editing: boolean; disabled: boolean; onChange: (text: string) => void}) {
   const area = useRef<HTMLTextAreaElement>(null);
   const style: CSSProperties = {fontSize: layer.fontSize || 24, color: layer.color || '#3f5048', textAlign: layer.align || 'left'};
@@ -43,12 +54,13 @@ function Picture({layer, assetBase}: {layer: DiaryLayer; assetBase: string}) {
 export default function DiaryCanvas({layers, paper, selected, tool, ink, zoom, disabled = false, onChange, onSelect, onTool, onText, onSticker, onBegin, onEnd, onNotice, commitRef, assetBase = '/api/secret-diary/assets', onTextOverflow}: CanvasProps) {
   const page = useRef<HTMLDivElement>(null), viewport = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(DIARY_WIDTH), [pending, setPending] = useState<DiaryLayer[]>([]);
-  const layersRef = useRef(layers), toolRef = useRef(tool);
+  const layersRef = useRef(layers), toolRef = useRef(tool), lastTap = useRef<{id: string; time: number} | null>(null);
   layersRef.current = layers; toolRef.current = tool;
   const action = useRef<{
-    pointer: number; type: 'ink' | 'move' | 'erase'; id?: string; start?: DiaryInkPoint; x?: number; y?: number;
+    pointer: number; type: 'ink' | 'move' | 'erase' | 'resize' | 'rotate'; id?: string; start?: DiaryInkPoint; x?: number; y?: number;
     points?: DiaryInkPoint[]; chunks?: DiaryInkPoint[][]; brush?: 'pen' | 'pencil' | 'marker'; color?: string; width?: number;
     maxPoints?: number; used?: number; lastPressure?: number;
+    distance?: number; size?: number; minSize?: number; angle?: number; rotation?: number;
   } | null>(null);
 
   useEffect(() => {
@@ -123,9 +135,14 @@ export default function DiaryCanvas({layers, paper, selected, tool, ink, zoom, d
   function down(event: ReactPointerEvent<HTMLDivElement>) {
     if (disabled || event.button !== 0 || action.current) return;
     if (tool === 'select') {onSelect(''); return;}
+    // A stray tap while a text box is open only finishes that box; it never stacks new empty boxes.
+    if (tool === 'text' && layers.find(layer => layer.id === selected)?.kind === 'text') {onSelect(''); onTool('select'); return;}
     if (tool === 'text') {
+      // Keep the browser's default press from pulling focus off the new text box before the child can type.
+      event.preventDefault();
       const p = point(event);
-      onText(Math.max(10, Math.min(90, p[0] / DIARY_WIDTH * 100)), Math.max(8, Math.min(92, p[1] / DIARY_HEIGHT * 100)));
+      // New boxes are 76% wide: start the line at the tap and keep the whole box on the paper.
+      onText(Math.max(38, Math.min(62, p[0] / DIARY_WIDTH * 100 + 38)), Math.max(8, Math.min(92, p[1] / DIARY_HEIGHT * 100)));
       return;
     }
     if (ink.penOnly && event.pointerType !== 'pen') return;
@@ -155,6 +172,13 @@ export default function DiaryCanvas({layers, paper, selected, tool, ink, zoom, d
     event.preventDefault();
     if (current.type === 'ink') collect(event);
     else if (current.type === 'erase') eraseAt(event);
+    else if (current.type === 'resize' || current.type === 'rotate') {
+      const p = point(event), dx = p[0] - current.x!, dy = p[1] - current.y!;
+      const patch = current.type === 'resize'
+        ? {size: Math.round(Math.max(current.minSize!, Math.min(100, current.size! * Math.hypot(dx, dy) / current.distance!)) * 10) / 10}
+        : {rotation: snapRotation(current.rotation! + Math.atan2(dy, dx) * 180 / Math.PI - current.angle!, event.shiftKey)};
+      onChange(layersRef.current.map(layer => layer.id === current.id ? {...layer, ...patch} : layer));
+    }
     else {
       const p = point(event);
       onChange(layersRef.current.map(layer => layer.id === current.id ? {...layer,
@@ -187,11 +211,27 @@ export default function DiaryCanvas({layers, paper, selected, tool, ink, zoom, d
     if (tool !== 'select' && tool !== 'text') return;
     event.preventDefault();
     event.stopPropagation();
+    // The box being typed in keeps its caret; any other tap selects so the piece can move and resize.
+    if (tool === 'text' && layer.kind === 'text' && layer.id === selected) return;
+    // Pointer capture swallows dblclick, so detect a quick second tap on the same text box here.
+    const now = event.timeStamp, previous = lastTap.current;
+    lastTap.current = {id: layer.id, time: now};
+    if (layer.kind === 'text' && previous?.id === layer.id && now - previous.time < 400) {onSelect(layer.id); onTool('text'); return;}
     onSelect(layer.id);
-    if (tool === 'text' && layer.kind === 'text') return;
+    if (tool === 'text') onTool('select');
     page.current?.setPointerCapture(event.pointerId);
     onBegin();
     action.current = {type: 'move', pointer: event.pointerId, id: layer.id, start: point(event), x: layer.x, y: layer.y};
+  }
+  function handleDown(event: ReactPointerEvent<HTMLElement>, layer: DiaryLayer, type: 'resize' | 'rotate') {
+    if (disabled || event.button !== 0 || action.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    page.current?.setPointerCapture(event.pointerId);
+    onBegin();
+    const p = point(event), x = layer.x / 100 * DIARY_WIDTH, y = layer.y / 100 * DIARY_HEIGHT;
+    action.current = {type, pointer: event.pointerId, id: layer.id, x, y, size: layer.size, minSize: layer.kind === 'text' ? 20 : 5,
+      distance: Math.max(1, Math.hypot(p[0] - x, p[1] - y)), angle: Math.atan2(p[1] - y, p[0] - x) * 180 / Math.PI, rotation: layer.rotation};
   }
   function keys(event: React.KeyboardEvent, layer: DiaryLayer) {
     if (disabled) return;
@@ -210,14 +250,20 @@ export default function DiaryCanvas({layers, paper, selected, tool, ink, zoom, d
     if (layer.kind === 'ink') return <svg key={layer.id} className={`sd-ink-layer ${isSelected ? 'is-selected' : ''}`} viewBox={`0 0 ${DIARY_WIDTH} ${DIARY_HEIGHT}`} style={{...style, height: `${layer.size}%`}} aria-label="손글씨 획" role={previewOnly ? undefined : 'button'} tabIndex={previewOnly || disabled ? -1 : 0} onPointerDown={event => objectDown(event, layer)} onKeyDown={event => keys(event, layer)}>
       <path d={diaryInkPath(layer, !previewOnly)} fill={layer.color || '#3f5048'} opacity={layer.opacity ?? 1} data-diary-ink={layer.id} style={{pointerEvents: previewOnly || ['pen', 'pencil', 'marker'].includes(tool) ? 'none' : 'visiblePainted'}}/>
     </svg>;
-    return <div key={layer.id} className={`sd-paper-layer ${isSelected ? 'is-selected' : ''} ${layer.kind === 'text' ? 'is-text' : ''}`} data-diary-layer={layer.id} style={style} tabIndex={disabled ? -1 : 0} role="group" aria-label={layer.kind === 'text' ? '내 글 조각' : spaceItem(layer.itemId)?.name || '내 사진'} onPointerDown={event => objectDown(event, layer)} onKeyDown={event => keys(event, layer)} onDoubleClick={event => {if (layer.kind === 'text' && !disabled) {event.stopPropagation(); onSelect(layer.id); onTool('text');}}}>
+    const handles = isSelected && tool === 'select' && !disabled;
+    return <div key={layer.id} className={`sd-paper-layer ${isSelected ? 'is-selected' : ''} ${handles ? 'has-handles' : ''} ${layer.kind === 'text' ? 'is-text' : ''}`} data-diary-layer={layer.id} style={style} tabIndex={disabled ? -1 : 0} role="group" aria-label={layer.kind === 'text' ? '내 글 조각' : spaceItem(layer.itemId)?.name || '내 사진'} onPointerDown={event => objectDown(event, layer)} onKeyDown={event => keys(event, layer)} onDoubleClick={event => {if (layer.kind === 'text' && !disabled) {event.stopPropagation(); onSelect(layer.id); onTool('text');}}}>
       {layer.kind === 'text' ? <DiaryText layer={layer} editing={isSelected && tool === 'text'} disabled={disabled} onChange={text => onChange(layersRef.current.map(value => value.id === layer.id ? {...value, text} : value))}/> : <Picture layer={layer} assetBase={assetBase}/>}
+      {handles && <span className="sd-transform" aria-hidden="true">
+        {(['nw', 'ne', 'sw', 'se'] as const).map(corner => <span key={corner} className={`sd-handle sd-resize ${corner}`} title="끌어서 크기 바꾸기" onPointerDown={event => handleDown(event, layer, 'resize')}/>)}
+        <span className="sd-rotate-stem"/>
+        <span className="sd-handle sd-rotate" title="끌어서 돌리기" onPointerDown={event => handleDown(event, layer, 'rotate')}/>
+      </span>}
     </div>;
   }
 
   return <div ref={viewport} className="sd-canvas-viewport" aria-label="일기장 종이 스크롤 영역">
     <div className="sd-canvas-sized" style={{width: DIARY_WIDTH * scale, height: DIARY_HEIGHT * scale}}>
-      <div ref={page} className={`sd-paper ${paper} tool-${tool} ${ink.penOnly ? 'pen-only' : ''}`} data-diary-paper="true" style={{width: DIARY_WIDTH, height: DIARY_HEIGHT, transform: `scale(${scale})`, backgroundColor: spaceItem(paper)?.color || '#fffbee'}} onPointerDown={down} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onDragOver={event => {if (event.dataTransfer.types.includes('application/x-diary-sticker')) {event.preventDefault(); event.dataTransfer.dropEffect = 'copy';}}} onDrop={event => {
+      <div ref={page} className={`sd-paper ${paper} tool-${tool} ${ink.penOnly ? 'pen-only' : ''}`} data-diary-paper="true" style={{width: DIARY_WIDTH, height: DIARY_HEIGHT, transform: `scale(${scale})`, ['--sd-ui' as string]: String(1 / scale), backgroundColor: spaceItem(paper)?.color || '#fffbee'}} onPointerDown={down} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onDragOver={event => {if (event.dataTransfer.types.includes('application/x-diary-sticker')) {event.preventDefault(); event.dataTransfer.dropEffect = 'copy';}}} onDrop={event => {
         event.preventDefault();
         if (disabled) return;
         const id = event.dataTransfer.getData('application/x-diary-sticker');

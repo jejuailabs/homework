@@ -82,6 +82,12 @@ export default function DiaryEditor({page, owned, onSave, onBack, onLock, onExpo
   }, []);
 
   function changeLayers(layers: DiaryLayer[]) {editor.edit({...editor.current(), schemaVersion: 2, layers});}
+  /** Leaving a text box that never got any words removes it, so stray taps leave no empty boxes behind. */
+  function select(id: string) {
+    const current = editor.current(), previous = current.layers.find(layer => layer.id === selected);
+    if (previous && previous.id !== id && previous.kind === 'text' && !previous.text?.trim()) changeLayers(current.layers.filter(layer => layer.id !== previous.id));
+    setSelected(id);
+  }
   function updateActive(patch: Partial<DiaryLayer>) {
     const current = editor.current();
     changeLayers(current.layers.map(layer => layer.id === selected ? {...layer, ...patch} : layer));
@@ -190,7 +196,7 @@ export default function DiaryEditor({page, owned, onSave, onBack, onLock, onExpo
   return <section ref={editorRoot} className="sd-editor" aria-label="나의 비밀일기 쓰기" onKeyDown={event => {
     if (!editable || /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName)) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {event.preventDefault(); if (event.shiftKey) editor.redo(); else editor.undo();}
-    if (event.key === 'Escape') {setSelected(''); setTool('select');}
+    if (event.key === 'Escape') {select(''); setTool('select');}
     if ((event.key === 'Delete' || event.key === 'Backspace') && selected) {event.preventDefault(); removeSelected();}
   }}>
     <header className="sd-editor-top">
@@ -218,7 +224,7 @@ export default function DiaryEditor({page, owned, onSave, onBack, onLock, onExpo
           {speechHint && <p className={`sd-speech-hint ${speechState === 'listening' ? 'is-listening' : ''}`} role="status"><Mic size={14}/>{speechHint}</p>}
         </div>
         <div className="sd-paper-controls"><div><button type="button" aria-label="실행 취소" title="실행 취소" disabled={!editable || !editor.canUndo} onClick={editor.undo}><Undo2 size={17}/></button><button type="button" aria-label="다시 실행" title="다시 실행" disabled={!editable || !editor.canRedo} onClick={editor.redo}><Redo2 size={17}/></button></div><span>{tool === 'pen' || tool === 'pencil' ? '천천히, 내 손글씨로' : '이 페이지는 나의 작은 세상'}</span><div><button type="button" aria-label="종이 축소" disabled={zoom <= 1} onClick={() => setZoom(value => Math.max(1, value - .25))}><ZoomOut size={16}/></button><output aria-label="종이 확대 비율">{Math.round(zoom * 100)}%</output><button type="button" aria-label="종이 확대" disabled={zoom >= 2} onClick={() => setZoom(value => Math.min(2, value + .25))}><ZoomIn size={16}/></button></div></div>
-        <DiaryCanvas layers={d.layers} paper={d.paper} selected={selected} tool={tool} ink={{color, width, penOnly}} zoom={zoom} disabled={!editable} onChange={changeLayers} onSelect={setSelected} onTool={setTool} onText={addText} onSticker={addSticker} onBegin={editor.begin} onEnd={editor.end} onNotice={setNotice} commitRef={commitCanvas} onTextOverflow={setTextOverflow}/>
+        <DiaryCanvas layers={d.layers} paper={d.paper} selected={selected} tool={tool} ink={{color, width, penOnly}} zoom={zoom} disabled={!editable} onChange={changeLayers} onSelect={select} onTool={setTool} onText={addText} onSticker={addSticker} onBegin={editor.begin} onEnd={editor.end} onNotice={setNotice} commitRef={commitCanvas} onTextOverflow={setTextOverflow}/>
         {textOverflow && <p className="sd-editor-notice sd-text-overflow" role="status">종이 밖으로 나간 글이 있어요. 글은 모두 저장돼요. 글씨 크기와 위치를 조절해 주세요. 글 조각을 고르면 ‘글 전체 편집’에서 나누어 다음 장에 이어 쓸 수 있어요.</p>}
         {active && <fieldset className="sd-selection" disabled={!editable}><legend>{titleForLayer(active)} 꾸미기</legend><div className="sd-selection-controls"><label>크기<input type="range" min={active.kind === 'ink' ? 10 : 5} max="100" value={active.size} onPointerDown={editor.begin} onPointerUp={editor.end} onPointerCancel={editor.end} onChange={event => updateActive({size: Number(event.target.value)})}/></label><label>회전<input type="range" min="-180" max="180" step="5" value={active.rotation} onPointerDown={editor.begin} onPointerUp={editor.end} onPointerCancel={editor.end} onChange={event => updateActive({rotation: Number(event.target.value)})}/></label>{active.kind === 'text' && <label>글씨 크기<input type="range" min="14" max="44" value={active.fontSize || 24} onChange={event => updateActive({fontSize: Number(event.target.value)})}/></label>}</div><div className="sd-selection-buttons"><button type="button" onClick={() => updateActive({rotation: 0})} aria-label="회전 되돌리기"><RotateCcw size={16}/></button><button type="button" onClick={() => moveLayer(-1)} disabled={d.layers[0]?.id === selected} aria-label="뒤로 보내기"><ArrowDown size={16}/></button><button type="button" onClick={() => moveLayer(1)} disabled={d.layers.at(-1)?.id === selected} aria-label="앞으로 가져오기"><ArrowUp size={16}/></button><button type="button" onClick={duplicate} disabled={d.layers.length >= 500} aria-label="조각 복제"><Copy size={16}/></button>{active.kind === 'text' && <button type="button" onClick={() => setTool('text')}><Type size={15}/>글 고치기</button>}<button type="button" className="sd-remove" onClick={removeSelected}><Trash2 size={15}/>조각 지우기</button></div></fieldset>}
         {active?.kind === 'text' && <details key={active.id} className="sd-full-text" open={fullTextOpen} onToggle={event => setFullTextOpen(event.currentTarget.open)}><summary><Type size={15}/>글 전체 편집 <span>{(active.text || '').length} / 6000자</span><ChevronDown size={15}/></summary><label>종이에서 보이지 않는 글도 여기서 고칠 수 있어요.<textarea aria-label="선택한 글 전체 편집" rows={7} value={active.text || ''} disabled={!editable} maxLength={6000} onChange={event => updateActive({text: event.target.value})}/></label></details>}
