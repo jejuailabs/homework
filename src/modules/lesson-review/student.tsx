@@ -19,7 +19,7 @@ export default function StudentLessonReview() {
   if (open?.kind === 'lesson') return <LessonRun id={open.id} onBack={back}/>;
   if (open?.kind === 'reviews') return <Reviews onBack={back}/>;
   return <div className="lr-page lr-student">
-    <header className="lr-heading"><div><span className="lr-eyebrow"><Sparkles size={14}/>배움 다지기</span><h1>오늘 배운 것, 내 것으로</h1><p>풀어 보고, 헷갈린 개념은 카드로 다시 보고, 한 번 더 풀어요. 잊어버릴 때쯤 다시 만나요.</p></div><img src="/characters/rabbit-tori.webp" alt=""/></header>
+    <header className="lr-heading"><div><span className="lr-eyebrow"><Sparkles size={14}/>복습하기</span><h1>오늘 배운 것, 내 것으로</h1><p>풀어 보고, 헷갈린 개념은 카드로 다시 보고, 한 번 더 풀어요. 잊어버릴 때쯤 다시 만나요.</p></div><img src="/characters/rabbit-tori.webp" alt=""/></header>
     {error && <p className="lr-error" role="alert">{error}</p>}
     {!home ? !error && <LoaderCircle className="spin"/> : <>
       <section className={`lr-due ${home.dueCount ? 'has-due' : ''}`}><CalendarClock size={26}/><div><strong>{home.dueCount ? `오늘 다시 볼 문제 ${Math.min(home.dueCount, 10)}개` : '오늘 복습할 문제가 없어요'}</strong><small>{home.dueCount ? '조금 헷갈렸던 문제가 돌아왔어요.' : home.nextDue ? `다음 복습은 ${shortDate(home.nextDue)}에 만나요.` : '수업 복습을 마치면 여기에 복습 문제가 생겨요.'}</small></div>{home.dueCount > 0 && <button type="button" className="button primary" onClick={() => setOpen({kind: 'reviews'})}>복습 시작</button>}</section>

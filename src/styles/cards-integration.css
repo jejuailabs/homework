@@ -19,3 +19,4 @@
  .thd-shortcuts .thd-shortcut>img{display:none}
  .thd-shortcuts .thd-shortcut>svg{position:absolute;right:9px;bottom:8px;width:13px}
 }
+@media(min-width:741px){.top-nav.teacher-nav,.top-nav.student-nav{gap:2px}.top-nav.teacher-nav a,.top-nav.student-nav a{padding:7px 9px;gap:6px}.top-nav.teacher-nav .nav-pictogram,.top-nav.student-nav .nav-pictogram{width:26px;height:26px}}
