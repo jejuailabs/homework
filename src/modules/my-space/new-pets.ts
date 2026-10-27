@@ -107,3 +107,14 @@ export const newPet = (id: string) => newPets.find(pet => pet.id === id);
 export const newPetFromArt = (src?: string) => newPets.find(pet => pet.art === src);
 export const supportsSharedWearables = (pet: string) => !newPet(pet);
 
+export const juniorBodyStates = ['knit', 'overalls', 'raincoat', 'sailor', 'pajamas', 'cape'] as const;
+export const juniorAttachmentIds = ['junior-head-beret', 'junior-head-crown', 'junior-head-flower', 'junior-head-beanie', 'junior-head-party', 'junior-neck-bow', 'junior-neck-scarf', 'junior-neck-bandana', 'junior-neck-moon'] as const;
+export type JuniorAttachmentId = typeof juniorAttachmentIds[number];
+export function juniorWearState(outfit: {body?: string} = {}) {
+  const state = outfit.body?.replace(/^junior-body-/, '');
+  return outfit.body?.startsWith('junior-body-') && juniorBodyStates.includes(state as typeof juniorBodyStates[number]) ? state! : 'bare';
+}
+export function compatibleWearable(pet: string, item: {id: string; slot?: string}) {
+  if (item.slot === 'background' || item.slot === 'frame') return true;
+  return !!newPet(pet) === item.id.startsWith('junior-');
+}

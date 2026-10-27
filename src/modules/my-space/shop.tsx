@@ -7,7 +7,7 @@ import {spaceItem, type Room} from './catalog';
 import {shopCategories, shopCatalog, wearableItem, type ShopKind, type ShopItem} from './shop-catalog';
 import {ItemArt} from './scene';
 import {spaceRequest} from './client';
-import {supportsSharedWearables} from './new-pets';
+import {compatibleWearable, newPet} from './new-pets';
 
 type Look = {pet: string; outfit: Room['outfit']; wardrobe?: WardrobeOutfit};
 function Preview({item, pet, outfit, wardrobe}: Look & {item: ShopItem}) {
@@ -34,8 +34,8 @@ export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBou
   const [kind, setKind] = useState<ShopKind>('pet'), [preview, setPreview] = useState<ShopItem | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const receipt = useRef({item: '', request: ''});
   const owns = (item: ShopItem) => (item.kind === 'accessory' ? wardrobeOwned : owned).includes(item.id);
-  const canDress = supportsSharedWearables(look.pet);
-  const items = shopCatalog.filter(i => i.kind === kind && (!wearableItem(i) || canDress) && (!inventory || owns(i)));
+  const isJunior = !!newPet(look.pet);
+  const items = shopCatalog.filter(i => i.kind === kind && (!wearableItem(i) || compatibleWearable(look.pet, i)) && (!inventory || owns(i)));
   async function wear(item: ShopItem) {
     if (busy || !enabled) return;
     setBusy(true); setError('');
@@ -59,7 +59,7 @@ export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBou
   }
   return <section className="ms-shop"><div className="ms-section-intro"><h2>{inventory ? '차곡차곡 내 보관함' : '모아의 작은 상점'}</h2><p>{inventory ? '내가 모은 취향을 꺼내 봐요. 옷은 여기에서 바로 입을 수 있어요.' : '내 친구에게 미리 입혀 보고 골라 봐요. 모든 구매는 보말로만 가능해요.'}</p></div>
     <div className="ms-categories" role="tablist" aria-label="상점 종류">{shopCategories.map(([id, name]) => <button key={id} type="button" role="tab" aria-selected={kind === id} onClick={() => setKind(id)}>{name}</button>)}</div>
-    {notice && <p className="ms-notice" role="status">{notice}</p>}{error && <p className="ms-error" role="alert">{error}</p>}
+    {isJunior && <p className="ms-hint">보송 옷과 장식은 새 친구 10종이 함께 써요. 한 번 구매하면 다른 보송 친구에게도 입힐 수 있어요.</p>}{notice && <p className="ms-notice" role="status">{notice}</p>}{error && <p className="ms-error" role="alert">{error}</p>}
     <div className="ms-product-grid">{items.map(i => {
       const has = owns(i), clothes = wearableItem(i);
       return <article key={i.id} className={'ms-product kind-' + i.kind} data-item-id={i.id}>
@@ -68,7 +68,7 @@ export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBou
         <button type="button" disabled={busy || (has && !clothes) || !enabled || (!has && balance < i.price)} onClick={() => has && clothes ? void wear(i) : setPreview(i)}>{has ? clothes ? '입기' : '함께하는 중' : balance < i.price ? '조금 더 모아요' : i.kind === 'pet' ? '친구 맞이하기' : '내 보관함에 담기'}</button>
       </article>;
     })}</div>
-    {!items.length && <p className="ms-empty">{!canDress && (kind === 'clothes' || kind === 'accessory') ? '이 친구는 지금 기본 모습으로 함께해요. 보유한 옷과 장식은 기존 친구에게 입힐 수 있어요.' : '여기는 아직 비어 있어요. 상점에서 마음에 드는 조각을 만나 봐요.'}</p>}
+    {!items.length && <p className="ms-empty">{inventory ? '보유한 아이템이 아직 없어요. 작은 상점에서 이 친구에게 맞는 옷과 장식을 만나 봐요.' : '여기는 아직 비어 있어요. 상점에서 마음에 드는 조각을 만나 봐요.'}</p>}
     {preview && <Confirmation item={preview} balance={balance} owned={owns(preview)} busy={busy} enabled={enabled} {...look} onClose={() => setPreview(null)} onBuy={() => void buy()} onWear={() => void wear(preview)}/>}
   </section>;
 }

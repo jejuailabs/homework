@@ -16,6 +16,12 @@ export type SpaceItem = {
 };
 const furniture = (id: string, name: string, en: string, price: number): SpaceItem => ({ id, kind: 'furniture', name, en, price, art: `/my-space/v1/${id}.webp` });
 export const spaceCatalog: SpaceItem[] = [
+    {"id":"junior-body-knit","kind":"clothes","slot":"body","name":"보송 딸기 니트","en":"Fluffy strawberry knit","price":35,"motif":"knit","color":"#e9a6b5"},
+    {"id":"junior-body-overalls","kind":"clothes","slot":"body","name":"보송 소풍 멜빵옷","en":"Fluffy picnic overalls","price":50,"motif":"overalls","color":"#9ab6cc"},
+    {"id":"junior-body-raincoat","kind":"clothes","slot":"body","name":"보송 노란 비옷","en":"Fluffy yellow raincoat","price":40,"motif":"raincoat","color":"#efcf70"},
+    {"id":"junior-body-sailor","kind":"clothes","slot":"body","name":"보송 바다 세일러복","en":"Fluffy sailor suit","price":45,"motif":"sailor","color":"#96b9d2"},
+    {"id":"junior-body-pajamas","kind":"clothes","slot":"body","name":"보송 별빛 잠옷","en":"Fluffy starlight pajamas","price":40,"motif":"pajamas","color":"#b9a5d3"},
+    {"id":"junior-body-cape","kind":"clothes","slot":"body","name":"보송 숲속 망토","en":"Fluffy forest cape","price":45,"motif":"cape","color":"#a6baa0"},
     ...newPets.map(pet => ({id: pet.id, kind: 'pet' as const, name: pet.species, en: pet.en, buddyName: pet.name, price: 60, base: pet.base, art: pet.art})),
     ...Object.entries(characterFiles).map(([base, file]) => ({ id: 'friend-' + base, kind: 'pet' as const, name: ({ cat: '모찌', dog: '두부', hamster: '콩이', alpaca: '구름이', rabbit: '토리', otter: '모아' } as Record<string, string>)[base], en: base, price: 0, base, art: `/characters/${file}.webp` })),
     ...[['american', '아메리칸 쇼트헤어', 'American shorthair', '줄이'], ['british', '브리티시 쇼트헤어', 'British shorthair', '포포'], ['siamese', '샴', 'Siamese', '코코'], ['persian', '페르시안', 'Persian', '솜이'], ['ragdoll', '랙돌', 'Ragdoll', '라라'], ['maine', '메인쿤', 'Maine coon', '솔이']].map(([breed, name, en, buddyName]) => ({ id: 'cat-' + breed, kind: 'pet' as const, name, en, buddyName, price: 60, base: 'cat', art: `/my-space/v1/cat-${breed}.webp` })),
