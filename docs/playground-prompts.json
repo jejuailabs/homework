@@ -1,0 +1,101 @@
+{
+  "created": "2026-10-27",
+  "provider": "OpenAI built-in ImageGen",
+  "reference": "public/my-space/v1/room.webp",
+  "spec": "PLAYGROUND_IMPLEMENTATION.md",
+  "output": "public/playground/v1/{id}.webp",
+  "style": "Soft painterly children's picture-book style matching the reference: rounded chunky shapes, warm cream highlights, gentle shading, pastel palette with one saturated accent. No text, no letters, no Hangul, no numbers, no logos, no watermark. No existing app characters and no people unless stated.",
+  "generations": [
+    {
+      "id": "hub-banner",
+      "name": "말놀이터 허브 배너",
+      "size": "1536x512",
+      "background": "opaque",
+      "prompt": "Use case: header banner for an elementary school word-game playground. Wide 3:1 panoramic scene of a tiny cheerful toy playground made of giant wooden alphabet-free letter blocks, a slide shaped like a question mark, a seesaw balancing a speech bubble and a light bulb, colourful bunting, floating puzzle pieces and little stars. Soft sky gradient, warm afternoon light. Keep the left third calm and less detailed so a title can be overlaid later. {style}"
+    },
+    {
+      "id": "kind-nonsense",
+      "name": "넌센스 메뉴 아이콘",
+      "size": "512x512",
+      "background": "transparent",
+      "prompt": "Use case: menu icon. A giggling round speech bubble with a curly question mark tail, sparkles and a tiny jester hat on top, playful and silly. Centered, generous padding, single object, soft drop shadow. Accent colour: tangerine orange. {style}"
+    },
+    {
+      "id": "kind-riddle",
+      "name": "수수께끼 메뉴 아이콘",
+      "size": "512x512",
+      "background": "transparent",
+      "prompt": "Use case: menu icon. A small wrapped mystery gift box with a magnifying glass leaning on it and a question-mark shaped ribbon, curious mood. Centered, generous padding, soft drop shadow. Accent colour: violet. {style}"
+    },
+    {
+      "id": "kind-vocab",
+      "name": "오늘의 국어 메뉴 아이콘",
+      "size": "512x512",
+      "background": "transparent",
+      "prompt": "Use case: menu icon. An open picture dictionary book with a glowing light bulb rising from the pages and a few abstract glyph-like shapes (not real letters) floating up. Centered, generous padding, soft drop shadow. Accent colour: leaf green. {style}"
+    },
+    {
+      "id": "kind-spelling",
+      "name": "맞춤법 메뉴 아이콘",
+      "size": "512x512",
+      "background": "transparent",
+      "prompt": "Use case: menu icon. A chunky pencil with a friendly eraser end next to a small notebook page showing a big check mark and a small cross mark, no writing. Centered, generous padding, soft drop shadow. Accent colour: sky blue. {style}"
+    },
+    {
+      "id": "mode-solo",
+      "name": "혼자 풀기 모드 아이콘",
+      "size": "384x384",
+      "background": "transparent",
+      "prompt": "Use case: small mode button icon. A single cozy cushion with a puzzle piece resting on it and a tiny desk lamp glow. Simple silhouette readable at 48px. {style}"
+    },
+    {
+      "id": "mode-duel",
+      "name": "1:1 대결 모드 아이콘",
+      "size": "384x384",
+      "background": "transparent",
+      "prompt": "Use case: small mode button icon. Two rounded toy buzzers facing each other, one coral and one teal, with a small lightning spark between them. Friendly, not aggressive. Simple silhouette readable at 48px. {style}"
+    },
+    {
+      "id": "mode-speed",
+      "name": "순발력 방 모드 아이콘",
+      "size": "384x384",
+      "background": "transparent",
+      "prompt": "Use case: small mode button icon. Four small round toy buzzers in four colours (coral, teal, sunflower yellow, lavender) arranged around a tiny stopwatch. Simple silhouette readable at 48px. {style}"
+    },
+    {
+      "id": "mode-team",
+      "name": "팀전 모드 아이콘",
+      "size": "384x384",
+      "background": "transparent",
+      "prompt": "Use case: small mode button icon. Three little pennant flags in different colours planted together on a small grassy mound with a tiny trophy. Simple silhouette readable at 48px. {style}"
+    },
+    {
+      "id": "team-badges",
+      "name": "팀 배지 6종 시트",
+      "size": "1536x1024",
+      "background": "transparent",
+      "prompt": "Use case: sprite sheet of six team badges for a classroom quiz game, arranged in a clean 3x2 grid with equal spacing so each can be cropped. Each badge is a round shield with one simple animal-free emblem: 1 coral sun, 2 teal wave, 3 sunflower-yellow star, 4 lavender moon, 5 leaf-green leaf, 6 sky-blue cloud. Same size, same lighting, same thick soft outline. {style}"
+    },
+    {
+      "id": "result-podium",
+      "name": "결과 시상대",
+      "size": "1024x768",
+      "background": "transparent",
+      "prompt": "Use case: results screen podium. A three-step toy podium made of rounded wooden blocks (center tallest), confetti and streamers falling, empty tops so player avatars can be placed above each step later. Steps tinted gold, silver, bronze in soft pastel tones, no numbers. {style}"
+    },
+    {
+      "id": "countdown-burst",
+      "name": "카운트다운 배경",
+      "size": "768x768",
+      "background": "transparent",
+      "prompt": "Use case: background burst behind a 3-2-1 countdown number. A circular radiating starburst of soft rays and small sparkles with an empty calm center for a large number overlay. Warm yellow to tangerine. {style}"
+    },
+    {
+      "id": "empty-waiting",
+      "name": "대기 중 빈 화면",
+      "size": "1024x768",
+      "background": "transparent",
+      "prompt": "Use case: empty state while waiting for friends to join a game room. A small open door with warm light and a doormat, two empty cushions and a little hourglass on a side table, inviting and calm. {style}"
+    }
+  ]
+}

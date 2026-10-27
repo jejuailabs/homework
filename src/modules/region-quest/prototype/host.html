@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>장난감 마을 · 지역 탐험 테스트</title>
+  <style>
+    *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0}body{display:flex;flex-direction:column;background:#eaf0f7;color:#334052;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}.prototype-bar{height:42px;flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 18px;background:#fffaf3;border-bottom:1px solid #e6e1ed;font-size:12px}.brand{display:flex;align-items:center;gap:9px;white-space:nowrap}.dot{width:10px;height:10px;border-radius:50%;background:#a38be8;box-shadow:0 0 0 4px #eee8fb}.brand strong{font-size:13px;font-weight:750}.brand span{color:#8c8993}.save{display:flex;align-items:center;gap:12px;color:#7a7884}.reset{font:inherit;color:#6b6381;background:transparent;border:1px solid #ded7e8;padding:5px 9px;border-radius:8px;cursor:pointer}.reset:hover{background:#f1ebfa}.reset:focus-visible{outline:3px solid #9c7ae1;outline-offset:2px}iframe{display:block;border:0;width:100%;flex:1;min-height:0;background:#bde4de}@media(max-width:600px){.prototype-bar{padding:0 10px;height:38px}.brand span{display:none}#save-status{font-size:10px}.save{gap:7px}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+  </style>
+  <style>
+    #reset-dialog{width:min(380px,calc(100% - 32px));padding:26px;border:1px solid white;border-radius:22px;background:#fffcf8;color:#4b465c;box-shadow:0 20px 70px #34304e33}#reset-dialog::backdrop{background:#35314840}#reset-dialog h2{font-size:19px;margin-top:0}#reset-dialog p{font-size:13px;line-height:1.8;color:#827b8c}#reset-dialog nav{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}#reset-dialog button{font:inherit;font-size:12px;padding:10px 14px;border:1px solid #ddd3ea;border-radius:11px;background:white;color:#6c5885;cursor:pointer}#reset-dialog #confirm-reset{background:#e6dcf5}
+  </style>
+</head>
+<body>
+  <header class="prototype-bar">
+    <div class="brand"><i class="dot" aria-hidden="true"></i><strong>장난감 마을</strong><span>움직임 · 대화 · 귀환 테스트</span></div>
+    <div class="save"><span id="save-status" role="status" aria-live="polite">이 기기에서 이어하기</span><button class="reset" id="reset-progress" type="button">처음부터</button></div>
+  </header>
+  <iframe id="game" title="장난감 마을 게임" src="/game" sandbox="allow-scripts" allow="fullscreen"></iframe>
+  <dialog id="reset-dialog" aria-labelledby="reset-title"><h2 id="reset-title">처음부터 걸어 볼까요?</h2><p>이 기기의 테스트 진행과 이야기 카드가 초기화돼요.</p><nav><button id="cancel-reset" autofocus>계속 탐험할게요</button><button id="confirm-reset">처음부터 시작</button></nav></dialog>
+  <script>
+    (() => {
+      'use strict';
+      const frame = document.getElementById('game');
+      const status = document.getElementById('save-status');
+      const storageKey = 'region-quest-toy-prototype-v1';
+      const directions = ['down', 'left', 'right', 'up'];
+      const phases = ['meet', 'find', 'deliver', 'done'];
+      let memoryState = null;
+      function point(value) {return value && typeof value === 'object' && !Array.isArray(value) && Number.isFinite(value.x) && Number.isFinite(value.y) && value.x >= 0 && value.x <= 1600 && value.y >= 0 && value.y <= 1000;}
+      function validatedState(value) {
+        try {
+          if (!value || typeof value !== 'object' || Array.isArray(value) || JSON.stringify(value).length > 16384) return null;
+          if (value.version !== 1 || !phases.includes(value.phase) || !point(value.position) || !directions.includes(value.facing) || typeof value.atHome !== 'boolean') return null;
+          const resume = value.resume;
+          if (resume !== null && (!point(resume) || !directions.includes(resume.facing))) return null;
+          return {version: 1, phase: value.phase, position: {x: value.position.x, y: value.position.y}, facing: value.facing, atHome: value.atHome, resume: resume ? {x: resume.x, y: resume.y, facing: resume.facing} : null};
+        } catch {return null;}
+      }
+      function send(message) {frame.contentWindow?.postMessage(message, '*');}
+      function readState() {
+        try {
+          const raw = localStorage.getItem(storageKey);
+          if (!raw) return memoryState;
+          if (raw.length > 16384) {localStorage.removeItem(storageKey); return null;}
+          const state = validatedState(JSON.parse(raw));
+          if (!state) localStorage.removeItem(storageKey);
+          return state;
+        } catch {
+          status.textContent = '저장 공간을 쓸 수 없어요 · 현재 창에서 계속';
+          return memoryState;
+        }
+      }
+      window.addEventListener('message', event => {
+        if (event.source !== frame.contentWindow || event.origin !== 'null' || !event.data || typeof event.data !== 'object') return;
+        if (event.data.type === 'rq-ready') {
+          memoryState = readState();
+          send({type: 'rq-load', state: memoryState});
+          return;
+        }
+        if (event.data.type === 'rq-save') {
+          const state = validatedState(event.data.state);
+          if (!state) {send({type: 'rq-saved', ok: false}); return;}
+          memoryState = state;
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(state));
+            status.textContent = '이 기기에 저장했어요';
+            send({type: 'rq-saved', ok: true});
+          } catch {
+            status.textContent = '저장하지 못했어요 · 현재 창에서 계속';
+            send({type: 'rq-saved', ok: false});
+          }
+        }
+        if (event.data.type === 'rq-reset') resetProgress();
+      });
+      function resetProgress() {
+        memoryState = null;
+        try {localStorage.removeItem(storageKey); status.textContent = '처음부터 시작해요';}
+        catch {status.textContent = '현재 창에서 처음부터 시작해요';}
+        send({type: 'rq-load', state: null});
+      }
+      const resetDialog = document.getElementById('reset-dialog');
+      document.getElementById('reset-progress').addEventListener('click', () => resetDialog.showModal());
+      document.getElementById('cancel-reset').addEventListener('click', () => resetDialog.close());
+      document.getElementById('confirm-reset').addEventListener('click', () => {resetProgress(); resetDialog.close();});
+    })();
+  </script>
+</body>
+</html>

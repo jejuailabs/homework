@@ -1,6 +1,6 @@
 # region-quest — 우리 동네 지도 탐험 RPG 모듈
 
-학교 중심 지역 팩 → 백지도·약도 → 2D 픽셀 RPG → 수업 결과물을 만드는 독립 모듈입니다.
+학교 중심 지역 팩 → 백지도·약도 → 2D 탐험 RPG → 수업 결과물을 만드는 독립 모듈입니다.
 
 지역의 6개 분야를 대화·조사·체험 미션으로 배우고, 향후 다른 지역까지 탐험을 이어 갑니다. 첫 버전부터 거점 귀환과 미션 이어하기를 갖추며, 지역별 미니맵·월드맵·발견한 지점 워프를 확장할 수 있게 설계합니다. 인물 표정, 조사 장면, 이야기 연출 등 이미지 에셋도 미션과 함께 제작합니다.
 
@@ -8,7 +8,28 @@
 - 현장 조사와 게임 설계: [docs/strategy.md](docs/strategy.md)
 - 애월초 OSM 실측: [docs/aewol-osm-measurement.md](docs/aewol-osm-measurement.md)
 
-상태: 기획 문서만 있음(구현 전).
+상태: 기획 문서 + **장난감 마을 스타일의 로컬 플레이 테스트판** + **실제 애월 도로를 따르는 연속 스크롤 샘플**. 지역 학습 내용과 학급 연결은 다음 단계입니다.
+
+## 실제 애월 길을 따라 걷기
+
+```powershell
+node src/modules/region-quest/scripts/serve-continuous.mjs
+```
+
+<http://127.0.0.1:8788>에서 학교 인근부터 해안까지 약 421m의 실제 도로 경로를 걸어봅니다. 도로·장소 좌표는 유지하고 장난감 이미지를 입혔습니다. 카메라가 따라 움직이며 미니맵에서 원본 도로를 비교할 수 있습니다. [연속 지도 샘플과 지도 보존 원칙](continuous/README.md)을 참고하세요.
+
+## 장난감 마을 먼저 플레이하기
+
+프로젝트 루트에서 다음 명령을 실행하고 <http://127.0.0.1:8787>을 엽니다.
+
+```powershell
+node src/modules/region-quest/scripts/serve-prototype.mjs
+```
+
+클릭·방향키·WASD로 걷고, 모모에게 편지 배달 미션을 받아 보세요. `캐릭터 보기`에서 네 방향 걷기, `학교로`와 `탐험 계속`으로 귀환과 이어하기를 확인할 수 있습니다. 외부 API·DB 없이 로컬 브라우저에만 저장합니다.
+
+- 구현 범위·조작·검증 방법: [prototype/README.md](prototype/README.md)
+- 독립 테스트: `node src/modules/region-quest/tests/run-tests.mjs`
 
 ## 분리 계약
 
