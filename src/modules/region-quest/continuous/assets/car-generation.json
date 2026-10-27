@@ -1,0 +1,24 @@
+{
+  "date": "2026-10-27",
+  "tool": "Codex built-in image_gen",
+  "sourceFile": "exec-b5a863ea-5a4a-44fd-9683-7e3ec991273f.png",
+  "references": [
+    "../../prototype/assets/player.png",
+    "home-peach.webp"
+  ],
+  "purpose": "Four directional sprites for the free exploration car mode.",
+  "prompt": "Use case: stylized-concept. Asset type: production 2D game directional sprite atlas on genuinely transparent background. Generate a NEW single 2x2 sprite sheet of exactly the SAME tiny mint-green and cream open-top toy car carrying the same cute purple bunny-hood girl from reference image 1. Image 1 is character identity/style reference only, image 2 is village material and lighting style reference only. The car is rounded, child-friendly and chunky, four small charcoal wheels, cream bumpers, circular warm headlights, small steering wheel. Bunny girl seated in driver's seat, hands on steering wheel, bunny ears visible, same brown hair, round face and lavender hood; no extra passenger. Soft matte 3D toy render, pastel colors, soft upper-left daylight, no outlines, consistent scale, camera looks down from about 35 degrees and stays fixed. EXACT layout: upper-left cell front view facing DOWN toward viewer (headlights visible); upper-right cell profile facing LEFT (nose unmistakably to left); lower-left cell profile facing RIGHT (nose unmistakably to right); lower-right cell rear view facing UP away from viewer (rear bumper visible, back of bunny hood). Views must have identical car proportions and colors, coherent four wheels and one girl only. Each complete vehicle centered in its own equal quadrant with large clear transparent gutters and margins, no overlap or clipping. 1024 square composition. No ground platform, no roads, no scenery, no full cast shadows extending outside vehicle, no labels, no words, no numbers, no borders, no grid, no watermark. Real alpha transparency, do not draw a checkerboard.",
+  "layout": [
+    "top-left: down/front",
+    "top-right: left/profile",
+    "bottom-left: right/profile",
+    "bottom-right: up/rear"
+  ],
+  "outputs": [
+    "car-down.webp",
+    "car-left.webp",
+    "car-right.webp",
+    "car-up.webp"
+  ],
+  "preparation": "scripts/prepare-car-assets.mjs: largest alpha-connected component in each quadrant, crop with 3px padding, resize height 240, preserve alpha, WebP quality92. No scene repainting."
+}
