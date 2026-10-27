@@ -2,6 +2,8 @@
 
 학교 중심 지역 팩 → 백지도·약도 → 2D 픽셀 RPG → 수업 결과물을 만드는 독립 모듈입니다.
 
+지역의 6개 분야를 대화·조사·체험 미션으로 배우고, 향후 다른 지역까지 탐험을 이어 갑니다. 첫 버전부터 거점 귀환과 미션 이어하기를 갖추며, 지역별 미니맵·월드맵·발견한 지점 워프를 확장할 수 있게 설계합니다. 인물 표정, 조사 장면, 이야기 연출 등 이미지 에셋도 미션과 함께 제작합니다.
+
 - 구현 지시서(Codex 의뢰용): [IMPLEMENTATION_BRIEF.md](IMPLEMENTATION_BRIEF.md)
 - 현장 조사와 게임 설계: [docs/strategy.md](docs/strategy.md)
 - 애월초 OSM 실측: [docs/aewol-osm-measurement.md](docs/aewol-osm-measurement.md)
@@ -17,6 +19,7 @@
 3. **DB는 공유하고 데이터는 분리합니다.** 같은 Firebase 프로젝트를 쓰되 새 데이터는 아래 경로에만 씁니다.
    - `users/{uid}/regionPacks/*`, `regionPacksPublished/*`, `regionMapCache/*`, `regionQuestLimits/*`
    - `classes/{classId}/regionSessions/*`, `classes/{classId}/students/{studentId}/regionProgress/*`
+   - `classes/{classId}/students/{studentId}/regionProfile/main` (지역 간 누적 성장·여권·귀환 정보)
    - Storage `region-quest/**`
    - 기존 문서(학급, 학생, 숙제, 포인트 등)는 **읽기만** 합니다. 기존 경로에 쓰는 일은 기존 API를 호출하는 방식으로만 합니다.
    - 보안 규칙은 기존 블록을 고치지 않고 새 블록을 추가만 합니다.

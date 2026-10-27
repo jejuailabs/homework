@@ -15,6 +15,8 @@
 - 이 루프가 반복되며 지역 전체를 한 바퀴 돕니다.
 - 미션은 기본적으로 자동 생성하고, 교사가 순서·내용·스팟을 직접 편집할 수 있습니다.
 - 지역과 지역은 나중에 연결할 수 있게 설계합니다.
+- 첫 버전부터 **거점 귀환 → 탐험 계속**과 선택·증거 제시·주민 반응이 있는 **대화형 미션**을 제공합니다. 향후 지역별 미니맵과 월드맵에서 발견한 지점으로 워프하며 다른 지역의 배움도 이어 갑니다.
+- 이미지 생성은 인물·표정·조사 장면·이야기 연출·체험 소품·이동 연출까지 활용합니다. 실제 생성과 외부 API 사용은 서비스별 비용·한도 확인 및 사용자 승인 후 실행합니다.
 
 같은 *지역 팩* 데이터로 다음도 함께 만듭니다.
 - 교사용 백지도·약도(SVG/PDF)
@@ -38,12 +40,12 @@
 | R4 | 약도 엔진 | 백지도 L1~L3 외 5개 스타일, PDF | 그림지도 텍스처 소수 |
 | R5 | 타일 컴파일러 | 좌표 → 타일맵, 도달 검사, 절차적 채우기 | – |
 | R6 | 아트 파이프라인 | 스타일 바이블, 아틀라스 생성·후처리·검수 | **대량** |
-| R7 | 게임 런타임 | 이동, 충돌, 구역 안개, 길 안내, 대화, 조사, 저장 | 사용 |
-| R8 | 캠페인·미션 엔진 | 구역 나누기, 자동 캠페인, 6분야 미션 템플릿, 흐름 검사, 교사 덮어쓰기 층 | 카드·인물 일러스트 |
+| R7 | 게임 런타임 | 이동, 구역 안개, 미니맵, 거점 귀환·이어하기, 분기 대화·조사·체험 | 사용 |
+| R8 | 캠페인·미션 엔진 | 자동 캠페인, 대화 그래프·증거·아이템, 6분야 템플릿, 흐름 검사, 교사 수정 보존 | 표정·조사 장면·이야기 연출 |
 | R9 | 교실 연동·교사 편집기 | 미션·구역·스팟 편집기, 학생 배정, 교사 통제, 학급 진행률 | – |
 | R10 | 출력·평가 | 우리 지역 이야기책 PDF, 분야별 리포트 | – |
-| R12 | (향후) 지역 연결 | 월드 그래프, 관문 스팟, 여권 | 관문 소품 |
 | R11 | QA·출시 | 기기, 접근성, 보안 규칙, 성능 | – |
+| R12 | (향후) 지역 연결·워프 | 월드맵, 지역별 미니맵, 발견 지점 워프, 내 학교 귀환, 지역 비교 미션 | 지역 카드·관문·이동 연출 |
 
 각 단계는 **기능 단위로 검증 → 커밋 → 푸시**합니다(§1).
 
@@ -160,6 +162,7 @@ export type RegionPack = {
   zones: Zone[];
   campaign: Campaign;                 // §4.5
   links: WorldLink[];                 // §4.6, 향후 지역 연결(지금은 빈 배열)
+  travel: {hubAnchorId: string; anchors: TravelAnchor[]; mapArtKey?: string}; // §4.6, 첫 버전은 학교 거점
   projection: {originLat: number; originLon: number; metersPerTile: number};   // 기본 5
   network: {nodes: RoadNode[]; edges: RoadEdge[]};
   areas: Area[]; coastline: [number, number][][];
@@ -192,7 +195,12 @@ export type TileMap = {
 ```ts
 export type RegionProgress = {
   packId: string; campaignVersion: string;
-  current: {missionId: string; stepIndex: number; startedAt: string} | null;   // null은 캠페인 완료일 때만 허용
+  current: {missionId: string; stepId: string; startedAt: string} | null;   // null은 캠페인 완료일 때만 허용
+  position: {x: number; y: number; anchorId?: string};                     // 게임 타일 위치, GPS 아님
+  resume: ResumePoint;                                                 // 귀환 전 탐험 체크포인트. 거점 자동 저장과 분리
+  stepStates: Record<string, Record<string, {dialogueNodeId?: string; choiceIds: string[]; clueIds: string[]; activityState?: Record<string, number | boolean>}>>; // missionId → stepId → 상태
+  evidence: Record<string, string[]>;                                   // missionId → 획득 단서 ID, 단계 전환 뒤에도 보존
+  flags: Record<string, boolean>; discoveredAnchorIds: string[];
   zonesRevealed: string[]; revealedTiles: string /* 이동 경로 비트셋 RLE */;
   missions: Record<string, {doneAt: string; answers: {stepId: string; correct: boolean; tries: number}[]}>;
   cards: {placeId: string; category: Category; at: string}[];                  // 배움 카드
@@ -201,37 +209,70 @@ export type RegionProgress = {
   ideas: {issueId: string; choice: string; text: string; at: string}[];
   minutesPlayed: number; finishedAt?: string; updatedAt: string;
 };
-export type ExplorerProfile = {categoryXp: Record<Category, number>; passport: {packId: string; finishedAt: string}[]; updatedAt: string};   // 학생 계정 단위 누적(지역 간 공유)
-export type ClassSession = {packId: string; status: 'idle' | 'live' | 'paused' | 'recall' | 'ended'; openZones: string[]; startMissionId?: string; sunsetAt?: string; updatedAt: string};
+export type ExplorerProfile = {
+  home: {packId: string; anchorId: string}; activePackId: string; mode: 'exploring' | 'at-hub';
+  lastExpedition?: {packId: string; campaignVersion: string};
+  pendingTravel?: {operationId: string; from: ResumePoint; to: {packId: string; campaignVersion: string; anchorId: string}};
+  recentTravelResults: {operationId: string; status: 'committed' | 'failed'; at: string}[];
+  categoryXp: Record<Category, number>; passport: {packId: string; finishedAt: string}[];
+  updatedAt: string;
+}; // 현재 학급의 학생 계정 단위 누적. 학급 이전 시의 계정 병합은 별도 범위
+export type ClassSession = {
+  packId: string; status: 'idle' | 'live' | 'paused' | 'recall' | 'ended'; openZones: string[];
+  startMissionId?: string; sunsetAt?: string;
+  travelPolicy: {allowedPackIds: string[]; warpEnabled: boolean; recallTo: 'local-hub' | 'home'};
+  updatedAt: string;
+};
 ```
+
+- 첫 버전의 `home`과 지역 거점은 같은 학교이고 `allowedPackIds`에는 현재 팩만 둡니다. 귀환 중에도 `current`와 `stepStates`를 보존하고 목표는 "탐험 계속"으로 안내합니다. 귀환 자체는 미션 완료나 보상 지급 사유가 아닙니다.
+- 조사 뒤 NPC에게 돌아가거나 보조 대화에 들어가도 미션별 `evidence`와 이전 `stepStates`를 지우지 않습니다. 완료 후 재방문 반응도 이 기록과 완료 상태에서 결정합니다.
+- `resume`는 마지막 안전 타일·미션 단계·대화 지점을 가리킵니다. 거점에서 30초 자동 저장이 실행돼도 귀환 전 체크포인트를 덮어쓰지 않습니다. 지역을 옮겨도 원래 지역의 진도 문서를 유지합니다.
+- 진도·아이템·보상은 서버가 게시된 미션 정의와 대조합니다. 보상 키는 `(studentId, packId, campaignVersion, missionId, rewardKey)`로 멱등 처리하고, 버전 간 동일 미션의 보상 이월도 검사해 귀환·재방문·재시도로 중복 지급하지 않습니다.
 
 ### 4.5 캠페인·미션
 
 ```ts
 export type StepType = 'go' | 'talk' | 'inspect' | 'check' | 'record' | 'help' | 'idea';
 // go: 목적지 도착 / talk: NPC·인물 대화 / inspect: 장면 속 단서 클릭 / check: 확인 문제 / record: 장소 사진기·한 줄 느낌 / help: 짧은 체험(그물 정리 등) / idea: 동네 고치기
+export type FactRef = {packId: string; campaignVersion: string; factId: string};
+export type StoryText = {text: string; kind: 'fact' | 'fiction' | 'guidance'; factIds: string[]; crossRegionFacts?: FactRef[]};
+export type DialogueLine = StoryText & {speaker: string; portraitKey?: string; expression?: 'neutral' | 'happy' | 'curious' | 'concerned'};
+export type DialogueCondition = {type: 'clue' | 'item' | 'flag'; key: string};
+export type DialogueChoice = {
+  id: string; label: StoryText; next: string;
+  requires?: DialogueCondition[];
+  effects?: {type: 'set-flag' | 'give-item' | 'take-item'; key: string}[];
+};
+export type DialogueNode = {
+  id: string; lines: DialogueLine[]; choices?: DialogueChoice[]; next?: string;
+  sceneKey?: string; end?: 'continue-step' | 'finish-step';
+};
+export type DialogueGraph = {entryNodeId: string; nodes: DialogueNode[]};
 export type MissionStep = {
   id: string; type: StepType; placeId?: string; zoneId?: string;
-  lines?: {speaker: string; text: string; factIds: string[]}[];          // 대사. 사실 문장은 반드시 factIds가 있어야 함
-  clues?: {id: string; x: number; y: number; text: string; factIds: string[]}[];
-  question?: {prompt: string; choices: string[]; answer: number; explain: string; factIds: string[]};
-  hint: {afterSec: number; text: string}[];                             // 단계적 힌트(30초·2분 등)
+  lines?: DialogueLine[]; dialogue?: DialogueGraph;
+  sceneKey?: string; clues?: {id: string; x: number; y: number; content: StoryText}[];
+  question?: {prompt: StoryText; choices: StoryText[]; answer: number; explain: StoryText};
+  hint: {afterSec: number; content: StoryText}[];                       // 단계적 힌트(30초·2분 등)
+  requiredEvidence?: DialogueCondition[];
+  activity?: {templateId: string; assetKeys: string[]; targetCount: number};
 };
 export type Mission = {
   id: string; zoneId: string; landmarkId: string; categories: Category[]; title: string;
   order: number; kind: 'main' | 'side' | 'hidden' | 'issue';
-  command: {speaker: string; text: string; direction?: string};          // 이 미션으로 보내는 이동 명령
+  command: DialogueLine & {direction?: string};                         // 이 미션으로 보내는 이동 명령
   steps: MissionStep[];
   reward: {card: true; stamp?: string; storyPiece?: string; item?: string; xp: Partial<Record<Category, number>>};
-  bridge: string;                                                        // 완료 대화의 마지막 줄 = 다음 미션 연결 문장
+  bridge: DialogueLine;                                                 // 완료 대화의 마지막 줄 = 다음 미션 연결 문장
   templateId: string; origin: 'auto' | 'teacher'; curriculum: string[];
 };
 export type Campaign = {
   version: string; generatedAt: string; storyTemplate: string;
-  intro: {lines: {speaker: string; text: string}[]};
+  intro: {lines: DialogueLine[]};
   missions: Mission[];               // 자동 생성 결과
   overrides: MissionOverride[];      // 교사 수정 층. 재생성해도 보존
-  finale: {placeId: string; lines: {speaker: string; text: string; factIds: string[]}[]};
+  finale: {placeId: string; lines: DialogueLine[]};
 };
 export type MissionOverride =
   | {op: 'reorder'; missionIds: string[]}
@@ -248,14 +289,30 @@ export type MissionOverride =
   - `factIds`가 미승인 사실을 가리킴
   - 이동 시간이 2분을 넘는데 경유 스팟이 없음
   - 같은 분야 3연속
+- 명령·연결문장·선택지·힌트·문제·해설·피날레에도 동일한 `StoryText` 검수를 적용합니다. `fact`에는 승인된 학생용 사실 참조가 하나 이상 필수입니다(`factIds` 또는 `crossRegionFacts`). `fiction`은 상상 장면임을 표시하며 지역 사실을 새로 주장할 수 없습니다. 오답 선택지도 `guidance`로 구분하고 승인 사실로 된 해설과 함께 검수합니다.
+- 대화 그래프는 진입점·참조·도달 가능한 종료·조건 충족 가능성을 검사합니다. 반복 질문은 허용하되 모든 분기에서 메인 목표로 복귀할 수 있어야 합니다. 필수 증거 없이 `finish-step`에 도착해도 완료시키지 않습니다.
 
-### 4.6 지역 연결 (향후, 형식만 지금 확정)
+### 4.6 귀환·지역 연결·워프
 
 ```ts
-export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; toGatePlaceId?: string; unlock: 'campaign-complete' | 'teacher'; label: string};
+export type TravelAnchor = {
+  id: string; placeId: string; kind: 'hub' | 'gate' | 'waypoint';
+  unlock: 'arrival' | 'visit' | 'mission'; missionId?: string; artKey?: string;
+};
+export type ResumePoint = {packId: string; campaignVersion: string; x: number; y: number; missionId?: string; stepId?: string; dialogueNodeId?: string};
+export type WorldLink = {
+  id: string; fromAnchorId: string; toPackId: string; toAnchorId: string;
+  unlock: 'campaign-complete' | 'teacher'; label: string; transitionArtKey?: string;
+};
 ```
-- 팩 ID는 전역에서 고유해야 합니다. 원점 좌표와 함께 위경도를 보존합니다.
-- 진도(`RegionProgress`)는 지역별 문서로, `ExplorerProfile`은 학생당 1문서로 저장합니다.
+- **첫 버전 필수**: 현재 지역 거점으로 귀환, 귀환 전 체크포인트, 탐험 계속, 현재 지역 미니맵의 거점·목표·완료 표시. `links:[]`, 워프 비활성으로 시작합니다.
+- **향후 공개**: 월드맵의 지역 선택 → 해당 지역 미니맵 → 발견한 관문·거점 선택 → 워프. 다른 지역 첫 진입은 허용된 관문으로 하고 도입 미션을 보여 줍니다. 미발견 지점·닫힌 구역으로 이동하거나 필수 학습을 건너뛰지 않습니다. 이미 발견한 구역의 미완료 조사로 돌아가는 것은 허용합니다.
+- **귀환 두 종류**: 현재 지역 거점과 내 학교(`home`)를 구분합니다. 어느 쪽으로 돌아가도 방문 지역의 `resume`와 미완료 목표는 유지합니다. 거점의 "탐험 계속"에서 재개할 지역·목표를 보여 줍니다. 귀환 비용·소모 아이템·재사용 대기시간은 없습니다.
+- **이동 절차**: 출발 진도 저장 확인 → 서버의 목적지 배정·게시 버전·관문·세션 권한 검사 → 목적지 에셋 준비 → 안전 타일로 이동 완료. 이동은 학생당 하나씩 처리합니다. `pendingTravel`과 완료 결과는 `regionProfile/main`에 저장하고, 같은 `operationId` 재시도는 같은 결과를 반환합니다. 결과 목록은 최대 20건으로 제한하고, 보존 범위를 벗어난 오래된 요청은 다시 실행하지 않고 상태 재조회로 돌립니다. 완료 전 실패하면 출발 상태를 복구합니다.
+- **이어하기 검사**: 정지·종료된 수업은 학생 이동보다 우선합니다. 복귀 시 같은 게시 버전과 열린 구역을 확인하고, 기존 타일이 막히면 같은 구역의 안전 타일로 보정합니다. 버전이 폐기됐거나 배정이 철회됐으면 현재 허용된 지역 거점 또는 게임 데이터를 표시하지 않는 대기 화면으로 안내하고 진도는 삭제하지 않습니다. 내 학교도 현재 권한이 있을 때만 엽니다. 새 버전 이관은 교사가 확인한 단계 매핑으로만 합니다.
+- **출시 테스트**: 대화 선택 직후 귀환, 체험 중 귀환, 거점 자동 저장, 새로고침 후 복귀에서 선택·단서·아이템·미니게임 상태를 보존합니다. 이동 실패·중복 요청·수업 강제 귀환 중 보상 중복과 진도 손실이 없어야 합니다.
+- 팩·장소·미션·관문 참조는 팩 ID와 함께 식별합니다. 도감과 아이템도 지역별로 출처를 보존합니다. `factIds`는 현재 고정 게시 버전 안에서 해석하고, 지역 비교는 `crossRegionFacts`에 팩·게시 버전·사실 ID를 명시합니다. 비교 미션 게시/조회 시 양쪽 배정과 승인 상태를 검사하며, 접근이 철회된 지역의 내용은 학생용 응답에서 제외합니다.
+- 기본 지도 지형은 좌표·타일 데이터에서 그립니다. 생성 이미지는 지역 카드·프레임·관문 장식에 사용하고, 지형·위치·미발견 정보는 이미지에서 추측해 만들지 않습니다.
 
 ### 4.4 Firestore 경로 (제안)
 
@@ -429,7 +486,7 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
 - 러닝킹과 같이 **iframe 격리**로 만듭니다.
   - 교사 미리보기: 교사 인증 후 HTML을 제공합니다.
   - 학생 실행: 학생 인증과 학급 배정을 확인한 뒤 HTML을 제공합니다.
-- 부모 창과는 `postMessage`로만 통신합니다. 메시지 종류: `load-pack`, `progress-load`, `progress-save`, `session-update`, `close`, `export-book`.
+- 부모 창과는 `postMessage`로만 통신합니다. 메시지 종류: `load-pack`, `progress-load`, `progress-save`, `session-update`, `travel-request`, `travel-result`, `close`, `export-book`. 이동 요청은 부모와 서버의 검증을 거치며 iframe이 임의 팩이나 Storage URL을 직접 열지 않습니다. 발신 창·메시지 형식·요청 ID를 검증합니다.
 - Canvas2D 자체 렌더러를 씁니다. 외부 게임 엔진은 넣지 않습니다(번들 경량화). `image-rendering: pixelated`, 정수 배율(×2~×4) 확대.
 
 **필수 시스템**
@@ -443,24 +500,28 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
 | 구역 안개 | 열리지 않은 구역은 안개로 덮습니다(길 윤곽만 흐리게). **구역 경계에 들어가면 그 구역 전체가 걷히는 연출 + 구역 이름 카드.** 교사가 닫은 구역은 "아직 갈 수 없는 곳"으로 막습니다. 지나간 길은 `revealedTiles`에 기록합니다 |
 | 목표 고정 HUD | 화면 위에 현재 메인 목표 1줄(어디로·무엇을)이 항상 보입니다. 목표가 없는 상태가 되면 개발 모드에서 오류를 냅니다 |
 | 길 안내 | 목적지까지 A* 경로를 발자국으로 표시하고, 화면 가장자리에 방위 화살표를 둡니다(교사 설정으로 끌 수 있음). 30초 경로 이탈 시 강조, 2분 무진행 시 힌트, 3분이면 "같이 가 줄까?"(자동 이동) |
-| 대화 | 2~3줄씩, 말하는 사람 초상, 읽어 주기(TTS, 기존 음성 기능 재사용 가능 여부 확인), 어려운 말 사전. 완료 대화의 마지막 줄(`bridge`)이 끝나면 다음 목표가 바로 HUD에 표시됩니다 |
-| 조사(inspect) | 랜드마크 장면 확대 → 단서 2~3개 클릭 → 단서 문장(사실 기반) |
+| 대화 | 2~3줄씩, 인물별 4표정 초상, 선택지 2~3개, 다시 묻기·단서 제시·아이템 전달·반응 변화. 읽어 주기와 어려운 말 사전. 완료 대화의 마지막 줄(`bridge.text`) 뒤 다음 목표를 즉시 표시 |
+| 조사(inspect) | 랜드마크별 전용 조사 장면 → 단서 2~3개 클릭 → 사실 문장과 증거 획득. 그림 위 클릭 영역은 별도 좌표 데이터이며 키보드로도 선택 가능 |
+| 체험(help) | 생성 소품을 이용한 10~20초 상호작용(그물 정리·정낭 걸기·편지 분류 등). 끌기 외에 클릭·키보드 대체 조작과 상태 저장 제공 |
 | 확인(check) | 보기 3개 문제, 틀리면 관련 단서를 다시 보여 주고 재도전(실패 상태 없음) |
 | 기록(record) | 장소 사진기: 현재 픽셀 장면 캡처 + 감정 스티커 + 한 줄 느낌 |
 | 배움 카드 | 미션 완료 시 카드 획득 연출 → 도감(6분야 탭)에 등록, 분야 경험치 증가와 등급 표시 |
-| 미니맵 | 처음부터 방위표와 지도 기호를 표시합니다. 열린 구역, 현재 목표, 완료 도장을 표시합니다 |
-| 해넘이 | 수업 세션 `sunsetAt` 5분 전부터 하늘색 변화. 도달하면 진행 중 미션을 저장하고 "학교로 돌아가자" → 정리 화면 |
-| 이어하기 | 다시 들어오면 "지난 이야기" 30초 회상(완료 미션 요약) → 저장된 `current` 미션 단계에서 재개 |
+| 미니맵 | 현재 지역의 실제 타일 지형, 방위·기호, 현재 위치, 목표, 거점, 완료 도장을 표시. 팩마다 독립적으로 렌더링하고 향후 월드맵의 지역 선택과 연결. 워프 버튼은 R12 활성화 전 숨김 |
+| 거점 귀환 | 첫 버전부터 메뉴의 "거점으로 돌아가기" 제공. 미션·대화·체험 상태를 저장한 뒤 현재 지역 거점으로 이동. 거점 자동 저장과 탐험 체크포인트를 분리하고 "탐험 계속" 표시 |
+| 해넘이 | `sunsetAt` 5분 전부터 하늘색 변화. 진행 중 상태를 저장한 뒤 교사가 정한 귀환 지점으로 이동 → 정리 화면. 수업 종료 상태에서는 탐험 재개를 잠금 |
+| 이어하기 | 건너뛸 수 있는 "지난 이야기" 30초 회상 → 귀환 전 미션·선택지·단서·체험 상태 복원. 같은 게시 버전·권한·열린 구역·안전 타일을 확인한 뒤 재개 |
 | 저장 | 30초마다, 그리고 단계 완료 시 `progress-save`. 실패해도 메모리로 계속 진행 |
 | 정리 화면 | 오늘 얻은 배움 카드, 도장, 장소 기록, 다녀온 지도 미리보기 |
 
-**성능**: 저사양 크롬북·태블릿에서 60fps(최소 30fps). 첫 화면까지 3초 이내(학교 주변 청크 우선). 아틀라스 총 4MB 이하.
+**성능**: 저사양 크롬북·태블릿에서 60fps(최소 30fps). 첫 화면까지 3초 이내(학교 주변 청크 우선). 기본 플레이 아틀라스는 총 4MB 이하를 유지합니다. 표정·조사 장면·컷신은 지역·미션별 묶음으로 나누고 현재/다음 장면만 지연 로드합니다. 각 묶음의 전송 크기와 디코딩 메모리를 manifest와 기기 QA에 기록하고, 지역 전환 뒤 이전 묶음을 해제합니다.
 **완료 기준**: 애월초 팩으로 다음이 끊김 없이 동작해야 합니다. 키보드·터치·클릭 이동을 모두 확인합니다.
 - 인트로 → 첫 명령 → 학교 구역 조사 → 배움 카드
 - 다음 명령 → 우체국 구역 진입(안개 걷힘) → 조사·확인·기록 → 다음 명령
 - 저장 → 새로고침 → 회상 → 같은 단계에서 재개
+- 증거 제시 선택지 → NPC 반응 변화 → 체험 → 보상 → 다음 명령
+- 대화·체험 도중 귀환 → 거점 자동 저장 → 새로고침 → 탐험 계속(상태 보존, 보상 중복 없음)
 
-**커밋**: 렌더러, 이동·충돌, 구역 안개, HUD·길 안내, 대화·조사·확인·기록, 카드·도감, 해넘이·이어하기를 나눠 커밋합니다.
+**커밋**: 렌더러, 이동·충돌, 구역 안개, HUD·미니맵, 분기 대화·조사·체험, 카드·도감, 귀환·해넘이·이어하기를 나눠 커밋합니다.
 
 ### R8. 캠페인·미션 엔진 (게임의 중심)
 
@@ -481,23 +542,31 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
 
 | 템플릿 | 분야 | 단계 구성 |
 |---|---|---|
-| `history-clue` | 역사 | go → inspect(옛 흔적 단서) → talk(옛날 이야기) → check → 이야기 조각 |
-| `person-meet` | 인물 | go → talk(인물, "상상해서 그린 모습") → inspect(남긴 기록·건물) → check → 인물 카드 |
-| `culture-use` | 문화 | go → inspect(전통 물건·건축) → help(쓰임 체험, 예: 정낭 걸기) → check |
-| `tourism-view` | 관광자원 | go → inspect(전망 지점 찾기) → record(사진기) → check |
-| `life-help` | 삶 | go → talk(일하는 사람) → help(짧은 체험: 그물 정리, 귤 따기) → check |
-| `public-errand` | 공공기관 | go → talk(주민 부탁) → help(편지 배달, 잃어버린 물건, 민원 접수) → check(기관이 하는 일) |
+| `history-clue` | 역사 | go → talk(의뢰·질문) → inspect(옛 흔적) → talk(단서 제시) → check → 이야기 조각 |
+| `person-meet` | 인물 | go → talk(인물, "상상해서 그린 모습") → inspect(기록·건물) → talk(발견 공유) → check → 인물 카드 |
+| `culture-use` | 문화 | go → talk(쓰임 질문) → inspect(전통 물건·건축) → help(정낭 걸기 등) → talk(반응) → check |
+| `tourism-view` | 관광자원 | go → talk(주민 안내·선택) → inspect(전망 지점) → record(사진기) → talk(발견 공유) → check |
+| `life-help` | 삶 | go → talk(일하는 사람) → help(그물 정리·귤 따기) → talk(결과·쓰임) → check |
+| `public-errand` | 공공기관 | go → talk(주민 부탁) → help(편지 배달·분실물·민원) → talk(주민 반응) → check(기관 역할) |
 | `teacher-custom` | 교사 선택 | 교사가 단계를 고르고 문장·문제를 직접 입력 |
 | `issue-idea` | 동네 고치기(선택) | go → inspect(불편한 점) → idea |
 
 - `help` 체험은 10~20초짜리 미니 상호작용입니다(클릭·드래그 3~5회). 템플릿마다 1종씩, 총 6종을 런타임에 구현합니다.
 - 이동 시간이 2분을 넘으면 경로 위의 보조 스팟으로 `side` 미션 또는 길 위의 발견을 자동으로 끼워 넣습니다.
 
+**대화형 미션의 필수 구성**
+- 메인 미션마다 NPC의 구체적인 부탁 → 학생의 선택 → 조사·체험 → 근거를 들고 돌아오기 → NPC 반응과 배움 카드 → 다음 의뢰를 구성합니다. 장면 성격에 따라 순서는 바꿀 수 있지만 대사 읽기와 객관식 문제만으로 끝내지 않습니다.
+- 최소 하나의 의미 있는 선택(질문 순서·도움 방법·어떤 단서를 제시할지)이 있고, 선택에 맞는 반응이 나와야 합니다. 다른 선택도 같은 핵심 배움에 도달하며 틀린 선택 때문에 영구적으로 막히지 않습니다.
+- NPC는 처음 만남·의뢰 진행 중·단서 확보·완료 후 재방문 대사를 구분합니다. 재방문에서는 이미 끝낸 설명을 건너뛸 수 있고, 새 질문이나 짧은 지역 이야기로 반응합니다.
+- 각 메인 미션은 **전용 조사/대화 배경 1개, 상황에 맞는 표정 변화, 클릭할 증거 또는 체험 소품, 완료 시각 연출**을 갖춥니다. 교사 편집기는 대화 분기를 펼쳐 보고 모든 선택지를 미리 실행할 수 있어야 합니다.
+- 예시(허구 의뢰): 포구 NPC가 물건 정리를 부탁함 → "어디에 쓰는 물건인가요? / 먼저 살펴볼게요" 선택 → 검수된 지역 자료가 설명하는 소품 조사 → 용도에 맞게 정리 → 증거 제시 → NPC 감사와 다음 구역 소개. 직업·역사에 관한 사실은 반드시 승인 자료에 연결합니다.
+
 **4) 문장 생성 `writeLines`**
 - 입력: 해당 장소의 `verified` 사실, 템플릿 문장 틀, 세계관 템플릿(`wind-spirit` 등)
 - 출력: 명령, 대사, 단서, 문제, 해설, `bridge` 문장
-- **사실을 말하는 문장에는 반드시 `factIds`를 붙이고, 없는 문장은 버립니다.** 감탄·안내 문장("좋아, 가 보자!")은 `factIds` 없이 허용하되, 고유명사·숫자·연도를 포함하면 버립니다.
+- 모든 문장은 `StoryText`로 생성합니다. **사실 문장은 승인된 학생용 `factIds`와 내용 일치를 검수**합니다. NPC의 허구 의뢰는 `fiction`, 안내·선택 질문은 `guidance`이며 새로운 지역 사실을 주장하면 검수에서 거부합니다. 역사 인물의 창작 대사와 재구성 장면에는 "상상해서 만든 대화/장면"을 표시합니다.
 - AI를 쓸 수 없을 때는 문장 틀 + 사실 원문 인용으로 대체합니다(오프라인 생성 보장).
+- 플레이 중 유료 AI 호출 없이 게시된 대화 그래프로 실행합니다. 교사 작성 시의 AI 초안도 별도 비용 승인을 받은 범위에서만 만듭니다.
 
 **5) 교사 덮어쓰기 층**: `MissionOverride`를 저장하고 `resolveCampaign`으로 적용합니다. 자동 재생성 뒤에도 교사 수정분은 유지됩니다. 수정한 미션이 가리키던 장소가 삭제되면 "확인 필요" 표시를 합니다.
 
@@ -511,19 +580,24 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
 **8) 애월초 fixture** (`fixtures/aewol/`): 전략 문서 6.2의 7구역 + 피날레를 만듭니다.
 - 「성담의 비밀」 흐름: 학교·애월진성 → 우체국 → 애월항 → 환해장성 → 한담 해안·장한철 → 읍사무소·도서관 → 밭담·오름 → 학교
 - 사실은 모두 `draft`로 넣고 "교사 검수 필요"를 표시합니다. 좌표는 근사값입니다.
+- 테스트에서는 검수 전 원본 fixture를 복제한 뒤 명시적인 승인 전이를 거쳐 전체 진행을 검사합니다. 이 테스트용 승인 데이터는 실제 학생 게시용 승인으로 취급하지 않습니다.
 
-**이미지 생성**: 배움 카드 일러스트(§6.6 `place-cards`), 인물·주민 초상(`portraits`), 이야기 장면(`story-scenes`), 구역 이름 카드 틀.
+**이미지 생성**: §6.6의 표정 초상, 랜드마크 조사 장면·변화 레이어, 미션 소품, 배움 카드, 도입·완료 이야기 장면, 구역 이름 카드 틀을 미션별 asset key로 연결합니다. 반복 생성 대신 인물·지역 스타일 참조를 공유합니다.
 
 **테스트(필수)**
 - `resolveCampaign` 덮어쓰기 적용 순서
-- `validateCampaignFlow`의 각 실패 조건 5종
+- `validateCampaignFlow`의 기본 실패 조건 5종과 대화 그래프 참조·종료·필수 증거 검사
 - 미승인 사실만 있는 랜드마크의 미션 미생성
 - `factIds` 없는 사실 문장 제거
 - 같은 분야 3연속 방지
 - 2분 초과 이동 시 경유 미션 삽입
 - 애월 fixture 전체 진행 시 "목표 공백" 0
+- 대화 선택지별 정상 종료, 조건 없는 막다른 분기 금지, 증거 없는 완료 거부
+- 아이템 지급·소모·보상 이벤트 재시도와 재방문 시 중복 방지
+- 대화 노드·선택·단서·체험 중간값의 귀환/복귀와 같은 버전 이어하기
+- 필요한 인물·표정·장면·소품 asset key 누락 및 학생용 manifest에 미승인 설명 포함 시 게시 거부
 
-**완료 기준**: 애월 fixture 캠페인이 자동 생성되고 흐름 검사를 통과합니다. 교사가 순서를 바꾸고 미션 1개를 추가한 뒤 재생성해도 수정이 보존됩니다. 시뮬레이터(`scripts/simulate-campaign.mjs`, 모든 미션을 자동으로 정답 처리하며 진행)로 인트로부터 피날레까지 목표가 끊기지 않음을 확인합니다.
+**완료 기준**: 애월 fixture 캠페인이 자동 생성되고 흐름 검사를 통과합니다. 교사가 순서를 바꾸고 미션 1개를 추가한 뒤 재생성해도 수정이 보존됩니다. 시뮬레이터(`scripts/simulate-campaign.mjs`)로 정답 경로뿐 아니라 선택 분기·오답 재시도·증거 부족·귀환 후 재개 경로를 검사합니다. 인트로부터 피날레까지 목표가 끊기지 않고 애월 7개 메인 미션 모두 대화형 미션 필수 구성을 만족해야 합니다.
 **커밋**: 구역 나누기, 순서, 템플릿, 문장 생성, 덮어쓰기·흐름 검사, fixture·시뮬레이터를 나눠 커밋합니다.
 
 ### R9. 교실 연동과 교사 편집기
@@ -535,6 +609,7 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
   - 캠페인을 세로 목록(구역 순서)과 지도 경로로 함께 보여 줍니다.
   - 드래그로 순서를 바꿉니다.
   - 미션을 열면 명령·대사·단서·문제·정답·힌트·연결 문장을 수정할 수 있습니다.
+  - 대화 노드·선택 조건·NPC 표정·장면·소품을 함께 편집하고, 각 분기의 출처와 진행 결과를 미리 봅니다. 사실 문장 수정 시 승인을 다시 받습니다.
   - "미션 추가"(템플릿 선택 → 스팟 → 문장)로 중간에 끼워 넣을 수 있습니다.
   - "자동/선생님" 배지를 표시합니다.
 - **미리 플레이**: 편집 화면에서 특정 미션부터 게임을 열어 확인합니다.
@@ -543,7 +618,7 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
 **배정과 수업**
 - **팩 배정**: 교사가 학급에 배정하면 서버가 `toStudentPack` + 해결된 캠페인 + TileMap을 게시합니다(`regionPacksPublished`). 게시 시점의 캠페인 버전을 고정해서, 수업 중 편집이 진행 중인 학생에게 영향을 주지 않게 합니다.
 - **학생 진입**: 학생 홈의 배정 활동 목록에서 시작합니다. 기존 학생 인증을 쓰고, 별도 가입은 없습니다.
-- **수업 통제**: 시작, 모두 멈춤, 모두 학교로 귀환, 구역 열기/닫기, 오늘 시작 미션 지정, 해넘이 시각(기본 시작 후 25분), 힌트 보내기. `regionSessions` 실시간 구독 → iframe `session-update`.
+- **수업 통제**: 시작, 모두 멈춤, 모두 귀환, 구역 열기/닫기, 오늘 시작 미션 지정, 해넘이 시각(기본 시작 후 25분), 힌트 보내기. 귀환 목적지는 첫 버전에는 학교, R12에서는 방문 지역 거점/내 학교 중 지정합니다. 교사 정지·귀환 명령은 대화·컷신·워프보다 우선하며 도중 상태는 보존합니다. `regionSessions` 실시간 구독 → iframe `session-update`.
 - **진행 보기**: 학생별 현재 미션, 완료 구역 수, 막힘 여부(3분 무진행)만 보여 줍니다. 실시간 위치는 없습니다.
 - **학급 진행률**: 학급 전체의 완료 구역·분야 카드 합계를 전자칠판용 전체 화면으로 보여 줍니다. 순위표는 기본으로 끕니다.
 - **장소 기록 → 갤러리**, **동네 고치기 → `class-poll` 투표**: 기존 API를 호출하는 방식으로 연결합니다(교사 승인).
@@ -570,13 +645,16 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
 - **출시 방식**: 처음에는 교사 미리보기 전용 베타로 엽니다(러닝킹과 같은 방식). 학생 배정 기능은 시범 학급 검증 후 플래그로 엽니다.
 - **보고**: 단계마다 *커밋 해시, 푸시 여부, 자동 배포 상태(확인한 시각), 검증한 것, 검증하지 못한 것*을 분리해서 보고합니다.
 
-### R12. (향후) 지역과 지역 연결
+### R12. (향후) 지역 연결·미니맵 워프
 
-이번 범위에서는 **형식과 저장 구조만** 반영하고(§4.6), 기능은 시범 학급 검증 뒤에 엽니다.
-- **관문 스팟**(`role:'gate'`): 버스정류장, 길 끝, 항구, 고개. 열리는 조건은 캠페인 완료 또는 교사 개방입니다.
-- **지역 이동**: 관문에서 "다음 지역으로" 연출 → 대상 팩 로드 → 대상 관문에서 시작합니다.
-- **여권**: `ExplorerProfile.passport`에 지역 완주 도장을 쌓고, 분야 등급은 지역을 넘어 누적합니다.
-- **넓혀 가는 단계**: 학교 주변 → 읍·면·동 → 시·군 → 도. 다른 교사의 팩과 연결하는 것은 공유 정책과 ODbL 검토 후에 합니다.
+첫 버전에는 §4.6의 저장 계약과 R7 거점 귀환을 구현합니다. 아래 기능은 시범 학급 검증 뒤 별도 플래그로 공개합니다.
+- **관문과 월드맵**: 지역 팩을 연결하고 지역 카드에 주제·완료도·허용 상태를 표시합니다. 학교 주변 → 읍·면·동 → 시·군 → 도로 확장합니다. 다른 교사의 팩은 공유 정책·데이터 이용 조건·학급 배정을 확인한 뒤 연결합니다.
+- **지역별 미니맵**: 월드맵에서 지역을 고르면 그 지역의 발견 구역·완료 도장·안전 이동 지점을 봅니다. 현재 지역 화면에서는 목표·경로와 거점도 봅니다. 미방문 지역은 교사가 허용한 소개만 보여 주며 숨은 스팟과 정답은 미리 노출하지 않습니다.
+- **워프**: 발견했고 현재 교사가 허용한 지점을 선택 → 목적지와 남은 목표 확인 → 이동 연출 → 안전 타일 도착. 미니맵과 월드맵 모두 같은 서버 이동 검사를 사용합니다. 초행 지역은 관문과 도입 미션으로 시작하며 워프만으로 조사·카드·완료 도장을 얻을 수 없습니다.
+- **귀환과 재출발**: 방문 지역 거점/내 학교 귀환, 여권에서 마지막 탐험 계속. 여러 지역의 미완료 진도를 각각 보관합니다. 내 학교로 돌아가도 다른 지역의 NPC 반응·아이템·미션 단계가 남습니다.
+- **지역 배움의 연결**: 새 지역의 안내자·의뢰·풍경·생활 소품을 제공하고, 지역별 캠페인 완료 뒤 두 지역의 공통점·차이를 묻는 선택 미션과 여행 기록을 엽니다. 비교 내용도 양쪽의 승인된 사실에 연결하며 어느 지역이 더 낫다는 순위는 만들지 않습니다.
+- **여권과 결과물**: 지역별 완주 도장·6분야 등급을 누적하고 이야기책을 지역별 장으로 묶습니다. 새 지역 추가는 지역 팩·대화·에셋 manifest 등록으로 가능해야 합니다.
+- **완료 기준**: 두 개의 로컬 시험 팩으로 첫 입장 → 의뢰 → 거점 발견 → 지역 이동 → 내 학교 귀환 → 미니맵 워프 → 같은 단계 재개를 검증합니다. 권한 철회·구역 잠금·버전 변경·네트워크 실패·중복 클릭에서도 진도 손실, 미승인 노출, 보상 중복이 없어야 합니다.
 
 ---
 
@@ -584,10 +662,14 @@ export type WorldLink = {id: string; fromGatePlaceId: string; toPackId: string; 
 
 ### 6.1 원칙
 - **생성 → 후처리 → 검수 → 등록** 4단계를 거칩니다. 생성 원본을 그대로 쓰지 않습니다.
+- **미션 장면표를 먼저 만듭니다.** `assets/scene-plan.json`에 `{packId, missionId, stepId, sceneKey, speaker, expression, evidenceKeys, beforeAfterKeys, factIds, fictionLabel, generationStatus}`를 기록합니다. 대화·조사·체험·보상·귀환에 필요한 그림이 빠지지 않게 하고, 없는 에셋은 게시 전 검사에서 찾습니다.
+- **이미지 생성 우선 범위**: 인물과 표정, 지역 풍경, 조사 확대 장면, 이야기 컷신, 체험 소품, 아이템·도감·도장, 귀환·관문 연출, 지도 프레임과 지역 소개 그림. 지역별 개성이 드러나도록 실제로 검수된 자료와 스타일 바이블을 참조합니다.
+- 글자·선택지·지도 지형·클릭 영역·정답·진행 상태는 런타임 데이터로 그립니다. 생성 그림 안에 글자나 상호작용 규칙을 굳혀 넣지 않습니다. 역사 재구성 장면은 상상 표시를 붙이고, 생성 그림만으로 새로운 역사 사실을 주장하지 않습니다.
 - 한 번에 큰 아틀라스 1장을 생성하지 않습니다. **주제별 작은 아틀라스(셀 4×4 이하)**로 나눠 생성하고, 후처리로 합칩니다. 생성 모델은 격자 정렬과 픽셀 정확도가 약하기 때문입니다.
 - 모든 생성 기록은 `src/modules/region-quest/assets/generation-prompts.json`에 남깁니다(기존 `docs/character-attachment-prompts.json` 형식 준수: tool, version, asset key, 프롬프트 전문, 참조 이미지, 원본 파일명, 후처리 파라미터, 검수 결과).
 - 대용량 원본(생성 PNG 묶음)은 커밋하지 않습니다. 커밋 대상은 최종 아틀라스, manifest, 프롬프트 기록, 검수 시트입니다.
 - 실존 브랜드, 로고, 상호, 실존 인물 사진풍 초상은 생성하지 않습니다. 역사 인물(장한철 등)은 **특정 얼굴을 주장하지 않는 귀여운 상징형 캐릭터**로 만들고, "상상해서 그린 모습" 표기를 붙입니다.
+- **비용 승인**: 아래 수량은 제작 계획이며 결제 승인이 아닙니다. 실제 요청 전에 도구/제공자, 모델·해상도·품질별 과금 단위, 무료 잔여량, 예상비용 또는 불확실성, 재시도 포함 요청 상한·총예산·기간, 반복 결제·초과 과금 조건을 설명하고 명시적인 승인을 받습니다. 확인 불가이면 생성 호출을 멈추고 장면표·프롬프트 작성 등 로컬 작업을 계속합니다. 자동 유료 대체·자동 재생성은 금지합니다.
 
 ### 6.2 스타일 바이블 (먼저 1장 생성해서 확정)
 - 탑다운 3/4 시점의 귀여운 2D 픽셀 아트입니다. 따뜻하고 부드러운 그림책 느낌이고, 아동용으로 위협적인 요소가 없습니다.
@@ -612,10 +694,10 @@ Reference image 1 is the style bible: match its palette, outline weight and prop
 ### 6.4 후처리 스크립트 `src/modules/region-quest/scripts/atlas-postprocess.mjs` (sharp 사용)
 1. 셀 분할: 원본을 COLS×ROWS로 균등 분할합니다.
 2. 키잉: #FF00FF 근처(ΔE<30)는 투명으로, 경계 1px의 마젠타 오염은 가까운 불투명 색으로 대체합니다.
-3. **픽셀 격자 복원**: 셀을 nearest-neighbor로 16×16(캐릭터는 16×24)까지 축소합니다. 축소 전에 셀 안 그림의 실제 픽셀 크기를 추정해(가장 흔한 색 경계 간격) 정렬합니다.
+3. **픽셀 격자 복원**: 에셋 규격대로 nearest-neighbor로 축소합니다(타일 16×16, 캐릭터 16×24, 초상 48×48, 카드 64×64, 장면 160×90 또는 320×180). 장면을 타일 크기로 축소하지 않습니다. 축소 전에 그림의 실제 픽셀 크기를 추정해(가장 흔한 색 경계 간격) 정렬합니다.
 4. **팔레트 고정**: 모든 픽셀을 32색 팔레트의 가장 가까운 색으로 양자화합니다(디더링 없음). 알파는 0 또는 255로 이진화합니다.
 5. **이음새 검사**(지형 타일): 같은 오토타일 세트의 인접 경계 색이 일치하는지 자동 비교하고, 불일치 셀 목록을 출력합니다.
-6. 최종 아틀라스로 패킹(셀 번호 고정), `manifest.json`에 `{key, atlas, x, y, w, h, frames?}`를 기록합니다. `webp`(무손실)와 `png`로 출력합니다.
+6. 최종 아틀라스로 패킹(셀 번호 고정), `manifest.json`에 `{key, atlas, x, y, w, h, frames?, packId?, bundle, bytes, decodedBytes}`를 기록합니다. `webp`(무손실)와 `png`로 출력합니다. 공용 아틀라스와 지역별 장면 묶음을 분리하고, 키는 `packId/missionId/asset` 또는 `shared/asset`으로 충돌을 막습니다.
 7. 검수용 확대 미리보기(×6)와 체커 배경 미리보기를 생성합니다(커밋하지 않음).
 
 ### 6.5 수작업 보정 허용 범위
@@ -640,6 +722,9 @@ Reference image 1 is the style bible: match its palette, outline weight and prop
 | `npcs` | 4×3 프레임 | 10명 | 우체부, 경찰관, 소방관, 주민센터 직원, 사서, 보건소 간호사, 어부, 해녀 할망, 시장 상인, 옛 선비(장한철 상징형) | 4방향 대기 프레임만 |
 | `spirit` | 4×4 | 1세트 | 안내자 바람 정령 '지움이' 대기·날기·웃음·놀람·가리키기 | 세계관 템플릿별로 추가 |
 | `portraits` | 4×4 | 16 | 대화창 초상(48×48): 안내자, 우체부, 경찰관, 소방관, 주민센터 직원, 사서, 간호사, 어부, 해녀 할망, 상인, 농부, 마을 어르신, 옛 병사, 옛 선비(장한철 상징형), 학생 2 | 인물은 "상상해서 그린 모습" |
+| `portrait-expressions` | 인물별 2×2 | 16명 × 4표정 | 기본·기쁨·궁금함·걱정(48×48), 얼굴·의상·시선 일관성 | `portraits`의 기본 초상 재사용, 새 표정은 48개. 인물별 참조 고정 |
+| `inspect-scenes` | 장면별 320×180 | 애월 7구역 × 1장 이상 | 성담·우체국·포구·환해장성·한담·읍내·밭과 오름의 조사 장면 | 검수된 단서 2~3개가 눈에 들어오게 구성, 클릭 영역 별도 |
+| `scene-overlays` | 장면별 투명 레이어 | 애월 7구역 × 2상태 이상 | 단서 발견 전후, 물건 정리 전후, 인물 반응 소품 | 같은 배경·구도·크기를 유지, 상태 변화가 실제 조작에 대응 |
 | `category-icons` | 2×3 | 6 | 6분야 아이콘: 문화, 역사, 인물, 관광자원, 삶, 공공기관 | 도감 탭, 카드, 미니맵 공용 |
 | `items-icons` | 4×4 | 16 | 편지, 잃어버린 물건 3, 옛 편지, 표해록 조각, 그물, 귤, 테왁, 구역 도장, 이야기 조각, 배움 카드, 물음표, 느낌표, 카메라, 발자국 | 12×12도 가능 |
 | `help-minigames` | 4×4 | 16 | 체험 6종 소품: 정낭 기둥, 편지 묶음, 그물 매듭, 귤 바구니, 민원 서류(글자 없음), 망원경 등 | R8 `help` 단계 |
@@ -648,11 +733,24 @@ Reference image 1 is the style bible: match its palette, outline weight and prop
 | `fx` | 4×4 | 16 | 안개 경계 4비트, 안개 걷힘 4프레임, 발자국, 반짝임 3프레임, 카드 획득 빛 3프레임, 도장 찍기 2프레임 | |
 | `zone-title` | 9-slice + 장식 | 1세트 | 구역 이름 카드 틀, 6분야별 색 띠 | 글자는 런타임에서 렌더링 |
 | `place-cards` | 일러스트 | 6분야 × 공용 3 + 애월 특별 8 | 배움 카드 그림(픽셀 64×64) | 분야 공용 그림 + 시범 지역 특별 |
-| `story-scenes` | 일러스트 | 애월 4 | 이야기 조각을 모으면 열리는 장면(픽셀 160×90): 옛 애월진성, 옛 포구, 표류하는 배, 오늘의 애월 | 지역별 추가 |
+| `story-scenes` | 장면별 160×90 또는 320×180 | 애월 최소 9 | 도입 1, 7구역 핵심 이야기, 피날레 1. 옛 성·포구·표류 이야기 등 검수된 주제를 재구성 | 과거 장면은 상상 표시, 자막은 런타임, 건너뛰기 지원 |
+| `hub-return` | 4×4 소품 + 장면 | 공용 1세트 + 지역 거점 1장 | 귀환 표식, 안내자 반응, 학교/방문 거점 풍경, 탐험 계속 UI 장식 | 첫 버전 필수, 귀환 연출 중에도 교사 통제 적용 |
+| `travel-fx` | 4×4 | 공용 1세트 | 관문 활성·도착·워프 빛·여행 전환 | R12, 감소된 움직임 모드와 즉시 전환 지원 |
+| `region-map-cards` | 지역별 160×90 + UI 세트 | 지역당 1장 + 공용 1세트 | 월드맵 지역 소개, 미니맵 프레임, 방문·미방문·완주·잠금·거점 아이콘 | R12, 실제 지도는 타일 데이터로 렌더링 |
+| `travel-passport` | 공용 UI + 지역 도장 | 공용 1세트 + 지역당 1개 | 여권, 방문 기록, 지역 비교 카드, 완주 도장 | 지도·도감과 공용 스타일 |
 | `picture-icons` | 4×4 | 16 | R4 그림지도용 수채·크레용풍 아이콘(픽셀 아님) | 별도 머리말: watercolor crayon children's map icon style |
 | `paper-textures` | – | 2 | 그림지도 종이, 옛 지도 종이 | 무늬 반복 가능(tileable) |
 
-**대략적인 생성 횟수**: 아틀라스·일러스트 약 55요청 + 재생성 여유 30% → **약 70~75요청**입니다. 지역 타일셋을 추가할 때는 1세트에 약 3~4요청이 듭니다.
+**제작 배치와 견적**: 종전 70~75요청 가늠은 표정·조사 장면·워프 확장분을 포함하지 않은 값이므로 새 총량으로 사용하지 않습니다. 에셋 수와 생성 요청 수는 다릅니다. 셀 묶음·참조 편집·해상도·재시도를 결정한 뒤 아래 배치별로 비용을 산정합니다.
+
+| 배치 | 제작 내용 | 통과 기준 |
+|---|---|---|
+| A. 대표 미션 | 스타일 바이블, 학교/포구 중 1개 미션의 인물 4표정·조사 배경·변화 레이어·소품·보상 | 선택 → 조사 → 증거 제시 → NPC 반응 → 귀환·이어하기를 실제 화면에서 확인 |
+| B. 애월 완성 | 7구역 장면표 전체, 12아바타, 공용 타일·미니게임·카드·9개 이상 이야기 장면 | 모든 메인 미션에 의미 있는 시각 변화, 임시 그림을 최종품처럼 남기지 않음 |
+| C. 타지역 확장 | 새 지역의 랜드마크·문화·주민·생활 소품·대화 배경·지도 카드·도장, 공용 워프 연출 | 새 지역의 고유한 배움과 미션을 유지하고 방문/귀환/재방문까지 시각 일관성 확보 |
+
+- 승인된 배치별로 요청 수·실제 사용량·재생성 수를 기록합니다. 다음 배치나 예산 확대는 별도 승인 대상으로 둡니다. C는 타지역 기능 공개 단계에 제작합니다.
+- 새 지역은 공용 엔진·아바타·UI를 재사용하되, 그 지역의 핵심 조사 장면과 주민 이야기는 장면표에 따라 별도 제작합니다. 단순히 지명과 색만 바꾸지 않습니다.
 
 ### 6.7 프롬프트 예시
 
@@ -689,7 +787,7 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
 ```
 
 ### 6.8 검수 체크리스트 (에셋마다 기록: `src/modules/region-quest/assets/review-sheet.md`)
-- [ ] 16px 격자에 정확히 맞음(흐린 픽셀, 중간색 테두리 없음)
+- [ ] 에셋별 픽셀 규격에 정확히 맞음(타일 16px, 초상·카드·장면은 각 규격; 흐린 픽셀 없음)
 - [ ] 팔레트 32색 밖의 색 0개(스크립트 검사)
 - [ ] 알파가 0 또는 255
 - [ ] 오토타일 이음새 검사 통과
@@ -698,6 +796,11 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
 - [ ] 아동에게 무섭거나 부적절한 표현 없음, 특정 집단 고정관념 없음
 - [ ] 문화유산·지역 상징이 왜곡되거나 희화화되지 않음
 - [ ] 게임 화면 ×3 배율에서 실제로 확인(스크린샷 첨부, 커밋 안 함)
+- [ ] 같은 인물의 4표정에서 얼굴·의상·크기·방향 일치
+- [ ] 장면표의 대화·조사·체험·보상·귀환 asset key가 실제 manifest와 연결됨
+- [ ] 단서가 그림에서 식별 가능하고 클릭·키보드 영역과 일치함; 정답을 그림의 글자로 노출하지 않음
+- [ ] 이야기 장면의 사실·상상 구분과 출처가 UI에 표시됨
+- [ ] 지역별 묶음 지연 로딩, 이전 묶음 해제, 저사양 모드·연출 건너뛰기 확인
 
 ---
 
@@ -714,12 +817,13 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
 | `REGION_QUEST_OVERPASS_URLS` | 쉼표로 구분한 미러 목록 | 기존 기본값 |
 | `REGION_QUEST_ENABLED` | 교사 미리보기 기능 플래그 | 모듈 전체 숨김, API 404 |
 | `REGION_QUEST_STUDENT_ENABLED` | 학생 배정 기능 플래그 | 교사 미리보기만 |
+| `REGION_QUEST_WORLD_ENABLED` | R12 지역 이동·월드맵·워프(서버 권한 검사와 함께 사용) | 현재 지역 거점 귀환·기본 미니맵만 제공 |
 
 ---
 
 ## 8. 사용자 결정이 필요한 항목 (작업 시작 전 확인)
 1. 구글 Maps Platform(Places API, 결제 계정)·도로명주소 좌표 API·공공데이터포털·TourAPI·국토지리정보원 키 발급 여부(키 발급과 결제 설정은 사용자가 직접 진행)
-2. 이미지 생성 사용량·비용 한도(약 70~75요청 + 지역 추가분)
+2. 이미지 생성 배치 A/B/C별 제공자·모델·규격·요청/재시도 상한·총비용·기간 승인(§6.6, 확장된 장면표로 새 견적 필요). "이미지 생성 최대 활용"은 제작 방향이며 별도 과금 승인은 아닙니다.
 3. 첫 공개 범위: 교사 미리보기 베타만 할지, 시범 학급(애월초)까지 할지
 4. 포인트 보상 연동 여부(기본 꺼짐 제안)
 5. 교사 간 지역 팩 공유(ODbL 공유 의무 검토 필요): 이번 범위에서 제외할지
@@ -733,8 +837,11 @@ no text, no logo, no real brand colors, centered, same palette and outline weigh
   - 이동 명령 → 구역 진입(안개 걷힘) → 랜드마크 조사 → 배움 카드 → 다음 명령이 **목표 공백 없이** 이어집니다.
   - 애월 7구역 캠페인을 인트로부터 피날레까지 완주할 수 있습니다.
   - 해넘이로 수업이 정리되고, 다음 시간에 같은 단계에서 이어집니다.
+  - 애월 7개 메인 미션마다 의미 있는 대화 선택, 조사 또는 체험, 발견/결과 제시, NPC 반응이 있고 대응 표정·장면·소품·완료 연출이 표시됩니다.
+  - 자발적 귀환/교사 귀환 → 거점 자동 저장 → 새로고침 → 탐험 계속에서 진행 상태가 보존되고 보상이 중복되지 않습니다.
   - 우리 지역 이야기책 PDF와 장소 기록이 남습니다.
   - 학급 리포트에 6분야별 근거가 표시됩니다.
 - 미승인 사실은 학생 화면과 학생 API 어디에도 나오지 않습니다.
 - 모든 출력물에 출처와 기준일이 표시됩니다.
+- 지역 연결은 §4.6 저장 계약과 로컬 시험 팩으로 확장 가능성을 확인하되, 실제 타지역 배포·월드맵 워프 공개 완료는 R12 기준으로 별도 보고합니다.
 - `npm test`, `npm run typecheck`, `npm run build`가 통과하고, 기능별로 커밋·푸시하며, 자동 배포 상태를 확인해서 보고합니다.
