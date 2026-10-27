@@ -1,4 +1,5 @@
 import { characterFiles } from '@/lib/characters';
+import { newPets } from './new-pets';
 export type SpaceKind = 'pet' | 'furniture' | 'theme' | 'clothes' | 'sticker' | 'paper';
 export type SpaceItem = {
     id: string;
@@ -15,6 +16,7 @@ export type SpaceItem = {
 };
 const furniture = (id: string, name: string, en: string, price: number): SpaceItem => ({ id, kind: 'furniture', name, en, price, art: `/my-space/v1/${id}.webp` });
 export const spaceCatalog: SpaceItem[] = [
+    ...newPets.map(pet => ({id: pet.id, kind: 'pet' as const, name: pet.species, en: pet.en, buddyName: pet.name, price: 60, base: pet.base, art: pet.art})),
     ...Object.entries(characterFiles).map(([base, file]) => ({ id: 'friend-' + base, kind: 'pet' as const, name: ({ cat: '모찌', dog: '두부', hamster: '콩이', alpaca: '구름이', rabbit: '토리', otter: '모아' } as Record<string, string>)[base], en: base, price: 0, base, art: `/characters/${file}.webp` })),
     ...[['american', '아메리칸 쇼트헤어', 'American shorthair', '줄이'], ['british', '브리티시 쇼트헤어', 'British shorthair', '포포'], ['siamese', '샴', 'Siamese', '코코'], ['persian', '페르시안', 'Persian', '솜이'], ['ragdoll', '랙돌', 'Ragdoll', '라라'], ['maine', '메인쿤', 'Maine coon', '솔이']].map(([breed, name, en, buddyName]) => ({ id: 'cat-' + breed, kind: 'pet' as const, name, en, buddyName, price: 60, base: 'cat', art: `/my-space/v1/cat-${breed}.webp` })),
     furniture('bed', '포근한 낮잠 침대', 'Cozy little bed', 60), furniture('shelf', '이야기 책장', 'Story bookshelf', 50), furniture('plant', '초록 리본 화분', 'Ribbon plant', 20), furniture('lamp', '반짝 버섯 조명', 'Mushroom lamp', 35),

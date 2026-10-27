@@ -7,6 +7,7 @@ import {spaceItem, type Room} from './catalog';
 import {shopCategories, shopCatalog, wearableItem, type ShopKind, type ShopItem} from './shop-catalog';
 import {ItemArt} from './scene';
 import {spaceRequest} from './client';
+import {supportsSharedWearables} from './new-pets';
 
 type Look = {pet: string; outfit: Room['outfit']; wardrobe?: WardrobeOutfit};
 function Preview({item, pet, outfit, wardrobe}: Look & {item: ShopItem}) {
@@ -23,7 +24,7 @@ function Confirmation({item, balance, owned, onClose, onBuy, onWear, busy, enabl
     <button className="ms-close" disabled={busy} onClick={onClose} aria-label="구매 창 닫기"><X size={18}/></button>
     <div className="ms-confirm-art"><Preview item={item} {...look}/></div><h2>{item.name}</h2>
     {wearableItem(item) && <p className="ms-preview-caption">내 친구에게 미리 입혀 본 모습이에요. 선택하기 전에는 저장되지 않아요.</p>}
-    {owned ? <p>이미 내 보관함에 있어요. 다시 보말을 쓰지 않고 입을 수 있어요.</p> : <><p><Shell size={17}/>{item.price} 보말로 {item.kind === 'pet' ? '새 친구를 맞이할까요?' : '내 보관함에 담을까요?'}</p><p>{balance >= item.price ? `구매 후 ${balance - item.price} 보말이 남아요.` : `${item.price - balance} 보말을 더 모으면 구매할 수 있어요.`}</p><small>한 번 구매하면 모든 친구에게 반복해서 사용할 수 있어요.</small></>}
+    {owned ? <p>이미 내 보관함에 있어요. 다시 보말을 쓰지 않고 입을 수 있어요.</p> : <><p><Shell size={17}/>{item.price} 보말로 {item.kind === 'pet' ? '새 친구를 맞이할까요?' : '내 보관함에 담을까요?'}</p><p>{balance >= item.price ? `구매 후 ${balance - item.price} 보말이 남아요.` : `${item.price - balance} 보말을 더 모으면 구매할 수 있어요.`}</p><small>{item.kind === 'pet' ? '내 친구에서 함께할 친구를 골라요.' : '구매한 아이템은 착용 가능한 친구에게 계속 사용할 수 있어요.'}</small></>}
     <div className="ms-actions"><button disabled={busy} onClick={onClose}>다음에</button>{owned ? <button className="ms-primary" disabled={busy || !enabled} onClick={onWear}>이 모습으로 입기</button> : <button className="ms-primary" disabled={busy || !enabled || balance < item.price} onClick={onBuy}>{busy ? '친구가 담는 중…' : wearableItem(item) ? '보말로 구매하고 입기' : '보말로 구매하기'}</button>}</div>
   </dialog>;
 }
@@ -33,7 +34,8 @@ export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBou
   const [kind, setKind] = useState<ShopKind>('pet'), [preview, setPreview] = useState<ShopItem | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const receipt = useRef({item: '', request: ''});
   const owns = (item: ShopItem) => (item.kind === 'accessory' ? wardrobeOwned : owned).includes(item.id);
-  const items = shopCatalog.filter(i => i.kind === kind && (!inventory || owns(i)));
+  const canDress = supportsSharedWearables(look.pet);
+  const items = shopCatalog.filter(i => i.kind === kind && (!wearableItem(i) || canDress) && (!inventory || owns(i)));
   async function wear(item: ShopItem) {
     if (busy || !enabled) return;
     setBusy(true); setError('');
@@ -66,7 +68,7 @@ export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBou
         <button type="button" disabled={busy || (has && !clothes) || !enabled || (!has && balance < i.price)} onClick={() => has && clothes ? void wear(i) : setPreview(i)}>{has ? clothes ? '입기' : '함께하는 중' : balance < i.price ? '조금 더 모아요' : i.kind === 'pet' ? '친구 맞이하기' : '내 보관함에 담기'}</button>
       </article>;
     })}</div>
-    {!items.length && <p className="ms-empty">여기는 아직 비어 있어요. 상점에서 마음에 드는 조각을 만나 봐요.</p>}
+    {!items.length && <p className="ms-empty">{!canDress && (kind === 'clothes' || kind === 'accessory') ? '이 친구는 지금 기본 모습으로 함께해요. 보유한 옷과 장식은 기존 친구에게 입힐 수 있어요.' : '여기는 아직 비어 있어요. 상점에서 마음에 드는 조각을 만나 봐요.'}</p>}
     {preview && <Confirmation item={preview} balance={balance} owned={owns(preview)} busy={busy} enabled={enabled} {...look} onClose={() => setPreview(null)} onBuy={() => void buy()} onWear={() => void wear(preview)}/>}
   </section>;
 }

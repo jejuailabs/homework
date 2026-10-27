@@ -1,0 +1,107 @@
+{
+  "version": 4,
+  "created": "2026-10-27",
+  "generator": "Built-in ImageGen; one transparent portrait per character; resized to 512px WebP",
+  "assets": [
+    {
+      "id": "dog-bichon",
+      "src": "/my-space/v4/pets/dog-bichon.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 57404,
+      "sha256": "eae5de2eacf8537f0c4f7d24ba3ee2d10ec60b78bc2723869641ab211095e27f",
+      "source": "exec-193617a1-7953-4994-86f5-bb23f756c83b.png"
+    },
+    {
+      "id": "dog-corgi",
+      "src": "/my-space/v4/pets/dog-corgi.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 64404,
+      "sha256": "87fb675496119ec06b009a637e720c00578bf0655fcaa24580c25371de781622",
+      "source": "exec-0bbcd044-3467-4e85-a75d-2fd87d9d8703.png"
+    },
+    {
+      "id": "dog-maltipoo",
+      "src": "/my-space/v4/pets/dog-maltipoo.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 75278,
+      "sha256": "89136431f39d655cc298fdc43234b267fbbb4d96a5883c624b37d396cc27d6bc",
+      "source": "exec-b6bc9b63-f409-4a87-97b2-6e797c7817a4.png"
+    },
+    {
+      "id": "dog-pomeranian",
+      "src": "/my-space/v4/pets/dog-pomeranian.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 63518,
+      "sha256": "090e898eb2678a49752e9af21a39dd6bb1c837cfb3fb192cb458cd0ff78d2b84",
+      "source": "exec-9c16bb8c-8f38-4997-b79c-0f4b87d2fa44.png"
+    },
+    {
+      "id": "dog-dachshund",
+      "src": "/my-space/v4/pets/dog-dachshund.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 66620,
+      "sha256": "aa9ddaa018088466df770f1fe0fe525e86301b78f9e0c7ebc6d6cf31151c3ec4",
+      "source": "exec-3c94a4b9-0906-41fb-86da-aed9a23b7dac.png"
+    },
+    {
+      "id": "animal-red-panda",
+      "src": "/my-space/v4/pets/animal-red-panda.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 82002,
+      "sha256": "e422575b32d5b299b6388fa2764bfd17465a8529fce47270d6e6cf3e44687a96",
+      "source": "exec-ffe9eb1b-e52a-427b-8073-365bd0b0b073.png"
+    },
+    {
+      "id": "animal-penguin",
+      "src": "/my-space/v4/pets/animal-penguin.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 53156,
+      "sha256": "2d0d8ffca2c1355fd6133275f64f5a49e2c841e26a194d39e15b636987e86654",
+      "source": "exec-498534e8-1f9f-4fb6-85a3-87c38f9ef46d.png"
+    },
+    {
+      "id": "animal-seal",
+      "src": "/my-space/v4/pets/animal-seal.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 44456,
+      "sha256": "f406926c3e17194c9708e062d7546eeb336e83bb7b81f91a59c0a237ba96e782",
+      "source": "exec-bc274157-02bc-44f0-9244-f14e72c9f3c6.png"
+    },
+    {
+      "id": "animal-fennec",
+      "src": "/my-space/v4/pets/animal-fennec.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 69120,
+      "sha256": "bae193104583e9dccece44fbd32d59cf09050b7264ad0b5549486a7a984c2943",
+      "source": "exec-51e87446-4134-4e39-8b05-061c3eac76ab.png"
+    },
+    {
+      "id": "fantasy-cloud-dragon",
+      "src": "/my-space/v4/pets/fantasy-cloud-dragon.webp",
+      "width": 512,
+      "height": 512,
+      "alpha": true,
+      "bytes": 51924,
+      "sha256": "58d4fa53c6f36071c29bb2bcd53947025bb16f34cf9614ee3a6bf598c504c65e",
+      "source": "exec-38268db1-9cae-4e31-86b6-6f7fda986ac0.png"
+    }
+  ]
+}
