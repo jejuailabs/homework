@@ -11,7 +11,11 @@
     "lamp": "lamp.webp",
     "bench": "bench.webp",
     "planter": "planter.webp",
-    "mailbox": "mailbox.webp"
+    "mailbox": "mailbox.webp",
+    "carDown": "car-down.webp",
+    "carLeft": "car-left.webp",
+    "carRight": "car-right.webp",
+    "carUp": "car-up.webp"
   },
   "dimensions": {
     "school": {
@@ -61,6 +65,22 @@
     "mailbox": {
       "width": 213,
       "height": 320
+    },
+    "carDown": {
+      "width": 175,
+      "height": 240
+    },
+    "carLeft": {
+      "width": 240,
+      "height": 240
+    },
+    "carRight": {
+      "width": 242,
+      "height": 240
+    },
+    "carUp": {
+      "width": 192,
+      "height": 240
     }
   },
   "anchors": {
@@ -111,6 +131,22 @@
     "mailbox": {
       "x": 106.5,
       "y": 318
+    },
+    "carDown": {
+      "x": 87.5,
+      "y": 238
+    },
+    "carLeft": {
+      "x": 120,
+      "y": 238
+    },
+    "carRight": {
+      "x": 121,
+      "y": 238
+    },
+    "carUp": {
+      "x": 96,
+      "y": 238
     }
   },
   "preparation": "Alpha-connected silhouettes, 3px source padding, Lanczos resize; original alpha preserved."

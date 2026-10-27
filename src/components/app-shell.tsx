@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import {usePathname,useRouter} from 'next/navigation';
 import {useTranslations} from 'next-intl';
 import {useEffect,useState,type ReactNode} from 'react';
@@ -15,8 +16,9 @@ import {useVerifiedViewer} from './viewer-context';
 import MyPageLink from '@/modules/teacher-notebook/my-page-link';
 // Card Play is hidden from the top menu for now; its pages still work by direct link.
 const cardsMenuVisible = false;
+const RegionQuestBeta = dynamic(() => import('@/modules/region-quest/beta/launcher'), {ssr:false});
 
-export default function AppShell({children,mySpaceEnabled=true}:{children:ReactNode;mySpaceEnabled?:boolean}) {
+export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled=true}:{children:ReactNode;mySpaceEnabled?:boolean;playgroundEnabled?:boolean}) {
   const t=useTranslations('common'), path=usePathname(), router=useRouter();
   const {locale,appearance,palette,setPreference}=usePreferences();
   const {viewer}=useVerifiedViewer();
@@ -50,6 +52,7 @@ export default function AppShell({children,mySpaceEnabled=true}:{children:ReactN
         {isStudent&&<Link href="/student/my-exhibition" className={path==='/student/my-exhibition'?'active':''} aria-current={path==='/student/my-exhibition'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Images size={18}/></span>{locale==='en'?'My gallery':'나의 전시실'}</Link>}
         {!isAdmin&&<Link href={`${workspacePath}/boards`} className={`nav-boards ${path.includes('/boards')?'active':''}`} aria-current={path.includes('/boards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{t('boards')}</Link>}
         {!isAdmin&&<Link href={`${workspacePath}/daily-quiz`} className={path.includes('/daily-quiz')?'active':''} aria-current={path.includes('/daily-quiz')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><BookOpen size={18}/></span>{locale==='en'?'Daily quiz':'데일리 퀴즈'}</Link>}
+        {!isAdmin&&playgroundEnabled&&<Link href={`${workspacePath}/playground`} className={path.includes('/playground')?'active':''} aria-current={path.includes('/playground')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Sparkles size={18}/></span>{locale==='en'?'Word playground':'말놀이터'}</Link>}
         {!isAdmin&&cardsMenuVisible&&<Link href={`${workspacePath}/cards`} className={`nav-cards ${path.includes('/cards')?'active':''}`} aria-current={path.includes('/cards')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Layers size={18}/></span>{t('cards')}</Link>}
         {isStudent&&mySpaceEnabled&&<Link href="/student/my-space" className={path==='/student/my-space'?'active':''} aria-current={path==='/student/my-space'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Shell size={18}/></span>{locale==='en'?'My little world':'나의 작은 세상'}</Link>}{isStudent&&<Link href="/student/canvases" className={path==='/student/canvases'?'active':''} aria-current={path==='/student/canvases'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><PanelsTopLeft size={18}/></span>{locale==='en'?'Together Canvas':'함께캔버스'}</Link>}
         {isStudent&&<Link href="/student/polls" className={path==='/student/polls'?'active':''} aria-current={path==='/student/polls'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Vote size={18}/></span>{locale==='en'?'Class polls':'학급 투표'}</Link>}
@@ -69,6 +72,6 @@ export default function AppShell({children,mySpaceEnabled=true}:{children:ReactN
     <main id="main" className={isLogin?'login-main':'app-main'}>{children}</main>
     <footer className="app-footer"><span>{t('brand')}</span><InstallShortcut/><span>{t('tagline')}</span></footer>
     {isStudent&&mySpaceEnabled&&<StudentCompanion/>}
-    {viewer&&['teacher','admin','superadmin'].includes(viewer.role)&&/^\/(teacher|admin)(\/|$)/.test(path)&&<LearningKingBeta key={`${path}:${viewer.uid}`}/>}
+    {viewer&&['teacher','admin','superadmin'].includes(viewer.role)&&/^\/(teacher|admin)(\/|$)/.test(path)&&<><RegionQuestBeta key={`region:${path}:${viewer.uid}`}/><LearningKingBeta key={`${path}:${viewer.uid}`}/></>}
   </>;
 }

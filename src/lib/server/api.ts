@@ -124,7 +124,8 @@ async function session(request: Request) {
   });
   if (Date.now() / 1000 - decoded.auth_time > 300) throw new ApiError(401, '안전을 위해 다시 로그인해 주세요.', 'RECENT_LOGIN_REQUIRED');
   const ctx = await contextForUid(decoded.uid, decoded.authVersion);
-  const expiresIn = ctx.role === 'student' ? 8 * 3_600_000 : 5 * 86_400_000;
+  // Students stay signed in on their device for the Firebase maximum (14 days); a code reset still ends it at once.
+  const expiresIn = ctx.role === 'student' ? 14 * 86_400_000 : 5 * 86_400_000;
   const value = await auth().createSessionCookie(token, { expiresIn });
   if (ctx.role !== 'student') await db().runTransaction(async tx => {
     const userRef=db().doc(`users/${ctx.uid}`),current=await tx.get(userRef);

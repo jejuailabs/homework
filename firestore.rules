@@ -32,6 +32,36 @@ service cloud.firestore {
         allow write: if false;
       }
     }
+    match /playRooms/{roomId} {
+      function room() { return get(/databases/$(database)/documents/playRooms/$(roomId)).data; }
+      function grant() { return get(/databases/$(database)/documents/playRooms/$(roomId)/readerGrants/$(request.auth.uid)).data; }
+      function permitted(value) {
+        let permission = grant();
+        let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+        return request.auth != null && user.get('disabled',false) != true
+          && value.status != 'closed' && permission.expiresAt > request.time
+          && ((permission.role == 'teacher' && value.ownerUid == request.auth.uid)
+            || (permission.role == 'student' && user.role == 'student'
+              && user.classId == value.classId && permission.classId == value.classId
+              && permission.playerKey == user.studentId && user.studentId in value.playerKeys
+              && permission.authVersion == user.authVersion && request.auth.token.authVersion == user.authVersion
+              && get(/databases/$(database)/documents/classes/$(user.classId)/settings/playground).data.enabled == true
+              && get(/databases/$(database)/documents/classes/$(user.classId)/students/$(user.studentId)).data.authUid == request.auth.uid
+              && get(/databases/$(database)/documents/classes/$(user.classId)/students/$(user.studentId)).data.get('disabled',false) != true));
+      }
+      allow get: if request.auth != null && permitted(resource.data);
+      allow list, write: if false;
+      match /rounds/{round} { allow get: if request.auth != null && permitted(room()); allow list, write: if false; }
+      match /players/{key} {
+        allow get: if request.auth != null && permitted(room()) && (key == grant().playerKey || grant().role == 'teacher');
+        allow list: if request.auth != null && permitted(room()) && grant().role == 'teacher';
+        allow write: if false;
+      }
+      match /secrets/{secret} { allow read, write: if false; }
+      match /answers/{answer} { allow read, write: if false; }
+      match /readerGrants/{uid} { allow read, write: if false; }
+      match /settlements/{settlement} { allow read, write: if false; }
+    }
     // All application access goes through authenticated, authorized server APIs.
     // Admin SDK bypasses these rules: server ownership checks remain mandatory.
     match /{document=**} { allow read, write: if false; }

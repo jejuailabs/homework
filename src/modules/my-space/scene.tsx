@@ -8,7 +8,7 @@ export function ItemArt({ id }: {
     id: string;
 }) { const item = spaceItem(id); if (!item)
     return null; if (item.art)
-    return <img src={item.art} alt="" draggable={false}/>; if (item.kind === 'sticker')
+    return <img src={item.previewArt || item.art} alt="" draggable={false}/>; if (item.kind === 'sticker')
     return item.motif === 'tape' ? <span className="ms-washi"/> : <span className="ms-sticker">{item.motif}</span>; return <span className={'ms-object ms-object-' + item.motif} style={{ background: item.color }}/>; }
 export default function Scene({ layers, onChange, selected, onSelect, background, paper, children, disabled = false, diary = false, onGestureStart, onGestureEnd, selectionOnTop = false }: {
     layers: (Placement | DiaryLayer)[];

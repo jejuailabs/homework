@@ -8,6 +8,13 @@ globalThis.ContinuousWorld = (() => {
   const world = {width:(e.maxX-e.minX)*scale+padding*2,height:(e.maxY-e.minY)*scale+padding*2,cellSize:20,roads:roads.map(r=>({...r,width:r.visualWidth-18})),obstacles:[],spawn:project(data.spawn)};
   const landmarks = data.landmarks.map(l=>({...l,point:project(l.point),roadPoint:project(l.roadPoint)}));
   const sea = data.seaPolygons.map(p=>p.points.map(project));
+  // Freedom to explore changes collision rules, never the source geography.
+  // Use source building footprints and water; decorative image bases only add
+  // small local obstacles. Both travel modes use the same ground-level radius.
+  world.freeRoam=true;
+  world.actorRadius=8;
+  world.water=sea;
+  world.solids=data.buildings.map(b=>b.points.map(project));
   function inPolygon(p,points){let inside=false;for(let i=0,j=points.length-1;i<points.length;j=i++){const a=points[i],b=points[j];if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)inside=!inside;}return inside;}
   const isSea = p => sea.some(poly=>inPolygon(p,poly));
   function roadDistance(p){let best=Infinity;for(const r of roads)for(let i=1;i<r.points.length;i++){const a=r.points[i-1],b=r.points[i],dx=b.x-a.x,dy=b.y-a.y;const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy||1)));best=Math.min(best,Math.hypot(p.x-a.x-dx*t,p.y-a.y-dy*t)-r.visualWidth/2);}return best;}
@@ -28,5 +35,18 @@ globalThis.ContinuousWorld = (() => {
   const npcs=[{id:'school',name:'모모',point:{x:world.spawn.x-117.82,y:world.spawn.y+54.94},target:world.spawn},{id:'coast',name:'해안의 모모',point:npcAt(stops[2]),target:stops[2].point}];
   for(let i=objects.length-1;i>=0;i--)if(['plant','prop'].includes(objects[i].kind)&&npcs.some(n=>distance(n.point,objects[i].point)<85))objects.splice(i,1);
   world.obstacles=npcs.map(n=>({x:n.point.x-33,y:n.point.y-19,width:66,height:38}));
+  for(const o of objects){
+    const available=roadDistance(o.point)-world.actorRadius-4;
+    if(available<=3)continue;
+    if(o.kind==='building'||o.kind==='landmark'){
+      const halfWidth=o.height*.28,halfDepth=o.height*.08;
+      const factor=Math.min(1,available/Math.hypot(halfWidth,halfDepth));
+      world.obstacles.push({x:o.point.x-halfWidth*factor,y:o.point.y-halfDepth*factor,width:halfWidth*factor*2,height:halfDepth*factor*2});
+    }else{
+      // Collide with tree trunks and furniture bases, not their tall canopies.
+      const radius=Math.min(available,o.key==='lamp'?5:o.key==='bench'?17:o.key==='planter'?14:11);
+      world.obstacles.push({x:o.point.x,y:o.point.y,radius});
+    }
+  }
   return {data,scale,padding,project,world,roads,route,stops,landmarks,sea,objects,npcs,isSea,roadDistance};
 })();

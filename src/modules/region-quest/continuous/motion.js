@@ -1,10 +1,10 @@
 'use strict';
 
 // East/right and south/down world coordinates. Roads are immutable after world
-// creation; replace world.roads when editing geometry. Obstacles may change.
+// creation; replace their arrays when editing geometry. Obstacles may change.
 globalThis.ContinuousMotion = (() => {
   const EPS = 1e-7, BUCKET = 160;
-  const cache = new WeakMap();
+  const cache = new WeakMap(), terrainCache = new WeakMap(), roadWorldCache=new WeakMap();
   const point = p => Boolean(p && Number.isFinite(p.x) && Number.isFinite(p.y));
   const copy = p => ({x: p.x, y: p.y});
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -50,15 +50,64 @@ globalThis.ContinuousMotion = (() => {
     const t = segment.length ? clamp(((p.x - segment.a.x) * segment.dx + (p.y - segment.a.y) * segment.dy) / segment.length ** 2, 0, 1) : 0;
     return {x: segment.a.x + segment.dx * t, y: segment.a.y + segment.dy * t};
   }
-  function inBounds(p, world) {return point(p) && p.x >= 0 && p.y >= 0 && p.x <= world.width && p.y <= world.height;}
-  function inRect(p, r) {return p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height;}
+  const actorRadius = world => Number.isFinite(world.actorRadius) ? Math.max(0, world.actorRadius) : 0;
+  function inBounds(p, world) {const r=actorRadius(world);return point(p) && p.x >= r && p.y >= r && p.x <= world.width-r && p.y <= world.height-r;}
+  function inRect(p, r, padding=0) {return p.x >= r.x-padding && p.x <= r.x+r.width+padding && p.y >= r.y-padding && p.y <= r.y+r.height+padding;}
+  function segmentDistance(p, a, b) {
+    const dx=b.x-a.x,dy=b.y-a.y,length=dx*dx+dy*dy;
+    const t=length?clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/length,0,1):0;
+    return Math.hypot(p.x-a.x-dx*t,p.y-a.y-dy*t);
+  }
+  function inPolygon(p, vertices) {
+    let inside=false;
+    for(let i=0,j=vertices.length-1;i<vertices.length;j=i++) {
+      const a=vertices[i],b=vertices[j];
+      if((a.y>p.y)!==(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)inside=!inside;
+    }
+    return inside;
+  }
+  function crossing(a,b,c,d) {
+    const cross=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
+    const abC=cross(a,b,c),abD=cross(a,b,d),cdA=cross(c,d,a),cdB=cross(c,d,b);
+    return ((abC>EPS&&abD<-EPS)||(abC<-EPS&&abD>EPS))&&((cdA>EPS&&cdB<-EPS)||(cdA<-EPS&&cdB>EPS));
+  }
+  function edgeDistance(a,b,c,d) {
+    return crossing(a,b,c,d)?0:Math.min(segmentDistance(a,c,d),segmentDistance(b,c,d),segmentDistance(c,a,b),segmentDistance(d,a,b));
+  }
+  function terrain(world) {
+    const old=terrainCache.get(world);
+    if(old&&old.water===world.water&&old.solids===world.solids)return old;
+    const shapes=[];
+    for(const vertices of [...world.water||[],...world.solids||[]]) {
+      if(!Array.isArray(vertices)||vertices.length<3||!vertices.every(point))continue;
+      const xs=vertices.map(p=>p.x),ys=vertices.map(p=>p.y);
+      const edges=vertices.map((a,i)=>{const b=vertices[(i+1)%vertices.length];return {a,b,minX:Math.min(a.x,b.x),maxX:Math.max(a.x,b.x),minY:Math.min(a.y,b.y),maxY:Math.max(a.y,b.y)};});
+      shapes.push({vertices,edges,minX:Math.min(...xs),maxX:Math.max(...xs),minY:Math.min(...ys),maxY:Math.max(...ys)});
+    }
+    const data={water:world.water,solids:world.solids,shapes};terrainCache.set(world,data);return data;
+  }
+  function nearShape(a,b,shape,r) {return Math.max(a.x,b.x)>=shape.minX-r&&Math.min(a.x,b.x)<=shape.maxX+r&&Math.max(a.y,b.y)>=shape.minY-r&&Math.min(a.y,b.y)<=shape.maxY+r;}
+  function blocked(p,world) {
+    const radius=actorRadius(world);
+    for(const o of world.obstacles||[]) {
+      if(Number.isFinite(o.radius)){const r=Math.max(0,o.radius)+radius+EPS,dx=p.x-o.x,dy=p.y-o.y;if(Math.abs(dx)<=r&&Math.abs(dy)<=r&&dx*dx+dy*dy<=r*r)return true;}
+      else if(inRect(p,o,radius))return true;
+    }
+    for(const shape of terrain(world).shapes) {
+      if(!nearShape(p,p,shape,radius))continue;
+      if(inPolygon(p,shape.vertices))return true;
+      for(const edge of shape.edges)if(nearShape(p,p,edge,radius)&&segmentDistance(p,edge.a,edge.b)<=radius+EPS)return true;
+    }
+    return false;
+  }
 
   function isWalkable(p, world) {
-    if (!world || !inBounds(p, world) || (world.obstacles || []).some(r => inRect(p, r))) return false;
+    if (!world || !inBounds(p, world)) return false;
+    if(world.freeRoam)return !blocked(p,world);
     const data = prepare(world);
     for (const id of data.buckets.get(`${Math.floor(p.x / BUCKET)},${Math.floor(p.y / BUCKET)}`) || []) {
       const s = data.segments[id];
-      if (distance(p, projection(p, s)) <= s.radius + EPS) return true;
+      if (distance(p, projection(p, s)) <= s.radius + EPS) return !blocked(p,world);
     }
     return false;
   }
@@ -72,14 +121,22 @@ globalThis.ContinuousMotion = (() => {
     return interval[0] <= interval[1] + EPS;
   }
 
-  function clearSegment(from, to, world) {
-    if (!isWalkable(from, world) || !isWalkable(to, world)) return false;
+  function clearSegment(from, to, world, endpointsKnown=false) {
+    if (!endpointsKnown&&(!isWalkable(from, world) || !isWalkable(to, world))) return false;
     const dx = to.x - from.x, dy = to.y - from.y, length2 = dx * dx + dy * dy;
     if (length2 < EPS) return true;
+    const padding=actorRadius(world);
     for (const r of world.obstacles || []) {
+      if(Number.isFinite(r.radius)) {const radius=Math.max(0,r.radius)+padding+EPS;if(Math.max(from.x,to.x)<r.x-radius||Math.min(from.x,to.x)>r.x+radius||Math.max(from.y,to.y)<r.y-radius||Math.min(from.y,to.y)>r.y+radius)continue;if(segmentDistance(r,from,to)<=radius)return false;continue;}
+      if(Math.max(from.x,to.x)<r.x-padding||Math.min(from.x,to.x)>r.x+r.width+padding||Math.max(from.y,to.y)<r.y-padding||Math.min(from.y,to.y)>r.y+r.height+padding)continue;
       const interval = [0, 1];
-      if (clip(interval, from.x, dx, r.x, r.x + r.width) && clip(interval, from.y, dy, r.y, r.y + r.height)) return false;
+      if (clip(interval, from.x, dx, r.x-padding, r.x+r.width+padding) && clip(interval, from.y, dy, r.y-padding, r.y+r.height+padding)) return false;
     }
+    for(const shape of terrain(world).shapes) {
+      if(!nearShape(from,to,shape,padding))continue;
+      for(const edge of shape.edges)if(nearShape(from,to,edge,padding)&&edgeDistance(from,to,edge.a,edge.b)<=padding+EPS)return false;
+    }
+    if(world.freeRoam)return true;
     // Exact capsule intervals avoid jumping over narrow gaps between roads.
     const data = prepare(world), intervals = [];
     function circle(c, radius) {
@@ -145,13 +202,63 @@ globalThis.ContinuousMotion = (() => {
       consider(center);
       if (s.length) for (const sign of [-1, 1]) consider({x: center.x - s.dy / s.length * inset * sign, y: center.y + s.dx / s.length * inset * sign});
     }
+    const padding=actorRadius(world)+.15;
+    consider({x:clamp(p.x,padding,world.width-padding),y:clamp(p.y,padding,world.height-padding)});
     for (const r of world.obstacles || []) {
-      const xs = [r.x - 0.1, r.x + r.width + 0.1], ys = [r.y - 0.1, r.y + r.height + 0.1];
+      if(Number.isFinite(r.radius)) {
+        for(let i=0;i<32;i++){const angle=i*Math.PI/16;consider({x:r.x+Math.cos(angle)*(r.radius+padding),y:r.y+Math.sin(angle)*(r.radius+padding)});}continue;
+      }
+      const xs = [r.x-padding, r.x+r.width+padding], ys = [r.y-padding, r.y+r.height+padding];
       for (const x of xs) consider({x, y: clamp(p.y, r.y, r.y + r.height)});
       for (const y of ys) consider({x: clamp(p.x, r.x, r.x + r.width), y});
       for (const x of xs) for (const y of ys) consider({x, y});
     }
+    for(const shape of terrain(world).shapes) {
+      if(!nearShape(p,p,shape,maxRadius+padding))continue;
+      const pts=shape.vertices;
+      for(let i=0;i<pts.length;i++) {
+        const a=pts[i],b=pts[(i+1)%pts.length],dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);
+        if(!len)continue;
+        const t=clamp(((p.x-a.x)*dx+(p.y-a.y)*dy)/(len*len),0,1),q={x:a.x+dx*t,y:a.y+dy*t};
+        for(const sign of [-1,1])consider({x:q.x-dy/len*padding*sign,y:q.y+dx/len*padding*sign});
+        for(let n=0;n<8;n++){const angle=n*Math.PI/4;consider({x:a.x+Math.cos(angle)*padding,y:a.y+Math.sin(angle)*padding});}
+      }
+    }
     return best;
+  }
+
+  // The guide deliberately retains the geographic road route. A player who
+  // wandered onto a lawn first walks back to a reachable road, then follows it.
+  function findRoadPath(from,to,world) {
+    if(!world.freeRoam)return findPath(from,to,world);
+    if(!isWalkable(from,world)||!isWalkable(to,world))return [];
+    let roadWorld=roadWorldCache.get(world);
+    if(!roadWorld){roadWorld={};roadWorldCache.set(world,roadWorld);}Object.assign(roadWorld,world,{freeRoam:false});
+    const roadGoal=nearestWalkable(to,roadWorld,160);
+    if(!roadGoal)return [];
+    const leave=distance(roadGoal,to)<.01?[]:findPath(roadGoal,to,world);
+    if(distance(roadGoal,to)>=.01&&!leave.length)return [];
+    const nearest=nearestWalkable(from,roadWorld,Math.hypot(world.width,world.height));
+    const via=roadStart=>{
+      const along=distance(roadStart,roadGoal)<.01?[]:findPath(roadStart,roadGoal,roadWorld);
+      if(distance(roadStart,roadGoal)>=.01&&!along.length)return null;
+      const join=distance(from,roadStart)<.01?[]:findPath(from,roadStart,world);
+      if(distance(from,roadStart)>=.01&&!join.length)return null;
+      return [...join,...along,...leave];
+    };
+    if(nearest){const result=via(nearest);if(result)return result;}
+    const candidates=[];
+    // A nearby road can be disconnected by the clipped map boundary or water.
+    // Try other geographic roads rather than refusing an otherwise valid trip.
+    for(const segment of prepare(roadWorld).segments) {
+      const candidate=nearestWalkable(projection(from,segment),roadWorld,40);
+      if(candidate&&(!nearest||distance(nearest,candidate)>=20)&&!candidates.some(p=>distance(p,candidate)<20))candidates.push(candidate);
+    }
+    candidates.sort((a,b)=>distance(a,from)-distance(b,from));
+    for(const roadStart of candidates) {
+      const result=via(roadStart);if(result)return result;
+    }
+    return [];
   }
 
   function findPath(from, to, world) {
@@ -198,7 +305,7 @@ globalThis.ContinuousMotion = (() => {
         const nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
         const next = ny * cols + nx, score = scores[id] + Math.hypot(dx, dy) * cell;
-        if (closed[next] || score >= scores[next] || !valid(next) || !clearSegment(here, center(next), world)) continue;
+        if (closed[next] || score >= scores[next] || !valid(next) || !clearSegment(here, center(next), world,true)) continue;
         parents[next] = id; scores[next] = score;
         push({id: next, f: score + distance(center(next), target)});
       }
@@ -225,6 +332,6 @@ globalThis.ContinuousMotion = (() => {
     return {x: axis(p.x, width, world.width), y: axis(p.y, height, world.height), width, height};
   }
 
-  return {isWalkable, move, findPath, nearestWalkable, cameraFor};
+  return {isWalkable, move, findPath, findRoadPath, nearestWalkable, cameraFor};
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = globalThis.ContinuousMotion;

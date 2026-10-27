@@ -8,14 +8,14 @@ const curved = {
   obstacles: [],
 };
 
-function walkRoute(from, route, world) {
+function walkRoute(from, route, world, step=8.8) {
   let position = {...from};
   for (const target of route) {
     let frames = 0;
     while (Math.hypot(target.x - position.x, target.y - position.y) > 0.001) {
       assert.ok(++frames < 1000, 'the actor must not stick to a planned road edge');
       const dx = target.x - position.x, dy = target.y - position.y;
-      const factor = Math.min(1, 8.8 / Math.hypot(dx, dy));
+      const factor = Math.min(1, step / Math.hypot(dx, dy));
       position = motion.move(position, {x: dx * factor, y: dy * factor}, world);
       assert.ok(motion.isWalkable(position, world));
     }
@@ -109,4 +109,75 @@ test('a 4000 pixel world finds a long road route without exceeding the grid budg
   const route = motion.findPath({x: 100, y: 3900}, {x: 3900, y: 100}, world);
   assert.ok(route.length >= 2);
   assert.deepEqual(route.at(-1), {x: 3900, y: 100});
+});
+
+const box=(x,y,w,h)=>[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];
+
+test('free roaming keeps road geometry while lawns become directly walkable', () => {
+  const world={...curved,freeRoam:true,water:[],solids:[],actorRadius:8};
+  const destination={x:650,y:100};
+  assert.ok(motion.isWalkable({x:450,y:400},world));
+  assert.deepEqual(motion.findPath(curved.spawn,destination,world),[destination]);
+  const moved=motion.move({x:450,y:650},{x:0,y:-200},world);
+  assert.ok(Math.abs(moved.y-450)<.001);
+  assert.equal(world.roads,curved.roads,'free exploration must not rewrite geographic roads');
+  assert.equal(motion.isWalkable({x:3,y:400},world),false,'the actor footprint stays inside the map');
+});
+
+test('thin water and building polygons stop high-speed travel without tunneling', () => {
+  for(const property of ['water','solids']) {
+    const world={width:800,height:500,freeRoam:true,roads:[],obstacles:[],[property]:[box(300.1,0,.2,500)],actorRadius:8};
+    const stopped=motion.move({x:100,y:250},{x:600,y:0},world);
+    assert.ok(stopped.x<292.1,`${property} blocks the full actor radius`);
+    assert.deepEqual(motion.findPath({x:100,y:250},{x:700,y:250},world),[]);
+    const slide=motion.move({x:290,y:150},{x:100,y:150},world);
+    assert.ok(slide.x<292.1&&slide.y>290,'diagonal travel slides along the shoreline or wall');
+  }
+});
+
+test('terrain click paths route around water, buildings and NPCs at car speed', () => {
+  const world={width:1000,height:700,cellSize:20,freeRoam:true,actorRadius:8,roads:[],water:[box(220,80,160,330)],solids:[box(520,280,160,330)],obstacles:[{x:450,y:480,radius:28}]};
+  const start={x:70,y:350},goal={x:930,y:350};
+  const path=motion.findPath(start,goal,world);
+  assert.ok(path.length>2);
+  assert.deepEqual(path.at(-1),goal);
+  const arrived=walkRoute(start,path,world,26),returned=walkRoute(goal,motion.findPath(goal,start,world),world,26);
+  assert.ok(Math.hypot(arrived.x-goal.x,arrived.y-goal.y)<.001);
+  assert.ok(Math.hypot(returned.x-start.x,returned.y-start.y)<.001);
+  assert.equal(motion.isWalkable({x:480,y:480},world),false,'NPC body includes actor clearance');
+  const stopped=motion.move({x:400,y:480},{x:100,y:0},world);
+  assert.ok(stopped.x<414,'a fast car cannot pass through an NPC');
+});
+
+test('polygon collisions use the actual footprint, not only its bounding rectangle', () => {
+  const world={width:500,height:500,freeRoam:true,roads:[],solids:[[{x:100,y:100},{x:400,y:100},{x:100,y:400}]],actorRadius:8};
+  assert.equal(motion.isWalkable({x:150,y:150},world),false);
+  assert.ok(motion.isWalkable({x:360,y:360},world));
+  assert.equal(motion.isWalkable({x:250,y:255},world),false,'clearance includes diagonal building edges');
+  const snapped=motion.nearestWalkable({x:200,y:200},world,90);
+  assert.ok(snapped&&motion.isWalkable(snapped,world));
+  assert.ok(Math.hypot(snapped.x-200,snapped.y-200)<=90);
+  assert.equal(motion.nearestWalkable({x:200,y:200},world,10),null);
+});
+
+test('road guide rejoins the road after free roaming and preserves bends', () => {
+  const world={...curved,freeRoam:true,water:[],solids:[],actorRadius:8};
+  const start={x:250,y:530},goal={x:650,y:100};
+  const path=motion.findRoadPath(start,goal,world);
+  assert.ok(path.length>=3,'the guide must retain bends instead of cutting across grass');
+  assert.deepEqual(path.at(-1),goal);
+  assert.deepEqual(walkRoute(start,path,world,26),goal);
+  const roadWorld={...world,freeRoam:false};
+  assert.ok(path.slice(1).every(p=>motion.isWalkable(p,roadWorld)));
+  assert.deepEqual(motion.findRoadPath(curved.spawn,goal,curved),motion.findPath(curved.spawn,goal,curved));
+});
+
+test('road guide can bypass the closest disconnected road when joining from grass', () => {
+  const world={width:800,height:600,freeRoam:true,cellSize:20,actorRadius:8,obstacles:[],roads:[{width:40,points:[{x:100,y:100},{x:300,y:100}]},{width:60,points:[{x:100,y:300},{x:600,y:300},{x:600,y:500}]}]};
+  const from={x:180,y:150},to={x:600,y:500};
+  const route=motion.findRoadPath(from,to,world);
+  assert.ok(route.length>=2,'join the connected road further south');
+  assert.deepEqual(route.at(-1),to);
+  const arrived=walkRoute(from,route,world,26);
+  assert.ok(Math.hypot(arrived.x-to.x,arrived.y-to.y)<.001);
 });
