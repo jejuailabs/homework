@@ -51,17 +51,18 @@ function studentRanks(all: PlayRankings, studentId: string): PlayRankings {
   const visible = (rows: PlayRankings['solo']) => rows.filter((row, index) => index < 5 || row.id === studentId);
   return {solo: visible(all.solo), duel: visible(all.duel), steady: visible(all.steady)};
 }
+const WEEK_LIST_MAX = 60;
 async function home(ctx: Context): Promise<PlayHome> {
   const a = await accessStudent(ctx), root = rootRef(a);
-  const [items, attempts, skills, day, score, ranking] = await Promise.all([
+  const [items, attempts, skills, day, score, list, ranking] = await Promise.all([
     loadItems(a.ctx.classId, a.gradeBand), root.collection('attempts').get(), root.collection('spelling').get(),
-    root.collection('days').doc(a.date).get(), scoreRef(a.pupil.ref, a.week).get(),
+    root.collection('days').doc(a.date).get(), scoreRef(a.pupil.ref, a.week).get(), db().doc(`classes/${a.ctx.classId}/playgroundLists/${a.week}`).get(),
     a.settings.enabled && a.settings.showRankings ? rankings(a.ctx.classId, a.week) : Promise.resolve({solo: [], duel: [], steady: []}),
   ]);
-  const seen = new Set(attempts.docs.map(row => row.id)), available = new Set(items.map(item => item.id));
+  const seen = new Set(attempts.docs.map(row => row.id)), available = new Set(items.map(item => item.id)), assigned = new Set<string>(Array.isArray(list.data()?.itemIds) ? list.data()!.itemIds : []);
   return {date: a.date, weekStart: a.week, studentId: a.ctx.studentId, name: String(a.pupil.data()?.name || ''), className: String(a.cls.data()?.name || ''), gradeBand: a.gradeBand, settings: a.settings, liveEnabled: liveEnabled(), scoredToday: Number(day.data()?.scored || 0), dailyLimit: 30,
     dueCount: skills.docs.filter(row => available.has(row.id) && row.data().dueDate <= a.date && row.data().lastDate < a.date).length,
-    score: scoreOf(score.data()), menus: playKinds.map(kind => ({kind, total: items.filter(item => item.kind === kind).length, remaining: items.filter(item => item.kind === kind && !seen.has(item.id)).length})), ranking: studentRanks(ranking, a.ctx.studentId)};
+    score: scoreOf(score.data()), menus: playKinds.map(kind => ({kind, total: items.filter(item => item.kind === kind).length, remaining: items.filter(item => item.kind === kind && !seen.has(item.id)).length, assigned: items.filter(item => item.kind === kind && assigned.has(item.id) && !seen.has(item.id)).length})), ranking: studentRanks(ranking, a.ctx.studentId)};
 }
 async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>) {
   if (typeof data.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(data.requestId)) throw new ApiError(400, '다음 문제 버튼을 다시 눌러 주세요.', 'PLAY_REQUEST');
@@ -92,10 +93,11 @@ async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>)
       if (!seen.has(practiceItemId)) throw new ApiError(400, '먼저 풀어 본 문제만 다시 연습할 수 있어요.');
       pool = pool.filter(item => item.id === practiceItemId);
     } else {
-      const selected = list.data()?.itemIds;
-      if (kind === 'spelling' && Array.isArray(selected) && selected.length) pool = pool.filter(item => selected.includes(item.id));
-      const fresh = pool.filter(item => !seen.has(item.id));
-      if (fresh.length) pool = fresh;
+      // This week's teacher-assigned items come first; once all are tried, the usual unseen pool continues.
+      const selected = new Set<string>(Array.isArray(list.data()?.itemIds) ? list.data()!.itemIds : []);
+      const fresh = pool.filter(item => !seen.has(item.id)), assigned = fresh.filter(item => selected.has(item.id));
+      if (assigned.length) pool = assigned;
+      else if (fresh.length) pool = fresh;
       else if (pool.length > 1) pool = pool.filter(item => item.id !== active.data()?.itemId);
     }
     if (!pool.length) throw new ApiError(409, review ? '오늘 다시 볼 맞춤법을 모두 풀었어요.' : '아직 이 범위의 문제가 없어요. 선생님께 알려 주세요.', review ? 'PLAY_NO_REVIEW' : 'PLAY_EMPTY');
@@ -164,7 +166,7 @@ async function teacherState(ctx: Context, classId: string, week: string): Promis
   const [settings, items, hidden, list] = await Promise.all([settingsRef(classId).get(), loadItems(classId, band), db().collection(`classes/${classId}/playgroundItems`).get(), db().doc(`classes/${classId}/playgroundLists/${week}`).get()]);
   const all = new Map(items.map(item => [item.id, item]));
   for (const row of hidden.docs) all.set(row.id, {...row.data(), id: row.id} as PlayItem);
-  return {classId, className: String(cls.data()?.name || ''), gradeBand: band, weekStart: week, settings: settingsOf(settings.data()), items: [...all.values()], spellingIds: list.data()?.itemIds || [], liveEnabled: liveEnabled()};
+  return {classId, className: String(cls.data()?.name || ''), gradeBand: band, weekStart: week, settings: settingsOf(settings.data()), items: [...all.values()], weekIds: list.data()?.itemIds || [], liveEnabled: liveEnabled()};
 }
 async function teacherReport(ctx: Context, classId: string, week: string): Promise<PlayReport> {
   await teacherClass(ctx, classId);
@@ -193,11 +195,12 @@ async function saveTeacher(ctx: Context, path: string, classId: string, data: Re
       item.id = itemId; item.source = 'teacher'; item.version = `teacher-${Number(existing.data()?.revision || 0) + 1}`;
       tx.set(ref, {...item, revision: Number(existing.data()?.revision || 0) + 1, updatedBy: ctx.uid, updatedAt: new Date().toISOString()}); return {item};
     }
-    if (path === 'teacher/spelling-list' && method === 'PUT') {
+    // The weekly list holds any kind: solo play serves it first, and team games can use it as their range.
+    if ((path === 'teacher/week-list' || path === 'teacher/spelling-list') && method === 'PUT') {
       const itemIds = data.itemIds;
-      if (!Array.isArray(itemIds) || itemIds.some(value => typeof value !== 'string') || (itemIds.length !== 0 && (itemIds.length < 5 || itemIds.length > 40)) || new Set(itemIds).size !== itemIds.length) throw new ApiError(400, '맞춤법은 5~40개를 고르거나 선택을 모두 해제해 주세요.');
-      const items = await loadItems(classId, gradeBand(cls.data()?.grade), tx), allowed = new Set(items.filter(item => item.kind === 'spelling').map(item => item.id));
-      if (itemIds.some(value => !allowed.has(value))) throw new ApiError(400, '우리 반 학년에 맞는 맞춤법 문제를 골라 주세요.');
+      if (!Array.isArray(itemIds) || itemIds.some(value => typeof value !== 'string') || itemIds.length > WEEK_LIST_MAX || new Set(itemIds).size !== itemIds.length) throw new ApiError(400, `이번 주 문제는 ${WEEK_LIST_MAX}개까지 낼 수 있어요.`);
+      const items = await loadItems(classId, gradeBand(cls.data()?.grade), tx), allowed = new Set(items.map(item => item.id));
+      if (itemIds.some(value => !allowed.has(value))) throw new ApiError(400, '우리 반 학년에 맞는 문제를 골라 주세요.');
       tx.set(cls.ref.collection('playgroundLists').doc(week), {itemIds, updatedAt: new Date().toISOString(), updatedBy: ctx.uid}); return {itemIds};
     }
     throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
@@ -222,7 +225,7 @@ export async function handlePlayground(request: Request, segments: string[]) {
     }
     if (segments[0] === 'teacher') {
       const classId = id(url.searchParams.get('classId') || data.classId), week = weekOf(url.searchParams.get('week'));
-      if (request.method === 'GET' && (path === 'teacher/settings' || path === 'teacher/items' || path === 'teacher/spelling-list')) return json(await teacherState(ctx, classId, week));
+      if (request.method === 'GET' && (path === 'teacher/settings' || path === 'teacher/items' || path === 'teacher/spelling-list' || path === 'teacher/week-list')) return json(await teacherState(ctx, classId, week));
       if (request.method === 'GET' && path === 'teacher/report') return json(await teacherReport(ctx, classId, week));
       return json(await saveTeacher(ctx, path, classId, data, week, request.method));
     }
