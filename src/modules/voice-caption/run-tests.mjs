@@ -111,6 +111,21 @@ function fixture() {
 }
 const rejectsStatus = (promise, status, code) => assert.rejects(promise, error => error instanceof policy.ApiError && error.status === status && (!code || error.code === code));
 
+test('voice: audio-only stories, clearing text and replacing a draft work for the student', () => offline(async () => {
+  const f = fixture();
+  await f.upload(); await f.caption('voice1', student, '');
+  assert.equal((await f.invoke(student)).draft.caption, '');
+  await f.caption('voice1', student, '고래를 그렸어요.'); await f.caption('voice1', student, '');
+  assert.equal((await f.invoke(student)).draft.caption, '');
+  await f.invoke(student, 'DELETE', ['voice1']); // Client replaces a draft by deleting it, then uploading again.
+  await f.upload('voice2');
+  assert.equal((await f.invoke(student)).draft.id, 'voice2');
+  await f.approve('voice2');
+  const listing = await f.invoke(other);
+  assert.equal(listing.active.id, 'voice2'); assert.equal(listing.active.caption, '');
+  assert.deepEqual(f.data.get('moduleVoiceStorage/teacher1'), {usedBytes: audio.length, reservedBytes: 0});
+}));
+
 test('voice: upload, manual caption, approval and playback work without an AI key', () => offline(async () => {
   const f = fixture();
   const saved = await f.upload();
