@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-27",
+  "provider": "Codex built-in image generation",
+  "reference": "prototype/assets/village.webp",
+  "purpose": "Modular toy-town scenery over unchanged OSM road coordinates",
+  "images": [
+    {
+      "id": "school",
+      "prompt": "Use case: stylized-concept. Asset type: transparent game building sprite. Reference image is STYLE ONLY, not geographic layout. Create ONE isolated adorable miniature cream school, mint-green tiled roof, small bell tower with gold bell, arched wooden front entrance, little front steps, flower pots at both sides. Match the supplied toy-village reference extremely closely: polished matte toy clay materials, soft bevels, pastel colors, tiny crisp architectural details, baked ambient occlusion, warm upper-left sunlight. Fixed orthographic high three-quarter overhead camera looking down about 35 degrees; front facade faces the bottom of image; visible right wall and roof. NO perspective vanishing, no blur. Complete building centered with generous transparent padding, front feet/base centered bottom. Narrow ivory foundation ONLY under building; no broad plaza, grass island or neighboring scenery. Separate sprite will be placed on real map. No people, text, label, logo, UI, ground plane, checkerboard. True alpha outside silhouette, no cast ground shadow. The school is a stylized illustration, not reconstruction of an actual building. Rich visual quality equal to reference, not low-poly wireframe."
+    },
+    {
+      "id": "postoffice",
+      "prompt": "Use case: stylized-concept. Asset type: transparent game building sprite. Reference is STYLE ONLY. Create ONE isolated adorable miniature peach post office, cornflower blue tiled gable roof, cream carved trims, small chimney, central arched wooden double door, an embossed cream envelope symbol above door (no letters), front steps, flowerboxes with white daisies and green leaves. Match supplied toy village precisely: rounded matte toy clay, soft bevels and warm upper-left light, beautifully crafted smooth miniature. Fixed orthographic high three-quarter overhead camera looking down about35 degrees, front faces image bottom with right wall visible. Same camera as reference. Entire building visible centered with roomy padding. Only a narrow ivory foundation under building. True transparent alpha outside silhouette. No ground plane, large platform, people, lettering, UI, logo, checkerboard, cast ground shadow, perspective distortion or blur. This is a stylized place marker building for a real-map 2D game."
+    },
+    {
+      "id": "homes",
+      "prompt": "Use case: stylized-concept. Asset type: transparent modular game buildings ATLAS. Four distinct isolated miniature buildings in EXACT 2 columns by 2 rows, generous transparent gaps so each can be extracted. Reference image STYLE ONLY. Row1 col1: cream Jeju cottage with lavender tiled roof, small wooden door and green flowerbox. Row1 col2: peach cottage with terracotta roof, arched teal window and tiny chimney. Row2 col1: pale mint two-storey village shop with cream-and-pink striped awning, flower boxes, no lettering. Row2 col2: ivory cottage with turquoise roof, round corner, yellow door and planter. Same size range, no duplicated buildings, crisp beautifully crafted pastel clay-toy quality like reference. Consistent orthographic high 3/4 camera looking down35degrees, front faces bottom, right facade visible, soft upper-left lighting, baked ambient occlusion. Every building fully isolated on true transparent background, NO shared ground, NO grass patches, NO labels, NO people, NO text or UI, NO cast ground shadows, NO broad pedestals. Narrow foundations only. Generous margins around all roofs and bases. Exact2x2 atlas, not a village scene."
+    },
+    {
+      "id": "props",
+      "prompt": "Use case: stylized-concept. Asset type: transparent toy-town environment props ATLAS, exact3 columns x2rows with generous transparent gaps. Match reference pastel miniature clay style, orthographic high3/4 camera down35degrees, upper-left softlight, rounded bevels, crisp detailed quality. Six completely separate isolated objects: Row1 col1 ONE lush rounded green tree with small tan trunk, row1 col2 ONE small mandarin tree with orange fruits and trunk, row1 col3 ONE turquoise old-fashioned street lamp with cream glowing glass. Row2 col1 ONE mint bench with ivory legs, row2 col2 ONE rounded low cluster of cream stone planter with green leaves and white/yellow daisies, row2 col3 ONE red rounded mailbox on dark small stand. Every object whole and uncut, generous transparent spacing eachcell. True alpha background; NO words, captions, people, ground plane, large pedestal, checkerboard, castgroundshadows, NO shared scenery. Objects should remain one connected silhouette per cell to allow technical extraction. Uniformly charming toy quality exactly like reference."
+    }
+  ],
+  "processing": "Alpha-component extraction and resize only; see scripts/prepare-continuous-assets.mjs. No paid API fallback.",
+  "locationRule": "Geographic geometry and landmark positions come from data/aewol.json. Image generation only determines appearance. Cultural/historical positions must be verified before adding."
+}

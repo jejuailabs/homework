@@ -1,0 +1,117 @@
+{
+  "files": {
+    "school": "school.webp",
+    "postoffice": "postoffice.webp",
+    "homeLavender": "home-lavender.webp",
+    "homePeach": "home-peach.webp",
+    "shop": "shop.webp",
+    "homeTeal": "home-teal.webp",
+    "tree": "tree.webp",
+    "mandarin": "mandarin.webp",
+    "lamp": "lamp.webp",
+    "bench": "bench.webp",
+    "planter": "planter.webp",
+    "mailbox": "mailbox.webp"
+  },
+  "dimensions": {
+    "school": {
+      "width": 688,
+      "height": 640
+    },
+    "postoffice": {
+      "width": 688,
+      "height": 640
+    },
+    "homeLavender": {
+      "width": 389,
+      "height": 420
+    },
+    "homePeach": {
+      "width": 422,
+      "height": 420
+    },
+    "shop": {
+      "width": 357,
+      "height": 420
+    },
+    "homeTeal": {
+      "width": 426,
+      "height": 420
+    },
+    "tree": {
+      "width": 305,
+      "height": 320
+    },
+    "mandarin": {
+      "width": 324,
+      "height": 320
+    },
+    "lamp": {
+      "width": 112,
+      "height": 320
+    },
+    "bench": {
+      "width": 423,
+      "height": 320
+    },
+    "planter": {
+      "width": 469,
+      "height": 320
+    },
+    "mailbox": {
+      "width": 213,
+      "height": 320
+    }
+  },
+  "anchors": {
+    "school": {
+      "x": 344,
+      "y": 638
+    },
+    "postoffice": {
+      "x": 344,
+      "y": 638
+    },
+    "homeLavender": {
+      "x": 194.5,
+      "y": 418
+    },
+    "homePeach": {
+      "x": 211,
+      "y": 418
+    },
+    "shop": {
+      "x": 178.5,
+      "y": 418
+    },
+    "homeTeal": {
+      "x": 213,
+      "y": 418
+    },
+    "tree": {
+      "x": 152.5,
+      "y": 318
+    },
+    "mandarin": {
+      "x": 162,
+      "y": 318
+    },
+    "lamp": {
+      "x": 56,
+      "y": 318
+    },
+    "bench": {
+      "x": 211.5,
+      "y": 318
+    },
+    "planter": {
+      "x": 234.5,
+      "y": 318
+    },
+    "mailbox": {
+      "x": 106.5,
+      "y": 318
+    }
+  },
+  "preparation": "Alpha-connected silhouettes, 3px source padding, Lanczos resize; original alpha preserved."
+}

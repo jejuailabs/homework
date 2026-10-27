@@ -1,0 +1,16 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>애월 산책 · 이어지는 장난감 마을</title><style>__STYLE__</style></head><body>
+<main id="app"><canvas id="world" tabindex="0" aria-label="애월의 실제 길. 방향키 또는 WASD로 걷고, E 키로 이야기하세요."></canvas>
+<header class="brand"><span class="emblem">✿</span><div><small>REGION QUEST · AEWOL</small><h1>학교에서 바다까지</h1><p id="area">애월초등학교 앞</p></div></header>
+<section class="quest" aria-label="산책 미션"><div class="eyebrow"><span>작은 편지, 긴 산책</span><b id="step">1 / 4</b></div><h2 id="objective">학교 앞 모모와 이야기해요</h2><p id="hint">실제 애월의 길을 따라 바다까지 걸어 봐요.</p><div class="progress"><i id="fill"></i></div><div class="quest-actions"><button id="guide">길 따라 걷기 ↗</button><span id="distance">전체 약 421m</span></div></section>
+<button id="map-button" class="minimap" aria-label="실제 길 지도 열기"><canvas id="mini" width="280" height="210"></canvas><span><b>애월의 실제 길</b><i>북 ↑</i></span></button>
+<div class="truth"><span>OSM 실제 도로 · 위치 유지</span><small>건물 외관과 소품은 장난감 스타일 시안</small></div>
+<div class="top-tools"><button id="zoom-out" aria-label="화면 축소">−</button><span id="zoom-label">100%</span><button id="zoom-in" aria-label="화면 확대">＋</button><button id="help" aria-label="샘플 안내">?</button></div>
+<button id="interact" hidden><b>E</b><span>이야기하기</span></button><div id="toast" role="status" aria-live="polite"></div>
+<div class="dpad" aria-label="화면 방향키"><button data-dir="up" aria-label="위로 이동">↑</button><button data-dir="left" aria-label="왼쪽으로 이동">←</button><button data-dir="down" aria-label="아래로 이동">↓</button><button data-dir="right" aria-label="오른쪽으로 이동">→</button></div>
+<nav class="dock"><button id="record">▤ 탐험 기록</button><button id="home">⌂ 학교로 귀환</button><button id="reset">↺ 처음부터</button></nav>
+<footer><span id="save">이 기기에서 이어하기</span><span>방향키 · WASD · 클릭 이동 · E 대화</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></footer>
+<div id="loading"><span>✿</span><h2>애월의 작은 길을 준비하고 있어요</h2><p>지도 위에 장난감 마을을 펼치는 중</p></div>
+</main>
+<dialog id="dialog" aria-labelledby="dialog-title"><div class="dialog-body"><img id="portrait" alt="모모"><div class="speech"><div class="dialog-heading"><span id="dialog-title">우체부 모모</span><button id="close-dialog" aria-label="대화 닫기">×</button></div><p id="dialog-text"></p><div id="choices"></div></div></div></dialog>
+<dialog id="panel" aria-labelledby="panel-title"><header><div><small>AEWOL WALKING JOURNAL</small><h2 id="panel-title"></h2></div><button id="close-panel" aria-label="닫기">×</button></header><div id="panel-content"></div></dialog>
+<script>globalThis.RQ_DATA=__DATA__;globalThis.RQ_ASSETS=__ASSETS__;</script><script>__MOTION__</script><script>__WORLD__</script><script>__GAME__</script></body></html>

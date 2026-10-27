@@ -8,7 +8,15 @@
 - 현장 조사와 게임 설계: [docs/strategy.md](docs/strategy.md)
 - 애월초 OSM 실측: [docs/aewol-osm-measurement.md](docs/aewol-osm-measurement.md)
 
-상태: 기획 문서 + **장난감 마을 스타일의 로컬 플레이 테스트판**. 실제 애월 지도, 지역 학습 내용, 학급 연결은 다음 단계입니다.
+상태: 기획 문서 + **장난감 마을 스타일의 로컬 플레이 테스트판** + **실제 애월 도로를 따르는 연속 스크롤 샘플**. 지역 학습 내용과 학급 연결은 다음 단계입니다.
+
+## 실제 애월 길을 따라 걷기
+
+```powershell
+node src/modules/region-quest/scripts/serve-continuous.mjs
+```
+
+<http://127.0.0.1:8788>에서 학교 인근부터 해안까지 약 421m의 실제 도로 경로를 걸어봅니다. 도로·장소 좌표는 유지하고 장난감 이미지를 입혔습니다. 카메라가 따라 움직이며 미니맵에서 원본 도로를 비교할 수 있습니다. [연속 지도 샘플과 지도 보존 원칙](continuous/README.md)을 참고하세요.
 
 ## 장난감 마을 먼저 플레이하기
 
