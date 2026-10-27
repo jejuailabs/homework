@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import model from '../prototype/model.js';
+import village from '../prototype/world.js';
 
 const world = {
   width: 250, height: 200, cellSize: 25,
@@ -122,4 +123,64 @@ test('active map geometry is used by save/load, quest transitions, return and re
   assert.equal(model.isWalkable(outsideActiveMap, activeWorld), false);
   assert.deepEqual(model.normalizeState({...exploring, position: outsideActiveMap}, activeWorld).position, model.createState().position);
   assert.equal(model.returnHome(accepted, outsideActiveMap, activeWorld).atHome, false);
+});
+
+test('NPC contact keeps both foot areas apart from every direction and permits sliding', () => {
+  const {world: map, locations: {guide}, playerFootprint, actors} = village;
+  const halfWidth = (playerFootprint.width + actors[0].footprint.width) / 2;
+  const halfDepth = (playerFootprint.depth + actors[0].footprint.depth) / 2;
+  const cases = [
+    [{x: 700, y: guide.y}, {x: 400, y: 0}, p => p.x < guide.x - halfWidth],
+    [{x: 1000, y: guide.y}, {x: -400, y: 0}, p => p.x > guide.x + halfWidth],
+    [{x: guide.x, y: 490}, {x: 0, y: 250}, p => p.y < guide.y - halfDepth],
+    [{x: guide.x, y: 700}, {x: 0, y: -250}, p => p.y > guide.y + halfDepth],
+  ];
+  for (const [from, delta, remainsOnApproachSide] of cases) {
+    const stopped = model.move(from, delta, map);
+    assert.ok(remainsOnApproachSide(stopped));
+    assert.ok(model.isWalkable(stopped, map));
+  }
+  const slide = model.move({x: 780, y: 540}, {x: 40, y: 20}, map);
+  assert.ok(slide.x < guide.x - halfWidth);
+  assert.ok(slide.y > 540, 'a diagonal press still moves along the free axis');
+});
+
+test('click paths actually walk around the NPC and preserve access to conversation and quests', () => {
+  const {world: map, locations: {guide, letter, mailbox}} = village;
+  const approach = {x: guide.x, y: guide.y + 70};
+  const journeys = [
+    [{x: 700, y: 550}, {x: 1000, y: 550}],
+    [{x: 1000, y: 550}, {x: 700, y: 550}],
+    [{x: 850, y: 490}, approach],
+    [model.createState().position, approach],
+    [approach, letter],
+    [letter, {x: mailbox.x - 40, y: mailbox.y + 45}],
+  ];
+  for (const [from, to] of journeys) {
+    const path = model.findPath(from, to, map);
+    assert.ok(path.length, `reachable destination ${JSON.stringify(to)}`);
+    let position = {...from};
+    for (const target of path) {
+      let steps = 0;
+      while (Math.hypot(target.x - position.x, target.y - position.y) > 0.001) {
+        assert.ok(++steps < 100, 'path follower must not get stuck on the NPC');
+        const dx = target.x - position.x, dy = target.y - position.y;
+        const factor = Math.min(1, 8.8 / Math.hypot(dx, dy));
+        position = model.move(position, {x: dx * factor, y: dy * factor}, map);
+        assert.ok(model.isWalkable(position, map));
+      }
+    }
+    assert.ok(Math.hypot(position.x - to.x, position.y - to.y) < 0.001);
+  }
+  assert.ok(Math.hypot(approach.x - guide.x, approach.y - guide.y) < 125);
+  assert.deepEqual(model.findPath(model.createState().position, guide, map), []);
+});
+
+test('a pre-collision save inside an NPC recovers without losing mission progress', () => {
+  const oldSave = {...model.createState(), phase: 'deliver', position: village.locations.guide};
+  const restored = model.normalizeState(oldSave, village.world);
+  assert.ok(model.isWalkable(restored.position, village.world));
+  assert.equal(restored.phase, 'deliver');
+  const moved = model.move(restored.position, {x: 10, y: 0}, village.world);
+  assert.notDeepEqual(moved, restored.position, 'the restored player is not trapped');
 });

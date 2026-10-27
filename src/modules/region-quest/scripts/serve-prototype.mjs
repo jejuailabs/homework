@@ -45,16 +45,18 @@ async function loadAssets() {
 }
 
 export async function buildPrototypeDocuments() {
-  const [host, template, css, model, game, assets] = await Promise.all([
+  const [host, template, css, model, world, game, assets] = await Promise.all([
     readFile(join(prototypeRoot, 'host.html'), 'utf8'),
     readFile(join(prototypeRoot, 'game.html'), 'utf8'),
     readFile(join(prototypeRoot, 'game.css'), 'utf8'),
     readFile(join(prototypeRoot, 'model.js'), 'utf8'),
+    readFile(join(prototypeRoot, 'world.js'), 'utf8'),
     readFile(join(prototypeRoot, 'game.js'), 'utf8'),
     loadAssets(),
   ]);
   let document = replaceToken(template, '__STYLE__', css.replace(/<\/style/gi, '<\\/style'));
   document = replaceToken(document, '__MODEL__', inlineScript(model));
+  document = replaceToken(document, '__WORLD__', inlineScript(world));
   document = replaceToken(document, '__GAME__', inlineScript(game));
   document = replaceToken(document, '__ASSETS__', JSON.stringify(assets).replace(/</g, '\\u003c'));
   return {host, game: document};

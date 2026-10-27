@@ -4,8 +4,7 @@
   const $ = id => document.getElementById(id);
   const canvas = $('world'), ctx = canvas.getContext('2d'), mini = $('minimap'), mctx = mini.getContext('2d');
   const dialogue = $('conversation'), panel = $('panel');
-  const home = {x: 450, y: 500}, guide = {x: 850, y: 550}, letter = {x: 610, y: 775}, mailbox = {x: 1415, y: 650};
-  const world = {...M.DEFAULT_WORLD, walkRegions: [[[200,480],[1100,440],[1120,570],[1460,625],[1490,760],[1260,875],[405,875],[130,700]]], obstacles: []};
+  const {world, locations: {home, guide, letter, mailbox}} = globalThis.RegionQuestWorld;
   const directions = ['down','left','right','up'];
   const quest = {
     meet: {title:'우체부 모모를 만나 봐요',text:'파란 모자를 쓴 모모가 기다리고 있어요.',step:1},
@@ -73,7 +72,7 @@
   function goTo(point,kind=null) {
     if(state.atHome){toast('먼저 탐험 계속을 눌러 주세요.');return;}
     const goal=kind==='guide'?{x:guide.x,y:guide.y+70}:kind==='mailbox'?{x:mailbox.x-40,y:mailbox.y+45}:point;
-    if(!M.isWalkable(goal,world)){toast('건물과 바다 쪽으로는 걸어갈 수 없어요.');return;}
+    if(!M.isWalkable(goal,world)){toast('사람이나 건물이 있는 곳이에요. 옆의 빈 바닥을 눌러 주세요.');return;}
     if(kind&&distance(state.position,point)<100){interact(kind);return;}
     const route=M.findPath(state.position,goal,world);
     if(!route.length){toast('다른 바닥을 눌러 보세요.');return;}
