@@ -12,6 +12,7 @@ import InstallShortcut from './install-shortcut';
 import StudentCompanion from '@/modules/my-space/companion';
 import LearningKingBeta from './learning-king-beta';
 import {useVerifiedViewer} from './viewer-context';
+import MyPageLink from '@/modules/teacher-notebook/my-page-link';
 // Card Play is hidden from the top menu for now; its pages still work by direct link.
 const cardsMenuVisible = false;
 
@@ -58,6 +59,7 @@ export default function AppShell({children,mySpaceEnabled=true}:{children:ReactN
       <div className="header-actions">
         <button className="icon-button" aria-label={t('language')} onClick={()=>setPreference({locale:locale==='ko'?'en':'ko'})}><Globe2 size={18}/><span>{locale==='ko'?'KO':'EN'}</span></button>
         <button className="icon-button" title={appearanceLabel} aria-label={appearanceLabel} onClick={()=>setPreference({appearance:nextAppearance})}>{resolvedAppearance==='dark'?<Moon size={19}/>:<Sun size={19}/>}</button>
+        {path.startsWith('/teacher')&&<MyPageLink active={path.startsWith('/teacher/me')}/>}
         <button className="icon-button" aria-label={t('settings')} aria-expanded={settings} onClick={()=>setSettings(!settings)}><Settings2 size={20}/></button>
         {!isLogin&&!isPublicGallery&&<button className="icon-button logout-button" aria-label={t('signOut')} disabled={busy} onClick={logout}><LogOut size={18}/></button>}
       </div>
