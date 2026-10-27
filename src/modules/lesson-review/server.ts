@@ -197,7 +197,7 @@ async function runAction(ctx: Context, request: Request, lessonId: string, actio
     if (reward) {
       const balance = addPointBalance(pointBalance(me.data()?.points), reward);
       tx.update(pupil, {points: balance, pointsEarnedTotal: addPointBalance(pointBalance(me.data()?.pointsEarnedTotal), reward)});
-      tx.create(receipt, {classId: ctx.classId, studentId: ctx.studentId, amount: reward, kind: 'earn', source: 'lesson-review', sourceId: lesson.id, reason: `배움 다지기 완료 · ${lesson.title}`, actorUid: ctx.uid, balanceAfter: balance, createdAt: stamp});
+      tx.create(receipt, {classId: ctx.classId, studentId: ctx.studentId, amount: reward, kind: 'earn', source: 'lesson-review', sourceId: lesson.id, reason: `복습하기 완료 · ${lesson.title}`, actorUid: ctx.uid, balanceAfter: balance, createdAt: stamp});
     }
     return next;
   });
@@ -268,6 +268,6 @@ export async function handleLessonReview(request: Request, segments: string[]) {
     if (error instanceof LessonReviewError) return json({error: error.message, code: error.code}, error.status);
     if (error instanceof ApiError) return json({error: error.message, code: error.code}, error.status);
     console.error('Lesson review failed', (error as {code?: string}).code || 'INTERNAL');
-    return json({error: '배움 다지기를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'LESSON_REVIEW_FAILED'}, 500);
+    return json({error: '복습하기를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'LESSON_REVIEW_FAILED'}, 500);
   }
 }
