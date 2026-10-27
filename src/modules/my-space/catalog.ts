@@ -8,6 +8,7 @@ export type SpaceItem = {
     en: string;
     price: number;
     art?: string;
+    previewArt?: string;
     motif?: string;
     color?: string;
     slot?: 'body' | 'bag';
@@ -15,7 +16,20 @@ export type SpaceItem = {
     buddyName?: string;
 };
 const furniture = (id: string, name: string, en: string, price: number): SpaceItem => ({ id, kind: 'furniture', name, en, price, art: `/my-space/v1/${id}.webp` });
+export const illustratedRoomThemes: SpaceItem[] = [
+    {"id":"theme-aegean","kind":"theme","name":"레몬꽃 지중해 바다방","en":"Lemon blossom seaside room","price":80,"art":"/my-space/v6/rooms/theme-aegean.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-aegean.webp"},
+    {"id":"theme-kyoto","kind":"theme","name":"벚꽃 교토의 작은 찻집","en":"Cherry blossom Kyoto tea room","price":80,"art":"/my-space/v6/rooms/theme-kyoto.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-kyoto.webp"},
+    {"id":"theme-paris","kind":"theme","name":"파리 지붕 위 그림 다락방","en":"Paris rooftop artist attic","price":80,"art":"/my-space/v6/rooms/theme-paris.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-paris.webp"},
+    {"id":"theme-riad","kind":"theme","name":"별빛 모로코 타일 리야드","en":"Moroccan lantern riad","price":80,"art":"/my-space/v6/rooms/theme-riad.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-riad.webp"},
+    {"id":"theme-nordic","kind":"theme","name":"눈꽃 북유럽 숲속 오두막","en":"Nordic snowy woodland cabin","price":80,"art":"/my-space/v6/rooms/theme-nordic.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-nordic.webp"},
+    {"id":"theme-lagoon","kind":"theme","name":"조개빛 열대 수상집","en":"Tropical shell lagoon bungalow","price":80,"art":"/my-space/v6/rooms/theme-lagoon.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-lagoon.webp"},
+    {"id":"theme-magic","kind":"theme","name":"달빛이 머무는 마법 도서관","en":"Moonlit little magic library","price":80,"art":"/my-space/v6/rooms/theme-magic.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-magic.webp"},
+    {"id":"theme-space","kind":"theme","name":"별사탕 우주 관측실","en":"Stardust space observatory","price":80,"art":"/my-space/v6/rooms/theme-space.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-space.webp"},
+    {"id":"theme-coral","kind":"theme","name":"산호 궁전의 바닷속 방","en":"Coral palace undersea room","price":80,"art":"/my-space/v6/rooms/theme-coral.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-coral.webp"},
+    {"id":"theme-sweets","kind":"theme","name":"딸기 크림 디저트 공방","en":"Strawberry cream dessert atelier","price":80,"art":"/my-space/v6/rooms/theme-sweets.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-sweets.webp"},
+];
 export const spaceCatalog: SpaceItem[] = [
+    ...illustratedRoomThemes,
     {"id":"junior-body-knit","kind":"clothes","slot":"body","name":"보송 딸기 니트","en":"Fluffy strawberry knit","price":35,"motif":"knit","color":"#e9a6b5"},
     {"id":"junior-body-overalls","kind":"clothes","slot":"body","name":"보송 소풍 멜빵옷","en":"Fluffy picnic overalls","price":50,"motif":"overalls","color":"#9ab6cc"},
     {"id":"junior-body-raincoat","kind":"clothes","slot":"body","name":"보송 노란 비옷","en":"Fluffy yellow raincoat","price":40,"motif":"raincoat","color":"#efcf70"},
