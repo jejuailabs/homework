@@ -140,8 +140,6 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
                     throw new ApiError(403, '선생님이 공개를 승인해 주세요.');
                 if (input.status === 'approved') {
                     const active = state.data()?.activeId, previous = active && active !== recordId ? await tx.get(records.doc(active)) : null;
-                    if (!v.caption.trim())
-                        throw new ApiError(400, '캡션을 먼저 입력해 주세요.');
                     if (previous?.exists)
                         tx.update(previous.ref, { status: 'hidden', version: crypto.randomUUID() });
                     tx.update(ref, { status: 'approved', version });
@@ -155,7 +153,8 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
             else {
                 if (v.status !== 'draft')
                     throw new ApiError(409, '새 녹음 초안에서 수정해 주세요.');
-                tx.update(ref, { caption: text(input.caption, '캡션', 3000), version, transcription: 'done' });
+                // Audio-only stories are allowed, so the caption may be cleared.
+                tx.update(ref, { caption: text(input.caption, '캡션', 3000, true), version, transcription: 'done' });
             }
         });
         return { saved: true };
