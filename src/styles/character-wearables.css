@@ -18,8 +18,10 @@
 .ms-clothes-preview .character-avatar-base{width:100%!important;height:100%!important}
 .ms-page .ms-confirm-art{height:290px}
 .ms-page .ms-pet-picker img{height:120px}
+.ms-page .ms-pet-picker img[src^="/my-space/whiteknee/"]{transform:scale(1.35)}
+.ms-friend-card .ms-buddy-portrait>.character-avatar[data-pet="animal-whiteknee"]{transform:scale(1.25)}
 .points-item-preview .wardrobe-item-art{padding:6%}
 @media(max-width:900px){.ms-page .ms-product-grid{--shop-art-size:230px;grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.ms-page .ms-product-grid{--shop-art-size:190px}.ms-page .ms-pet-picker{grid-template-columns:repeat(2,minmax(0,1fr))}.ms-product.kind-pet .ms-product-art>img[src^="/my-space/whiteknee/"]{transform:scale(1.18)}.ms-try-on>.character-avatar[data-pet="animal-whiteknee"]{transform:translateY(6px) scale(1.18)}}
+@media(max-width:600px){.ms-page .ms-product-grid{--shop-art-size:190px}.ms-page .ms-pet-picker{grid-template-columns:repeat(2,minmax(0,1fr))}.ms-product.kind-pet .ms-product-art>img[src^="/my-space/whiteknee/"]{transform:scale(1.18)}.ms-try-on>.character-avatar[data-pet="animal-whiteknee"]{transform:translateY(6px) scale(1.18)}.ms-page .ms-pet-picker img[src^="/my-space/whiteknee/"]{transform:scale(1.15)}}
 @media(max-width:420px){.ms-page .ms-product-grid{--shop-art-size:260px;grid-template-columns:minmax(0,1fr)}.ms-page .ms-confirm-art{height:250px}.ms-confirm-art>.character-avatar{width:min(100%,250px)}}
 .avatar-fitted>.avatar-attachments{position:absolute;inset:0;z-index:3;width:100%;height:100%;overflow:visible;pointer-events:none;display:block}.avatar-attachments image{pointer-events:none}.avatar-attachments .worn-neck,.avatar-attachments .worn-head{filter:none}
