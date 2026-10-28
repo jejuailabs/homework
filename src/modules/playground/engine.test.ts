@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {addDays, answerScore, choicesFor, chosung, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
+import {addDays, answerScore, choicesFor, DAILY_SIZE, dailyPick, chosung, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
 import {playBank} from './bank/index';
 import {defaultPlaySettings, playKinds, type PlayItem, type PlaySession, type PlaySkill} from './types';
 import {nextQuizSkill} from '../daily-quiz/engine';
@@ -132,4 +132,20 @@ test('settings validate boolean flags, bounded rewards and nonoverlapping same-d
     {...defaultPlaySettings,timeWindows:[{start:'9:00',end:'10:00'}]}, {...defaultPlaySettings,timeWindows:[{start:'22:00',end:'06:00'}]},
     {...defaultPlaySettings,timeWindows:[{start:'08:00',end:'10:00'},{start:'09:30',end:'11:00'}]},
   ]) assert.throws(() => validateSettings(invalid));
+});
+test('daily sets hold 10 questions, change by day and student, and put assigned then unseen first', () => {
+  const pool = playBank.filter(item => item.kind === 'nonsense' && item.gradeBand === 'mid');
+  const seen = new Set(pool.slice(0, 55).map(item => item.id)), assigned = new Set([pool[57].id, pool[3].id]);
+  const today = dailyPick(pool, seen, assigned, 'u1:2026-10-28:nonsense');
+  assert.equal(today.length, DAILY_SIZE);
+  assert.equal(new Set(today).size, DAILY_SIZE);
+  assert.equal(today[0], pool[57].id);
+  // 5 unseen remain (one assigned): they come before any already-tried question; seen assigned items are not forced in.
+  assert.deepEqual(new Set(today.slice(0, 5)), new Set(pool.slice(55).map(item => item.id)));
+  assert(today.slice(5).every(id => seen.has(id)));
+  assert.deepEqual(dailyPick(pool, seen, assigned, 'u1:2026-10-28:nonsense'), today);
+  const fresh = new Set<string>();
+  assert.notDeepEqual(dailyPick(pool, fresh, fresh, 'u1:2026-10-28:nonsense'), dailyPick(pool, fresh, fresh, 'u1:2026-10-29:nonsense'));
+  assert.notDeepEqual(dailyPick(pool, fresh, fresh, 'u1:2026-10-28:nonsense'), dailyPick(pool, fresh, fresh, 'u2:2026-10-28:nonsense'));
+  assert.equal(dailyPick(pool.slice(0, 4), fresh, fresh, 'x').length, 4);
 });
