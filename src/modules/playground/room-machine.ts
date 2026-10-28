@@ -6,7 +6,17 @@ export const TIE_WINDOW_MS = 150;
 export function canAnswer(room: PlayRoom, player: RoomPlayer, now: number) {
   return room.status === 'question' && now >= room.roundStartsAt && now <= room.roundEndsAt + ANSWER_GRACE_MS && !player.forfeited && player.eligibleFrom <= room.round && now - player.lastSeen <= 30_000;
 }
-export function roomTransition(previous: PlayRoom, action: 'start'|'tick'|'next'|'pause'|'end', now: number, answered = 0): PlayRoom {
+/** Connected, eligible players: the round ends early once all of them have answered. */
+export function activeKeys(room: PlayRoom, players: RoomPlayer[], now: number) {
+  return new Set(players.filter(player => room.playerKeys.includes(player.key) && !player.forfeited && player.eligibleFrom <= room.round && now - player.lastSeen <= 30_000).map(player => player.key));
+}
+/** True when a time-based transition is pending, so any participant's request may advance the room. */
+export function roomDue(room: PlayRoom, now: number) {
+  if (room.status === 'lobby' || room.status === 'countdown') return now >= room.statusEndsAt;
+  if (room.status === 'question') return now > room.statusEndsAt;
+  return room.status === 'reveal' && room.mode !== 'team' && now >= room.statusEndsAt;
+}
+export function roomTransition(previous: PlayRoom, action: 'start'|'tick'|'next'|'pause'|'end', now: number, answered = 0, active = previous.playerKeys.length): PlayRoom {
   const room = structuredClone(previous);
   if (['finished', 'closed'].includes(room.status)) return room;
   const finish = (completion: 'complete'|'cancelled' = 'cancelled') => {room.status = room.round < 0 ? 'closed' : 'finished'; room.completion=completion; room.statusEndsAt = 0; room.expiresAtMs = now + 30 * 60_000;};
@@ -20,7 +30,7 @@ export function roomTransition(previous: PlayRoom, action: 'start'|'tick'|'next'
     if (action === 'start' && room.playerKeys.length >= 2) {room.status = 'countdown'; room.statusEndsAt = now + 3000;}
     else if (now >= room.statusEndsAt) {room.status = 'closed'; room.expiresAtMs = now;}
   } else if (room.status === 'countdown' && now >= room.statusEndsAt) question();
-  else if (room.status === 'question' && (now > room.roundEndsAt + ANSWER_GRACE_MS || answered === room.playerKeys.length || action === 'next')) {
+  else if (room.status === 'question' && (now > room.roundEndsAt + ANSWER_GRACE_MS || answered > 0 && answered >= active || action === 'next')) {
     if (action === 'next') room.skippedRounds.push(room.round);
     room.status = 'reveal'; room.statusEndsAt = now + 4000;
   } else if (room.status === 'reveal' && (action === 'next' || room.mode !== 'team' && now >= room.statusEndsAt)) {
