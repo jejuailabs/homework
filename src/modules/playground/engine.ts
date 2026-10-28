@@ -63,6 +63,13 @@ export function choicesFor(item: PlayItem, seed: string): PlayChoice[] {
   return choices;
 }
 
+export const DAILY_SIZE = 10;
+/** Today's set for one kind: teacher-assigned unseen items, then unseen, then already-tried ones; each tier in a per-seed shuffle. */
+export function dailyPick(items: PlayItem[], seen: Set<string>, assigned: Set<string>, seed: string, size = DAILY_SIZE): string[] {
+  const order = (rows: PlayItem[]) => rows.map(item => ({item, key: hash(`${seed}:${item.id}`)})).sort((a, b) => a.key - b.key || a.item.id.localeCompare(b.item.id)).map(row => row.item);
+  const fresh = items.filter(item => !seen.has(item.id));
+  return [...order(fresh.filter(item => assigned.has(item.id))), ...order(fresh.filter(item => !assigned.has(item.id))), ...order(items.filter(item => seen.has(item.id)))].slice(0, size).map(item => item.id);
+}
 export function hintsFor(item: PlayItem): string[] {
   if (item.hints.length || item.kind !== 'vocab') return [...item.hints];
   const answer = item.answers[0].normalize('NFC'), letters = Array.from(answer.replace(/\s/g, ''));

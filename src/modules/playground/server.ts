@@ -5,8 +5,8 @@ import {db} from '@/lib/server/admin';
 import {assertOrigin, getContext, type Context} from '@/lib/server/auth';
 import {ApiError, id} from '@/lib/server/policy';
 import {addPointBalance, pointBalance} from '@/lib/server/points-policy';
-import {answerScore, choicesFor, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, PlayError, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
-import {playKinds, type PlayHome, type PlayItem, type PlayKind, type PlayRankings, type PlayReport, type PlayScore, type PlaySession, type PlaySkill, type PlayTeacherState} from './types';
+import {answerScore, choicesFor, DAILY_SIZE, dailyPick, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, PlayError, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
+import {playKinds, type PlayDaily, type PlayHome, type PlayItem, type PlayKind, type PlayRankings, type PlayReport, type PlayScore, type PlaySession, type PlaySkill, type PlayTeacherState} from './types';
 import {accessStudent, loadItems, requirePlayEnabled, settingsOf, settingsRef, teacherClass, type PlayAccess} from './server-access';
 import {handleRoomRequest} from './rooms-server';
 import {handleSocialRequest} from './social-server';
@@ -16,6 +16,11 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const rootRef = (a: PlayAccess) => a.pupil.ref.collection('playgroundYears').doc(a.year);
 const scoreRef = (pupil: FirebaseFirestore.DocumentReference, week: string) => pupil.collection('playgroundScores').doc(week);
 const liveEnabled = () => process.env.PLAYGROUND_LIVE_DISABLED !== 'true';
+/** Every question of every day's set can score: one set of DAILY_SIZE per kind. */
+const SOLO_DAILY_LIMIT = DAILY_SIZE * playKinds.length;
+const dailyRef = (a: PlayAccess, kind: PlayKind) => rootRef(a).collection('daily').doc(`${a.date}_${kind}`);
+type DailyDoc = {date: string; kind: PlayKind; itemIds: string[]; done: string[]; correct: number; score: number};
+const dailyView = (doc: DailyDoc): PlayDaily => ({total: doc.itemIds.length, done: doc.done.length, correct: doc.correct, score: doc.score});
 function kindOf(raw: unknown): PlayKind {
   if (!playKinds.includes(raw as PlayKind)) throw new ApiError(400, '놀이 종류를 확인해 주세요.', 'PLAY_KIND');
   return raw as PlayKind;
@@ -59,10 +64,12 @@ async function home(ctx: Context): Promise<PlayHome> {
     root.collection('days').doc(a.date).get(), scoreRef(a.pupil.ref, a.week).get(), db().doc(`classes/${a.ctx.classId}/playgroundLists/${a.week}`).get(),
     a.settings.enabled && a.settings.showRankings ? rankings(a.ctx.classId, a.week) : Promise.resolve({solo: [], duel: [], steady: []}),
   ]);
+  const dailies = await db().getAll(...playKinds.map(kind => dailyRef(a, kind)));
   const seen = new Set(attempts.docs.map(row => row.id)), available = new Set(items.map(item => item.id)), assigned = new Set<string>(Array.isArray(list.data()?.itemIds) ? list.data()!.itemIds : []);
-  return {date: a.date, weekStart: a.week, studentId: a.ctx.studentId, name: String(a.pupil.data()?.name || ''), className: String(a.cls.data()?.name || ''), gradeBand: a.gradeBand, settings: a.settings, liveEnabled: liveEnabled(), scoredToday: Number(day.data()?.scored || 0), dailyLimit: 30,
+  return {date: a.date, weekStart: a.week, studentId: a.ctx.studentId, name: String(a.pupil.data()?.name || ''), className: String(a.cls.data()?.name || ''), gradeBand: a.gradeBand, settings: a.settings, liveEnabled: liveEnabled(), scoredToday: Number(day.data()?.scored || 0), dailyLimit: SOLO_DAILY_LIMIT,
     dueCount: skills.docs.filter(row => available.has(row.id) && row.data().dueDate <= a.date && row.data().lastDate < a.date).length,
-    score: scoreOf(score.data()), menus: playKinds.map(kind => ({kind, total: items.filter(item => item.kind === kind).length, remaining: items.filter(item => item.kind === kind && !seen.has(item.id)).length, assigned: items.filter(item => item.kind === kind && assigned.has(item.id) && !seen.has(item.id)).length})), ranking: studentRanks(ranking, a.ctx.studentId)};
+    score: scoreOf(score.data()), menus: playKinds.map(kind => ({kind, total: items.filter(item => item.kind === kind).length, remaining: items.filter(item => item.kind === kind && !seen.has(item.id)).length, assigned: items.filter(item => item.kind === kind && assigned.has(item.id) && !seen.has(item.id)).length,
+      today: (() => {const doc = dailies[playKinds.indexOf(kind)].data() as DailyDoc | undefined; return doc ? {done: doc.done.length, total: doc.itemIds.length} : {done: 0, total: Math.min(DAILY_SIZE, items.filter(item => item.kind === kind).length)};})()})), ranking: studentRanks(ranking, a.ctx.studentId)};
 }
 async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>) {
   if (typeof data.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(data.requestId)) throw new ApiError(400, '다음 문제 버튼을 다시 눌러 주세요.', 'PLAY_REQUEST');
@@ -72,12 +79,14 @@ async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>)
   return db().runTransaction(async tx => {
     const a = await accessStudent(ctx, tx); requirePlayEnabled(a);
     const root = rootRef(a), ref = root.collection('sessions').doc(hash(`${a.date}:${kind}:${review ? 'review' : 'solo'}:${requestId}`));
-    const activeRef = root.collection('active').doc(`${kind}_${review ? 'review' : 'solo'}`);
-    const [existing, active] = await Promise.all([tx.get(ref), tx.get(activeRef)]);
-    if (existing.exists) return {session: publicSession(existing.data() as PlaySession)};
+    const activeRef = root.collection('active').doc(`${kind}_${review ? 'review' : 'solo'}`), todayRef = dailyRef(a, kind);
+    const [existing, active, todaySnapshot] = await Promise.all([tx.get(ref), tx.get(activeRef), tx.get(todayRef)]);
+    let today = todaySnapshot.data() as DailyDoc | undefined;
+    const progress = () => today && !review ? {daily: dailyView(today)} : {};
+    if (existing.exists) return {session: publicSession(existing.data() as PlaySession), ...progress()};
     if (active.data()?.sessionId) {
       const open = await tx.get(root.collection('sessions').doc(id(active.data()!.sessionId)));
-      if (open.exists && open.data()!.date === a.date && !open.data()!.result && open.data()!.review === review && (!practiceItemId || open.data()!.item.id === practiceItemId)) return {session: publicSession(open.data() as PlaySession)};
+      if (open.exists && open.data()!.date === a.date && !open.data()!.result && open.data()!.review === review && (!practiceItemId || open.data()!.item.id === practiceItemId)) return {session: publicSession(open.data() as PlaySession), ...progress()};
     }
     const [items, attempts, skills, list] = await Promise.all([
       loadItems(a.ctx.classId, a.gradeBand, tx), tx.get(root.collection('attempts')), tx.get(root.collection('spelling')),
@@ -93,19 +102,23 @@ async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>)
       if (!seen.has(practiceItemId)) throw new ApiError(400, '먼저 풀어 본 문제만 다시 연습할 수 있어요.');
       pool = pool.filter(item => item.id === practiceItemId);
     } else {
-      // This week's teacher-assigned items come first; once all are tried, the usual unseen pool continues.
-      const selected = new Set<string>(Array.isArray(list.data()?.itemIds) ? list.data()!.itemIds : []);
-      const fresh = pool.filter(item => !seen.has(item.id)), assigned = fresh.filter(item => selected.has(item.id));
-      if (assigned.length) pool = assigned;
-      else if (fresh.length) pool = fresh;
-      else if (pool.length > 1) pool = pool.filter(item => item.id !== active.data()?.itemId);
+      // A fixed set of today's questions per kind; this week's teacher-assigned items come first.
+      if (!today) {
+        const selected = new Set<string>(Array.isArray(list.data()?.itemIds) ? list.data()!.itemIds : []);
+        today = {date: a.date, kind, itemIds: dailyPick(pool, seen, selected, `${ctx.uid}:${a.date}:${kind}`), done: [], correct: 0, score: 0};
+        if (today.itemIds.length) tx.set(todayRef, today);
+      }
+      const done = new Set(today.done), nextId = today.itemIds.find(itemId => !done.has(itemId));
+      if (today.itemIds.length && !nextId) return {session: null, daily: dailyView(today)};
+      pool = pool.filter(item => item.id === nextId);
     }
     if (!pool.length) throw new ApiError(409, review ? '오늘 다시 볼 맞춤법을 모두 풀었어요.' : '아직 이 범위의 문제가 없어요. 선생님께 알려 주세요.', review ? 'PLAY_NO_REVIEW' : 'PLAY_EMPTY');
     pool.sort((left, right) => hash(`${requestId}:${left.id}`).localeCompare(hash(`${requestId}:${right.id}`)));
     const item = pool[0];
-    const session: PlaySession = {id: ref.id, kind, item, date: a.date, gradeBand: a.gradeBand, seed: hash(`${ctx.uid}:${item.id}:${a.date}`), hintsUsed: 0, review, createdAt: new Date().toISOString()};
+    const daily = !review && !practiceItemId;
+    const session: PlaySession = {id: ref.id, kind, item, date: a.date, gradeBand: a.gradeBand, seed: hash(`${ctx.uid}:${item.id}:${a.date}`), hintsUsed: 0, review, ...(daily ? {daily} : {}), createdAt: new Date().toISOString()};
     tx.create(ref, session); tx.set(activeRef, {sessionId: ref.id, itemId: item.id, date: a.date});
-    return {session: publicSession(session)};
+    return {session: publicSession(session), ...progress()};
   });
 }
 async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', data: Record<string, unknown>) {
@@ -115,10 +128,12 @@ async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', dat
     if (!snapshot.exists || snapshot.data()!.kind !== kind) throw new ApiError(404, '풀고 있는 문제를 다시 열어 주세요.', 'PLAY_SESSION');
     const session = snapshot.data() as PlaySession;
     if (session.date !== a.date) throw new ApiError(409, '날짜가 바뀌었어요. 새 문제를 열어 주세요.', 'PLAY_DATE');
-    if (session.result) return {session: publicSession(session)};
+    const todayRef = dailyRef(a, kind), todaySnapshot = session.daily ? await tx.get(todayRef) : null;
+    const today = todaySnapshot?.data() as DailyDoc | undefined, progress = () => today ? {daily: dailyView(today)} : {};
+    if (session.result) return {session: publicSession(session), ...progress()};
     if (phase === 'hint') {
       session.hintsUsed = Math.min(hintsFor(session.item).length, session.hintsUsed + 1);
-      tx.update(ref, {hintsUsed: session.hintsUsed}); return {session: publicSession(session)};
+      tx.update(ref, {hintsUsed: session.hintsUsed}); return {session: publicSession(session), ...progress()};
     }
     let answer: string;
     if (data.choiceId !== undefined) {
@@ -133,7 +148,7 @@ async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', dat
     const attemptRef = root.collection('attempts').doc(session.item.id), dayRef = root.collection('days').doc(a.date), rankRef = scoreRef(a.pupil.ref, a.week), skillRef = root.collection('spelling').doc(session.item.id);
     const [attempt, day, ranking, skill] = await Promise.all([tx.get(attemptRef), tx.get(dayRef), tx.get(rankRef), tx.get(skillRef)]);
     const correct = session.item.answers.some(expected => normalizeAnswer(expected, kind) === normalizeAnswer(answer, kind));
-    const scoredBefore = Number(day.data()?.scored || 0), eligible = !attempt.exists && !session.review && scoredBefore < 30;
+    const scoredBefore = Number(day.data()?.scored || 0), eligible = !attempt.exists && !session.review && scoredBefore < SOLO_DAILY_LIMIT;
     const scored = scoredBefore + (eligible ? 1 : 0), score = eligible ? answerScore(correct, session.hintsUsed) : 0;
     const paidBefore = Number(day.data()?.soloRewarded || 0);
     const milestone = eligible && scored % 10 === 0;
@@ -153,12 +168,16 @@ async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', dat
     tx.set(dayRef, {...day.data(), scored, soloRewarded: paidBefore + reward, updatedAt: at});
     tx.set(rankRef, {...totals, updatedAt: at});
     if (nextSkill) tx.set(skillRef, nextSkill);
+    if (today && today.itemIds.includes(session.item.id) && !today.done.includes(session.item.id)) {
+      today.done = [...today.done, session.item.id]; today.correct += correct ? 1 : 0; today.score += score;
+      tx.set(todayRef, today);
+    }
     if (reward) {
       const balance = addPointBalance(pointBalance(a.pupil.data()?.points), reward);
       tx.update(a.pupil.ref, {points: balance, pointsEarnedTotal: addPointBalance(pointBalance(a.pupil.data()?.pointsEarnedTotal), reward)});
       tx.create(receipt, {classId: a.ctx.classId, studentId: a.ctx.studentId, amount: reward, kind: 'earn', source: 'playground', sourceId: ref.id, reason: '말놀이터 처음 푼 문제 10개', actorUid: ctx.uid, balanceAfter: balance, createdAt: at});
     }
-    return {session: publicSession(session)};
+    return {session: publicSession(session), ...progress()};
   });
 }
 async function teacherState(ctx: Context, classId: string, week: string): Promise<PlayTeacherState> {
