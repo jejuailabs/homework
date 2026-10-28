@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import {useEffect, useState, type FormEvent} from 'react';
-import {BarChart3, BookOpen, Check, ChevronRight, Clock3, PencilLine, Plus, RefreshCw, Settings2, Sparkles, X} from 'lucide-react';
-import {playKinds, playLabels, type GradeBand, type PlayItem, type PlayReport, type PlaySettings, type PlayTeacherState} from './types';
+import {useRouter} from 'next/navigation';
+import {useEffect, useRef, useState, type FormEvent} from 'react';
+import {BarChart3, BookOpen, Check, ChevronRight, Clock3, Hand, ListChecks, PencilLine, Plus, RefreshCw, Send, Settings2, Shuffle, Sparkles, Tags, User, Users, X} from 'lucide-react';
+import {playKinds, playLabels, type GradeBand, type PlayItem, type PlayKind, type PlayReport, type PlaySettings, type PlayTeacherState} from './types';
 import {playMutation, playRequest} from './client';
-import RoomLauncher from './room-launcher';
+import {roomRequest} from './use-play-room';
 import './styles.css';
 
 type ClassItem = {id: string; name: string};
@@ -28,14 +29,54 @@ function SettingsPanel({state, saved}: {state: PlayTeacherState; saved: () => vo
     <label className="pg-setting-row"><span><strong>보말 연결</strong><small>혼자 풀기 10문제마다 {settings.soloReward}보말, 대결 완주마다 {settings.duelReward}보말을 지급합니다. 각각 하루 최대 3보말입니다.</small></span><input type="checkbox" checked={settings.rewardsEnabled} onChange={() => toggle('rewardsEnabled')}/></label>
     <div className="pg-time-windows"><h3><Clock3 size={17}/>학생 대결 이용 시간</h3><p className="pg-help">한국 시간 기준입니다. 비워 두면 시간 제한이 없습니다. 혼자 풀기는 언제든 이용할 수 있습니다.</p>{settings.timeWindows.map((window, index) => <div className="pg-time-row" key={index}><label><span className="pg-sr-only">시간대 {index + 1} 시작</span><input type="time" value={window.start} required onChange={event => setSettings(value => ({...value, timeWindows: value.timeWindows.map((row, i) => i === index ? {...row, start: event.target.value} : row)}))}/></label><span>~</span><label><span className="pg-sr-only">시간대 {index + 1} 종료</span><input type="time" value={window.end} required onChange={event => setSettings(value => ({...value, timeWindows: value.timeWindows.map((row, i) => i === index ? {...row, end: event.target.value} : row)}))}/></label><button className="pg-icon-button" type="button" aria-label={`시간대 ${index + 1} 삭제`} onClick={() => setSettings(value => ({...value, timeWindows: value.timeWindows.filter((_, i) => i !== index)}))}><X size={17}/></button></div>)}<button className="pg-button pg-secondary" type="button" disabled={settings.timeWindows.length >= 6} onClick={() => setSettings(value => ({...value, timeWindows: [...value.timeWindows, {start: '08:40', end: '09:00'}]}))}><Plus size={16}/>시간대 추가</button></div>
     <button className="pg-button" type="submit">{busy ? '저장하고 있어요…' : '설정 저장'}<Check size={17}/></button>
-  </fieldset>{error && <p className="pg-error" role="alert">{error}</p>}{notice && <p className="pg-notice" role="status">{notice}</p>}</form><aside><section className="pg-card"><h2><Sparkles size={20}/>친구들과 함께</h2><p className="pg-help">교사가 여는 팀전은 학급 전체가 참여합니다. 팀 인원이 달라도 점수는 평균으로 비교합니다.</p><RoomLauncher teacher classId={state.classId} enabled={state.liveEnabled && state.settings.enabled}/></section><section className="pg-card"><h2><BookOpen size={20}/>처음 여는 선생님께</h2><p className="pg-help">출제 학년은 학급 설정의 {bands[state.gradeBand]}입니다. 기본 문제의 문장과 설명을 확인하고 우리 반 수준에 맞는 문제를 더해 주세요.</p><p className="pg-help">학생은 답을 제출한 뒤 정답과 설명을 확인합니다. 최초 도전만 점수에 반영되며, 맞춤법 오답은 다시 볼 목록에 들어갑니다.</p><p className="pg-help">기능을 닫아도 기존 풀이 기록은 유지됩니다.</p></section></aside></div>;
+  </fieldset>{error && <p className="pg-error" role="alert">{error}</p>}{notice && <p className="pg-notice" role="status">{notice}</p>}</form><aside><section className="pg-card"><h2><BookOpen size={20}/>처음 여는 선생님께</h2><p className="pg-help">출제 학년은 학급 설정의 {bands[state.gradeBand]}입니다. 기본 문제의 문장과 설명을 확인하고 우리 반 수준에 맞는 문제를 더해 주세요.</p><p className="pg-help">학생은 답을 제출한 뒤 정답과 설명을 확인합니다. 최초 도전만 점수에 반영되며, 맞춤법 오답은 다시 볼 목록에 들어갑니다.</p><p className="pg-help">기능을 닫아도 기존 풀이 기록은 유지됩니다.</p></section></aside></div>;
 }
 
 type ItemDraft = {id?: string; kind: PlayItem['kind']; gradeBand: GradeBand; prompt: string; answers: string; choices: string; hints: string; reveal: string; enabled: boolean};
 const blankItem = (gradeBand: GradeBand): ItemDraft => ({kind: 'nonsense', gradeBand, prompt: '', answers: '', choices: '', hints: '', reveal: '', enabled: true});
+const aiCounts = [5, 10, 20];
+/** Drafts stay in the browser until the teacher approves them; only approved questions reach pupils. */
+function AiMaker({state, saved}: {state: PlayTeacherState; saved: () => void}) {
+  const [kind, setKind] = useState<PlayKind>('nonsense'), [count, setCount] = useState(10), [topic, setTopic] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const [drafts, setDrafts] = useState<PlayItem[]>([]), [keep, setKeep] = useState<string[]>([]), [dropped, setDropped] = useState(0), pending = useRef<{configuration: string; id: string} | null>(null);
+  async function make() {
+    setBusy(true); setError(''); setNotice('');
+    const configuration = JSON.stringify([state.classId, kind, count, topic.trim()]);
+    if (pending.current?.configuration !== configuration) pending.current = {configuration, id: crypto.randomUUID()};
+    try {
+      const value = await playMutation<{items: PlayItem[]; dropped: number}>('teacher/ai-questions', {classId: state.classId, kind, count, topic: topic.trim(), requestId: pending.current.id});
+      setDrafts(value.items); setKeep(value.items.map(item => item.id)); setDropped(value.dropped); pending.current = null;
+    } catch (cause) {setError((cause as Error).message);} finally {setBusy(false);}
+  }
+  async function approve() {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const value = await playMutation<{items: PlayItem[]}>('teacher/ai-questions/approve', {classId: state.classId, items: drafts.filter(item => keep.includes(item.id))});
+      setNotice(`${value.items.length}개를 우리 반 문제에 넣었어요. 내일부터 오늘의 10문제 후보로 나와요. 고칠 문제는 아래 목록에서 수정할 수 있어요.`); setDrafts([]); setKeep([]); saved();
+    } catch (cause) {setError((cause as Error).message);} finally {setBusy(false);}
+  }
+  return <section className="pg-card pg-ai-maker" aria-busy={busy}>
+    <h2><Sparkles size={20}/>AI로 새 문제 만들기 <small>{bands[state.gradeBand]} 수준</small></h2>
+    {!state.aiConfigured ? <p className="pg-help">AI 연결이 설정되어 있지 않아요. 오른쪽에서 문제를 직접 만들 수 있어요.</p> : <>
+      <p className="pg-help">기본 문제은행과 우리 반 문제와 정답·문장이 겹치지 않게 만들어요. 선생님이 고른 문제만 아이들에게 나가요.</p>
+      <fieldset className="pg-ai-options" disabled={busy}><legend className="pg-sr-only">만들 문제</legend>
+        <div className="pg-kind-chips" role="group" aria-label="문제 종류">{playKinds.map(value => <button key={value} type="button" aria-pressed={kind === value} onClick={() => setKind(value)}>{playLabels[value]}</button>)}</div>
+        <div className="pg-option-row"><div><span>문제 수</span><div className="pg-segment">{aiCounts.map(value => <button key={value} type="button" aria-pressed={count === value} onClick={() => setCount(value)}>{value}문제</button>)}</div></div>
+          <label className="pg-ai-topic"><span>주제 (선택)</span><input value={topic} maxLength={60} onChange={event => setTopic(event.target.value)} placeholder="예: 가을, 동물, 받침이 헷갈리는 말"/></label></div>
+        <button type="button" className="pg-button" onClick={() => void make()}><Sparkles size={17}/>{busy && !drafts.length ? 'AI가 문제를 만들고 있어요… (1분쯤 걸려요)' : drafts.length ? '다시 만들기' : '새 문제 만들기'}</button>
+      </fieldset></>}
+    {error && <p className="pg-error" role="alert">{error}</p>}
+    {notice && <p className="pg-notice" role="status">{notice}</p>}
+    {drafts.length > 0 && <div className="pg-ai-drafts">
+      <p className="pg-help" role="status">새 문제 {drafts.length}개를 만들었어요.{dropped > 0 && ` 겹치거나 형식이 맞지 않는 ${dropped}개는 뺐어요.`} 내보내지 않을 문제는 체크를 풀어 주세요.</p>
+      <ol>{drafts.map(item => <li key={item.id} className={keep.includes(item.id) ? '' : 'is-off'}><label><input type="checkbox" checked={keep.includes(item.id)} disabled={busy} onChange={() => setKeep(value => value.includes(item.id) ? value.filter(other => other !== item.id) : [...value, item.id])}/><span><strong>{item.prompt}</strong><small>정답 <b>{item.answers[0]}</b> · 보기 {item.choices?.join(' / ')}</small>{item.hints[0] && <small>힌트 {item.hints[0]}</small>}<small>설명 {item.reveal}</small></span></label></li>)}</ol>
+      <div className="pg-inline-actions"><button type="button" className="pg-button" disabled={busy || !keep.length} onClick={() => void approve()}><Check size={17}/>{keep.length}개 우리 반 문제에 넣기</button><button type="button" className="pg-button pg-secondary" disabled={busy} onClick={() => {setDrafts([]); setKeep([]);}}><X size={17}/>모두 버리기</button></div>
+    </div>}
+  </section>;
+}
 function ItemsPanel({state, saved}: {state: PlayTeacherState; saved: () => void}) {
   const [draft, setDraft] = useState<ItemDraft>(() => blankItem(state.gradeBand)), [filter, setFilter] = useState('all'), [search, setSearch] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  const rows = state.items.filter(item => (filter === 'all' || item.kind === filter || filter === 'teacher' && item.source === 'teacher') && (!search || `${item.prompt} ${item.answers.join(' ')}`.includes(search)));
+  const rows = state.items.filter(item => (filter === 'all' || item.kind === filter || filter === 'teacher' && item.source !== 'bank') && (!search || `${item.prompt} ${item.answers.join(' ')}`.includes(search)));
   function edit(item: PlayItem) {setDraft({...item, answers: item.answers.join('\n'), choices: item.choices?.join('\n') || '', hints: item.hints.join('\n'), enabled: item.enabled !== false}); setNotice(''); setError(''); document.getElementById('pg-item-editor')?.scrollIntoView({block: 'start'});}
   async function save(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError(''); setNotice('');
@@ -50,21 +91,79 @@ function ItemsPanel({state, saved}: {state: PlayTeacherState; saved: () => void}
     try {await playMutation('teacher/items', {classId: state.classId, id: item.id, item: {...item, enabled: item.enabled === false}}, 'PATCH'); setNotice(item.enabled === false ? '문제를 다시 출제합니다.' : '새 풀이에서 이 문제를 숨겼어요.'); saved();}
     catch (cause) {setError((cause as Error).message);} finally {setBusy(false);}
   }
-  return <div className="pg-editor-grid"><section className="pg-card"><h2><BookOpen size={20}/>문제 둘러보기 <small>{rows.length}개</small></h2><div className="pg-filter-row"><label><span className="pg-sr-only">문제 종류</span><select value={filter} onChange={event => setFilter(event.target.value)}><option value="all">전체 문제</option><option value="teacher">직접 만든 문제</option>{playKinds.map(kind => <option value={kind} key={kind}>{playLabels[kind]}</option>)}</select></label><label><span className="pg-sr-only">문제 검색</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="문제나 정답 검색" type="search"/></label></div><div className="pg-item-list">{rows.map(item => <details key={item.id} className={item.enabled === false ? 'is-hidden' : ''}><summary><span className={`pg-kind-dot pg-${item.kind}`}/><span>{item.prompt}<small>{playLabels[item.kind]} · {bands[item.gradeBand]} · {item.source === 'teacher' ? '우리 반 문제' : '기본 문제'}{item.enabled === false && ' · 숨김'}</small></span><ChevronRight size={16}/></summary><div className="pg-item-details"><p><b>정답</b> {item.answers.join(' / ')}</p>{!!item.choices?.length && <p><b>보기</b> {item.choices.join(' · ')}</p>}<p>{item.reveal}</p>{item.hints.length > 0 && <p className="pg-help">힌트: {item.hints.join(' → ')}</p>}{item.source === 'teacher' && <div className="pg-inline-actions"><button type="button" className="pg-button pg-secondary" disabled={busy} onClick={() => edit(item)}>수정</button><button type="button" className="pg-button pg-secondary" disabled={busy} onClick={() => void toggle(item)}>{item.enabled === false ? '다시 출제' : '출제에서 숨기기'}</button></div>}</div></details>)}{!rows.length && <p className="pg-help">찾는 문제가 없어요. 오른쪽에서 우리 반 문제를 만들어 보세요.</p>}</div></section>
+  return <><AiMaker state={state} saved={saved}/><div className="pg-editor-grid"><section className="pg-card"><h2><BookOpen size={20}/>문제 둘러보기 <small>{rows.length}개</small></h2><div className="pg-filter-row"><div className="pg-kind-chips is-compact" role="group" aria-label="문제 종류">{[['all', '전체'], ...playKinds.map(kind => [kind, playLabels[kind]]), ['teacher', '우리 반 문제']].map(([value, label]) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>)}</div><label><span className="pg-sr-only">문제 검색</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="문제나 정답 검색" type="search"/></label></div><div className="pg-item-list">{rows.map(item => <details key={item.id} className={item.enabled === false ? 'is-hidden' : ''}><summary><span className={`pg-kind-dot pg-${item.kind}`}/><span>{item.prompt}<small>{playLabels[item.kind]} · {bands[item.gradeBand]} · {item.source === 'teacher' ? '우리 반 문제' : item.source === 'ai-approved' ? 'AI로 만든 우리 반 문제' : '기본 문제'}{item.enabled === false && ' · 숨김'}</small></span><ChevronRight size={16}/></summary><div className="pg-item-details"><p><b>정답</b> {item.answers.join(' / ')}</p>{!!item.choices?.length && <p><b>보기</b> {item.choices.join(' · ')}</p>}<p>{item.reveal}</p>{item.hints.length > 0 && <p className="pg-help">힌트: {item.hints.join(' → ')}</p>}{item.source !== 'bank' && <div className="pg-inline-actions"><button type="button" className="pg-button pg-secondary" disabled={busy} onClick={() => edit(item)}>수정</button><button type="button" className="pg-button pg-secondary" disabled={busy} onClick={() => void toggle(item)}>{item.enabled === false ? '다시 출제' : '출제에서 숨기기'}</button></div>}</div></details>)}{!rows.length && <p className="pg-help">찾는 문제가 없어요. 오른쪽에서 우리 반 문제를 만들어 보세요.</p>}</div></section>
     <form className="pg-card pg-item-editor" id="pg-item-editor" onSubmit={save}><h2><PencilLine size={20}/>{draft.id ? '우리 반 문제 수정' : '우리 반 문제 만들기'}</h2><fieldset className="pg-form-fields" disabled={busy}><legend className="pg-sr-only">문제 내용</legend><div className="pg-form-row"><label>놀이 종류<select value={draft.kind} onChange={event => setDraft(value => ({...value, kind: event.target.value as PlayItem['kind']}))}>{playKinds.map(kind => <option key={kind} value={kind}>{playLabels[kind]}</option>)}</select></label><label>학년대<select value={draft.gradeBand} onChange={event => setDraft(value => ({...value, gradeBand: event.target.value as GradeBand}))}>{Object.entries(bands).map(([band, label]) => <option key={band} value={band}>{label}</option>)}</select></label></div><label>문제 문장<textarea required rows={3} maxLength={500} value={draft.prompt} onChange={event => setDraft(value => ({...value, prompt: event.target.value}))}/></label><label>인정할 정답 <small>한 줄에 하나씩. 첫 번째가 대표 정답입니다.</small><textarea required rows={2} maxLength={800} value={draft.answers} onChange={event => setDraft(value => ({...value, answers: event.target.value}))}/></label><label>보기 <small>한 줄에 하나씩 2~4개. 대표 정답을 꼭 포함해 주세요. 비워 두면 혼자 쓰기 문제로 출제합니다.</small><textarea rows={4} maxLength={800} value={draft.choices} onChange={event => setDraft(value => ({...value, choices: event.target.value}))}/></label><label>힌트 <small>한 줄에 하나씩 최대 2개. 오늘의 국어는 비우면 글자 수와 초성 힌트를 만듭니다.</small><textarea rows={2} maxLength={500} value={draft.hints} onChange={event => setDraft(value => ({...value, hints: event.target.value}))}/></label><label>정답 설명<textarea required rows={3} maxLength={1000} value={draft.reveal} onChange={event => setDraft(value => ({...value, reveal: event.target.value}))}/></label><label className="pg-check-row"><input type="checkbox" checked={draft.enabled} onChange={event => setDraft(value => ({...value, enabled: event.target.checked}))}/>학생에게 출제하기</label><div className="pg-inline-actions"><button className="pg-button" type="submit">{busy ? '저장 중…' : draft.id ? '수정 저장' : '문제 추가'}<Check size={17}/></button>{draft.id && <button className="pg-button pg-secondary" type="button" onClick={() => setDraft(blankItem(state.gradeBand))}>새 문제로 전환</button>}</div></fieldset>{error && <p className="pg-error" role="alert">{error}</p>}{notice && <p className="pg-notice" role="status">{notice}</p>}</form>
-  </div>;
+  </div></>;
 }
 
-function SpellingPanel({state, saved}: {state: PlayTeacherState; saved: () => void}) {
-  const [selected, setSelected] = useState(state.spellingIds), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  useEffect(() => setSelected(state.spellingIds), [state.spellingIds]);
-  const items = state.items.filter(item => item.kind === 'spelling' && item.gradeBand === state.gradeBand && item.enabled !== false);
-  async function save(clear = false) {
+type Source = 'kinds' | 'random' | 'pick' | 'mistakes';
+const sources: {id: Source; label: string; hint: string; Icon: typeof Tags}[] = [
+  {id: 'kinds', label: '항목별', hint: '고른 항목에서 골고루', Icon: Tags},
+  {id: 'random', label: '랜덤', hint: '모든 항목을 섞어서', Icon: Shuffle},
+  {id: 'pick', label: '직접 고르기', hint: '문제를 보고 체크', Icon: Hand},
+  {id: 'mistakes', label: '많이 틀린 맞춤법', hint: '우리 반 오답 상위 20개', Icon: PencilLine},
+];
+const forLive = (item: PlayItem) => (item.choices?.length || 0) >= 2;
+const sample = <T,>(rows: T[], count: number) => [...rows].map(row => ({row, key: Math.random()})).sort((a, b) => a.key - b.key).slice(0, count).map(entry => entry.row);
+
+/** One flow for giving questions: what to ask, how many, and whether the class plays together now or each child plays alone this week. */
+function PublishPanel({state, saved}: {state: PlayTeacherState; saved: () => void}) {
+  const router = useRouter(), pending = useRef<{configuration: string; id: string} | null>(null);
+  const [source, setSource] = useState<Source>('kinds'), [kinds, setKinds] = useState<PlayKind[]>(['nonsense']), [picked, setPicked] = useState<string[]>([]);
+  const [count, setCount] = useState(10), [seconds, setSeconds] = useState(20), [teamCount, setTeamCount] = useState(2), [target, setTarget] = useState<'live' | 'solo'>('live');
+  const [pickKind, setPickKind] = useState<PlayKind | 'all'>('all'), [search, setSearch] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const usable = state.items.filter(item => item.enabled !== false && (target === 'solo' || forLive(item)));
+  const pool = source === 'pick' ? usable.filter(item => picked.includes(item.id)) : source === 'random' ? usable : source === 'kinds' ? usable.filter(item => kinds.includes(item.kind)) : [];
+  const total = source === 'pick' ? pool.length : source === 'mistakes' ? 20 : Math.min(count, pool.length);
+  const liveOff = !state.settings.enabled || !state.liveEnabled, maxPick = target === 'live' ? 30 : 60;
+  const blocked = busy || (target === 'live' && liveOff) || (source === 'mistakes' && target === 'solo') || (source === 'kinds' && !kinds.length) || (source === 'pick' ? !picked.length || picked.length > maxPick || (target === 'live' && picked.length < 3) : source !== 'mistakes' && pool.length < (target === 'live' ? Math.max(3, count) : 1));
+  const week = state.items.filter(item => state.weekIds.includes(item.id));
+  const browse = state.items.filter(item => item.enabled !== false && (pickKind === 'all' || item.kind === pickKind) && (!search || `${item.prompt} ${item.answers.join(' ')}`.includes(search)));
+  const toggleKind = (kind: PlayKind) => setKinds(old => old.includes(kind) ? old.filter(value => value !== kind) : [...old, kind]);
+  async function publish() {
     setBusy(true); setError(''); setNotice('');
-    try {await playMutation(`teacher/spelling-list?classId=${encodeURIComponent(state.classId)}&week=${state.weekStart}`, {itemIds: clear ? [] : selected}, 'PUT'); setNotice(clear ? '주간 목록을 비웠어요. 기본 범위로 출제합니다.' : '이번 주 맞춤법 목록을 저장했어요.'); saved();}
-    catch (cause) {setError((cause as Error).message);} finally {setBusy(false);}
+    try {
+      if (target === 'live') {
+        const body = {mode: 'team', classId: state.classId, seconds, teamCount,
+          kinds: source === 'pick' ? [...new Set(pool.map(item => item.kind))] : source === 'kinds' ? kinds : source === 'mistakes' ? ['spelling'] : [...playKinds],
+          rounds: source === 'pick' ? pool.length : source === 'mistakes' ? Math.min(count, 20) : count,
+          range: source === 'mistakes' ? 'mistakes' : 'all', ...(source === 'pick' ? {itemIds: pool.map(item => item.id)} : {})};
+        const configuration = JSON.stringify(body);
+        if (pending.current?.configuration !== configuration) pending.current = {configuration, id: crypto.randomUUID()};
+        const room = await roomRequest<{roomId: string}>('rooms', {...body, requestId: pending.current.id});
+        router.push(`/teacher/playground/live/${room.roomId}`);
+        return;
+      }
+      const itemIds = (source === 'pick' ? pool : sample(pool, count)).map(item => item.id);
+      await playMutation(`teacher/week-list?classId=${encodeURIComponent(state.classId)}&week=${state.weekStart}`, {itemIds}, 'PUT');
+      setNotice(`이번 주 혼자 풀기 문제 ${itemIds.length}개를 냈어요. 아이들이 이 문제부터 풀어요.`); saved();
+    } catch (cause) {setError((cause as Error).message);} finally {setBusy(false);}
   }
-  return <section className="pg-card"><h2><PencilLine size={20}/>이번 주에 함께 익힐 맞춤법</h2><p className="pg-help">{state.weekStart} 시작 주 · {bands[state.gradeBand]} · 5~40개를 고르세요. 이 목록은 우리 반 맞춤법 출제와 팀전 범위에 사용합니다.</p><div className="pg-selection-bar"><strong>{selected.length}개 선택</strong><div className="pg-inline-actions"><button className="pg-button pg-secondary" disabled={busy || !state.spellingIds.length} onClick={() => void save(true)}>기본 범위로 되돌리기</button><button className="pg-button" disabled={busy || selected.length < 5 || selected.length > 40} onClick={() => void save()}>주간 목록 저장<Check size={17}/></button></div></div>{error && <p className="pg-error" role="alert">{error}</p>}{notice && <p className="pg-notice" role="status">{notice}</p>}<div className="pg-spelling-list">{items.map(item => <label key={item.id} className={selected.includes(item.id) ? 'is-selected' : ''}><input type="checkbox" checked={selected.includes(item.id)} disabled={busy || !selected.includes(item.id) && selected.length >= 40} onChange={() => setSelected(value => value.includes(item.id) ? value.filter(id => id !== item.id) : [...value, item.id])}/><span><strong>{item.prompt}</strong><small>정답: {item.answers[0]}</small></span></label>)}</div>{!items.length && <p className="pg-help">이 학년대의 맞춤법 문제를 먼저 추가해 주세요.</p>}</section>;
+  async function clearWeek() {setBusy(true); setError(''); try {await playMutation(`teacher/week-list?classId=${encodeURIComponent(state.classId)}&week=${state.weekStart}`, {itemIds: []}, 'PUT'); setNotice('이번 주 목록을 비웠어요. 아이들은 안 푼 문제를 골고루 풀어요.'); saved();} catch (cause) {setError((cause as Error).message);} finally {setBusy(false);}}
+  return <div className="pg-publish">
+    <section className="pg-card pg-step"><h2><span className="pg-step-no">1</span>어떤 문제를 낼까요?</h2>
+      <div className="pg-source-grid" role="radiogroup" aria-label="출제 방법">{sources.map(({id, label, hint, Icon}) => <button key={id} type="button" role="radio" aria-checked={source === id} onClick={() => setSource(id)}><Icon size={22}/><strong>{label}</strong><small>{hint}</small></button>)}</div>
+      {source === 'kinds' && <div className="pg-kind-chips">{playKinds.map(kind => <button key={kind} type="button" aria-pressed={kinds.includes(kind)} className={`pg-${kind}`} onClick={() => toggleKind(kind)}><span className={`pg-kind-dot pg-${kind}`}/>{playLabels[kind]}<small>{usable.filter(item => item.kind === kind).length}</small></button>)}</div>}
+      {source === 'random' && <p className="pg-help">넌센스·수수께끼·오늘의 국어·맞춤법에서 무작위로 골라요. 지금 고를 수 있는 문제 {usable.length}개.</p>}
+      {source === 'mistakes' && <p className="pg-help">우리 반 아이들이 혼자 풀기에서 많이 틀린 맞춤법 20개 안에서 내요. 함께 풀기에서만 쓸 수 있어요.</p>}
+      {source === 'pick' && <div className="pg-picker"><div className="pg-filter-row"><div className="pg-kind-chips is-compact">{(['all', ...playKinds] as const).map(kind => <button key={kind} type="button" aria-pressed={pickKind === kind} onClick={() => setPickKind(kind)}>{kind === 'all' ? '전체' : playLabels[kind]}</button>)}</div><label><span className="pg-sr-only">문제 검색</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="문제나 정답 검색"/></label></div>
+        <div className="pg-selection-bar"><strong>{picked.length}개 골랐어요</strong><small>{target === 'live' ? '함께 풀기는 3~30개' : '혼자 풀기는 60개까지'}{target === 'live' && ' · 보기가 있는 문제만 낼 수 있어요'}</small>{picked.length > 0 && <button type="button" className="pg-button pg-secondary" onClick={() => setPicked([])}>선택 비우기</button>}</div>
+        <div className="pg-pick-list">{browse.map(item => {const off = target === 'live' && !forLive(item), on = picked.includes(item.id); return <label key={item.id} className={`${on ? 'is-selected' : ''} ${off ? 'is-off' : ''}`}><input type="checkbox" checked={on} disabled={off || (!on && picked.length >= maxPick)} onChange={() => setPicked(old => on ? old.filter(value => value !== item.id) : [...old, item.id])}/><span className={`pg-kind-dot pg-${item.kind}`}/><span><strong>{item.prompt}</strong><small>{playLabels[item.kind]} · 정답 {item.answers[0]}{item.source !== 'bank' ? ' · 우리 반 문제' : ''}</small></span></label>;})}{!browse.length && <p className="pg-help">찾는 문제가 없어요.</p>}</div></div>}
+    </section>
+    <section className="pg-card pg-step"><h2><span className="pg-step-no">2</span>몇 문제를 낼까요?</h2>
+      <div className="pg-option-row">{source !== 'pick' && <div><span>문제 수</span><div className="pg-segment">{[5, 10, 15].map(value => <button key={value} type="button" aria-pressed={count === value} onClick={() => setCount(value)}>{value}문제</button>)}</div></div>}
+        {source === 'pick' && <p className="pg-help">고른 문제 {picked.length}개를 모두 내요.</p>}
+        {target === 'live' && <div><span>한 문제당</span><div className="pg-segment">{[10, 20, 30].map(value => <button key={value} type="button" aria-pressed={seconds === value} onClick={() => setSeconds(value)}>{value}초</button>)}</div></div>}
+        {target === 'live' && <div><span>팀 수</span><div className="pg-segment">{[2, 3, 4, 5, 6].map(value => <button key={value} type="button" aria-pressed={teamCount === value} onClick={() => setTeamCount(value)}>{value}팀</button>)}</div></div>}</div>
+    </section>
+    <section className="pg-card pg-step"><h2><span className="pg-step-no">3</span>어떻게 풀까요?</h2>
+      <div className="pg-source-grid is-two" role="radiogroup" aria-label="푸는 방법"><button type="button" role="radio" aria-checked={target === 'live'} onClick={() => setTarget('live')}><Users size={22}/><strong>지금 우리 반 함께 풀기</strong><small>팀을 나눠 프로젝터로 퀴즈쇼. 아이들은 방 코드로 들어와요.</small></button><button type="button" role="radio" aria-checked={target === 'solo'} onClick={() => setTarget('solo')}><User size={22}/><strong>이번 주 혼자 풀기로 내기</strong><small>아이들이 쉬는 시간에 각자 풀어요. 낸 문제부터 먼저 나와요.</small></button></div>
+      {target === 'live' && liveOff && <p className="pg-notice">함께 풀기를 쓰려면 설정·기록 탭에서 말놀이터를 켜 주세요.</p>}
+      {target === 'solo' && week.length > 0 && <div className="pg-week-now"><ListChecks size={18}/><span>지금 이번 주 문제 <strong>{week.length}개</strong> ({playKinds.filter(kind => week.some(item => item.kind === kind)).map(kind => `${playLabels[kind]} ${week.filter(item => item.kind === kind).length}`).join(' · ')}) · 새로 내면 이 목록을 바꿔요.</span><button type="button" className="pg-button pg-secondary" disabled={busy} onClick={() => void clearWeek()}>목록 비우기</button></div>}
+      {error && <p className="pg-error" role="alert">{error}</p>}{notice && <p className="pg-notice" role="status">{notice}</p>}
+      <div className="pg-publish-bar"><span>{source === 'pick' ? `고른 ${total}문제` : source === 'mistakes' ? `많이 틀린 맞춤법에서 ${Math.min(count, 20)}문제` : `${source === 'random' ? '전체 랜덤' : kinds.map(kind => playLabels[kind]).join('·') || '항목을 골라 주세요'} ${total}문제`} · {target === 'live' ? `함께 풀기 ${teamCount}팀, 문제당 ${seconds}초` : '이번 주 혼자 풀기'}</span><button type="button" className="pg-button" disabled={blocked} onClick={() => void publish()}>{busy ? '준비하고 있어요…' : '출제하기'}<Send size={17}/></button></div>
+    </section>
+  </div>;
 }
 
 function ReportPanel({state}: {state: PlayTeacherState}) {
@@ -74,14 +173,14 @@ function ReportPanel({state}: {state: PlayTeacherState}) {
 }
 
 export default function PlaygroundTeacher() {
-  const [classes, setClasses] = useState<ClassItem[]>([]), [classId, setClassId] = useState(''), [state, setState] = useState<PlayTeacherState | null>(null), [tab, setTab] = useState('settings');
+  const [classes, setClasses] = useState<ClassItem[]>([]), [classId, setClassId] = useState(''), [state, setState] = useState<PlayTeacherState | null>(null), [tab, setTab] = useState('publish');
   const [error, setError] = useState(''), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0), [classRevision, setClassRevision] = useState(0);
   useEffect(() => {const controller = new AbortController(); setError(''); setLoading(true); fetch('/api/classes', {cache: 'no-store', signal: controller.signal}).then(async response => {const data = await response.json(); if (!response.ok) throw new Error(data.error || '학급을 불러오지 못했어요.'); return data as {classes: ClassItem[]};}).then(data => {setClasses(data.classes); setClassId(data.classes[0]?.id || '');}).catch(cause => {if (!controller.signal.aborted) setError((cause as Error).message);}).finally(() => {if (!controller.signal.aborted) setLoading(false);}); return () => controller.abort();}, [classRevision]);
   useEffect(() => {setState(previous => previous?.classId === classId ? previous : null); if (!classId) return; const controller = new AbortController(); setLoading(true); setError(''); playRequest<PlayTeacherState>(`teacher/settings?classId=${encodeURIComponent(classId)}`, {signal: controller.signal}).then(setState).catch(cause => {if (!controller.signal.aborted) setError((cause as Error).message);}).finally(() => {if (!controller.signal.aborted) setLoading(false);}); return () => controller.abort();}, [classId, revision]);
-  return <section className="playground pg-teacher"><header className="pg-teacher-heading"><div><p className="pg-eyebrow"><Sparkles size={15}/>우리 반의 작은 우리말 놀이터</p><h1>말놀이터 관리</h1><p className="pg-help">놀이 약속을 정하고, 문제를 만들고, 아이들의 생각을 살펴보세요.</p></div><label>우리 반<select value={classId} onChange={event => setClassId(event.target.value)}>{classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></header>
-    <div className="pg-tabs pg-management-tabs" role="group" aria-label="관리 화면 선택">{[['settings','설정',Settings2],['items','우리 반 문제',BookOpen],['spelling','맞춤법 목록',PencilLine],['report','리포트',BarChart3]].map(([id, label, Icon]) => {const Symbol = Icon as typeof Settings2; return <button key={id as string} type="button" aria-pressed={tab === id} onClick={() => setTab(id as string)}><Symbol size={17}/>{label as string}</button>;})}</div>
+  return <section className="playground pg-teacher"><header className="pg-teacher-heading"><div><p className="pg-eyebrow"><Sparkles size={15}/>우리 반의 작은 우리말 놀이터</p><h1>말놀이터</h1><p className="pg-help">문제를 고르고, 함께 풀지 혼자 풀지 정하면 끝이에요.</p></div><label>우리 반<select value={classId} onChange={event => setClassId(event.target.value)}>{classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></header>
+    <div className="pg-tabs pg-management-tabs" role="group" aria-label="관리 화면 선택">{[['publish','출제하기',Send],['items','문제 보기',BookOpen],['manage','설정·기록',Settings2]].map(([id, label, Icon]) => {const Symbol = Icon as typeof Settings2; return <button key={id as string} type="button" aria-pressed={tab === id} onClick={() => setTab(id as string)}><Symbol size={17}/>{label as string}</button>;})}</div>
     {loading && <p className="pg-status" role="status">우리 반 놀이터를 불러오고 있어요…</p>}{error && <div className="pg-error" role="alert"><p>{error}</p><button className="pg-button" onClick={() => classId ? setRevision(value => value + 1) : setClassRevision(value => value + 1)}>다시 불러오기</button></div>}{!loading && !error && !classes.length && <section className="pg-card"><p>먼저 학급을 만들어 주세요.</p><Link href="/teacher/homework?action=class" className="pg-button">학급 만들기<ArrowRightIcon/></Link></section>}
-    {state && <div key={`${state.classId}:${tab}`}>{tab === 'settings' && <SettingsPanel state={state} saved={() => setRevision(value => value + 1)}/>} {tab === 'items' && <ItemsPanel state={state} saved={() => setRevision(value => value + 1)}/>} {tab === 'spelling' && <SpellingPanel state={state} saved={() => setRevision(value => value + 1)}/>} {tab === 'report' && <ReportPanel state={state}/>}</div>}
+    {state && <div key={`${state.classId}:${tab}`}>{tab === 'publish' && <PublishPanel state={state} saved={() => setRevision(value => value + 1)}/>}{tab === 'items' && <ItemsPanel state={state} saved={() => setRevision(value => value + 1)}/>}{tab === 'manage' && <><SettingsPanel state={state} saved={() => setRevision(value => value + 1)}/><ReportPanel state={state}/></>}</div>}
   </section>;
 }
 function ArrowRightIcon() {return <ChevronRight size={17}/>;}

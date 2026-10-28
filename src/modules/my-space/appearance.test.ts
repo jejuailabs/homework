@@ -6,7 +6,7 @@ import {characterFiles} from '@/lib/characters';
 import {wardrobeCatalog} from '@/lib/points-types';
 import {spaceCatalog, defaultRoom, starterSpaceIds} from './catalog';
 import {validateRoom} from './policy';
-import {avatarPet, wearablePets, wearStates, wearState, wornSprite, accessoryArt, accessoryFit} from './appearance';
+import {avatarPet, wearablePets, wearStates, wearState, wornSprite, accessoryArt, accessoryFit, isWearablePet} from './appearance';
 import {attachmentLayout, characterRigs, characterRig, attachmentIds, chinPath} from './attachment-rig';
 import {attachmentAssets} from './attachment-assets';
 
@@ -18,7 +18,7 @@ test('all twelve character identities resolve without confusing the six cat bree
   assert.equal(wearState({body: '__proto__', bag: 'invented'}), 'bare');
 });
 test('every friend can wear all eight owned outfits with and without the bag: 216 complete sprites', () => {
-  const clothes = spaceCatalog.filter(s => s.kind === 'clothes' && s.slot === 'body' && !s.id.startsWith('whiteknee-'));
+  const clothes = spaceCatalog.filter(s => s.kind === 'clothes' && s.slot === 'body' && s.id.startsWith('body-'));
   assert.equal(clothes.length, 8); assert.equal(wearStates.length, 18);
   const all = new Set<string>();
   for (const pet of wearablePets) for (const body of [undefined, ...clothes.map(s => s.id)]) for (const bag of [undefined, 'bag-leaf']) {
@@ -31,7 +31,7 @@ test('every friend can wear all eight owned outfits with and without the bag: 21
   assert.equal(all.size, 216);
 });
 test('6480 head/neck/body/bag combinations use bounded registered layers and bundled art', () => {
-  const heads = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'head' && !i.id.startsWith('whiteknee-')).map(i => i.id)], necks = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'neck' && !i.id.startsWith('whiteknee-')).map(i => i.id)];
+  const heads = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'head' && i.id.startsWith('head-')).map(i => i.id)], necks = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'neck' && i.id.startsWith('neck-')).map(i => i.id)];
   let cases = 0;
   for (const pet of wearablePets) for (const state of wearStates) for (const head of heads) for (const neck of necks) {
     cases++; assert(state);
@@ -42,6 +42,21 @@ test('6480 head/neck/body/bag combinations use bounded registered layers and bun
     }
   }
   assert.equal(cases, 6480);
+});
+
+test('Whiteknee, junior and classic sprites retain distinct identities and wardrobe paths', () => {
+  const whiteknee = 'animal-whiteknee';
+  assert.equal(avatarPet(whiteknee), whiteknee);
+  assert.equal(avatarPet('cat', '/my-space/whiteknee/v1/poses/rest/bare.webp'), whiteknee);
+  assert.equal(isWearablePet(whiteknee), false);
+  assert.equal(wornSprite(whiteknee, {body: 'whiteknee-body-hero'}, 'raised'), '/my-space/whiteknee/v1/poses/raised/hero.webp');
+  assert.equal(wornSprite(whiteknee, {body: 'junior-body-knit'}), '/my-space/whiteknee/v1/poses/rest/bare.webp');
+  assert.equal(avatarPet('dog', '/my-space/v4/pets/dog-bichon.webp'), 'dog-bichon');
+  assert.equal(wornSprite('dog-bichon', {body: 'junior-body-knit'}, 'raised'), '/my-space/v5/wardrobe/dog-bichon/knit.webp');
+  assert.equal(wornSprite('dog-bichon', {body: 'whiteknee-body-hero'}), '/my-space/v4/pets/dog-bichon.webp');
+  assert.equal(wornSprite('friend-cat', {body: 'body-knit'}, 'raised'), '/my-space/v2/wardrobe/friend-cat/knit.webp');
+  assert.equal(accessoryArt('whiteknee-face-goggles'), '/my-space/whiteknee/v1/accessories/face-goggles.webp');
+  assert.equal(accessoryArt('whiteknee-../../unknown'), undefined);
 });
 
 test('all 108 character/item attachment sets use their own alpha art and preserve asset integrity', () => {

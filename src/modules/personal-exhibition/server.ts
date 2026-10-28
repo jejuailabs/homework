@@ -46,6 +46,11 @@ export async function readPersonalExhibition(ctx: Context, cursor: string | null
       // Explicit response fields keep private storage paths and uploader details on the server.
       return {
         id: doc.id, exhibitionId: room.id, exhibitionTitle: room.data().title,
+        exhibitionDescription: room.data().description || '',
+        exhibitionGrade: String(room.data().grade ?? cls.data()!.grade ?? '').trim(),
+        exhibitionClassName: room.data().className || cls.data()!.name,
+        exhibitionYear: Number(room.data().year ?? cls.data()!.year) || null,
+        exhibitedOn: artworkToday(new Date(value.status === 'approved' && value.reviewedAt ? value.reviewedAt : value.createdAt)),
         studentId, studentName: student.data()!.name, studentNumber: student.data()!.number,
         title: value.title, description: value.description, status: value.status, feedback: value.feedback || '',
         artistName: value.artistName || student.data()!.name,

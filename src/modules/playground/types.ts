@@ -8,11 +8,13 @@ export const defaultPlaySettings: PlaySettings = {enabled: false, allowDuels: fa
 export type PlayChoice = {id: string; label: string};
 export type PlayResult = {answer: string; correct: boolean; expected: string; reveal: string; score: number; practice: boolean; reward: number; dueDate?: string};
 export type PublicPlaySession = {id: string; kind: PlayKind; itemId: string; prompt: string; choices: PlayChoice[]; hints: string[]; hintCount: number; maxHints: number; result?: PlayResult};
-export type PlaySession = {id: string; kind: PlayKind; item: PlayItem; date: string; gradeBand: GradeBand; seed: string; hintsUsed: number; review: boolean; createdAt: string; result?: PlayResult};
+export type PlaySession = {id: string; kind: PlayKind; item: PlayItem; date: string; gradeBand: GradeBand; seed: string; hintsUsed: number; review: boolean; daily?: boolean; createdAt: string; result?: PlayResult};
+/** One student's set of the day for one kind; `done` keeps answer order. */
+export type PlayDaily = {total: number; done: number; correct: number; score: number};
 export type PlaySkill = {id: string; dueDate: string; interval: number; attempts: number; correctStreak: number; lastDate: string; errors: number};
 export type PlayScore = {solo: number; wins: number; draws: number; losses: number; games: number; days: string[]; correct: number; answered: number};
 export type PlayRank = {id: string; name: string; score: number; rank: number};
 export type PlayRankings = {solo: PlayRank[]; duel: PlayRank[]; steady: PlayRank[]};
-export type PlayHome = {date: string; weekStart: string; studentId: string; name: string; className: string; gradeBand: GradeBand; settings: PlaySettings; liveEnabled: boolean; scoredToday: number; dailyLimit: number; dueCount: number; score: PlayScore; menus: {kind: PlayKind; total: number; remaining: number}[]; ranking: PlayRankings};
-export type PlayTeacherState = {classId: string; className: string; gradeBand: GradeBand; weekStart: string; settings: PlaySettings; items: PlayItem[]; spellingIds: string[]; liveEnabled: boolean};
+export type PlayHome = {date: string; weekStart: string; studentId: string; name: string; className: string; gradeBand: GradeBand; settings: PlaySettings; liveEnabled: boolean; scoredToday: number; dailyLimit: number; dueCount: number; score: PlayScore; menus: {kind: PlayKind; total: number; remaining: number; assigned: number; today: {done: number; total: number}}[]; ranking: PlayRankings};
+export type PlayTeacherState = {classId: string; className: string; gradeBand: GradeBand; weekStart: string; settings: PlaySettings; items: PlayItem[]; weekIds: string[]; liveEnabled: boolean; aiConfigured: boolean};
 export type PlayReport = {students: {id: string; name: string; number: number; score: PlayScore; dueCount: number}[]; spelling: {id: string; prompt: string; errors: number}[]; ranking: PlayRankings};

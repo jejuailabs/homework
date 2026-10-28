@@ -5,8 +5,12 @@ import {db} from '@/lib/server/admin';
 import {assertOrigin, getContext, type Context} from '@/lib/server/auth';
 import {ApiError, id} from '@/lib/server/policy';
 import {addPointBalance, pointBalance} from '@/lib/server/points-policy';
-import {answerScore, choicesFor, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, PlayError, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
-import {playKinds, type PlayHome, type PlayItem, type PlayKind, type PlayRankings, type PlayReport, type PlayScore, type PlaySession, type PlaySkill, type PlayTeacherState} from './types';
+import {runMeteredAi} from '@/lib/server/ai';
+import {completedAiText, providerFailure, readBoundedJson} from '@/lib/server/ai-policy';
+import {playBank} from './bank';
+import {AI_COUNT_MAX, AI_COUNT_OPTIONS, duplicateOf, playAiDrafts, playAiRequest} from './ai-questions';
+import {answerScore, choicesFor, DAILY_SIZE, dailyPick, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, PlayError, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
+import {playKinds, type PlayDaily, type PlayHome, type PlayItem, type PlayKind, type PlayRankings, type PlayReport, type PlayScore, type PlaySession, type PlaySkill, type PlayTeacherState} from './types';
 import {accessStudent, loadItems, requirePlayEnabled, settingsOf, settingsRef, teacherClass, type PlayAccess} from './server-access';
 import {handleRoomRequest} from './rooms-server';
 import {handleSocialRequest} from './social-server';
@@ -16,6 +20,11 @@ const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const rootRef = (a: PlayAccess) => a.pupil.ref.collection('playgroundYears').doc(a.year);
 const scoreRef = (pupil: FirebaseFirestore.DocumentReference, week: string) => pupil.collection('playgroundScores').doc(week);
 const liveEnabled = () => process.env.PLAYGROUND_LIVE_DISABLED !== 'true';
+/** Every question of every day's set can score: one set of DAILY_SIZE per kind. */
+const SOLO_DAILY_LIMIT = DAILY_SIZE * playKinds.length;
+const dailyRef = (a: PlayAccess, kind: PlayKind) => rootRef(a).collection('daily').doc(`${a.date}_${kind}`);
+type DailyDoc = {date: string; kind: PlayKind; itemIds: string[]; done: string[]; correct: number; score: number};
+const dailyView = (doc: DailyDoc): PlayDaily => ({total: doc.itemIds.length, done: doc.done.length, correct: doc.correct, score: doc.score});
 function kindOf(raw: unknown): PlayKind {
   if (!playKinds.includes(raw as PlayKind)) throw new ApiError(400, '놀이 종류를 확인해 주세요.', 'PLAY_KIND');
   return raw as PlayKind;
@@ -51,17 +60,20 @@ function studentRanks(all: PlayRankings, studentId: string): PlayRankings {
   const visible = (rows: PlayRankings['solo']) => rows.filter((row, index) => index < 5 || row.id === studentId);
   return {solo: visible(all.solo), duel: visible(all.duel), steady: visible(all.steady)};
 }
+const WEEK_LIST_MAX = 60;
 async function home(ctx: Context): Promise<PlayHome> {
   const a = await accessStudent(ctx), root = rootRef(a);
-  const [items, attempts, skills, day, score, ranking] = await Promise.all([
+  const [items, attempts, skills, day, score, list, ranking] = await Promise.all([
     loadItems(a.ctx.classId, a.gradeBand), root.collection('attempts').get(), root.collection('spelling').get(),
-    root.collection('days').doc(a.date).get(), scoreRef(a.pupil.ref, a.week).get(),
+    root.collection('days').doc(a.date).get(), scoreRef(a.pupil.ref, a.week).get(), db().doc(`classes/${a.ctx.classId}/playgroundLists/${a.week}`).get(),
     a.settings.enabled && a.settings.showRankings ? rankings(a.ctx.classId, a.week) : Promise.resolve({solo: [], duel: [], steady: []}),
   ]);
-  const seen = new Set(attempts.docs.map(row => row.id)), available = new Set(items.map(item => item.id));
-  return {date: a.date, weekStart: a.week, studentId: a.ctx.studentId, name: String(a.pupil.data()?.name || ''), className: String(a.cls.data()?.name || ''), gradeBand: a.gradeBand, settings: a.settings, liveEnabled: liveEnabled(), scoredToday: Number(day.data()?.scored || 0), dailyLimit: 30,
+  const dailies = await db().getAll(...playKinds.map(kind => dailyRef(a, kind)));
+  const seen = new Set(attempts.docs.map(row => row.id)), available = new Set(items.map(item => item.id)), assigned = new Set<string>(Array.isArray(list.data()?.itemIds) ? list.data()!.itemIds : []);
+  return {date: a.date, weekStart: a.week, studentId: a.ctx.studentId, name: String(a.pupil.data()?.name || ''), className: String(a.cls.data()?.name || ''), gradeBand: a.gradeBand, settings: a.settings, liveEnabled: liveEnabled(), scoredToday: Number(day.data()?.scored || 0), dailyLimit: SOLO_DAILY_LIMIT,
     dueCount: skills.docs.filter(row => available.has(row.id) && row.data().dueDate <= a.date && row.data().lastDate < a.date).length,
-    score: scoreOf(score.data()), menus: playKinds.map(kind => ({kind, total: items.filter(item => item.kind === kind).length, remaining: items.filter(item => item.kind === kind && !seen.has(item.id)).length})), ranking: studentRanks(ranking, a.ctx.studentId)};
+    score: scoreOf(score.data()), menus: playKinds.map(kind => ({kind, total: items.filter(item => item.kind === kind).length, remaining: items.filter(item => item.kind === kind && !seen.has(item.id)).length, assigned: items.filter(item => item.kind === kind && assigned.has(item.id) && !seen.has(item.id)).length,
+      today: (() => {const doc = dailies[playKinds.indexOf(kind)].data() as DailyDoc | undefined; return doc ? {done: doc.done.length, total: doc.itemIds.length} : {done: 0, total: Math.min(DAILY_SIZE, items.filter(item => item.kind === kind).length)};})()})), ranking: studentRanks(ranking, a.ctx.studentId)};
 }
 async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>) {
   if (typeof data.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(data.requestId)) throw new ApiError(400, '다음 문제 버튼을 다시 눌러 주세요.', 'PLAY_REQUEST');
@@ -71,12 +83,14 @@ async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>)
   return db().runTransaction(async tx => {
     const a = await accessStudent(ctx, tx); requirePlayEnabled(a);
     const root = rootRef(a), ref = root.collection('sessions').doc(hash(`${a.date}:${kind}:${review ? 'review' : 'solo'}:${requestId}`));
-    const activeRef = root.collection('active').doc(`${kind}_${review ? 'review' : 'solo'}`);
-    const [existing, active] = await Promise.all([tx.get(ref), tx.get(activeRef)]);
-    if (existing.exists) return {session: publicSession(existing.data() as PlaySession)};
+    const activeRef = root.collection('active').doc(`${kind}_${review ? 'review' : 'solo'}`), todayRef = dailyRef(a, kind);
+    const [existing, active, todaySnapshot] = await Promise.all([tx.get(ref), tx.get(activeRef), tx.get(todayRef)]);
+    let today = todaySnapshot.data() as DailyDoc | undefined;
+    const progress = () => today && !review ? {daily: dailyView(today)} : {};
+    if (existing.exists) return {session: publicSession(existing.data() as PlaySession), ...progress()};
     if (active.data()?.sessionId) {
       const open = await tx.get(root.collection('sessions').doc(id(active.data()!.sessionId)));
-      if (open.exists && open.data()!.date === a.date && !open.data()!.result && open.data()!.review === review && (!practiceItemId || open.data()!.item.id === practiceItemId)) return {session: publicSession(open.data() as PlaySession)};
+      if (open.exists && open.data()!.date === a.date && !open.data()!.result && open.data()!.review === review && (!practiceItemId || open.data()!.item.id === practiceItemId)) return {session: publicSession(open.data() as PlaySession), ...progress()};
     }
     const [items, attempts, skills, list] = await Promise.all([
       loadItems(a.ctx.classId, a.gradeBand, tx), tx.get(root.collection('attempts')), tx.get(root.collection('spelling')),
@@ -92,18 +106,23 @@ async function next(ctx: Context, kind: PlayKind, data: Record<string, unknown>)
       if (!seen.has(practiceItemId)) throw new ApiError(400, '먼저 풀어 본 문제만 다시 연습할 수 있어요.');
       pool = pool.filter(item => item.id === practiceItemId);
     } else {
-      const selected = list.data()?.itemIds;
-      if (kind === 'spelling' && Array.isArray(selected) && selected.length) pool = pool.filter(item => selected.includes(item.id));
-      const fresh = pool.filter(item => !seen.has(item.id));
-      if (fresh.length) pool = fresh;
-      else if (pool.length > 1) pool = pool.filter(item => item.id !== active.data()?.itemId);
+      // A fixed set of today's questions per kind; this week's teacher-assigned items come first.
+      if (!today) {
+        const selected = new Set<string>(Array.isArray(list.data()?.itemIds) ? list.data()!.itemIds : []);
+        today = {date: a.date, kind, itemIds: dailyPick(pool, seen, selected, `${ctx.uid}:${a.date}:${kind}`), done: [], correct: 0, score: 0};
+        if (today.itemIds.length) tx.set(todayRef, today);
+      }
+      const done = new Set(today.done), nextId = today.itemIds.find(itemId => !done.has(itemId));
+      if (today.itemIds.length && !nextId) return {session: null, daily: dailyView(today)};
+      pool = pool.filter(item => item.id === nextId);
     }
     if (!pool.length) throw new ApiError(409, review ? '오늘 다시 볼 맞춤법을 모두 풀었어요.' : '아직 이 범위의 문제가 없어요. 선생님께 알려 주세요.', review ? 'PLAY_NO_REVIEW' : 'PLAY_EMPTY');
     pool.sort((left, right) => hash(`${requestId}:${left.id}`).localeCompare(hash(`${requestId}:${right.id}`)));
     const item = pool[0];
-    const session: PlaySession = {id: ref.id, kind, item, date: a.date, gradeBand: a.gradeBand, seed: hash(`${ctx.uid}:${item.id}:${a.date}`), hintsUsed: 0, review, createdAt: new Date().toISOString()};
+    const daily = !review && !practiceItemId;
+    const session: PlaySession = {id: ref.id, kind, item, date: a.date, gradeBand: a.gradeBand, seed: hash(`${ctx.uid}:${item.id}:${a.date}`), hintsUsed: 0, review, ...(daily ? {daily} : {}), createdAt: new Date().toISOString()};
     tx.create(ref, session); tx.set(activeRef, {sessionId: ref.id, itemId: item.id, date: a.date});
-    return {session: publicSession(session)};
+    return {session: publicSession(session), ...progress()};
   });
 }
 async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', data: Record<string, unknown>) {
@@ -113,10 +132,12 @@ async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', dat
     if (!snapshot.exists || snapshot.data()!.kind !== kind) throw new ApiError(404, '풀고 있는 문제를 다시 열어 주세요.', 'PLAY_SESSION');
     const session = snapshot.data() as PlaySession;
     if (session.date !== a.date) throw new ApiError(409, '날짜가 바뀌었어요. 새 문제를 열어 주세요.', 'PLAY_DATE');
-    if (session.result) return {session: publicSession(session)};
+    const todayRef = dailyRef(a, kind), todaySnapshot = session.daily ? await tx.get(todayRef) : null;
+    const today = todaySnapshot?.data() as DailyDoc | undefined, progress = () => today ? {daily: dailyView(today)} : {};
+    if (session.result) return {session: publicSession(session), ...progress()};
     if (phase === 'hint') {
       session.hintsUsed = Math.min(hintsFor(session.item).length, session.hintsUsed + 1);
-      tx.update(ref, {hintsUsed: session.hintsUsed}); return {session: publicSession(session)};
+      tx.update(ref, {hintsUsed: session.hintsUsed}); return {session: publicSession(session), ...progress()};
     }
     let answer: string;
     if (data.choiceId !== undefined) {
@@ -131,7 +152,7 @@ async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', dat
     const attemptRef = root.collection('attempts').doc(session.item.id), dayRef = root.collection('days').doc(a.date), rankRef = scoreRef(a.pupil.ref, a.week), skillRef = root.collection('spelling').doc(session.item.id);
     const [attempt, day, ranking, skill] = await Promise.all([tx.get(attemptRef), tx.get(dayRef), tx.get(rankRef), tx.get(skillRef)]);
     const correct = session.item.answers.some(expected => normalizeAnswer(expected, kind) === normalizeAnswer(answer, kind));
-    const scoredBefore = Number(day.data()?.scored || 0), eligible = !attempt.exists && !session.review && scoredBefore < 30;
+    const scoredBefore = Number(day.data()?.scored || 0), eligible = !attempt.exists && !session.review && scoredBefore < SOLO_DAILY_LIMIT;
     const scored = scoredBefore + (eligible ? 1 : 0), score = eligible ? answerScore(correct, session.hintsUsed) : 0;
     const paidBefore = Number(day.data()?.soloRewarded || 0);
     const milestone = eligible && scored % 10 === 0;
@@ -151,12 +172,16 @@ async function study(ctx: Context, kind: PlayKind, phase: 'hint' | 'answer', dat
     tx.set(dayRef, {...day.data(), scored, soloRewarded: paidBefore + reward, updatedAt: at});
     tx.set(rankRef, {...totals, updatedAt: at});
     if (nextSkill) tx.set(skillRef, nextSkill);
+    if (today && today.itemIds.includes(session.item.id) && !today.done.includes(session.item.id)) {
+      today.done = [...today.done, session.item.id]; today.correct += correct ? 1 : 0; today.score += score;
+      tx.set(todayRef, today);
+    }
     if (reward) {
       const balance = addPointBalance(pointBalance(a.pupil.data()?.points), reward);
       tx.update(a.pupil.ref, {points: balance, pointsEarnedTotal: addPointBalance(pointBalance(a.pupil.data()?.pointsEarnedTotal), reward)});
       tx.create(receipt, {classId: a.ctx.classId, studentId: a.ctx.studentId, amount: reward, kind: 'earn', source: 'playground', sourceId: ref.id, reason: '말놀이터 처음 푼 문제 10개', actorUid: ctx.uid, balanceAfter: balance, createdAt: at});
     }
-    return {session: publicSession(session)};
+    return {session: publicSession(session), ...progress()};
   });
 }
 async function teacherState(ctx: Context, classId: string, week: string): Promise<PlayTeacherState> {
@@ -164,7 +189,34 @@ async function teacherState(ctx: Context, classId: string, week: string): Promis
   const [settings, items, hidden, list] = await Promise.all([settingsRef(classId).get(), loadItems(classId, band), db().collection(`classes/${classId}/playgroundItems`).get(), db().doc(`classes/${classId}/playgroundLists/${week}`).get()]);
   const all = new Map(items.map(item => [item.id, item]));
   for (const row of hidden.docs) all.set(row.id, {...row.data(), id: row.id} as PlayItem);
-  return {classId, className: String(cls.data()?.name || ''), gradeBand: band, weekStart: week, settings: settingsOf(settings.data()), items: [...all.values()], spellingIds: list.data()?.itemIds || [], liveEnabled: liveEnabled()};
+  return {classId, className: String(cls.data()?.name || ''), gradeBand: band, weekStart: week, settings: settingsOf(settings.data()), items: [...all.values()], weekIds: list.data()?.itemIds || [], liveEnabled: liveEnabled(), aiConfigured: Boolean(process.env.OPENAI_API_KEY?.trim())};
+}
+/** Class questions of every band, hidden ones included, so new questions never repeat an answer of the kind. */
+async function classItems(classId: string, tx?: FirebaseFirestore.Transaction) {
+  const query = db().collection(`classes/${classId}/playgroundItems`).limit(500), snapshot = tx ? await tx.get(query) : await query.get();
+  return {size: snapshot.size, items: snapshot.docs.map(row => ({...row.data(), id: row.id}) as PlayItem)};
+}
+async function aiDrafts(ctx: Context, classId: string, data: Record<string, unknown>) {
+  const cls = await teacherClass(ctx, classId), band = gradeBand(cls.data()?.grade);
+  if (!playKinds.includes(data.kind as PlayKind)) throw new ApiError(400, '문제 종류를 골라 주세요.');
+  if (!AI_COUNT_OPTIONS.includes(data.count as typeof AI_COUNT_OPTIONS[number])) throw new ApiError(400, `만들 문제 수를 ${AI_COUNT_OPTIONS.join('·')}개 중에서 골라 주세요.`);
+  if (typeof data.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(data.requestId)) throw new ApiError(400, '만들기 버튼을 다시 눌러 주세요.');
+  const topic = data.topic === undefined ? '' : data.topic;
+  if (typeof topic !== 'string' || topic.length > 60 || /[\u0000-\u001f\u007f]/.test(topic)) throw new ApiError(400, '주제는 60자 이내로 적어 주세요.');
+  if (!process.env.OPENAI_API_KEY?.trim()) throw new ApiError(503, 'AI 연결 설정을 확인해 주세요. 문제를 직접 만들 수도 있어요.', 'AI_NOT_CONFIGURED');
+  const kind = data.kind as PlayKind, count = data.count as number, own = await classItems(classId);
+  // Same-band questions go last so they survive the request's cut-off of the avoid list.
+  const existing = [...playBank, ...own.items].sort((a, b) => Number(a.gradeBand === band) - Number(b.gradeBand === band));
+  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna', fingerprint = hash(JSON.stringify(['playground-ai-v1', classId, kind, count, topic.trim(), data.requestId]));
+  const text = await runMeteredAi(ctx.uid, 'playground-questions', model, fingerprint, async observe => {
+    const response = await fetch('https://api.openai.com/v1/responses', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json'}, body: JSON.stringify(playAiRequest({kind, gradeBand: band, count, topic: topic.trim(), existing}, model)), signal: AbortSignal.timeout(110_000), cache: 'no-store'});
+    if (!response.ok) {await response.body?.cancel(); throw providerFailure(response.status);}
+    const payload = await readBoundedJson(response, 512 * 1024); observe(payload);
+    return completedAiText(payload);
+  }, classId);
+  const drafts = playAiDrafts(text, kind, band, existing, () => `t_${randomUUID()}`);
+  if (!drafts.items.length) throw new ApiError(502, '겹치지 않는 새 문제를 만들지 못했어요. 주제를 바꿔 다시 만들어 주세요.', 'PLAY_AI_EMPTY');
+  return drafts;
 }
 async function teacherReport(ctx: Context, classId: string, week: string): Promise<PlayReport> {
   await teacherClass(ctx, classId);
@@ -190,14 +242,33 @@ async function saveTeacher(ctx: Context, path: string, classId: string, data: Re
       if (method === 'PATCH' && !existing.exists) throw new ApiError(404, '문제를 찾을 수 없어요.');
       if (method === 'POST') {const count = await tx.get(cls.ref.collection('playgroundItems').limit(500)); if (count.size >= 500) throw new ApiError(409, '우리 반 문제는 500개까지 보관할 수 있어요.');}
       const item = validateItem(data.item, itemId);
-      item.id = itemId; item.source = 'teacher'; item.version = `teacher-${Number(existing.data()?.revision || 0) + 1}`;
+      item.id = itemId; item.source = existing.data()?.source === 'ai-approved' ? 'ai-approved' : 'teacher'; item.version = `teacher-${Number(existing.data()?.revision || 0) + 1}`;
       tx.set(ref, {...item, revision: Number(existing.data()?.revision || 0) + 1, updatedBy: ctx.uid, updatedAt: new Date().toISOString()}); return {item};
     }
-    if (path === 'teacher/spelling-list' && method === 'PUT') {
+    if (path === 'teacher/ai-questions/approve' && method === 'POST') {
+      const rows = data.items;
+      if (!Array.isArray(rows) || !rows.length || rows.length > AI_COUNT_MAX) throw new ApiError(400, `저장할 문제를 1~${AI_COUNT_MAX}개 골라 주세요.`);
+      const own = await classItems(classId, tx);
+      if (own.size + rows.length > 500) throw new ApiError(409, '우리 반 문제는 500개까지 보관할 수 있어요. 쓰지 않는 문제를 먼저 정리해 주세요.');
+      const items: PlayItem[] = [], existing = [...playBank, ...own.items], at = new Date().toISOString();
+      for (const raw of rows) {
+        const draftId = (raw as {id?: unknown})?.id;
+        if (typeof draftId !== 'string' || !/^t_[a-zA-Z0-9-]{8,60}$/.test(draftId)) throw new ApiError(400, '새 문제를 다시 만들어 주세요.');
+        if ([...own.items, ...items].some(other => other.id === draftId)) throw new ApiError(409, '이미 우리 반 문제에 넣은 문제예요.', 'PLAY_DUPLICATE');
+        const item = validateItem({...(raw as object), source: 'ai-approved', version: 'ai-1', enabled: true}, draftId);
+        const same = duplicateOf(item, [...existing, ...items]);
+        if (same) throw new ApiError(409, `이미 있는 문제와 정답이나 문장이 겹쳐요: “${item.prompt.slice(0, 40)}”`, 'PLAY_DUPLICATE');
+        items.push(item);
+      }
+      items.forEach(item => tx.create(cls.ref.collection('playgroundItems').doc(item.id), {...item, revision: 1, createdBy: 'ai', updatedBy: ctx.uid, updatedAt: at}));
+      return {items};
+    }
+    // The weekly list holds any kind: solo play serves it first, and team games can use it as their range.
+    if ((path === 'teacher/week-list' || path === 'teacher/spelling-list') && method === 'PUT') {
       const itemIds = data.itemIds;
-      if (!Array.isArray(itemIds) || itemIds.some(value => typeof value !== 'string') || (itemIds.length !== 0 && (itemIds.length < 5 || itemIds.length > 40)) || new Set(itemIds).size !== itemIds.length) throw new ApiError(400, '맞춤법은 5~40개를 고르거나 선택을 모두 해제해 주세요.');
-      const items = await loadItems(classId, gradeBand(cls.data()?.grade), tx), allowed = new Set(items.filter(item => item.kind === 'spelling').map(item => item.id));
-      if (itemIds.some(value => !allowed.has(value))) throw new ApiError(400, '우리 반 학년에 맞는 맞춤법 문제를 골라 주세요.');
+      if (!Array.isArray(itemIds) || itemIds.some(value => typeof value !== 'string') || itemIds.length > WEEK_LIST_MAX || new Set(itemIds).size !== itemIds.length) throw new ApiError(400, `이번 주 문제는 ${WEEK_LIST_MAX}개까지 낼 수 있어요.`);
+      const items = await loadItems(classId, gradeBand(cls.data()?.grade), tx), allowed = new Set(items.map(item => item.id));
+      if (itemIds.some(value => !allowed.has(value))) throw new ApiError(400, '우리 반 학년에 맞는 문제를 골라 주세요.');
       tx.set(cls.ref.collection('playgroundLists').doc(week), {itemIds, updatedAt: new Date().toISOString(), updatedBy: ctx.uid}); return {itemIds};
     }
     throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
@@ -222,8 +293,9 @@ export async function handlePlayground(request: Request, segments: string[]) {
     }
     if (segments[0] === 'teacher') {
       const classId = id(url.searchParams.get('classId') || data.classId), week = weekOf(url.searchParams.get('week'));
-      if (request.method === 'GET' && (path === 'teacher/settings' || path === 'teacher/items' || path === 'teacher/spelling-list')) return json(await teacherState(ctx, classId, week));
+      if (request.method === 'GET' && (path === 'teacher/settings' || path === 'teacher/items' || path === 'teacher/spelling-list' || path === 'teacher/week-list')) return json(await teacherState(ctx, classId, week));
       if (request.method === 'GET' && path === 'teacher/report') return json(await teacherReport(ctx, classId, week));
+      if (request.method === 'POST' && path === 'teacher/ai-questions') return json(await aiDrafts(ctx, classId, data));
       return json(await saveTeacher(ctx, path, classId, data, week, request.method));
     }
     const socialResponse = await handleSocialRequest(request, ctx, segments, data);

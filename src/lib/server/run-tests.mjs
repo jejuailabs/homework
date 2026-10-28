@@ -21,6 +21,7 @@ await import(moduleUrl(compile('../canvas-camera.test.ts').replace("'./canvas-ca
 const canvasLayoutUrl=moduleUrl(compile('../canvas-text-layout.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)));
 await import(moduleUrl(compile('../canvas-text.test.ts').replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'./canvas-text-layout'",JSON.stringify(canvasLayoutUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));
 await import(moduleUrl(compile('../canvas-document.test.ts').replace("'./canvas-document'", JSON.stringify(canvasUrl))));
+await import(moduleUrl(compile('../canvas-groups.test.ts').replace("'./canvas-groups'", JSON.stringify(moduleUrl(compile('../canvas-groups.ts'))))));
 const geometryUrl=moduleUrl(compile('../canvas-geometry.ts').replace("'perfect-freehand'",JSON.stringify(import.meta.resolve('perfect-freehand'))));
 await import(moduleUrl(compile('../canvas-geometry.test.ts').replace("'./canvas-geometry'",JSON.stringify(geometryUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));
 const studentCodesUrl = moduleUrl(compile('./student-codes.ts'));
@@ -64,8 +65,14 @@ await import('../../modules/digital-artbook/run-tests.mjs');
 await import('../../modules/my-space/run-tests.mjs');
 await import('../../modules/daily-quiz/run-tests.mjs');
 await import('../../modules/playground/run-tests.mjs');
+await import('../../modules/lesson-review/run-tests.mjs');
 await import('../../modules/teacher-notebook/run-tests.mjs');
 
 const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
 await import(moduleUrl(compile('../admin-console-policy.test.ts').replace("'./admin-console-policy'",JSON.stringify(adminConsolePolicyUrl))));
 await import('../../modules/learning-king/run-tests.mjs');
+
+// Secret diary suites use memory substitutes, with no external service calls.
+await import('../../modules/my-space/run-diary-server-tests.mjs');
+await import('../../modules/my-space/run-diary-export-tests.mjs');
+await import('../../modules/my-space/run-diary-editor-tests.mjs');

@@ -26,7 +26,8 @@ function replaceToken(source, token, value) {
   return source.replaceAll(token, () => value);
 }
 
-async function loadAssets() {
+async function loadAssets(root = moduleRoot) {
+  const continuousRoot = join(root, 'continuous');
   const manifest = JSON.parse(await readFile(join(continuousRoot, 'assets/manifest.json'), 'utf8'));
   if (!manifest || !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files)) {
     throw new Error('continuous/assets/manifest.json에 files 객체가 필요합니다.');
@@ -49,12 +50,13 @@ async function loadAssets() {
     }
     await include(key, name, join(continuousRoot, 'assets'));
   }
-  await include('player', 'player.png', join(moduleRoot, 'prototype/assets'));
-  await include('guide', 'guide.png', join(moduleRoot, 'prototype/assets'));
+  await include('player', 'player.png', join(root, 'prototype/assets'));
+  await include('guide', 'guide.png', join(root, 'prototype/assets'));
   return {urls, assets};
 }
 
-export async function buildContinuousDocuments() {
+export async function buildContinuousDocuments(root = moduleRoot) {
+  const continuousRoot = join(root, 'continuous');
   const [template, css, motion, world, game, dataJSON, bundle] = await Promise.all([
     readFile(join(continuousRoot, 'game.html'), 'utf8'),
     readFile(join(continuousRoot, 'game.css'), 'utf8'),
@@ -62,7 +64,7 @@ export async function buildContinuousDocuments() {
     readFile(join(continuousRoot, 'world.js'), 'utf8'),
     readFile(join(continuousRoot, 'game.js'), 'utf8'),
     readFile(join(continuousRoot, 'data/aewol.json'), 'utf8'),
-    loadAssets(),
+    loadAssets(root),
   ]);
   const values = {
     __STYLE__: css.replace(/<\/style/gi, '<\\/style'),

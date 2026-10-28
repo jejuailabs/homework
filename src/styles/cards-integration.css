@@ -1,7 +1,7 @@
 .nav-cards .nav-pictogram{background:var(--play-peach)}
 .thd-shortcuts{grid-template-columns:repeat(5,minmax(0,1fr))}
 .thd-shortcut strong{font-size:15px}
-@media(min-width:741px) and (max-width:1200px){.header-inner:has(.teacher-nav){height:auto;min-height:78px;flex-wrap:wrap;padding-block:12px;row-gap:8px}.top-nav.teacher-nav{order:3;flex-basis:100%;min-width:0;justify-content:space-between;overflow-x:auto}.top-nav.teacher-nav a{flex:none}}
+@media(min-width:741px){.header-inner:has(.teacher-nav){height:auto;min-height:78px;flex-wrap:wrap;padding-block:12px;row-gap:8px}.top-nav.teacher-nav{order:3;flex-basis:100%;min-width:0;max-width:100%;justify-content:flex-start;overflow-x:auto}.top-nav.teacher-nav a{flex:none;white-space:nowrap}}
 @media(max-width:1150px){.thd-shortcuts{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:740px){.top-nav.teacher-nav,html[lang=en] .top-nav.teacher-nav{display:flex;overflow-x:auto;gap:5px;scrollbar-width:thin;justify-content:flex-start}.top-nav.teacher-nav a,html[lang=en] .top-nav.teacher-nav a{flex:none;min-width:65px;white-space:nowrap;font-size:10px;flex-direction:column;padding:6px;gap:4px}.app-main:has(.cards-workspace){padding-top:18px}.thd-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.thd-shortcut strong{font-size:13px}}
@@ -19,3 +19,4 @@
  .thd-shortcuts .thd-shortcut>img{display:none}
  .thd-shortcuts .thd-shortcut>svg{position:absolute;right:9px;bottom:8px;width:13px}
 }
+@media(min-width:741px){.top-nav.teacher-nav,.top-nav.student-nav{gap:2px}.top-nav.teacher-nav a,.top-nav.student-nav a{padding:7px 9px;gap:6px}.top-nav.teacher-nav .nav-pictogram,.top-nav.student-nav .nav-pictogram{width:26px;height:26px}}

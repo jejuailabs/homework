@@ -1,11 +1,14 @@
 import {characterFiles} from '@/lib/characters';
+import {newPet, newPetFromArt, type NewPetId, juniorWearState, newPets} from './new-pets';
+import {juniorAttachmentAssets} from './junior-assets';
 import {attachmentAssets} from './attachment-assets';
 import {attachmentLayout, type AttachmentId} from './attachment-rig';
-import {isWhiteknee, WHITEKNEE_ID, WHITEKNEE_ROOT, whitekneeSprite, type WhitekneePose} from './whiteknee';
+import {isWhiteknee, WHITEKNEE_ID, WHITEKNEE_ROOT, whitekneeAccessoryArt, whitekneeSprite, type WhitekneePose} from './whiteknee';
 
 export const wearablePets = ['friend-cat', 'friend-dog', 'friend-hamster', 'friend-alpaca', 'friend-rabbit', 'friend-otter', 'cat-american', 'cat-british', 'cat-siamese', 'cat-persian', 'cat-ragdoll', 'cat-maine'] as const;
 export type WearablePet = typeof wearablePets[number];
-export type AvatarPet = WearablePet | typeof WHITEKNEE_ID;
+export type AvatarPet = WearablePet | NewPetId | typeof WHITEKNEE_ID;
+export const isWearablePet = (pet: AvatarPet): pet is WearablePet => wearablePets.includes(pet as WearablePet);
 export const wearStates = ['bare', 'knit', 'sailor', 'apron', 'raincoat', 'hoodie', 'overalls', 'dino', 'pajamas', 'bare-bag', 'knit-bag', 'sailor-bag', 'apron-bag', 'raincoat-bag', 'hoodie-bag', 'overalls-bag', 'dino-bag', 'pajamas-bag'] as const;
 export type WearState = typeof wearStates[number];
 export type SpaceOutfit = Partial<Record<'body' | 'bag', string>>;
@@ -14,6 +17,8 @@ const accessories = ['head-sprout', 'head-crown', 'head-beret', 'head-party', 'h
 
 export function avatarPet(character = 'cat', imageSrc?: string): AvatarPet {
   if (isWhiteknee(character) || imageSrc?.startsWith(WHITEKNEE_ROOT + '/poses/')) return WHITEKNEE_ID;
+  const added = newPetFromArt(imageSrc) || newPet(character);
+  if (added) return added.id;
   const breed = imageSrc?.match(/^\/my-space\/v1\/(cat-[a-z]+)\.webp$/)?.[1];
   if (breed && wearablePets.includes(breed as WearablePet)) return breed as WearablePet;
   const classic = Object.entries(characterFiles).find(([, file]) => imageSrc === `/characters/${file}.webp`)?.[0];
@@ -24,8 +29,20 @@ export function wearState(outfit: SpaceOutfit = {}): WearState {
   const body = requested && ['knit', 'sailor', 'apron', 'raincoat', 'hoodie', 'overalls', 'dino', 'pajamas'].includes(requested) ? requested : 'bare';
   return (body + (outfit.bag === 'bag-leaf' ? '-bag' : '')) as WearState;
 }
-export function wornSprite(pet: AvatarPet, outfit: SpaceOutfit = {}, pose?: WhitekneePose) {return isWhiteknee(pet) ? whitekneeSprite(pose, outfit.body) : `${root}/${pet}/${wearState(outfit)}.webp`;}
-export function accessoryArt(itemId: string, pet: AvatarPet = 'friend-cat') {return itemId.startsWith('whiteknee-') ? `${WHITEKNEE_ROOT}/accessories/${itemId.slice('whiteknee-'.length)}.webp` : accessories.includes(itemId) ? attachmentAssets[pet+'/'+itemId]?.src : undefined;}
+export function wornSprite(pet: AvatarPet, outfit: SpaceOutfit = {}, pose?: WhitekneePose) {
+  if (isWhiteknee(pet)) return whitekneeSprite(pose, outfit.body);
+  const added = newPet(pet);
+  if (added) {
+    const state = juniorWearState(outfit);
+    return state === 'bare' ? added.art : `/my-space/v5/wardrobe/${pet}/${state}.webp`;
+  }
+  return `${root}/${pet}/${wearState(outfit)}.webp`;
+}
+export function accessoryArt(itemId: string, pet: AvatarPet = 'friend-cat') {
+  if (itemId.startsWith('whiteknee-')) return whitekneeAccessoryArt(itemId);
+  if (itemId.startsWith('junior-')) return juniorAttachmentAssets[(newPet(pet)?.id || newPets[0].id)+'/'+itemId]?.src;
+  return accessories.includes(itemId) ? attachmentAssets[pet+'/'+itemId]?.src : undefined;
+}
 export function accessoryFit(pet: WearablePet, itemId: string, body = 'bare') {
   const {left,top,width,height,rotate}=attachmentLayout(pet,itemId as AttachmentId,body);
   return {left,top,width,height,rotate};

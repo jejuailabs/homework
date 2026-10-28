@@ -1,3 +1,5 @@
+import {newPet} from './new-pets';
+
 export const personalities: Record<string, {
     name: string;
     en: string;
@@ -13,7 +15,7 @@ export const personalities: Record<string, {
     alpaca: { name: '구름이', en: 'Cloud', trait: '느긋하게 기다려 주는 포근한 친구', hello: ['서두르지 않아도 돼. 네 속도로 가자.', '포근한 구름 자리 하나 비워 뒀어.', '오늘 네 기분은 어떤 색이야?'], cheer: '네 속도로 해낸 오늘이 참 멋져.', rest: '푹신한 구름처럼 잠깐 쉬어도 좋아.' },
     otter: { name: '모아', en: 'Moa', trait: '그림과 꾸미기를 좋아하는 꼬마 예술가', hello: ['마음에 드는 색 하나 골라 볼래?', '우리 방에 네 취향을 한 조각 더하자.', '작은 조개 하나에 네 이야기를 담아 봐.'], cheer: '네 정성이 작품처럼 반짝여!', rest: '마음에도 여백을 남겨 두자.' },
 };
-export const friendBase = (pet: string) => pet.startsWith('cat-') ? 'cat' : pet.replace('friend-', '');
+export const friendBase = (pet: string) => newPet(pet)?.base || (pet.startsWith('cat-') ? 'cat' : pet.replace('friend-', ''));
 const breedPersonalities: Record<string, (typeof personalities)[string]> = {
     'animal-whiteknee': {name: '화이트니', en: 'Whiteknee', trait: '작은 발걸음으로 용기를 전하는 보송보송한 친구', hello: ['오늘은 어떤 작은 모험을 떠나 볼까?', '보송보송한 응원, 네 곁에 놓고 갈게!', '네가 오니까 반가워서 발이 들썩여!'], cheer: '한 걸음씩 해낸 너, 정말 멋져!', rest: '발을 내려놓고, 우리 잠깐 쉬어 가자.'},
     'cat-american': { name: '줄이', en: 'Juli', trait: '줄무늬 주머니에 발견을 모으는 탐험가', hello: ['오늘의 발견 지도에 무엇을 그릴까?', '작은 발자국도 멋진 모험의 시작이야.', '네가 찾은 보물을 내게도 보여 줘!'], cheer: '모험 지도에 반짝이는 발자국이 늘었네!', rest: '탐험가에게도 햇살 낮잠이 필요해.' },
@@ -23,4 +25,7 @@ const breedPersonalities: Record<string, (typeof personalities)[string]> = {
     'cat-ragdoll': { name: '라라', en: 'Lala', trait: '작은 기쁨을 함께 나누는 다정한 친구', hello: ['오늘 네가 웃었던 순간을 들려줄래?', '작은 꽃 한 송이도 함께 보면 더 예뻐.', '좋아하는 색으로 오늘을 꾸며 보자.'], cheer: '네 기쁨이 내 마음에도 꽃처럼 피었어!', rest: '아무것도 하지 않아도 우리는 친구야.' },
     'cat-maine': { name: '솔이', en: 'Soli', trait: '숲속의 용기를 모으는 든든한 친구', hello: ['커다란 나무도 작은 새싹에서 시작한대.', '오늘의 용기를 작은 잎에 담아 보자.', '낯선 일도 한 발씩 함께 가면 괜찮아.'], cheer: '도전한 네 마음이 큰 나무처럼 자랐네!', rest: '나무 그늘에서 숨을 고르고 다시 가자.' },
 };
-export const petPersonality = (pet: string) => breedPersonalities[pet] || personalities[friendBase(pet)] || personalities.cat;
+export const petPersonality = (pet: string) => {
+    const added = newPet(pet);
+    return added ? {name: added.name, en: added.en, trait: added.trait, hello: [added.hello, '네가 오니까 오늘도 마음이 포근해졌어.', '오늘의 작은 기쁨을 함께 모아 볼까?'], cheer: '네가 한 걸음 해낸 순간을 나도 기억할게!', rest: '잠깐 쉬어도 좋아. 네 옆에서 기다릴게.'} : breedPersonalities[pet] || personalities[friendBase(pet)] || personalities.cat;
+};
