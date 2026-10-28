@@ -13,4 +13,5 @@ export type PlayRoom = {id: string; code: string; classId: string; ownerUid: str
 export type RoomAnswer = {key: string; round: number; choiceId: string; receivedAt: number; elapsedMs?: number; correct: boolean};
 export type RoomRoundResult = {key: string; points: number; rank: number; correct: boolean};
 export type PublicRoomRound = {round: number; kind: PlayKind; prompt: string; choices: PlayChoice[]; correctChoiceId?: string; reveal?: string; results?: RoomRoundResult[]; distribution?: Record<string, number>; skipped?: boolean};
-export type RoomBootstrap = {room: PlayRoom; question: PublicRoomRound | null; player: RoomPlayer | null; viewer: {uid: string; key: string; teacher: boolean; canHost: boolean}; serverTime: number};
+export type RoomBootstrap = {room: PlayRoom; question: PublicRoomRound | null; player: RoomPlayer | null; players?: RoomPlayer[]; viewer: {uid: string; key: string; teacher: boolean; canHost: boolean}; serverTime: number};
+export type RoomState = {room: PlayRoom; key: string; question?: PublicRoomRound | null; players?: RoomPlayer[]; serverTime: number};

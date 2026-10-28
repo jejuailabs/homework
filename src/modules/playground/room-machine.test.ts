@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {canAnswer, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
+import {activeKeys, canAnswer, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
 import type {PlayRoom, RoomPlayer} from './room-types';
 
 const player = (key: string): RoomPlayer => ({key, uid: key, name: key, character: 'cat', outfit: {}, spaceOutfit: {}, team: 0, score: 0, lastSeen: 1000, forfeited: false, answered: 0, eligibleFrom: 0, joinedAt: 1000, lastReactionAt: 0, reaction: '', answeredRound: -1});
@@ -47,4 +47,29 @@ test('30 simultaneous answers are individually scored and skipped questions gran
 test('early termination is cancelled and only the final reveal completes a match', () => {
   assert.equal(roomTransition({...room(),status:'question',round:0},'end',10000).completion,'cancelled');
   assert.equal(roomTransition({...room(),status:'reveal',round:1,statusEndsAt:0},'tick',10000).completion,'complete');
+});
+test('a question ends early once every connected, eligible player answered', () => {
+  const r = {...room(), status: 'question' as const, round: 2, playerKeys: ['a', 'b', 'c'], roundStartsAt: 1000, roundEndsAt: 16000, statusEndsAt: 16500};
+  const players = [{...player('a'), lastSeen: 5000}, {...player('b'), lastSeen: 5000}, {...player('c'), lastSeen: 1000}];
+  assert.deepEqual([...activeKeys(r, players, 6000)].sort(), ['a', 'b', 'c']);
+  assert.deepEqual([...activeKeys(r, players, 32000)].sort(), ['a', 'b']);
+  assert.equal(activeKeys(r, players, 36000).size, 0);
+  // c closed the laptop: a and b answering is enough.
+  assert.equal(roomTransition(r, 'tick', 6000, 2, 2).status, 'reveal');
+  assert.equal(roomTransition(r, 'tick', 6000, 2, 3).status, 'question');
+  // Nobody connected never ends the question before its clock.
+  assert.equal(roomTransition(r, 'tick', 6000, 0, 0).status, 'question');
+  assert.equal(activeKeys(r, [{...player('a'), lastSeen: 5000, eligibleFrom: 3}, {...player('b'), lastSeen: 5000, forfeited: true}], 6000).size, 0);
+});
+test('roomDue matches the transitions a server tick would apply', () => {
+  const r = room();
+  assert.equal(roomDue(r, 599999), false); assert.equal(roomDue(r, 600000), true);
+  const countdown = roomTransition(r, 'start', 1000);
+  assert.equal(roomDue(countdown, 3999), false); assert.equal(roomDue(countdown, 4000), true);
+  const question = roomTransition(countdown, 'tick', 4000);
+  assert.equal(roomDue(question, 14500), false); assert.equal(roomDue(question, 14501), true);
+  const reveal = roomTransition(question, 'tick', 14501);
+  assert.equal(roomDue(reveal, 18500), false); assert.equal(roomDue(reveal, 18501), true);
+  assert.equal(roomDue({...reveal, mode: 'team'}, 99999), false);
+  assert.equal(roomDue({...reveal, status: 'paused'}, 99999), false);
 });
