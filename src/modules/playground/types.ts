@@ -16,5 +16,5 @@ export type PlayScore = {solo: number; wins: number; draws: number; losses: numb
 export type PlayRank = {id: string; name: string; score: number; rank: number};
 export type PlayRankings = {solo: PlayRank[]; duel: PlayRank[]; steady: PlayRank[]};
 export type PlayHome = {date: string; weekStart: string; studentId: string; name: string; className: string; gradeBand: GradeBand; settings: PlaySettings; liveEnabled: boolean; scoredToday: number; dailyLimit: number; dueCount: number; score: PlayScore; menus: {kind: PlayKind; total: number; remaining: number; assigned: number; today: {done: number; total: number}}[]; ranking: PlayRankings};
-export type PlayTeacherState = {classId: string; className: string; gradeBand: GradeBand; weekStart: string; settings: PlaySettings; items: PlayItem[]; weekIds: string[]; liveEnabled: boolean};
+export type PlayTeacherState = {classId: string; className: string; gradeBand: GradeBand; weekStart: string; settings: PlaySettings; items: PlayItem[]; weekIds: string[]; liveEnabled: boolean; aiConfigured: boolean};
 export type PlayReport = {students: {id: string; name: string; number: number; score: PlayScore; dueCount: number}[]; spelling: {id: string; prompt: string; errors: number}[]; ranking: PlayRankings};

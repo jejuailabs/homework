@@ -5,6 +5,10 @@ import {db} from '@/lib/server/admin';
 import {assertOrigin, getContext, type Context} from '@/lib/server/auth';
 import {ApiError, id} from '@/lib/server/policy';
 import {addPointBalance, pointBalance} from '@/lib/server/points-policy';
+import {runMeteredAi} from '@/lib/server/ai';
+import {completedAiText, providerFailure, readBoundedJson} from '@/lib/server/ai-policy';
+import {playBank} from './bank';
+import {AI_COUNT_MAX, AI_COUNT_OPTIONS, duplicateOf, playAiDrafts, playAiRequest} from './ai-questions';
 import {answerScore, choicesFor, DAILY_SIZE, dailyPick, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, PlayError, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
 import {playKinds, type PlayDaily, type PlayHome, type PlayItem, type PlayKind, type PlayRankings, type PlayReport, type PlayScore, type PlaySession, type PlaySkill, type PlayTeacherState} from './types';
 import {accessStudent, loadItems, requirePlayEnabled, settingsOf, settingsRef, teacherClass, type PlayAccess} from './server-access';
@@ -185,7 +189,34 @@ async function teacherState(ctx: Context, classId: string, week: string): Promis
   const [settings, items, hidden, list] = await Promise.all([settingsRef(classId).get(), loadItems(classId, band), db().collection(`classes/${classId}/playgroundItems`).get(), db().doc(`classes/${classId}/playgroundLists/${week}`).get()]);
   const all = new Map(items.map(item => [item.id, item]));
   for (const row of hidden.docs) all.set(row.id, {...row.data(), id: row.id} as PlayItem);
-  return {classId, className: String(cls.data()?.name || ''), gradeBand: band, weekStart: week, settings: settingsOf(settings.data()), items: [...all.values()], weekIds: list.data()?.itemIds || [], liveEnabled: liveEnabled()};
+  return {classId, className: String(cls.data()?.name || ''), gradeBand: band, weekStart: week, settings: settingsOf(settings.data()), items: [...all.values()], weekIds: list.data()?.itemIds || [], liveEnabled: liveEnabled(), aiConfigured: Boolean(process.env.OPENAI_API_KEY?.trim())};
+}
+/** Class questions of every band, hidden ones included, so new questions never repeat an answer of the kind. */
+async function classItems(classId: string, tx?: FirebaseFirestore.Transaction) {
+  const query = db().collection(`classes/${classId}/playgroundItems`).limit(500), snapshot = tx ? await tx.get(query) : await query.get();
+  return {size: snapshot.size, items: snapshot.docs.map(row => ({...row.data(), id: row.id}) as PlayItem)};
+}
+async function aiDrafts(ctx: Context, classId: string, data: Record<string, unknown>) {
+  const cls = await teacherClass(ctx, classId), band = gradeBand(cls.data()?.grade);
+  if (!playKinds.includes(data.kind as PlayKind)) throw new ApiError(400, '문제 종류를 골라 주세요.');
+  if (!AI_COUNT_OPTIONS.includes(data.count as typeof AI_COUNT_OPTIONS[number])) throw new ApiError(400, `만들 문제 수를 ${AI_COUNT_OPTIONS.join('·')}개 중에서 골라 주세요.`);
+  if (typeof data.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(data.requestId)) throw new ApiError(400, '만들기 버튼을 다시 눌러 주세요.');
+  const topic = data.topic === undefined ? '' : data.topic;
+  if (typeof topic !== 'string' || topic.length > 60 || /[\u0000-\u001f\u007f]/.test(topic)) throw new ApiError(400, '주제는 60자 이내로 적어 주세요.');
+  if (!process.env.OPENAI_API_KEY?.trim()) throw new ApiError(503, 'AI 연결 설정을 확인해 주세요. 문제를 직접 만들 수도 있어요.', 'AI_NOT_CONFIGURED');
+  const kind = data.kind as PlayKind, count = data.count as number, own = await classItems(classId);
+  // Same-band questions go last so they survive the request's cut-off of the avoid list.
+  const existing = [...playBank, ...own.items].sort((a, b) => Number(a.gradeBand === band) - Number(b.gradeBand === band));
+  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna', fingerprint = hash(JSON.stringify(['playground-ai-v1', classId, kind, count, topic.trim(), data.requestId]));
+  const text = await runMeteredAi(ctx.uid, 'playground-questions', model, fingerprint, async observe => {
+    const response = await fetch('https://api.openai.com/v1/responses', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json'}, body: JSON.stringify(playAiRequest({kind, gradeBand: band, count, topic: topic.trim(), existing}, model)), signal: AbortSignal.timeout(110_000), cache: 'no-store'});
+    if (!response.ok) {await response.body?.cancel(); throw providerFailure(response.status);}
+    const payload = await readBoundedJson(response, 512 * 1024); observe(payload);
+    return completedAiText(payload);
+  }, classId);
+  const drafts = playAiDrafts(text, kind, band, existing, () => `t_${randomUUID()}`);
+  if (!drafts.items.length) throw new ApiError(502, '겹치지 않는 새 문제를 만들지 못했어요. 주제를 바꿔 다시 만들어 주세요.', 'PLAY_AI_EMPTY');
+  return drafts;
 }
 async function teacherReport(ctx: Context, classId: string, week: string): Promise<PlayReport> {
   await teacherClass(ctx, classId);
@@ -211,8 +242,26 @@ async function saveTeacher(ctx: Context, path: string, classId: string, data: Re
       if (method === 'PATCH' && !existing.exists) throw new ApiError(404, '문제를 찾을 수 없어요.');
       if (method === 'POST') {const count = await tx.get(cls.ref.collection('playgroundItems').limit(500)); if (count.size >= 500) throw new ApiError(409, '우리 반 문제는 500개까지 보관할 수 있어요.');}
       const item = validateItem(data.item, itemId);
-      item.id = itemId; item.source = 'teacher'; item.version = `teacher-${Number(existing.data()?.revision || 0) + 1}`;
+      item.id = itemId; item.source = existing.data()?.source === 'ai-approved' ? 'ai-approved' : 'teacher'; item.version = `teacher-${Number(existing.data()?.revision || 0) + 1}`;
       tx.set(ref, {...item, revision: Number(existing.data()?.revision || 0) + 1, updatedBy: ctx.uid, updatedAt: new Date().toISOString()}); return {item};
+    }
+    if (path === 'teacher/ai-questions/approve' && method === 'POST') {
+      const rows = data.items;
+      if (!Array.isArray(rows) || !rows.length || rows.length > AI_COUNT_MAX) throw new ApiError(400, `저장할 문제를 1~${AI_COUNT_MAX}개 골라 주세요.`);
+      const own = await classItems(classId, tx);
+      if (own.size + rows.length > 500) throw new ApiError(409, '우리 반 문제는 500개까지 보관할 수 있어요. 쓰지 않는 문제를 먼저 정리해 주세요.');
+      const items: PlayItem[] = [], existing = [...playBank, ...own.items], at = new Date().toISOString();
+      for (const raw of rows) {
+        const draftId = (raw as {id?: unknown})?.id;
+        if (typeof draftId !== 'string' || !/^t_[a-zA-Z0-9-]{8,60}$/.test(draftId)) throw new ApiError(400, '새 문제를 다시 만들어 주세요.');
+        if ([...own.items, ...items].some(other => other.id === draftId)) throw new ApiError(409, '이미 우리 반 문제에 넣은 문제예요.', 'PLAY_DUPLICATE');
+        const item = validateItem({...(raw as object), source: 'ai-approved', version: 'ai-1', enabled: true}, draftId);
+        const same = duplicateOf(item, [...existing, ...items]);
+        if (same) throw new ApiError(409, `이미 있는 문제와 정답이나 문장이 겹쳐요: “${item.prompt.slice(0, 40)}”`, 'PLAY_DUPLICATE');
+        items.push(item);
+      }
+      items.forEach(item => tx.create(cls.ref.collection('playgroundItems').doc(item.id), {...item, revision: 1, createdBy: 'ai', updatedBy: ctx.uid, updatedAt: at}));
+      return {items};
     }
     // The weekly list holds any kind: solo play serves it first, and team games can use it as their range.
     if ((path === 'teacher/week-list' || path === 'teacher/spelling-list') && method === 'PUT') {
@@ -246,6 +295,7 @@ export async function handlePlayground(request: Request, segments: string[]) {
       const classId = id(url.searchParams.get('classId') || data.classId), week = weekOf(url.searchParams.get('week'));
       if (request.method === 'GET' && (path === 'teacher/settings' || path === 'teacher/items' || path === 'teacher/spelling-list' || path === 'teacher/week-list')) return json(await teacherState(ctx, classId, week));
       if (request.method === 'GET' && path === 'teacher/report') return json(await teacherReport(ctx, classId, week));
+      if (request.method === 'POST' && path === 'teacher/ai-questions') return json(await aiDrafts(ctx, classId, data));
       return json(await saveTeacher(ctx, path, classId, data, week, request.method));
     }
     const socialResponse = await handleSocialRequest(request, ctx, segments, data);
