@@ -15,6 +15,7 @@ export const personalities: Record<string, {
 };
 export const friendBase = (pet: string) => pet.startsWith('cat-') ? 'cat' : pet.replace('friend-', '');
 const breedPersonalities: Record<string, (typeof personalities)[string]> = {
+    'animal-whiteknee': {name: '화이트니', en: 'Whiteknee', trait: '작은 발걸음으로 용기를 전하는 보송보송한 친구', hello: ['오늘은 어떤 작은 모험을 떠나 볼까?', '보송보송한 응원, 네 곁에 놓고 갈게!', '네가 오니까 반가워서 발이 들썩여!'], cheer: '한 걸음씩 해낸 너, 정말 멋져!', rest: '발을 내려놓고, 우리 잠깐 쉬어 가자.'},
     'cat-american': { name: '줄이', en: 'Juli', trait: '줄무늬 주머니에 발견을 모으는 탐험가', hello: ['오늘의 발견 지도에 무엇을 그릴까?', '작은 발자국도 멋진 모험의 시작이야.', '네가 찾은 보물을 내게도 보여 줘!'], cheer: '모험 지도에 반짝이는 발자국이 늘었네!', rest: '탐험가에게도 햇살 낮잠이 필요해.' },
     'cat-british': { name: '포포', en: 'Popo', trait: '기다려 주는 마음이 폭신한 낮잠 친구', hello: ['폭신한 자리 하나, 네 옆에 남겨 뒀어.', '네가 오니까 내 하루가 말랑해졌어!', '급하지 않아. 네 이야기를 천천히 들려줘.'], cheer: '차근차근 해낸 네 마음을 안아 주고 싶어.', rest: '잠깐 쉬어도 괜찮아. 포근한 자리에서 기다릴게.' },
     'cat-siamese': { name: '코코', en: 'Coco', trait: '궁금한 것이 많은 재잘재잘 이야기꾼', hello: ['있잖아, 오늘 제일 궁금한 건 뭐야?', '네가 만든 이야기에 다음 장이 궁금해!', '창밖 구름은 어디로 여행을 갈까?'], cheer: '와, 그 다음 이야기도 정말 기대돼!', rest: '오늘 이야기는 잠깐 책갈피를 꽂아 두자.' },

@@ -1,8 +1,11 @@
-export type WardrobeSlot = 'head' | 'neck' | 'background' | 'frame';
+import {whitekneeAccessoryItems, type WhitekneePose} from '../modules/my-space/whiteknee';
+
+export type WardrobeSlot = 'head' | 'face' | 'neck' | 'background' | 'frame';
 export type WardrobeOutfit = Partial<Record<WardrobeSlot, string>>;
 export type WardrobeItem = {id: string; slot: WardrobeSlot; ko: string; en: string; price: number; color: string; motif: string};
 /** Original CSS/SVG decorations. Prices are re-resolved from this catalogue on the server. */
 export const wardrobeCatalog: WardrobeItem[] = [
+  ...whitekneeAccessoryItems,
   {id: 'head-sprout', slot: 'head', ko: '새싹 친구', en: 'Little sprout', price: 0, color: '#7baa68', motif: 'sprout'},
   {id: 'head-crown', slot: 'head', ko: '별빛 왕관', en: 'Starlight crown', price: 60, color: '#e5ad45', motif: 'crown'},
   {id: 'head-beret', slot: 'head', ko: '화가 베레모', en: 'Artist beret', price: 40, color: '#aa7ba9', motif: 'beret'},
@@ -32,4 +35,4 @@ export type PointLedgerEntry = {id: string; amount: number; kind: 'earn' | 'spen
 export type TeacherPointLedgerEntry = PointLedgerEntry & {studentId: string; studentName: string; studentNumber: number};
 export type TeacherPointHistory = {ledger: TeacherPointLedgerEntry[]; nextCursor: string | null};
 export type PointStudent = {id: string; name: string; number: number; character: string; points: number; pointsEarnedTotal: number; wardrobeOwned: string[]; wardrobeOutfit: WardrobeOutfit; disabled: boolean};
-export type StudentPointsState = {settings: PointSettings; student: PointStudent; ledger: PointLedgerEntry[]; nextCursor: string | null;mySpaceEnabled?:boolean;spaceCompanion?:{art?:string;name:string;outfit:Partial<Record<'body'|'bag',string>>}|null};
+export type StudentPointsState = {settings: PointSettings; student: PointStudent; ledger: PointLedgerEntry[]; nextCursor: string | null;mySpaceEnabled?:boolean;spaceCompanion?:{pet?:string;art?:string;name:string;pose?:WhitekneePose;outfit:Partial<Record<'body'|'bag',string>>}|null};

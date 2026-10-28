@@ -63,8 +63,21 @@ export async function buy(ctx: StudentContext, input: Data) {
         return { purchased: true, repeated: false };
     });
 }
-export async function saveRoom(ctx: StudentContext, input: Data) { return db().runTransaction(async (tx) => { const { s } = await active(ctx, tx, true), old = await tx.get(room(ctx)), value = validateRoom(input, ownedItems(s.spaceOwned)); if ((old.data()?.version || 0) !== value.version)
-    throw new ApiError(409, '다른 화면에서 방이 바뀌었어요. 새로 불러온 뒤 꾸며 주세요.', 'VERSION_CONFLICT'); const next = { ...value, version: value.version + 1, updatedAt: new Date().toISOString() }; tx.set(room(ctx), next); tx.update(pupil(ctx), { character: spaceItem(value.pet)?.base || s.character || 'cat' }); return { room: next }; }); }
+export async function saveRoom(ctx: StudentContext, input: Data) {
+    return db().runTransaction(async tx => {
+        const {s} = await active(ctx, tx, true), old = await tx.get(room(ctx));
+        const previousPet = old.data()?.pet || defaultRoom(s.character || 'cat').pet;
+        const value = validateRoom(input, ownedItems(s.spaceOwned), previousPet);
+        if ((old.data()?.version || 0) !== value.version) throw new ApiError(409, '다른 화면에서 방이 바뀌었어요. 새로 불러온 뒤 꾸며 주세요.', 'VERSION_CONFLICT');
+        const next = {...value, version: value.version + 1, updatedAt: new Date().toISOString()};
+        tx.set(room(ctx), next);
+        tx.update(pupil(ctx), {
+            character: spaceItem(value.pet)?.base || s.character || 'cat',
+            wardrobeOutfit: wardrobeOutfit(s.wardrobeOutfit, s.wardrobeOwned, value.pet),
+        });
+        return {room: next};
+    });
+}
 const diaryDto = (doc: FirebaseFirestore.DocumentSnapshot) => ({ ...doc.data(), id: doc.id });
 export async function listDiaries(ctx: StudentContext, cursor: string) { await active(ctx); let query = diaries(ctx).orderBy('updatedAt', 'desc').orderBy(FieldPath.documentId(), 'desc').limit(21); if (cursor) {
     const previous = await diaries(ctx).doc(id(cursor)).get();

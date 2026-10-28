@@ -7,35 +7,41 @@ import {spaceItem, type Room} from './catalog';
 import {shopCategories, shopCatalog, wearableItem, type ShopKind, type ShopItem} from './shop-catalog';
 import {ItemArt} from './scene';
 import {spaceRequest} from './client';
+import {isWhiteknee, normalizeWhitekneePose, WHITEKNEE_ID, whitekneeItemCompatible} from './whiteknee';
+import './whiteknee.css';
 
-type Look = {pet: string; outfit: Room['outfit']; wardrobe?: WardrobeOutfit};
-function Preview({item, pet, outfit, wardrobe}: Look & {item: ShopItem}) {
+type Look = {pet: string; outfit: Room['outfit']; wardrobe?: WardrobeOutfit; pose?: Room['pose']};
+function Preview({item, pet, outfit, wardrobe, pose}: Look & {item: ShopItem}) {
   if (!wearableItem(item)) return <ItemArt id={item.id}/>;
   const friend = spaceItem(pet);
-  return <CharacterAvatar character={friend?.base || 'cat'} imageSrc={friend?.art} outfit={item.kind === 'accessory' ? {...wardrobe, [item.slot]: item.id} : wardrobe} spaceOutfit={item.kind === 'clothes' ? {...outfit, [item.slot!]: item.id} : outfit} alt={`${friend?.buddyName || friend?.name || '내 친구'}의 ${item.name} 착용 모습`}/>;
+  return <CharacterAvatar character={friend?.base || 'cat'} imageSrc={friend?.art} pose={pose} outfit={item.kind === 'accessory' ? {...wardrobe, [item.slot]: item.id} : wardrobe} spaceOutfit={item.kind === 'clothes' ? {...outfit, [item.slot!]: item.id} : outfit} alt={`${friend?.buddyName || friend?.name || '내 친구'}의 ${item.name} 착용 모습`}/>;
 }
-function Confirmation({item, balance, owned, onClose, onBuy, onWear, busy, enabled, ...look}: Look & {
-  item: ShopItem; balance: number; owned: boolean; onClose: () => void; onBuy: () => void; onWear: () => void; busy: boolean; enabled: boolean;
+function Confirmation({item, balance, owned, canWear, onClose, onBuy, onWear, busy, enabled, ...look}: Look & {
+  item: ShopItem; balance: number; owned: boolean; canWear: boolean; onClose: () => void; onBuy: () => void; onWear: () => void; busy: boolean; enabled: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {ref.current?.showModal();}, []);
   return <dialog className="ms-confirm" ref={ref} onCancel={e => {e.preventDefault(); if (!busy) onClose();}} aria-label={wearableItem(item) ? '내 친구에게 미리 입혀 보기' : '보말로 구매하기'}>
     <button className="ms-close" disabled={busy} onClick={onClose} aria-label="구매 창 닫기"><X size={18}/></button>
-    <div className="ms-confirm-art"><Preview item={item} {...look}/></div><h2>{item.name}</h2>
+    <div className="ms-confirm-art"><Preview item={item} {...look}/></div><h2>{item.name}</h2>{item.id.startsWith('whiteknee-') && <span className="ms-whiteknee-badge">화이트니 전용</span>}
     {wearableItem(item) && <p className="ms-preview-caption">내 친구에게 미리 입혀 본 모습이에요. 선택하기 전에는 저장되지 않아요.</p>}
-    {owned ? <p>이미 내 보관함에 있어요. 다시 보말을 쓰지 않고 입을 수 있어요.</p> : <><p><Shell size={17}/>{item.price} 보말로 {item.kind === 'pet' ? '새 친구를 맞이할까요?' : '내 보관함에 담을까요?'}</p><p>{balance >= item.price ? `구매 후 ${balance - item.price} 보말이 남아요.` : `${item.price - balance} 보말을 더 모으면 구매할 수 있어요.`}</p><small>한 번 구매하면 모든 친구에게 반복해서 사용할 수 있어요.</small></>}
-    <div className="ms-actions"><button disabled={busy} onClick={onClose}>다음에</button>{owned ? <button className="ms-primary" disabled={busy || !enabled} onClick={onWear}>이 모습으로 입기</button> : <button className="ms-primary" disabled={busy || !enabled || balance < item.price} onClick={onBuy}>{busy ? '친구가 담는 중…' : wearableItem(item) ? '보말로 구매하고 입기' : '보말로 구매하기'}</button>}</div>
+    {!canWear && wearableItem(item) && <p className="ms-hint">내 친구에서 이 옷이 맞는 친구를 고르면 입을 수 있어요.</p>}{owned ? <p>이미 내 보관함에 있어요. 다시 보말을 쓰지 않고 입을 수 있어요.</p> : <><p><Shell size={17}/>{item.price} 보말로 {item.kind === 'pet' ? '새 친구를 맞이할까요?' : '내 보관함에 담을까요?'}</p><p>{balance >= item.price ? `구매 후 ${balance - item.price} 보말이 남아요.` : `${item.price - balance} 보말을 더 모으면 구매할 수 있어요.`}</p><small>한 번 구매하면 이 옷이 맞는 친구에게 반복해서 사용할 수 있어요.</small></>}
+    <div className="ms-actions"><button disabled={busy} onClick={onClose}>다음에</button>{owned ? <button className="ms-primary" disabled={busy || !enabled || !canWear} onClick={onWear}>이 모습으로 입기</button> : <button className="ms-primary" disabled={busy || !enabled || balance < item.price} onClick={onBuy}>{busy ? '친구가 담는 중…' : wearableItem(item) && canWear ? '보말로 구매하고 입기' : '보말로 구매하기'}</button>}</div>
   </dialog>;
 }
 export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBought, onWear, inventory = false, ...look}: Look & {
   owned: string[]; wardrobeOwned: string[]; balance: number; enabled: boolean; onBought: () => Promise<void>; onWear: (itemId: string) => Promise<void> | void; inventory?: boolean;
 }) {
   const [kind, setKind] = useState<ShopKind>('pet'), [preview, setPreview] = useState<ShopItem | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
+  const [whiteknee, setWhiteknee] = useState(isWhiteknee(look.pet)), [previewPose, setPreviewPose] = useState(normalizeWhitekneePose(look.pose));
   const receipt = useRef({item: '', request: ''});
+  const modelPet = whiteknee ? WHITEKNEE_ID : isWhiteknee(look.pet) ? 'friend-cat' : look.pet;
+  const model: Look = {pet: modelPet, outfit: modelPet === look.pet ? look.outfit : {}, wardrobe: look.wardrobe, pose: whiteknee ? previewPose : 'rest'};
+  const canWear = (item: ShopItem) => !wearableItem(item) || whitekneeItemCompatible(look.pet, item);
   const owns = (item: ShopItem) => (item.kind === 'accessory' ? wardrobeOwned : owned).includes(item.id);
-  const items = shopCatalog.filter(i => i.kind === kind && (!inventory || owns(i)));
+  const items = shopCatalog.filter(i => i.kind === kind && (!inventory || owns(i)) && (!wearableItem(i) || whitekneeItemCompatible(modelPet, i)));
   async function wear(item: ShopItem) {
-    if (busy || !enabled) return;
+    if (busy || !enabled || !canWear(item)) return;
     setBusy(true); setError('');
     try {await onWear(item.id); setPreview(null);} catch (e) {setError((e as Error).message);} finally {setBusy(false);}
   }
@@ -51,22 +57,22 @@ export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBou
       } else await spaceRequest('/purchase', 'POST', {itemId: item.id, requestId: receipt.current.request});
       await onBought();
       receipt.current = {item: '', request: ''}; setPreview(null);
-      if (wearableItem(item)) await onWear(item.id);
-      else setNotice(item.kind === 'pet' ? '새 친구가 우리 집에 왔어요! 내 친구에서 만나 봐요.' : '보관함에 담았어요! 마음껏 꾸며 봐요.');
+      if (wearableItem(item) && canWear(item)) await onWear(item.id);
+      else setNotice(item.kind === 'pet' ? '새 친구가 우리 집에 왔어요! 내 친구에서 만나 봐요.' : wearableItem(item) ? '보관함에 담았어요! 내 친구에서 이 옷이 맞는 친구를 골라 입혀 봐요.' : '보관함에 담았어요! 마음껏 꾸며 봐요.');
     } catch (e) {setError((e as Error).message);} finally {setBusy(false);}
   }
   return <section className="ms-shop"><div className="ms-section-intro"><h2>{inventory ? '차곡차곡 내 보관함' : '모아의 작은 상점'}</h2><p>{inventory ? '내가 모은 취향을 꺼내 봐요. 옷은 여기에서 바로 입을 수 있어요.' : '내 친구에게 미리 입혀 보고 골라 봐요. 모든 구매는 보말로만 가능해요.'}</p></div>
     <div className="ms-categories" role="tablist" aria-label="상점 종류">{shopCategories.map(([id, name]) => <button key={id} type="button" role="tab" aria-selected={kind === id} onClick={() => setKind(id)}>{name}</button>)}</div>
-    {notice && <p className="ms-notice" role="status">{notice}</p>}{error && <p className="ms-error" role="alert">{error}</p>}
+    {(kind === 'clothes' || kind === 'accessory') && <><div className="ms-wardrobe-family" role="group" aria-label="어느 친구의 옷장인가요"><button type="button" aria-pressed={!whiteknee} onClick={() => setWhiteknee(false)}>모찌·두부와 친구들</button><button type="button" aria-pressed={whiteknee} onClick={() => setWhiteknee(true)}>화이트니 전용</button></div>{whiteknee && <fieldset className="whiteknee-pose-picker"><legend>미리보기 자세</legend><button type="button" aria-pressed={previewPose === 'rest'} onClick={() => setPreviewPose('rest')}>편안하게</button><button type="button" aria-pressed={previewPose === 'raised'} onClick={() => setPreviewPose('raised')}>살짝 서서 인사</button></fieldset>}</>}{notice && <p className="ms-notice" role="status">{notice}</p>}{error && <p className="ms-error" role="alert">{error}</p>}
     <div className="ms-product-grid">{items.map(i => {
       const has = owns(i), clothes = wearableItem(i);
       return <article key={i.id} className={'ms-product kind-' + i.kind} data-item-id={i.id}>
-        {clothes ? <button type="button" className="ms-product-art ms-try-on" aria-label={`${i.name} 미리 입어 보기`} onClick={() => setPreview(i)}><Preview item={i} {...look}/><span>미리 입어 보기</span></button> : <div className="ms-product-art"><ItemArt id={i.id}/></div>}
-        <h3>{i.name}</h3><p>{has ? <><Check size={14}/>내 보관함에 있어요</> : <><Shell size={14}/>{i.price} 보말</>}</p>
-        <button type="button" disabled={busy || (has && !clothes) || !enabled || (!has && balance < i.price)} onClick={() => has && clothes ? void wear(i) : setPreview(i)}>{has ? clothes ? '입기' : '함께하는 중' : balance < i.price ? '조금 더 모아요' : i.kind === 'pet' ? '친구 맞이하기' : '내 보관함에 담기'}</button>
+        {clothes ? <button type="button" className="ms-product-art ms-try-on" aria-label={`${i.name} 미리 입어 보기`} onClick={() => setPreview(i)}><Preview item={i} {...model}/><span>미리 입어 보기</span></button> : <div className="ms-product-art"><ItemArt id={i.id}/></div>}
+        <h3>{i.name}</h3>{i.id.startsWith('whiteknee-') && <span className="ms-whiteknee-badge">화이트니 전용</span>}<p>{has ? <><Check size={14}/>내 보관함에 있어요</> : <><Shell size={14}/>{i.price} 보말</>}</p>
+        <button type="button" disabled={busy || (has && !clothes) || !enabled || (!has && balance < i.price)} onClick={() => has && clothes && canWear(i) ? void wear(i) : setPreview(i)}>{has ? clothes ? canWear(i) ? '입기' : '미리 입어 보기' : '함께하는 중' : balance < i.price ? '조금 더 모아요' : i.kind === 'pet' ? '친구 맞이하기' : '내 보관함에 담기'}</button>
       </article>;
     })}</div>
     {!items.length && <p className="ms-empty">여기는 아직 비어 있어요. 상점에서 마음에 드는 조각을 만나 봐요.</p>}
-    {preview && <Confirmation item={preview} balance={balance} owned={owns(preview)} busy={busy} enabled={enabled} {...look} onClose={() => setPreview(null)} onBuy={() => void buy()} onWear={() => void wear(preview)}/>}
+    {preview && <Confirmation item={preview} balance={balance} owned={owns(preview)} canWear={canWear(preview)} busy={busy} enabled={enabled} {...model} onClose={() => setPreview(null)} onBuy={() => void buy()} onWear={() => void wear(preview)}/>}
   </section>;
 }

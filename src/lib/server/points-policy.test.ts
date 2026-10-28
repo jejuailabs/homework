@@ -67,6 +67,32 @@ test('balances cannot expose invalid, negative, or unsafe stored numbers', () =>
   assert.equal(pointBalance(0), 0); assert.equal(pointBalance(75), 75);
 });
 
+test('Whiteknee can combine head, face and neck while ownership and pet compatibility remain enforced', () => {
+  const owned = ['whiteknee-head-bow', 'whiteknee-face-goggles', 'whiteknee-neck-scarf', 'whiteknee-face-glasses'];
+  let outfit = equipWardrobe({}, owned, 'head', owned[0], 'animal-whiteknee');
+  outfit = equipWardrobe(outfit, owned, 'face', owned[1], 'animal-whiteknee');
+  outfit = equipWardrobe(outfit, owned, 'neck', owned[2], 'animal-whiteknee');
+  assert.deepEqual(outfit, {head: owned[0], face: owned[1], neck: owned[2]});
+  assert.throws(() => equipWardrobe({}, [], 'face', owned[1], 'animal-whiteknee'), (e: any) => e.code === 'ITEM_NOT_OWNED');
+  assert.throws(() => equipWardrobe({}, owned, 'head', owned[1], 'animal-whiteknee'), (e: any) => e.code === 'ITEM_NOT_OWNED');
+  assert.throws(() => equipWardrobe({}, owned, 'face', owned[1], 'friend-cat'), (e: any) => e.code === 'ITEM_INCOMPATIBLE');
+  assert.throws(() => equipWardrobe({}, ['head-crown'], 'head', 'head-crown', 'animal-whiteknee'), (e: any) => e.code === 'ITEM_INCOMPATIBLE');
+  assert.deepEqual(equipWardrobe(outfit, owned, 'face', null, 'animal-whiteknee'), {head: owned[0], neck: owned[2]});
+  assert.deepEqual(equipWardrobe(outfit, owned, 'face', owned[3], 'animal-whiteknee'), {head: owned[0], face: owned[3], neck: owned[2]});
+  assert.deepEqual(wardrobeOutfit({...outfit, background: 'background-cloud', frame: 'frame-soft'}, owned, 'friend-cat'), {background: 'background-cloud', frame: 'frame-soft'});
+  assert.deepEqual(wardrobeOwnership(owned).filter(id => id.startsWith('whiteknee-')), owned);
+});
+
+test('superseded Whiteknee accessories cannot be bought or equipped through legacy item IDs', () => {
+  const removed = ['whiteknee-neck-bandana', 'whiteknee-neck-bow', 'whiteknee-neck-star'];
+  assert.equal(wardrobeCatalog.filter(item => item.id.startsWith('whiteknee-')).length, 8);
+  assert.deepEqual(wardrobeOwnership(removed).filter(id => id.startsWith('whiteknee-')), []);
+  for (const id of removed) {
+    assert.throws(() => pointPurchaseDecision(100, [], id), (e: any) => e.code === 'ITEM_NOT_FOUND');
+    assert.throws(() => equipWardrobe({}, removed, 'neck', id, 'animal-whiteknee'), (e: any) => e.code === 'ITEM_NOT_FOUND');
+  }
+});
+
 test('half-point quiz balances survive teacher awards, recovery and purchases without migration', () => {
   const settings = pointSettings({enabled: true});
   assert.equal(pointBalance(70.5), 70.5); assert.equal(pointBalance(0.25), 0);

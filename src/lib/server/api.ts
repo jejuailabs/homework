@@ -21,6 +21,7 @@ import {directoryFields} from '../admin-directory-fields';
 import {handleAdminDirectory} from './admin-directory';
 import {handleAdminConsole} from './admin-console';
 import {companionProfile} from '@/modules/my-space/profile';
+import {ownedItems, roomCompanionAppearance} from '@/modules/my-space/policy';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
 import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
 
@@ -326,7 +327,21 @@ async function character(request: Request) {
   const ctx = await requireStudent(request);
   const input = await body(request);
   if (!characters.includes(input.character)) throw new ApiError(400, '함께할 친구를 선택해 주세요.');
-  await db().runTransaction(async tx=>{const ref=db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`),space=ref.collection('mySpace').doc('room'),[pupil,room]=await Promise.all([tx.get(ref),tx.get(space)]);if(!pupil.exists||pupil.data()?.disabled||pupil.data()?.authUid!==ctx.uid)throw new ApiError(403,'학생 계정을 다시 확인해 주세요.');tx.update(ref,{character:input.character});if(room.exists)tx.update(space,{pet:'friend-'+input.character,version:(room.data()?.version||0)+1});});
+  await db().runTransaction(async tx => {
+    const ref = db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`), space = ref.collection('mySpace').doc('room');
+    const [pupil, room] = await Promise.all([tx.get(ref), tx.get(space)]);
+    const student = pupil.data();
+    if (!pupil.exists || student?.disabled || student?.authUid !== ctx.uid) throw new ApiError(403, '학생 계정을 다시 확인해 주세요.');
+    const pet = 'friend-' + input.character;
+    tx.update(ref, {
+      character: input.character,
+      wardrobeOutfit: wardrobeOutfit(student.wardrobeOutfit, student.wardrobeOwned, pet),
+    });
+    if (room.exists) tx.update(space, {
+      ...roomCompanionAppearance(room.data(), ownedItems(student.spaceOwned), pet),
+      version: (room.data()?.version || 0) + 1,
+    });
+  });
   return json({ profile: await studentProfile(ctx) });
 }
 async function initUpload(request: Request) {

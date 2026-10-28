@@ -1,4 +1,5 @@
 import { spaceCatalog, spaceItem, starterSpaceIds, type Room, type Placement, type DiaryPage, type DiaryLayer } from './catalog';
+import {isWhiteknee, normalizeWhitekneePose, whitekneeItemCompatible, whitekneePoses} from './whiteknee';
 export class SpaceError extends Error {
     constructor(message: string, public status = 400) { super(message); }
 }
@@ -20,19 +21,54 @@ function unique(layers: {
     id: string;
 }[], limit: number) { if (layers.length > limit || new Set(layers.map(p => p.id)).size !== layers.length)
     throw new SpaceError(`한 화면에 ${limit}개까지 꾸밀 수 있어요.`); }
-export function validateRoom(value: unknown, items: string[]): Room { const v = object(value); if (!Array.isArray(v.placements))
-    throw new SpaceError('방 구성을 확인해 주세요.'); const placements = v.placements.map(p => { const q = placement(p); owned(q.itemId, 'furniture', items); return q; }); unique(placements, 40); const names = object(v.nicknames || {}), nicknames: Record<string, string> = {}; if (Object.keys(names).length > spaceCatalog.filter(i => i.kind === 'pet').length)
-    throw new SpaceError('친구 이름을 다시 확인해 주세요.'); for (const [key, name] of Object.entries(names)) {
-    owned(key, 'pet', items);
-    nicknames[key] = shortText(name, 20);
-} const o = object(v.outfit || {}), outfit: Room['outfit'] = {}; for (const slot of ['body', 'bag'] as const) {
-    if (o[slot]) {
-        const key = owned(o[slot], 'clothes', items);
-        if (spaceItem(key)?.slot !== slot)
-            throw new SpaceError('옷 위치를 확인해 주세요.');
+/** Normalize saved appearance when another screen changes the active companion. */
+export function roomCompanionAppearance(value: unknown, items: string[], pet: string): Pick<Room, 'pet' | 'pose' | 'outfit'> {
+    const selectedPet = owned(pet, 'pet', items);
+    const v = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
+    const outfit: Room['outfit'] = {};
+    for (const slot of ['body', 'bag'] as const) {
+        const key = v.outfit?.[slot];
+        const item = typeof key === 'string' ? spaceItem(key) : undefined;
+        if (item?.kind === 'clothes' && item.slot === slot && items.includes(item.id) && whitekneeItemCompatible(selectedPet, item)) outfit[slot] = item.id;
+    }
+    return {pet: selectedPet, pose: isWhiteknee(selectedPet) ? normalizeWhitekneePose(v.pose) : 'rest', outfit};
+}
+export function validateRoom(value: unknown, items: string[], previousPet?: string): Room {
+    const v = object(value);
+    if (!Array.isArray(v.placements)) throw new SpaceError('방 구성을 확인해 주세요.');
+    const pet = owned(v.pet, 'pet', items);
+    if (v.pose !== undefined && !whitekneePoses.includes(v.pose)) throw new SpaceError('친구의 자세를 다시 골라 주세요.');
+    const placements = v.placements.map(p => {
+        const q = placement(p);
+        owned(q.itemId, 'furniture', items);
+        return q;
+    });
+    unique(placements, 40);
+    const names = object(v.nicknames || {}), nicknames: Record<string, string> = {};
+    if (Object.keys(names).length > spaceCatalog.filter(i => i.kind === 'pet').length) throw new SpaceError('친구 이름을 다시 확인해 주세요.');
+    for (const [key, name] of Object.entries(names)) {
+        owned(key, 'pet', items);
+        nicknames[key] = shortText(name, 20);
+    }
+    const o = object(v.outfit || {}), outfit: Room['outfit'] = {};
+    for (const slot of ['body', 'bag'] as const) {
+        if (!o[slot]) continue;
+        const key = owned(o[slot], 'clothes', items), item = spaceItem(key)!;
+        if (item.slot !== slot) throw new SpaceError('옷 위치를 확인해 주세요.');
+        if (!whitekneeItemCompatible(pet, item)) {
+            // Changing the companion may carry the previous friend's clothes in an older client.
+            // Remove only the worn selection; inventory ownership is never changed here.
+            if (previousPet && previousPet !== pet) continue;
+            throw new SpaceError('이 친구에게 맞는 전용 옷을 골라 주세요.', 403);
+        }
         outfit[slot] = key;
     }
-} return { version: revision(v.version), theme: owned(v.theme, 'theme', items), pet: owned(v.pet, 'pet', items), nicknames, outfit, placements }; }
+    return {
+        version: revision(v.version), theme: owned(v.theme, 'theme', items), pet,
+        pose: isWhiteknee(pet) ? normalizeWhitekneePose(v.pose) : 'rest',
+        nicknames, outfit, placements,
+    };
+}
 export function validateDiary(value: unknown, items: string[]): Omit<DiaryPage, 'id' | 'updatedAt'> { const v = object(value); if (!Array.isArray(v.layers))
     throw new SpaceError('노트 내용을 확인해 주세요.'); const layers = v.layers.map((raw: unknown): DiaryLayer => { const r = object(raw), p = placement(r); if (!['text', 'sticker', 'photo', 'art'].includes(r.kind))
     throw new SpaceError('노트 조각을 확인해 주세요.'); if (r.kind === 'sticker')

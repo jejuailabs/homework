@@ -1,0 +1,67 @@
+{
+  "generator": "Built-in image_gen tool, included account usage; no API-key calls",
+  "reference": "User supplied cute twelve-panel Whiteknee character sheet, 2026-10-28; panel 1 identity, panels 2/4/7/8 clothing",
+  "packaging": "Generated RGBA resized proportionally to 704 x 704 contain, 32px transparent padding, WebP quality 90 alphaQuality 100. No manual repainting or background removal.",
+  "entries": [
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/rest/bare.webp",
+      "source": "exec-15fcb8c1-4348-4120-a50d-788e3f05e29d.png",
+      "prompt": "Use case: background-extraction. Extract and faithfully recreate ONLY the cute fluffy spider in panel 1 (기본 화이트니, top row second panel) of the reference as a high quality transparent full-body game character. Match that exact small brown face, glossy eyes, smiling mouth, rounded furry body, black legs with cream-white knee bands, compact natural resting pose and proportions. Keep its face small relative to the body exactly as pictured; do not redesign it. Natural overlapping/partially hidden rear legs are correct; do not spread all legs to display them. One single character, no text, numbers, hearts, log, scenery, accessories, border or shadow background. Center the whole character with a little clear space on all sides. True transparent background."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/raised/bare.webp",
+      "source": "exec-0cf93c90-ca21-4e8b-9972-8d607812bc06.png",
+      "prompt": "Use case: identity-preserve. Make a second pose of this exact cute Whiteknee spider for a dress-up game. Keep the same face, eye size, warm brown fur, black-and-cream striped legs and body proportions. Change only the pose: body slightly higher, front pair of legs gently lifted in a small friendly greeting, other legs naturally support the body. Compact cute posture, not upright humanoid, not widely splayed. Rear legs may be hidden by overlap; do not force all eight legs to be separately visible and do not add legs. Face looks toward viewer. Single full body, centered, transparent background, no ground, backdrop, shadow glow, text or accessories.",
+      "derivationSource": "exec-5c6153df-2745-4a7b-90cd-9e5c5fc23770.png",
+      "correctionPrompt": "Use case: precise-object-edit. Correct just ONE extra rear leg in this transparent sprite. At the lower RIGHT of the image there is a narrow dark rear foot immediately behind and to the right of the large cream-banded foreground leg. On the 1536x1024 image, the unwanted rear foot ends around (1290,865); the large foreground leg ends around (1190,950) and MUST remain. Remove that ONE narrow outer rear leg/foot completely, revealing transparency there. Keep the inner rear foot nearer the body's center. This fixes the right side appearing to have five legs. Do not add any limbs and do not spread the hidden legs. EVERYTHING ELSE must stay identical: exact face, pose, all remaining legs, fur, size, camera, framing and transparent background. This is a small local anatomy correction only."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/rest/explorer.webp",
+      "source": "exec-369c1c1f-59ac-44e0-b0ab-d352dddb2e90.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Image 1 is the exact character and pose to KEEP. Image 2 panel 2 (탐험가 화이트니) is the clothing reference. Dress image 1 in that small brown/tan explorer vest with little buckles and a compact backpack with a rolled sleeping mat visible behind the shoulder, closely matching the reference. Do not add the safari hat; it is a separate game accessory. Keep the same face, eyes, happy mouth, fur, leg positions, natural overlaps, body proportions, framing and camera of image 1. The garment should wrap naturally around the small spider body, leaving the face and legs clear. One full-body sprite, genuinely transparent background; no scene, map, ground, text or effects."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/rest/chef.webp",
+      "source": "exec-b536746d-b1a9-4a39-a8c6-dec197651cf3.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Image 1 is the exact Whiteknee character to keep. Image 2 panel 4 (요리사 화이트니) is the chef clothing reference. Add a small cream-white chef apron like panel 4, wrapping naturally around the little body with short shoulder straps and a neat pocket. Headwear and red neckerchief are separate game items, so leave the head and neck bare. Preserve image 1 face, smile, eyes, fur, leg pose and number, compact proportions, camera and framing exactly. No human torso or arms. One full-body game sprite on genuine transparent background, no kitchen, food, table, text or lighting backdrop."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/rest/pajamas.webp",
+      "source": "exec-40e23a43-b0f8-427f-ba8f-5f977e867e33.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Image 1 is the exact Whiteknee character and pose to preserve. Image 2 panel 7 (잠꾸러기 화이트니) is the color and fabric reference. Dress image 1 in a small soft purple pajama top patterned with tiny yellow stars, matching the purple nightcap in that panel. Just a cozy little shirt wrapping the spider's torso; all legs stay furry and unchanged. The nightcap is a separate accessory, so leave the head bare. Keep the exact face, glossy eyes, smile, fur and leg pose, natural overlap, scale and framing from image 1. No pillow, sleepy closed eyes or extra limbs. One complete centered sprite, genuine transparent background with no scenery or glow."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/rest/hero.webp",
+      "source": "exec-a0aec05e-8a8c-487e-9cca-2a54daffd0f8.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Keep the exact Whiteknee spider from image 1. Dress it in the superhero outfit from panel 8 (슈퍼 히어로 화이트니) of image 2: bright blue little torso suit with a red shield and yellow W badge on the chest, plus a red cape flowing gently behind the body. Leave the head bare and do not add the eye mask, because face items are separately selectable. Preserve the same small face, eyes, smile, fur, black and cream leg bands, natural overlapping leg positions, body scale, framing and camera as image 1. No human arms or torso. One complete centered full-body character, genuine transparent background, no landscape or glow or text apart from the small W emblem."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/raised/explorer.webp",
+      "source": "exec-0b79131b-ebd1-44f8-82be-8e20b3e1f4a3.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Image 1 is the Whiteknee slightly raised/greeting pose; keep its exact face, fur, legs and pose. Image 2 is the approved explorer outfit on the same character. Put precisely the explorer vest, brown buckles, compact backpack and rolled sleeping mat of image 2 onto image 1. Match the outfit design and material, adapt naturally to the raised pose. Keep all leg positions and the face from image 1 unchanged. No hat or other accessories, no new legs. Preserve framing and body size. One full-body sprite, true transparent background, no scene, ground, text or glow.",
+      "derivationSource": "exec-ff9f60aa-6c0d-4f71-997d-6e9f5dde6128.png",
+      "correctionPrompt": "Use case: precise-object-edit. Small local anatomy correction ONLY. This spider incorrectly has an extra narrow dark rear foot at the lower RIGHT. On the 1536x1024 canvas, the unwanted toe is at (1310,856), directly to the right of the large foreground foot, identification area (1240,735)-(1350,925). Remove that one extra outer rear leg and its toe behind the large cream-banded foreground leg, revealing transparent background there. Keep the large foreground leg and the inner rear foot near the center. Keep the tiny brown pedipalps under the mouth. EVERYTHING ELSE must stay identical: exact face, pose, remaining legs, all clothing details, fur, colors, body size, framing and transparent background. Do not add or reposition any remaining limbs. Preserve original clothing. Single transparent full-body sprite."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/raised/chef.webp",
+      "source": "exec-724294c9-4a21-4688-a47f-d97ff33fd684.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Image 1 is the Whiteknee slightly raised greeting pose to preserve exactly. Image 2 is its approved cream-white chef apron. Dress image 1 in precisely the same small white apron with tan buttons, short shoulder straps and front pocket, adapting the garment naturally to the raised pose. Keep image 1 face, smile, eyes, fur, all leg positions and proportions unchanged. Head and neck bare for separate accessories. Do not add or remove limbs or change the pose. Same camera, scale and framing. One centered full-body sprite, genuine transparent background, no kitchen, table, props or backdrop.",
+      "derivationSource": "exec-df293ab2-567d-4dc5-88dd-f32f47817800.png",
+      "correctionPrompt": "Use case: precise-object-edit. Small local anatomy correction ONLY. This spider incorrectly has an extra narrow dark rear foot at the lower RIGHT. On the 1536x1024 canvas, the unwanted toe is at (1282,820), directly to the right of the large foreground foot, identification area (1225,700)-(1330,895). Remove that one extra outer rear leg and its toe behind the large cream-banded foreground leg, revealing transparent background there. Keep the large foreground leg and the inner rear foot near the center. Keep the tiny brown pedipalps under the mouth. EVERYTHING ELSE must stay identical: exact face, pose, remaining legs, all clothing details, fur, colors, body size, framing and transparent background. Do not add or reposition any remaining limbs. Preserve original clothing. Single transparent full-body sprite."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/raised/pajamas.webp",
+      "source": "exec-a90e2174-d71c-4db0-9a01-88a8c5c98872.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Image 1 is the Whiteknee slightly raised/greeting pose to KEEP exactly. Image 2 shows the approved purple pajamas. Put exactly that soft purple shirt with yellow stars and ribbed edges onto image 1, fitting around the body and front legs naturally. Preserve image 1 face, eyes, smile, fur, all leg positions, leg count, natural overlaps and camera framing. Head bare for a separate nightcap. Do not alter the pose or add limbs. Single full-body sprite, centered at the same size, genuine transparent background, no scene, pillow, floor, text or glow.",
+      "derivationSource": "exec-c36a0fd4-76e3-41cf-aa1e-32f08e02ca82.png",
+      "correctionPrompt": "Use case: precise-object-edit. Small local anatomy correction ONLY. This spider has an unwanted extra narrow dark rear foot at the lower RIGHT, immediately behind and to the right of the large cream-banded foreground leg. In this 1536x1024 image the unwanted toe is at about (1282,820), identification area (1225,700)-(1330,895). Remove that ONE extra outer rear leg and toe completely, revealing transparency there. The large foreground leg ending near (1190,950) must stay. Keep the inner rear foot closer to the body's center and the tiny brown pedipalps under the mouth. Preserve absolutely all other pixels and design as closely as possible: same face, fur, pose, all remaining legs, clothes, fabric, colors, lighting, scale and framing. Do not spread or add legs. Keep genuinely transparent background."
+    },
+    {
+      "asset": "public/my-space/whiteknee/v1/poses/raised/hero.webp",
+      "source": "exec-76b3ae1d-f53d-4a1c-b866-6e697123e3b5.png",
+      "prompt": "Use case: identity-preserve wardrobe edit. Image 1 is the Whiteknee slightly raised greeting pose to preserve. Image 2 is the approved superhero wardrobe. Put exactly the bright blue little suit, red chest shield with yellow W and red cape from image 2 onto image 1. Adapt clothing naturally around the raised pose; the cape stays behind. Keep image 1 face, eyes, smile, proportions, fur and all leg positions and overlaps unchanged. Head bare, no eye mask. No added limbs or human torso. Same framing and body scale, one full-body centered sprite, genuine transparent background with no ground, scene, effects or text except the small W emblem.",
+      "derivationSource": "exec-701d0e2f-399a-4eeb-bcaf-65b41eeb517f.png",
+      "correctionPrompt": "Use case: precise-object-edit. Small local anatomy correction ONLY. This spider has an unwanted extra narrow dark rear foot at the lower RIGHT, immediately behind and to the right of the large cream-banded foreground leg. In this 1536x1024 image the unwanted toe is at about (1282,820), identification area (1225,700)-(1330,895). Remove that ONE extra outer rear leg and toe completely, revealing transparency there. The large foreground leg ending near (1190,950) must stay. Keep the inner rear foot closer to the body's center and the tiny brown pedipalps under the mouth. Preserve absolutely all other pixels and design as closely as possible: same face, fur, pose, all remaining legs, clothes, fabric, colors, lighting, scale and framing. Do not spread or add legs. Keep genuinely transparent background."
+    }
+  ]
+}

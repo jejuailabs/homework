@@ -185,7 +185,11 @@ async function equip(request: Request) {
   const result = await db().runTransaction(async tx => {
     const {cls, pupil} = await activeStudent(ctx, tx);
     if (!pointSettings(cls.data()?.pointSettings).enabled) throw new ApiError(409, '선생님이 포인트 꾸미기를 켜면 사용할 수 있어요.', 'POINTS_DISABLED');
-    const value = pupil.data()!, outfit = equipWardrobe(value.wardrobeOutfit, value.wardrobeOwned, data.slot, data.itemId);
+    const value = pupil.data()!;
+    // Resolve the active companion from the student's room, never from request data.
+    const room = process.env.MY_SPACE_DISABLED === 'true' ? null : await tx.get(pupil.ref.collection('mySpace').doc('room'));
+    const pet = companionProfile(value, room?.data())?.pet || `friend-${value.character || 'cat'}`;
+    const outfit = equipWardrobe(value.wardrobeOutfit, value.wardrobeOwned, data.slot, data.itemId, pet);
     tx.update(pupil.ref, {wardrobeOutfit: outfit}); return outfit;
   });
   return json({outfit: result});

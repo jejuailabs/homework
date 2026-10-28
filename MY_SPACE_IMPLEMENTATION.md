@@ -49,3 +49,31 @@ Firebase demo 에뮬레이터의 가상 학생·합성 사진으로 확인했다
 단위 검사 193개 통과. API 9개 검증 묶음, Chromium 전체 흐름 8개 묶음, 터치/동시 편집/WebKit 3개 묶음을 통과했다. 합성 6MB 사진의 브라우저 축소·전송·저장도 확인했다. 빌드와 타입 검사를 통과했다. 운영 배포 시에는 인증 없는 실제 API 차단과 정적 에셋을 검사하고, 배포된 UI의 데이터 요청을 demo 서버로만 연결해 운영 학생 자료를 바꾸지 않고 확인한다.
 
 2026-10-19 착용 표시 개선: 공통 캐릭터를 실제 착용 이미지 216장과 친구별 위치/턱 가림을 적용한 장식 18장으로 교체했다. 의류 5종을 추가했고 상점의 내 친구 미리 입기·구매 후 바로 착용·보유 옷 재착용을 연결했다. 조합 수·추가 제작량·생성 프롬프트·최종 에셋 경로는 [WEARABLES_IMPLEMENTATION.md](WEARABLES_IMPLEMENTATION.md)를 따른다.
+
+## 화이트니 카탈로그·저장 계약 (2026-10-28)
+
+사용자가 지정한 귀여운 12패널 화이트니 사진을 기준으로 신규 친구 `animal-whiteknee`를 60보말에 등록한다. 아래 항목의 단일 원본은 `src/modules/my-space/whiteknee.ts`이며 방 상점과 기존 옷장 카탈로그가 함께 사용한다. 기존 12친구·의류·구매 내역은 유지한다.
+
+| 의상 ID | 의상 | 보말 |
+| --- | --- | ---: |
+| `whiteknee-body-explorer` | 숲속 탐험 조끼 | 45 |
+| `whiteknee-body-chef` | 꼬마 셰프 앞치마 | 35 |
+| `whiteknee-body-pajamas` | 별빛 잠옷 | 40 |
+| `whiteknee-body-hero` | 파란 히어로복과 빨간 망토 | 45 |
+
+| 장식 ID | 장식 | 슬롯 | 보말 |
+| --- | --- | --- | ---: |
+| `whiteknee-head-explorer` | 탐험 모자 | head | 35 |
+| `whiteknee-head-sprout` | 새싹 핀 | head | 20 |
+| `whiteknee-head-chef` | 셰프 모자 | head | 30 |
+| `whiteknee-head-sleep` | 별 수면모자 | head | 30 |
+| `whiteknee-head-bow` | 핑크 아이돌 리본 | head | 25 |
+| `whiteknee-neck-scarf` | 빨간 셰프 목수건 | neck | 25 |
+| `whiteknee-face-glasses` | 동그란 안경 | face | 35 |
+| `whiteknee-face-goggles` | 파란 물안경 | face | 40 |
+
+- 화이트니만 전용 옷·장식을 착용한다. 머리·얼굴·목 슬롯은 각각 하나씩 동시에 사용할 수 있고, 같은 슬롯에서 새 물건을 고르면 이전 선택을 교체한다. 배경과 테두리는 기존 친구들과 공유한다.
+- 서버는 저장된 방의 실제 소유 친구와 보유 아이템을 확인한다. 친구를 변경할 때 맞지 않는 착용 선택만 정리하며 보관함 소유권은 지우지 않는다.
+- 방의 선택적 `pose` 값은 `rest` 또는 `raised`다. 값이 없는 기존 기록은 `rest`로 표시하고 저장 시에도 자세를 보존한다.
+- 정적 에셋 루트는 `/my-space/whiteknee/v1`이다. 본체는 `poses/{rest|raised}/{bare|explorer|chef|pajamas|hero}.webp` 10장, 장식은 `accessories/{아이템 ID에서 whiteknee-를 뺀 값}.webp` 8장을 사용한다. 최종 그림과 착용 위치는 별도 시각 검증 대상이다.
+- 제작 중 초안의 화이트니 비옷·민트 반다나·목 리본·별 목걸이는 최종 카탈로그에서 제외했다. 기존 친구의 일반 비옷과 목 장식에는 영향을 주지 않는다.

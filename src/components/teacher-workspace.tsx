@@ -20,7 +20,7 @@ import {classMetadataFetch} from '@/lib/class-metadata-cache';
 import {countUsageOnce} from "@/lib/usage-beacon";
 type Status = "pending" | "submitted" | "done" | "revision";
 type Classroom = {id: string; name: string; grade: number; year: number; studentCount: number};
-type Student = {id: string; name: string; number: number; character?: Character; xp?: number; accessCode?: string; wardrobeOutfit?: WardrobeOutfit; spaceCompanion?: {art: string; outfit: Partial<Record<"body" | "bag", string>>} | null};
+type Student = {id: string; name: string; number: number; character?: Character; xp?: number; accessCode?: string; wardrobeOutfit?: WardrobeOutfit; spaceCompanion?: {art: string; pose?: 'rest' | 'raised'; outfit: Partial<Record<"body" | "bag", string>>} | null};
 type Assignment = VisibilityAssignment & {materials?: AssignmentMaterial[]; submissionType?: AssignmentSubmissionType; id: string; classId: string; title: string; description: string; dueAt?: string | null; targetCount: number; submittedCount: number; reviewedCount: number; targetStudentIds?: string[]};
 type Submission = {id: string; studentId: string; text: string; attemptId: string; attemptNumber: number; status: Status; feedback?: string; uploads: {id: string; fileName: string; contentType: string; url?: string; thumbnailUrl?:string}[]};
 type Detail = {assignment: Assignment; students: Student[]; submissions: Submission[]};
@@ -306,5 +306,5 @@ function TeacherWorkspace({entry}: {entry: WorkspaceEntry}) {
 }
 
 function StudentAvatar({student}: {student: Student}) {
-  return <CharacterAvatar className="ws-student-avatar" character={student.character} outfit={student.wardrobeOutfit} imageSrc={student.spaceCompanion?.art} spaceOutfit={student.spaceCompanion?.outfit}/>;
+  return <CharacterAvatar className="ws-student-avatar" character={student.character} outfit={student.wardrobeOutfit} imageSrc={student.spaceCompanion?.art} spaceOutfit={student.spaceCompanion?.outfit} pose={student.spaceCompanion?.pose}/>;
 }

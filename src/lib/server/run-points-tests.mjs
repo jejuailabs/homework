@@ -5,8 +5,9 @@ const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toS
 const characters = moduleUrl(compile('../characters.ts'));
 const submission = moduleUrl(compile('../assignment-submission.ts'));
 const base = moduleUrl(compile('./policy.ts').replace("'../characters'", JSON.stringify(characters)).replace("'../assignment-submission'", JSON.stringify(submission)));
-const types = moduleUrl(compile('../points-types.ts'));
-const policy = moduleUrl(compile('./points-policy.ts').replace("'./policy'", JSON.stringify(base)).replace("'../points-types'", JSON.stringify(types)));
+const whiteknee = moduleUrl(compile('../../modules/my-space/whiteknee.ts'));
+const types = moduleUrl(compile('../points-types.ts').replace("'../modules/my-space/whiteknee'", JSON.stringify(whiteknee)));
+const policy = moduleUrl(compile('./points-policy.ts').replace("'./policy'", JSON.stringify(base)).replace("'../points-types'", JSON.stringify(types)).replace("'../../modules/my-space/whiteknee'", JSON.stringify(whiteknee)));
 await import(moduleUrl(compile('./points-policy.test.ts').replace("'./points-policy'", JSON.stringify(policy)).replace("'../points-types'", JSON.stringify(types))));
 const history = moduleUrl(compile('./points-history.ts').replace("'./policy'", JSON.stringify(base)));
 await import(moduleUrl(compile('./points-history.test.ts').replace("'./points-history'", JSON.stringify(history))));

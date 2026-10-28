@@ -1,0 +1,454 @@
+{
+  "created": "2026-10-28",
+  "provider": "OpenAI built-in ImageGen",
+  "referenceStyleOnly": "ChatGPT 이미지 2026년 10월 28일 오후 09_58_22.png",
+  "usageCheck": {
+    "includedUsedPercent": 5,
+    "creditsBalance": 0,
+    "externalApiUsed": false
+  },
+  "notes": "Final eight accessories selected against the user-supplied twelve-panel reference. Five retained first-pass candidates plus three reference-based built-in ImageGen calls. Packaging only crops transparent margins, resizes and pads; no content redraw. All original source paths are recorded as basenames only.",
+  "assets": [
+    {
+      "id": "head-explorer",
+      "filename": "head-explorer.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent wearable accessory sprite for a very cute plush 3D children's game character. Render exactly ONE isolated object, centered and fully visible, front-facing with only a slight view of its rounded top for dimensionality. Warm neutral studio illumination, soft rounded toy-like forms, detailed but gentle tactile fabric or material, cohesive premium animated-family-film 3D style. This is an accessory to composite over a brown fluffy character later; do NOT render the character, spider, face, eyes, body, head, fur, mannequin, model, display stand, ground, environment, text, lettering, logo, border, cast ground shadow, or watermark. Use actual transparent RGBA background and generous clear padding. No white backdrop and no baked checkerboard. Subject: ONE small cocoa-brown safari explorer hat, broad soft curved brim that is wider than the crown, low rounded crown, warm tan hatband, one tiny sewn sage-green leaf emblem on the front. Cute rounded woven canvas with subtle stitching. Front view. Lower brim is a clear curved horizontal silhouette ready to sit on a round head.",
+      "output": "/my-space/whiteknee/v1/accessories/head-explorer.webp",
+      "width": 512,
+      "height": 341,
+      "sourceSize": {
+        "width": 1536,
+        "height": 1024
+      },
+      "sourceTrim": {
+        "left": 26,
+        "top": 41,
+        "width": 1483,
+        "height": 983
+      },
+      "contentBounds": {
+        "left": 2,
+        "top": 39,
+        "width": 508,
+        "height": 271,
+        "nonzero": 75506
+      },
+      "visibleBounds": {
+        "left": 3,
+        "top": 41,
+        "width": 507,
+        "height": 229,
+        "nonzero": 74069
+      },
+      "solidBounds": {
+        "left": 3,
+        "top": 42,
+        "width": 506,
+        "height": 228,
+        "nonzero": 73423
+      },
+      "transparentPixels": 99086,
+      "bytes": 40316,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "sourceBasename": "exec-0597ab23-599e-41eb-ad51-c4f686365afd.png",
+      "reusedFromFirstPass": true
+    },
+    {
+      "id": "head-sprout",
+      "filename": "head-sprout.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent wearable accessory sprite for a very cute plush 3D children's game character. Render exactly ONE isolated object, centered and fully visible, front-facing with only a slight view of its rounded top for dimensionality. Warm neutral studio illumination, soft rounded toy-like forms, detailed but gentle tactile fabric or material, cohesive premium animated-family-film 3D style. This is an accessory to composite over a brown fluffy character later; do NOT render the character, spider, face, eyes, body, head, fur, mannequin, model, display stand, ground, environment, text, lettering, logo, border, cast ground shadow, or watermark. Use actual transparent RGBA background and generous clear padding. No white backdrop and no baked checkerboard. Subject: ONE tiny sprout hair clip, a very short curved stem with EXACTLY TWO softly plump leaves opening left and right, gentle sage and light green colors, velvety soft silicone/felt material with delicate leaf veins and a tiny discreet warm-brown clip at the bottom. Rounded cheerful simple silhouette. Front view. No pot, soil or extra leaves.",
+      "output": "/my-space/whiteknee/v1/accessories/head-sprout.webp",
+      "width": 512,
+      "height": 342,
+      "sourceSize": {
+        "width": 1536,
+        "height": 1024
+      },
+      "sourceTrim": {
+        "left": 0,
+        "top": 9,
+        "width": 1497,
+        "height": 995
+      },
+      "contentBounds": {
+        "left": 2,
+        "top": 5,
+        "width": 490,
+        "height": 328,
+        "nonzero": 53522
+      },
+      "visibleBounds": {
+        "left": 36,
+        "top": 63,
+        "width": 454,
+        "height": 240,
+        "nonzero": 51398
+      },
+      "solidBounds": {
+        "left": 36,
+        "top": 64,
+        "width": 454,
+        "height": 239,
+        "nonzero": 50594
+      },
+      "transparentPixels": 121582,
+      "bytes": 30590,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "sourceBasename": "exec-9ccfa599-38ce-41b8-85ed-36498c5ff78f.png",
+      "reusedFromFirstPass": true
+    },
+    {
+      "id": "head-chef",
+      "filename": "head-chef.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent wearable accessory sprite for a very cute plush 3D children's game character. Render exactly ONE isolated object, centered and fully visible, front-facing with only a slight view of its rounded top for dimensionality. Warm neutral studio illumination, soft rounded toy-like forms, detailed but gentle tactile fabric or material, cohesive premium animated-family-film 3D style. This is an accessory to composite over a brown fluffy character later; do NOT render the character, spider, face, eyes, body, head, fur, mannequin, model, display stand, ground, environment, text, lettering, logo, border, cast ground shadow, or watermark. Use actual transparent RGBA background and generous clear padding. No white backdrop and no baked checkerboard. Subject: ONE small fluffy ivory chef toque, pleasantly rounded cloud-like fabric crown with 4 or 5 soft bulges and a low snug cylindrical cream hatband. Matte cotton with delicate fine weave and gentle stitching. Front view. Creamy warmth, soft volume, compact toddler-toy proportions; no face, no food, no utensils.",
+      "output": "/my-space/whiteknee/v1/accessories/head-chef.webp",
+      "width": 512,
+      "height": 410,
+      "sourceSize": {
+        "width": 1392,
+        "height": 1130
+      },
+      "sourceTrim": {
+        "left": 0,
+        "top": 29,
+        "width": 1376,
+        "height": 1101
+      },
+      "contentBounds": {
+        "left": 14,
+        "top": 42,
+        "width": 496,
+        "height": 358,
+        "nonzero": 109418
+      },
+      "visibleBounds": {
+        "left": 32,
+        "top": 52,
+        "width": 459,
+        "height": 311,
+        "nonzero": 107003
+      },
+      "solidBounds": {
+        "left": 33,
+        "top": 53,
+        "width": 458,
+        "height": 309,
+        "nonzero": 106271
+      },
+      "transparentPixels": 100502,
+      "bytes": 38274,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "sourceBasename": "exec-0626d779-1317-4f9b-a5b2-c42cd689e327.png",
+      "reusedFromFirstPass": true
+    },
+    {
+      "id": "head-sleep",
+      "filename": "head-sleep.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent wearable accessory sprite for a very cute plush 3D children's game character. Render exactly ONE isolated object, centered and fully visible, front-facing with only a slight view of its rounded top for dimensionality. Warm neutral studio illumination, soft rounded toy-like forms, detailed but gentle tactile fabric or material, cohesive premium animated-family-film 3D style. This is an accessory to composite over a brown fluffy character later; do NOT render the character, spider, face, eyes, body, head, fur, mannequin, model, display stand, ground, environment, text, lettering, logo, border, cast ground shadow, or watermark. Use actual transparent RGBA background and generous clear padding. No white backdrop and no baked checkerboard. Subject: ONE soft lavender sleeping cap, its curved cone droops clearly toward the VIEWER'S RIGHT and ends in a small round cream pompom. Pale cream softly rolled brim, exactly 3 tiny pale yellow embroidered star motifs on lavender fabric. Cozy soft cotton. Front view, complete brim and rightward pompom visible. No face and no character.",
+      "output": "/my-space/whiteknee/v1/accessories/head-sleep.webp",
+      "width": 512,
+      "height": 378,
+      "sourceSize": {
+        "width": 1536,
+        "height": 1024
+      },
+      "sourceTrim": {
+        "left": 219,
+        "top": 73,
+        "width": 1257,
+        "height": 926
+      },
+      "contentBounds": {
+        "left": 12,
+        "top": 13,
+        "width": 498,
+        "height": 336,
+        "nonzero": 112381
+      },
+      "visibleBounds": {
+        "left": 15,
+        "top": 15,
+        "width": 493,
+        "height": 330,
+        "nonzero": 110039
+      },
+      "solidBounds": {
+        "left": 15,
+        "top": 16,
+        "width": 492,
+        "height": 329,
+        "nonzero": 109132
+      },
+      "transparentPixels": 81155,
+      "bytes": 50386,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "sourceBasename": "exec-299e1df1-db1b-445f-b68d-69d65f59e6f2.png",
+      "reusedFromFirstPass": true
+    },
+    {
+      "id": "head-bow",
+      "prompt": "Use case: precise-object-edit. Input image is a twelve-panel character reference sheet only. Create a clean reusable game wardrobe sprite by recreating ONLY the accessory described below from its specified panel. Keep the reference's sweet rounded toy-like 3D rendering, gentle tactile material, soft warm neutral lighting and charming tiny accessory proportions. Exactly ONE accessory asset, front-facing, entire item clearly visible and centered with transparent padding. REAL TRANSPARENT RGBA background, including all empty interior cutouts. No character, head, eyes, body, spider, fur, person, mannequin, stand, surface, environment, shadows cast onto a background, labels, lettering, borders or watermark. Do not reproduce the panel or any of its characters. Do not add extra unrelated decoration. Target: the PASTEL PINK HEAD BOW on character 9, the idol character in the bottom row, second panel from the left. Recreate one cute softly padded pink satin/fabric hair ribbon bow, two rounded triangular loops, a small central knot and two very short tails. Preserve its warm blush-pink color, subtle satin highlight and plump but delicate silhouette. The bow alone, no microphone and no hairclip body visible. Fairly horizontal front view; it will be tilted and placed on the side of the character's head in the application. Not red, not magenta, no jewels, no glitter.",
+      "sourceBasename": "exec-d972abb9-6283-49c8-9897-806b44027a6a.png",
+      "filename": "head-bow.webp",
+      "referencePanel": 9,
+      "output": "/my-space/whiteknee/v1/accessories/head-bow.webp",
+      "width": 512,
+      "height": 345,
+      "sourceSize": {
+        "width": 1536,
+        "height": 1024
+      },
+      "sourceTrim": {
+        "left": 25,
+        "top": 47,
+        "width": 1455,
+        "height": 977
+      },
+      "contentBounds": {
+        "left": 27,
+        "top": 29,
+        "width": 469,
+        "height": 300,
+        "nonzero": 71296
+      },
+      "visibleBounds": {
+        "left": 49,
+        "top": 44,
+        "width": 427,
+        "height": 244,
+        "nonzero": 69645
+      },
+      "solidBounds": {
+        "left": 49,
+        "top": 44,
+        "width": 427,
+        "height": 243,
+        "nonzero": 68889
+      },
+      "transparentPixels": 105344,
+      "bytes": 42824,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "neck-scarf",
+      "prompt": "Use case: precise-object-edit. Input image is a twelve-panel character reference sheet only. Create a clean reusable game wardrobe sprite by recreating ONLY the accessory described below from its specified panel. Keep the reference's sweet rounded toy-like 3D rendering, gentle tactile material, soft warm neutral lighting and charming tiny accessory proportions. Exactly ONE accessory asset, front-facing, entire item clearly visible and centered with transparent padding. REAL TRANSPARENT RGBA background, including all empty interior cutouts. No character, head, eyes, body, spider, fur, person, mannequin, stand, surface, environment, shadows cast onto a background, labels, lettering, borders or watermark. Do not reproduce the panel or any of its characters. Do not add extra unrelated decoration. Target: the RED CHEF NECKERCHIEF on character 4, middle row first panel. Recreate ONLY the vivid warm cherry-red fabric neckerchief: a softly curved short red neck wrap running left-to-right, a small knot at the center front, and TWO short triangular fabric ends hanging downward from the knot. Match the cute smooth chef scarf seen in that panel, with slight sewn edges and soft folds. The center knot and red tails must be clearly readable when tiny. Do not include the white chef coat, chef hat, torso, character or any white collar. Transparent empty space above the curved wrap; there must be no filled neck or bib backing.",
+      "sourceBasename": "exec-1018899a-e934-4544-ba6a-5ba53cc815bc.png",
+      "filename": "neck-scarf.webp",
+      "referencePanel": 4,
+      "output": "/my-space/whiteknee/v1/accessories/neck-scarf.webp",
+      "width": 512,
+      "height": 337,
+      "sourceSize": {
+        "width": 1536,
+        "height": 1024
+      },
+      "sourceTrim": {
+        "left": 0,
+        "top": 19,
+        "width": 1508,
+        "height": 989
+      },
+      "contentBounds": {
+        "left": 24,
+        "top": 2,
+        "width": 474,
+        "height": 332,
+        "nonzero": 47732
+      },
+      "visibleBounds": {
+        "left": 26,
+        "top": 51,
+        "width": 470,
+        "height": 239,
+        "nonzero": 45872
+      },
+      "solidBounds": {
+        "left": 27,
+        "top": 51,
+        "width": 468,
+        "height": 239,
+        "nonzero": 45035
+      },
+      "transparentPixels": 124812,
+      "bytes": 25594,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "face-glasses",
+      "filename": "face-glasses.webp",
+      "prompt": "Use case: stylized-concept. Asset type: a single transparent wearable accessory sprite for a very cute plush 3D children's game character. Render exactly ONE isolated object, centered and fully visible, front-facing with only a slight view of its rounded top for dimensionality. Warm neutral studio illumination, soft rounded toy-like forms, detailed but gentle tactile fabric or material, cohesive premium animated-family-film 3D style. This is an accessory to composite over a brown fluffy character later; do NOT render the character, spider, face, eyes, body, head, fur, mannequin, model, display stand, ground, environment, text, lettering, logo, border, cast ground shadow, or watermark. Use actual transparent RGBA background and generous clear padding. No white backdrop and no baked checkerboard. Subject: ONE pair of thin round cocoa tortoiseshell eyeglasses, front-facing straight-on and horizontally symmetrical. Exactly two circular rounded frames connected by one small gently arched bridge; very short side temple hints only. Warm brown subtle amber mottling, soft toy-like acetate highlights on the FRAME ONLY. CRITICAL: both lens/interior circular holes are COMPLETELY EMPTY TRANSPARENT CUTOUTS with zero alpha, with no glass, reflections, tint, white fill, gray fill, eyeballs or lenses. They must be real open holes so the character's existing eyes remain visible when this transparent PNG is composited. No face, display stand or product card.",
+      "output": "/my-space/whiteknee/v1/accessories/face-glasses.webp",
+      "width": 512,
+      "height": 250,
+      "sourceSize": {
+        "width": 1774,
+        "height": 887
+      },
+      "sourceTrim": {
+        "left": 33,
+        "top": 21,
+        "width": 1717,
+        "height": 831
+      },
+      "contentBounds": {
+        "left": 7,
+        "top": 13,
+        "width": 495,
+        "height": 225,
+        "nonzero": 21946
+      },
+      "visibleBounds": {
+        "left": 9,
+        "top": 38,
+        "width": 490,
+        "height": 174,
+        "nonzero": 19346
+      },
+      "solidBounds": {
+        "left": 10,
+        "top": 39,
+        "width": 489,
+        "height": 172,
+        "nonzero": 18182
+      },
+      "transparentPixels": 106054,
+      "bytes": 28080,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "holeSamplesAlpha": [
+          0,
+          0
+        ]
+      },
+      "sourceBasename": "exec-5a7f29d4-2de1-4e6a-99e7-9f190a71f8c6.png",
+      "reusedFromFirstPass": true
+    },
+    {
+      "id": "face-goggles",
+      "prompt": "Use case: precise-object-edit. Input image is a twelve-panel character reference sheet only. Create a clean reusable game wardrobe sprite by recreating ONLY the accessory described below from its specified panel. Keep the reference's sweet rounded toy-like 3D rendering, gentle tactile material, soft warm neutral lighting and charming tiny accessory proportions. Exactly ONE accessory asset, front-facing, entire item clearly visible and centered with transparent padding. REAL TRANSPARENT RGBA background, including all empty interior cutouts. No character, head, eyes, body, spider, fur, person, mannequin, stand, surface, environment, shadows cast onto a background, labels, lettering, borders or watermark. Do not reproduce the panel or any of its characters. Do not add extra unrelated decoration. Target: the BLUE SWIMMING MASK and its attached snorkel on character 6, middle row third panel. Recreate one connected aquatic accessory set: a bright cobalt-blue and sky-blue rounded diving/swimming mask with a soft clear light-blue silicone rim accent, two large rounded lens apertures joined at the nose bridge, and one curved BLUE snorkel attached on the VIEWER'S RIGHT that rises above the mask and ends with a small YELLOW tip, faithful to the reference. Cheerful rounded toy-like plastic, front view. The mask will be worn over the character's forehead/eyes. CRITICAL: lens apertures must be fully empty TRANSPARENT cutouts (zero alpha), no glass shading, no blue film, no reflection, no opaque white/gray fill, no eyes inside. Keep highlights only on the blue FRAME and the tube. No snorkel on the left. No water splashes, duck or character.",
+      "sourceBasename": "exec-5123321e-b87d-4d0e-b4e0-5784e7a8e065.png",
+      "filename": "face-goggles.webp",
+      "referencePanel": 6,
+      "output": "/my-space/whiteknee/v1/accessories/face-goggles.webp",
+      "width": 512,
+      "height": 327,
+      "sourceSize": {
+        "width": 1536,
+        "height": 1024
+      },
+      "sourceTrim": {
+        "left": 0,
+        "top": 39,
+        "width": 1512,
+        "height": 961
+      },
+      "contentBounds": {
+        "left": 2,
+        "top": 9,
+        "width": 481,
+        "height": 309,
+        "nonzero": 42381
+      },
+      "visibleBounds": {
+        "left": 75,
+        "top": 11,
+        "width": 384,
+        "height": 305,
+        "nonzero": 39161
+      },
+      "solidBounds": {
+        "left": 75,
+        "top": 11,
+        "width": 384,
+        "height": 304,
+        "nonzero": 38005
+      },
+      "transparentPixels": 125043,
+      "bytes": 32664,
+      "qa": {
+        "cornersAlpha": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "holeSamplesAlpha": [
+          0,
+          0,
+          0
+        ],
+        "holeSamplePoints": [
+          {
+            "x": 187,
+            "y": 190
+          },
+          {
+            "x": 338,
+            "y": 190
+          },
+          {
+            "x": 260,
+            "y": 167
+          }
+        ]
+      }
+    }
+  ],
+  "excludedCandidateIds": [
+    "neck-bandana",
+    "neck-bow",
+    "neck-star"
+  ],
+  "referenceDifferences": [
+    "Retained explorer hat includes a small leaf emblem that is not prominent in reference panel 2.",
+    "Retained sprout clip has two leaves, while reference panel 5 uses a fuller leaf cluster."
+  ],
+  "updated": "2026-10-28"
+}

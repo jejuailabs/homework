@@ -18,7 +18,7 @@ test('all twelve character identities resolve without confusing the six cat bree
   assert.equal(wearState({body: '__proto__', bag: 'invented'}), 'bare');
 });
 test('every friend can wear all eight owned outfits with and without the bag: 216 complete sprites', () => {
-  const clothes = spaceCatalog.filter(s => s.kind === 'clothes' && s.slot === 'body');
+  const clothes = spaceCatalog.filter(s => s.kind === 'clothes' && s.slot === 'body' && !s.id.startsWith('whiteknee-'));
   assert.equal(clothes.length, 8); assert.equal(wearStates.length, 18);
   const all = new Set<string>();
   for (const pet of wearablePets) for (const body of [undefined, ...clothes.map(s => s.id)]) for (const bag of [undefined, 'bag-leaf']) {
@@ -31,7 +31,7 @@ test('every friend can wear all eight owned outfits with and without the bag: 21
   assert.equal(all.size, 216);
 });
 test('6480 head/neck/body/bag combinations use bounded registered layers and bundled art', () => {
-  const heads = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'head').map(i => i.id)], necks = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'neck').map(i => i.id)];
+  const heads = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'head' && !i.id.startsWith('whiteknee-')).map(i => i.id)], necks = [undefined, ...wardrobeCatalog.filter(i => i.slot === 'neck' && !i.id.startsWith('whiteknee-')).map(i => i.id)];
   let cases = 0;
   for (const pet of wearablePets) for (const state of wearStates) for (const head of heads) for (const neck of necks) {
     cases++; assert(state);

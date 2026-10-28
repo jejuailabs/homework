@@ -1,0 +1,11 @@
+.avatar-fitted>.whiteknee-accessories{position:absolute;inset:0;display:block;z-index:3;pointer-events:none;overflow:visible}
+.avatar-fitted .whiteknee-accessory{position:absolute;display:block;height:auto;max-width:none!important;margin:0!important;object-fit:contain;pointer-events:none;filter:none;transform-origin:center}
+.whiteknee-pose-picker{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;border:0;padding:0}
+.whiteknee-pose-picker legend{font-size:13px;font-weight:700;color:#5c594b;margin-bottom:8px}
+.ms-page .whiteknee-pose-picker button{border:1px solid #ded8c8;border-radius:14px;background:#fffcf5;padding:9px 13px;min-height:42px;color:#665747}
+.ms-page .whiteknee-pose-picker button[aria-pressed=true]{background:#e8eedb;border-color:#8b9e70;color:#3d563a;box-shadow:0 0 0 1px #8b9e70}
+.ms-whiteknee-badge{display:inline-flex;border-radius:20px;background:#eee9df;color:#6a5546;font-size:10px;font-weight:700;padding:3px 8px;line-height:1.5}
+.ms-wardrobe-family{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+.ms-page .ms-wardrobe-family button{border:1px solid #e0dbcd;background:#fffdf6;border-radius:20px;padding:8px 12px;font-size:12px}
+.ms-page .ms-wardrobe-family button[aria-pressed=true]{border-color:#789168;background:#edf1e5;color:#435e3e}
+@media(max-width:520px){.whiteknee-pose-picker{justify-content:center}.whiteknee-pose-picker legend{width:100%;text-align:center}}
