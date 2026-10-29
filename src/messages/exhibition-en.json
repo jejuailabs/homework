@@ -238,5 +238,6 @@
   "deleteNow": "Delete permanently",
   "deleting": "Deleting…",
   "deleteFailed": "The room could not be deleted. Please try again.",
-  "roomDeleted": "Room deleted."
+  "roomDeleted": "Room deleted.",
+  "deleteSummary": "Removes the room with its artworks, voices and guestbooks. This cannot be undone."
 }

@@ -238,5 +238,6 @@
   "deleteNow": "영구 삭제",
   "deleting": "삭제하고 있어요…",
   "deleteFailed": "전시실을 삭제하지 못했어요. 다시 시도해 주세요.",
-  "roomDeleted": "전시실을 삭제했어요."
+  "roomDeleted": "전시실을 삭제했어요.",
+  "deleteSummary": "전시실과 작품·음성·방명록을 모두 지워요. 되돌릴 수 없어요."
 }
