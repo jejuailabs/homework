@@ -3,7 +3,7 @@ import type {AnswerRecord, LessonConcept, LessonContent, LessonQuestion, LessonR
 export const CONCEPT_MIN = 3, CONCEPT_MAX = 6, QUESTION_MIN = 5, QUESTION_MAX = 10;
 /** Days until the next review: a fully unknown point returns weekly, a shaky one every two weeks. */
 export const REVIEW_DAYS: Record<Exclude<ReviewRating, 'know'>, number> = {unknown: 7, unsure: 14};
-export const GRADUATE_STREAK = 2, DAILY_REVIEW_LIMIT = 10, LESSON_REWARD = 1;
+export const GRADUATE_STREAK = 2, DAILY_REVIEW_LIMIT = 10, LESSON_REWARD = 10;
 export const SUBJECTS = ['국어', '수학', '사회', '과학', '영어', '도덕', '음악', '미술', '체육', '실과', '기타'] as const;
 export const RATINGS: ReviewRating[] = ['know', 'unsure', 'unknown'];
 

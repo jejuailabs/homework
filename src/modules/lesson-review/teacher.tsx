@@ -27,7 +27,7 @@ export default function TeacherLessonReview() {
   return <div className="lr-page lr-teacher">
     <header className="lr-heading"><div><span className="lr-eyebrow"><Sparkles size={14}/>복습하기</span><h1>오늘 배운 것, 단단하게</h1><p>수업 내용을 넣으면 AI가 개념 카드와 문제 초안을 만들어요. 선생님이 확인하고 배포한 것만 아이들에게 보여요.</p></div><img src="/characters/otter-moa.webp" alt=""/></header>
     <div className="lr-toolbar"><label className="lr-class"><span>우리 반</span><select value={classId} onChange={event => setClassId(event.target.value)}>{classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-      {state && <label className={`lr-switch ${state.rewardsEnabled ? 'is-on' : ''}`}><input type="checkbox" role="switch" checked={state.rewardsEnabled} disabled={busy} onChange={() => void toggleRewards()}/><span className="lr-switch-track" aria-hidden="true"/><span><strong>완료 보말</strong><small>한 차시를 끝까지 마치면 1개</small></span></label>}
+      {state && <label className={`lr-switch ${state.rewardsEnabled ? 'is-on' : ''}`}><input type="checkbox" role="switch" checked={state.rewardsEnabled} disabled={busy} onChange={() => void toggleRewards()}/><span className="lr-switch-track" aria-hidden="true"/><span><strong>완료 보말</strong><small>한 차시를 끝까지 마치면 10개</small></span></label>}
       {view.kind === 'list' && <button type="button" className="button primary" disabled={!classId} onClick={() => setView({kind: 'create'})}><Plus size={16}/>새 복습 만들기</button>}
       {view.kind !== 'list' && <button type="button" className="button" onClick={() => {setView({kind: 'list'}); void load();}}>목록으로</button>}</div>
     {error && <p className="lr-error" role="alert">{error}</p>}
