@@ -62,6 +62,7 @@ await import('./run-points-tests.mjs');
 await import('../run-matching-tests.mjs');
 await import('../run-classroom-tools-tests.mjs');
 await import('./run-tools-report-tests.mjs');
+await import('./run-chalkboard-tests.mjs');
 await import('../run-neighborhood-tests.mjs');
 await import('../../modules/artwork-extensions/run-tests.mjs');
 await import('../../modules/digital-artbook/run-tests.mjs');

@@ -25,7 +25,7 @@ export const toolCatalog: ToolDefinition[] = [
   {id:'manipulatives',ko:'디지털 교구',en:'Math objects',category:'play',icon:'Shapes',color:'mint',ai:true},
   {id:'matching',ko:'같은 그림 찾기',en:'Picture match',category:'play',icon:'ScanEye',color:'peach',ai:true,kind:'matching'},
   {id:'memo',ko:'메모',en:'Memo',category:'materials',icon:'StickyNote',color:'yellow'},
-  {id:'board',ko:'판서',en:'Whiteboard',category:'materials',icon:'Presentation',color:'sky',ai:true},
+  {id:'board',ko:'판서',en:'Classroom board',category:'materials',icon:'Presentation',color:'sky'},
   {id:'notes',ko:'노트',en:'Notebook',category:'materials',icon:'NotebookPen',color:'lavender',ai:true},
   {id:'handwriting',ko:'사진 글 정리',en:'Photo writing',category:'materials',icon:'FileText',color:'mint',ai:true,kind:'handwriting'},
   {id:'qr',ko:'QR 코드',en:'QR code',category:'materials',icon:'QrCode',color:'mint'},
