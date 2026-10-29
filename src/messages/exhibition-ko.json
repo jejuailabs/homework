@@ -231,5 +231,12 @@
   "linkArtistsHint": "작가 학생이 연결되지 않은 작품이 {count}개 있어요. 작품 제목과 같은 이름의 학생에게 연결하면, 학생이 자기 작품으로 보고 목소리 도슨트를 녹음할 수 있어요.",
   "linkArtistsButton": "학생 {count}명과 자동 연결",
   "linkArtistsDone": "작품 {count}개를 학생과 연결했어요.",
-  "linkArtistsPartial": "작품 {count}개를 연결했어요. {failed}개는 연결하지 못했어요."
+  "linkArtistsPartial": "작품 {count}개를 연결했어요. {failed}개는 연결하지 못했어요.",
+  "deleteRoom": "전시실 삭제",
+  "deleteWarning": "\"{title}\" 전시실과 작품 {count}개, 음성 도슨트 녹음, 방명록, QR 공유 링크가 모두 바로 지워져요. 삭제한 뒤에는 되돌릴 수 없어요.",
+  "deleteAgree": "되돌릴 수 없다는 것을 확인했어요",
+  "deleteNow": "영구 삭제",
+  "deleting": "삭제하고 있어요…",
+  "deleteFailed": "전시실을 삭제하지 못했어요. 다시 시도해 주세요.",
+  "roomDeleted": "전시실을 삭제했어요."
 }

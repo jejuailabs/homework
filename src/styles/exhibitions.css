@@ -26,3 +26,11 @@
 @media(prefers-reduced-motion:reduce){.ex-workspace *,.ex-dialog *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .ex-artist-link{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:12px 0;padding:12px 14px;border-radius:14px;background:#fff6e5;border:1px solid #f0d9ae;color:#7a5418}
 .ex-artist-link p{flex:1;min-width:220px;margin:0;font-size:12px;line-height:1.65}
+.ex-delete-zone{display:grid;gap:10px;margin-top:18px;padding-top:16px;border-top:1px dashed #e5c9bd}
+.ex-delete-zone h3{display:flex;align-items:center;gap:6px;margin:0;font-size:14px;color:#a3402a}
+.ex-delete-zone p{margin:0;font-size:12px;line-height:1.7;color:#7a3a2b}
+.ex-delete-agree{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}
+.ex-delete-actions{display:flex;flex-wrap:wrap;gap:8px}
+.ex-button.ex-danger-outline{justify-self:start;color:#a3402a;border-color:#e5c9bd}
+.ex-button.ex-danger{background:#b4472d;border-color:#b4472d;color:#fff}
+.ex-button.ex-danger:disabled{opacity:.5}

@@ -242,11 +242,49 @@ async function cleanup(ctx: Context) {
   return json({ ...result, storageUsage: storageValue((await quotaRef(ctx.uid).get()).data()) });
 }
 
-function queueReplacedArtwork(tx: FirebaseFirestore.Transaction, ownerUid: string, old: Data) {
+function assetCleanupJob(ownerUid: string, old: Data) {
   const fileId = old.uploadId || old.displayPath.split('/')[2];
-  const jobId=hash(old.exhibitionId + ':' + fileId);
-  tx.set(db().doc(`exhibitionAssetCleanup/${jobId}`), {ownerUid, paths: [`exhibition-uploads/${old.uploaderUid}/${fileId}/original`, old.displayPath, old.thumbnailPath], bytes: old.storedBytes || 0, originalManifest: fileId});
+  return {jobId: hash(old.exhibitionId + ':' + fileId), job: {ownerUid, paths: [`exhibition-uploads/${old.uploaderUid}/${fileId}/original`, old.displayPath, old.thumbnailPath], bytes: old.storedBytes || 0, originalManifest: fileId}};
+}
+function queueReplacedArtwork(tx: FirebaseFirestore.Transaction, ownerUid: string, old: Data) {
+  const {jobId, job} = assetCleanupJob(ownerUid, old);
+  tx.set(db().doc(`exhibitionAssetCleanup/${jobId}`), job);
   return jobId;
+}
+
+/** Deletes a room for good: artwork files (through the cleanup queue, which also returns the storage quota), voice recordings, guestbooks, share links and every record under the room. */
+async function deleteExhibition(ctx: Context, exhibition: Exhibition, request: Request) {
+  owner(ctx, exhibition);
+  const input = await body(request);
+  if (input.confirm !== true) throw new ApiError(400, '삭제를 한 번 더 확인해 주세요.', 'CONFIRM_REQUIRED');
+  const room = exhibitionRef(exhibition.id), ownerUid = exhibition.ownerUid, containerKey = `exhibition:${exhibition.id}`;
+  const artworks = await room.collection('artworks').get();
+  // 1. Queue every artwork file first, so a failure later never strands files without a cleanup job.
+  const jobs = artworks.docs.map(doc => doc.data()).filter(value => value.displayPath).map(value => assetCleanupJob(ownerUid, {...value, exhibitionId: exhibition.id}));
+  for (let start = 0; start < jobs.length; start += 400) {const batch = db().batch(); jobs.slice(start, start + 400).forEach(({jobId, job}) => batch.set(db().doc(`exhibitionAssetCleanup/${jobId}`), job)); await batch.commit();}
+  // 2. Uploads still in progress for this room.
+  const pending = await db().collection('exhibitionUploads').where('exhibitionId', '==', exhibition.id).where('status', 'in', ['pending', 'processing', 'cleanup']).get();
+  for (const doc of pending.docs) await cleanupUpload(ownerUid, doc.id, undefined, true);
+  // 3. Voice recordings: audio files and the teacher's voice storage figure.
+  const voices = await db().collection('moduleVoices').where('containerKey', '==', containerKey).get();
+  for (const root of voices.docs) {
+    const recordings = (await root.ref.collection('recordings').get()).docs.map(doc => doc.data()).filter(value => value.uploadStatus !== 'deleted');
+    await Promise.all(recordings.map(value => bucket().file(`module-voice/${root.data().ownerUid}/${root.id}/${value.id}.wav`).delete({ignoreNotFound: true})));
+    const used = recordings.filter(value => (value.quotaBucket || 'usedBytes') === 'usedBytes').reduce((total, value) => total + Number(value.size || 0), 0);
+    const reserved = recordings.filter(value => value.quotaBucket === 'reservedBytes').reduce((total, value) => total + Number(value.size || 0), 0);
+    if (used || reserved) await db().runTransaction(async tx => {const quota = db().doc(`moduleVoiceStorage/${root.data().ownerUid}`), usage = (await tx.get(quota)).data() || {}; tx.set(quota, {usedBytes: Math.max(0, (usage.usedBytes || 0) - used), reservedBytes: Math.max(0, (usage.reservedBytes || 0) - reserved)}, {merge: true});});
+    await db().recursiveDelete(root.ref);
+  }
+  // 4. Guestbooks and the QR share link.
+  for (const root of (await db().collection('moduleGuestbooks').where('containerKey', '==', containerKey).get()).docs) await db().recursiveDelete(root.ref);
+  const share = await db().doc(`exhibitionShares/${exhibition.id}`).get();
+  if (share.data()?.token) await db().doc(`exhibitionShareLinks/${hash(share.data()!.token)}`).delete();
+  if (share.exists) await share.ref.delete();
+  // 5. The room with its artworks, comments, reactions, student slots and passports.
+  await db().recursiveDelete(room);
+  await cleanupReplacedArtworks(ownerUid, jobs.map(item => item.jobId));
+  await db().collection('adminAudit').add({actorUid: ctx.uid, action: 'exhibition.delete', target: exhibition.id, details: {classId: exhibition.classId, title: exhibition.title, artworks: artworks.size, voices: voices.size}, kind: 'change', outcome: 'success', createdAt: now()});
+  return json({deleted: true, artworks: artworks.size});
 }
 export async function cleanupReplacedArtworks(ownerUid: string, jobIds?: string[]) {
   const jobs = jobIds ? (jobIds.length ? await db().getAll(...jobIds.map(jobId=>db().doc(`exhibitionAssetCleanup/${jobId}`))) : []) : (await db().collection('exhibitionAssetCleanup').where('ownerUid', '==', ownerUid).limit(30).get()).docs;
@@ -627,6 +665,7 @@ export async function handleExhibitions(request: Request, segments: string[] = [
       const exhibition = await loadExhibition(ctx, exhibitionId);
       if (segments.length === 1 && request.method === 'GET') return await detail(ctx, exhibition);
       if (segments.length === 1 && request.method === 'PATCH') return await edit(ctx, exhibition, request);
+      if (segments.length === 1 && request.method === 'DELETE') return await deleteExhibition(ctx, exhibition, request);
       if (segments.length === 2 && section === 'share' && request.method === 'GET') return await shareExhibition(ctx, exhibition, request);
       if (segments.length === 2 && section === 'read-authors' && request.method === 'POST') {owner(ctx, exhibition); const input = await readBoundedJson(request, 3_300_000) as {images?: unknown}; return json({names: await readArtworkAuthors(ctx.uid, artworkAuthorImages(input.images),exhibition.classId)});}
       if (segments.length === 2 && section === 'uploads' && request.method === 'POST') return await initUpload(ctx, exhibition, request);

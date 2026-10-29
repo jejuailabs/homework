@@ -231,5 +231,12 @@
   "linkArtistsHint": "{count} artworks have no student linked. Link them to the student whose name matches the title so students see them as their own and can record a voice docent.",
   "linkArtistsButton": "Link {count} students automatically",
   "linkArtistsDone": "Linked {count} artworks to students.",
-  "linkArtistsPartial": "Linked {count} artworks. {failed} could not be linked."
+  "linkArtistsPartial": "Linked {count} artworks. {failed} could not be linked.",
+  "deleteRoom": "Delete room",
+  "deleteWarning": "\"{title}\" with its {count} artworks, voice docent recordings, guestbooks and QR share link will be deleted right away. This cannot be undone.",
+  "deleteAgree": "I understand this cannot be undone",
+  "deleteNow": "Delete permanently",
+  "deleting": "Deleting…",
+  "deleteFailed": "The room could not be deleted. Please try again.",
+  "roomDeleted": "Room deleted."
 }
