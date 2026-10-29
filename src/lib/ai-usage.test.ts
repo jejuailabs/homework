@@ -9,6 +9,7 @@ test('missing usage and unregistered pricing are unknown, never false zero costs
   for(const payload of [{},{usage:{input_tokens:-1,output_tokens:4}},{usage:{input_tokens:10,output_tokens:20},service_tier:'unrecognized'}])assert.equal(aiProviderUsage(payload,'gpt-6-luna').estimatedUsd,null);
   assert.equal(aiProviderUsage({usage:{input_tokens:1,output_tokens:2},service_tier:'default'},'unknown-model').estimatedUsd,null);
   const voice=aiProviderUsage({text:'PRIVATE CAPTION'},'gpt-transcribe',{audioSeconds:60});assert.equal(voice.estimatedUsd,.0045);assert.equal(voice.inputTokens,null);assert(!JSON.stringify(voice).includes('PRIVATE'));
+  assert.equal(aiProviderUsage({text:'x',duration:30},'whisper-1').estimatedUsd,.003);
 });
 test('pricing honors actual processing tier and separates incomplete requests from zero-token requests',()=>{
   const payload={usage:{input_tokens:1000,output_tokens:1000},service_tier:'default'},standard=aiProviderUsage(payload,'gpt-6-luna').estimatedUsd!;assert.equal(aiProviderUsage({...payload,service_tier:'priority'},'gpt-6-luna').estimatedUsd,standard*2);assert.equal(aiProviderUsage({...payload,service_tier:'flex'},'gpt-6-luna').estimatedUsd,standard*.5);

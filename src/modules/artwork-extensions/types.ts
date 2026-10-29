@@ -43,6 +43,8 @@ export type VoiceRecording = {
     duration: number;
     status: 'draft' | 'approved' | 'hidden';
     transcription: 'idle' | 'running' | 'done' | 'failed';
+    /** AI subtitles with sentence times in seconds; separate from the student's own caption. */
+    transcript: { text: string; segments: { start: number; end: number; text: string }[] } | null;
     version: string;
     audioUrl: string;
     error?: string;

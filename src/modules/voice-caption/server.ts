@@ -12,9 +12,10 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
         throw new ApiError(404, '음성 도슨트가 꺼져 있어요.', 'MODULE_DISABLED');
     const root = db().doc('moduleVoices/' + t.key), records = root.collection('recordings'), quota = db().doc('moduleVoiceStorage/' + t.ownerUid), recordId = segments[0] ? id(segments[0]) : '', ref = recordId ? records.doc(recordId) : null;
     const canEdit = (v: Data) => t.manage || t.record && v.actorKey === t.actor.key;
-    const canTranscribe = t.manage && process.env.VOICE_AI_TRANSCRIPTION_ENABLED === 'true';
+    // The recording's student (right after upload) or its teacher may request the one-time timed transcript.
+    const canTranscribe = (t.manage || t.record) && process.env.VOICE_AI_TRANSCRIPTION_ENABLED === 'true';
     const audioPath = (v: Data) => `module-voice/${t.ownerUid}/${t.key}/${v.id}.wav`;
-    const view = (v: Data) => ({ id: v.id, caption: v.caption || '', duration: v.duration, status: v.status, transcription: v.transcription === 'running' && v.leaseUntil <= Date.now() ? 'failed' : v.transcription || 'idle', uploadStatus: v.uploadStatus, version: v.version, error: v.error || '', audioUrl: new URL(request.url).pathname.replace(/\/voice(?:\/.*)?$/, '/voice/' + v.id + '/audio') + new URL(request.url).search });
+    const view = (v: Data) => ({ id: v.id, caption: v.caption || '', duration: v.duration, status: v.status, transcription: v.transcription === 'running' && v.leaseUntil <= Date.now() ? 'failed' : v.transcript ? 'done' : v.transcription === 'done' ? 'idle' : v.transcription || 'idle', transcript: v.transcript || null, uploadStatus: v.uploadStatus, version: v.version, error: v.error || '', audioUrl: new URL(request.url).pathname.replace(/\/voice(?:\/.*)?$/, '/voice/' + v.id + '/audio') + new URL(request.url).search });
     if (request.method === 'GET') {
         const state = (await root.get()).data() || {};
         if (recordId) {
@@ -100,27 +101,28 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
     }
     // Audio storage and manual captions never implicitly enable a paid AI call.
     if (request.method === 'POST' && segments[1] === 'transcribe' && !canTranscribe)
-        throw new ApiError(403, 'AI 자동 캡션은 별도 비용 승인 후 선생님만 사용할 수 있어요. 캡션을 직접 입력해 주세요.', 'VOICE_AI_DISABLED');
+        throw new ApiError(403, 'AI 자막이 꺼져 있어요. 녹음은 그대로 들을 수 있어요.', 'VOICE_AI_DISABLED');
     const input = request.method === 'DELETE' ? {} : await moduleJson(request);
+    // The timed transcript lives beside the caption and never bumps `version`, so caption edits and approval are not blocked by it.
     if (request.method === 'POST' && segments[1] === 'transcribe') {
-        const attempt = await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const snapshot = await tx.get(ref), v = snapshot.data(); if (!v || !canEdit(v) || v.status !== 'draft' || v.uploadStatus !== 'ready')
-            throw new ApiError(403, '내 녹음 초안만 변환할 수 있어요.'); if (v.transcription === 'done')
-            return { cached: v.caption }; if (v.transcription === 'running' && v.leaseUntil > Date.now())
-            throw new ApiError(409, '음성을 변환하고 있어요.'); if (['running', 'failed'].includes(v.transcription) && input.retry !== true)
-            throw new ApiError(409, '변환 재시도 버튼을 눌러 주세요.', 'VOICE_RETRY_REQUIRED'); if ((v.attempt || 0) >= 3)
-            throw new ApiError(429, '변환을 여러 번 시도했어요. 캡션을 직접 입력해 주세요.'); const token = crypto.randomUUID(); tx.update(ref, { transcription: 'running', leaseUntil: Date.now() + 90000, attempt: (v.attempt || 0) + 1, lease: token, error: '', version: token }); return { token,duration:v.duration }; });
+        const attempt = await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const snapshot = await tx.get(ref), v = snapshot.data(); if (!v || !canEdit(v) || !['draft', 'approved'].includes(v.status) || v.uploadStatus !== 'ready')
+            throw new ApiError(403, '이 녹음은 자막을 만들 수 없어요.'); if (v.transcript)
+            return { cached: v.transcript }; if (v.transcription === 'running' && v.leaseUntil > Date.now())
+            throw new ApiError(409, '자막을 만들고 있어요.'); if (['running', 'failed'].includes(v.transcription) && input.retry !== true)
+            throw new ApiError(409, '자막 다시 만들기 버튼을 눌러 주세요.', 'VOICE_RETRY_REQUIRED'); if ((v.attempt || 0) >= 3)
+            throw new ApiError(429, '자막을 여러 번 시도했어요. 녹음은 그대로 들을 수 있어요.'); const token = crypto.randomUUID(); tx.update(ref, { transcription: 'running', leaseUntil: Date.now() + 90000, attempt: (v.attempt || 0) + 1, lease: token, error: '' }); return { token,duration:v.duration }; });
         if ('cached' in attempt)
-            return { caption: attempt.cached };
+            return { transcript: attempt.cached };
         try {
             const [audio] = await bucket().file(audioPath({ id: recordId })).download();
-            const caption = await transcribeVoice(t.ownerUid, t.key + ':' + recordId + ':' + attempt.token, audio,{classId:t.classId,audioSeconds:attempt.duration});
-            await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const v = (await tx.get(ref)).data(); if (v?.lease !== attempt.token || v.uploadStatus !== 'ready' || v.status !== 'draft')
-                throw new ApiError(409, '녹음이 변경됐어요.'); tx.update(ref, { caption, transcription: 'done', leaseUntil: 0, version: crypto.randomUUID() }); });
-            return { caption };
+            const transcript = await transcribeVoice(t.ownerUid, t.key + ':' + recordId + ':' + attempt.token, audio,{classId:t.classId,audioSeconds:attempt.duration});
+            await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const v = (await tx.get(ref)).data(); if (v?.lease !== attempt.token || v.uploadStatus !== 'ready')
+                throw new ApiError(409, '녹음이 변경됐어요.'); tx.update(ref, { transcript, transcription: 'done', leaseUntil: 0 }); });
+            return { transcript };
         }
         catch (e) {
             await db().runTransaction(async (tx) => { const v = (await tx.get(ref)).data(); if (v?.lease === attempt.token && v.transcription === 'running')
-                tx.update(ref, { transcription: 'failed', leaseUntil: 0, error: e instanceof ApiError ? e.code : 'VOICE_TRANSCRIPTION_FAILED', version: crypto.randomUUID() }); });
+                tx.update(ref, { transcription: 'failed', leaseUntil: 0, error: e instanceof ApiError ? e.code : 'VOICE_TRANSCRIPTION_FAILED' }); });
             throw e;
         }
     }
@@ -130,8 +132,6 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
             const [snapshot, state] = await Promise.all([tx.get(ref), tx.get(root)]), v = snapshot.data();
             if (!v || v.uploadStatus !== 'ready' || !canEdit(v))
                 throw new ApiError(403, '이 녹음을 수정할 수 없어요.');
-            if (v.transcription === 'running' && v.leaseUntil > Date.now())
-                throw new ApiError(409, '변환이 끝난 뒤 수정해 주세요.');
             if (v.version !== input.version)
                 throw new ApiError(409, '녹음이 바뀌었어요. 새로고침해 주세요.');
             const version = crypto.randomUUID();
@@ -154,7 +154,7 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
                 if (v.status !== 'draft')
                     throw new ApiError(409, '새 녹음 초안에서 수정해 주세요.');
                 // Audio-only stories are allowed, so the caption may be cleared.
-                tx.update(ref, { caption: text(input.caption, '캡션', 3000, true), version, transcription: 'done' });
+                tx.update(ref, { caption: text(input.caption, '캡션', 3000, true), version });
             }
         });
         return { saved: true };

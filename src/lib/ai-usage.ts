@@ -12,6 +12,7 @@ export function aiProviderUsage(payload:unknown,model:string,hints:AiUsageHints=
   let estimatedUsd:number|null=null;
   if(model==='gpt-6-luna'&&inputTokens!==null&&outputTokens!==null){const multiplier=serviceTier==='default'?1:serviceTier==='flex'?.5:serviceTier==='priority'||serviceTier==='fast'?2:null;if(multiplier!==null){const cached=Math.min(inputTokens,cachedInputTokens??0);estimatedUsd=((inputTokens-cached)*.1+cached*.01+outputTokens*.5)/1_000_000*multiplier+webSearchCalls*.01;}}
   if(model==='gpt-transcribe'&&audioSeconds!==null)estimatedUsd=audioSeconds/60*.0045;
+  if(model==='whisper-1'&&audioSeconds!==null)estimatedUsd=audioSeconds/60*.006;
   return{inputTokens,cachedInputTokens,outputTokens,totalTokens,audioSeconds,webSearchCalls,serviceTier,estimatedUsd,pricingDate:AI_USAGE_PRICING_DATE};
 }
 export type AiUsageJob={actorUid:string;classId?:string;tool?:string;model?:string;status:string;createdAt:string;usage?:AiProviderUsage;durationMs?:number|null};

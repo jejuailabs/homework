@@ -92,7 +92,7 @@ function fixture() {
   const server = load('./server.ts', {
     'firebase-admin/firestore': {FieldValue}, '@/lib/server/admin': {db: () => db, bucket: () => bucket}, '@/lib/server/policy': policy,
     '../artwork-extensions/server-utils': utils, './wav': wav,
-    './provider': {transcribeVoice: async () => {stats.ai++; return '테스트 음성 캡션';}},
+    './provider': {transcribeVoice: async () => {stats.ai++; return {text: '안녕하세요. 고래를 그렸어요.', segments: [{start: 0, end: 1.2, text: '안녕하세요.'}, {start: 1.2, end: 3, text: '고래를 그렸어요.'}]};}},
   });
   const request = (who, method, segments = [], body) => new Request('https://example.test/api/artwork-modules/exhibition/room1/art1/voice' + (segments.length ? '/' + segments.join('/') : '') + (who === null ? '?share=' + share : ''), {
     method, ...(body === undefined ? {} : {body: body instanceof Uint8Array ? body : JSON.stringify(body), headers: {'Content-Type': body instanceof Uint8Array ? 'audio/wav' : 'application/json'}}),
@@ -229,21 +229,54 @@ test('voice: disabled AI rejects before download, provider invocation or state m
   await rejectsStatus(provider.transcribeVoice('teacher1', 'test', audio), 403, 'VOICE_AI_DISABLED');
 }));
 
-test('voice: even an enabled AI capability is teacher-only and invoked only explicitly', () => offline(async () => {
+test('voice: an enabled timed transcript is made once, kept beside the caption and shown to public listeners', () => offline(async () => {
   // Process-local flag only; provider remains a stub and no deployment environment is changed.
   await environment({VOICE_AI_TRANSCRIPTION_ENABLED: 'true'}, async () => {
     const f = fixture();
-    await f.upload();
-    assert.equal(f.stats.ai, 0); assert.equal(f.stats.downloads, 0);
-    assert.equal((await f.invoke(student)).viewer.transcribe, false);
+    await f.upload(); await f.caption();
+    assert.equal(f.stats.ai, 0); assert.equal(f.stats.downloads, 0); // Uploading alone never calls the AI.
+    assert.equal((await f.invoke(student)).viewer.transcribe, true);
     assert.equal((await f.invoke(teacher)).viewer.transcribe, true);
     const before = {...f.stats};
-    await rejectsStatus(f.invoke(student, 'POST', ['voice1', 'transcribe'], {}), 403, 'VOICE_AI_DISABLED');
+    await rejectsStatus(f.invoke(other, 'POST', ['voice1', 'transcribe'], {}), 403);
     assert.deepEqual(f.stats, before);
-    const result = await f.invoke(teacher, 'POST', ['voice1', 'transcribe'], {});
-    assert.equal(result.caption, '테스트 음성 캡션'); assert.equal(f.stats.ai, 1);
+    const version = f.data.get(recordingPath('voice1')).version;
+    const result = await f.invoke(student, 'POST', ['voice1', 'transcribe'], {});
+    assert.equal(result.transcript.segments.length, 2); assert.equal(f.stats.ai, 1);
     await f.invoke(teacher, 'POST', ['voice1', 'transcribe'], {});
-    assert.equal(f.stats.ai, 1); // Repeated explicit request returns the completed caption.
-    assert.equal(f.data.get(recordingPath('voice1')).status, 'draft');
+    assert.equal(f.stats.ai, 1); // A finished transcript is replayed, never paid for twice.
+    const saved = f.data.get(recordingPath('voice1'));
+    assert.equal(saved.caption, '바다와 섬을 그렸어요.'); assert.equal(saved.version, version); assert.equal(saved.status, 'draft');
+    await f.caption('voice1', student, '고친 설명이에요.'); // Caption edits still work after subtitles arrive.
+    await f.approve();
+    const listing = await f.invoke(null);
+    assert.equal(listing.active.transcription, 'done');
+    assert.deepEqual(listing.active.transcript.segments.map(s => s.text), ['안녕하세요.', '고래를 그렸어요.']);
+    assert.equal(listing.active.caption, '고친 설명이에요.');
   });
 }));
+
+test('voice: a failed transcript keeps the recording playable and needs an explicit retry', () => offline(async () => {
+  await environment({VOICE_AI_TRANSCRIPTION_ENABLED: 'true'}, async () => {
+    const f = fixture();
+    await f.upload();
+    const ref = recordingPath('voice1');
+    f.data.set(ref, {...f.data.get(ref), transcription: 'failed', attempt: 1});
+    await rejectsStatus(f.invoke(student, 'POST', ['voice1', 'transcribe'], {}), 409, 'VOICE_RETRY_REQUIRED');
+    assert.equal(f.stats.ai, 0);
+    const draft = (await f.invoke(student)).draft;
+    assert.equal(draft.transcription, 'failed'); assert.equal(draft.transcript, null); assert.match(draft.audioUrl, /\/voice\/voice1\/audio$/);
+    assert.equal((await f.invoke(student, 'POST', ['voice1', 'transcribe'], {retry: true})).transcript.text, '안녕하세요. 고래를 그렸어요.');
+  });
+}));
+
+test('voice: provider bodies become bounded, ordered subtitles with or without timestamps', () => {
+  const {timedTranscript, activeSegment} = load('./transcript.ts');
+  const timed = timedTranscript({text: 'x', segments: [{start: 0, end: 2, text: ' 안녕\n하세요. '}, {start: 1.5, end: 90, text: '바다예요.'}, {start: 'bad', end: 3, text: '무시'}]}, 10);
+  assert.deepEqual(timed.segments, [{start: 0, end: 2, text: '안녕 하세요.'}, {start: 2, end: 10, text: '바다예요.'}]);
+  const spread = timedTranscript({text: '짧아요. 이 문장은 조금 더 길어요.'}, 6);
+  assert.equal(spread.segments.length, 2); assert.equal(spread.segments[0].start, 0); assert.equal(spread.segments[1].end, 6);
+  assert.ok(spread.segments[0].end < 3);
+  assert.equal(timedTranscript({text: '  '}, 5), null);
+  assert.equal(activeSegment(timed.segments, 0.5), 0); assert.equal(activeSegment(timed.segments, 4), 1);
+});
