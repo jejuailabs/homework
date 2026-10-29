@@ -14,3 +14,6 @@ const matching=dataUrl(compile('../artwork-student-matching.ts'));
 await import(dataUrl(compile('../artwork-student-matching.test.ts').replace("'./artwork-student-matching'",JSON.stringify(matching))));
 const author=dataUrl(compile('./artwork-author-policy.ts').replace("'./policy'",JSON.stringify(policy)));
 await import(dataUrl(compile('./exhibition-upgrade.test.ts').replace("'../exhibition-metadata'",JSON.stringify(metadata)).replace("'./artwork-author-policy'",JSON.stringify(author))));
+const whitekneeWorld = dataUrl(compile('../whiteknee-world-model.ts'));
+await import(dataUrl(compile('../whiteknee-world-model.test.ts').replace("'./whiteknee-world-model'", JSON.stringify(whitekneeWorld)).replace("'three'", JSON.stringify(import.meta.resolve('three')))));
+await import('./run-exhibition-companion-tests.mjs');

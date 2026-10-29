@@ -8,6 +8,7 @@ import {createArtScreenPainter, type ArtScreenFrame} from '@/lib/exhibition-scre
 import ExhibitionScreen from './exhibition-screen';
 import WorldJoystick from './world-joystick';
 import { createExhibitionLabelCanvas } from "@/lib/exhibition-label";
+import {createWhitekneeWorldModel, type WorldCompanion} from '@/lib/whiteknee-world-model';
 import "@/styles/exhibition-world.css";
 
 export type WorldBuilding = { id: string; name: string };
@@ -23,6 +24,7 @@ export type ExhibitionWorldProps = {
   theme?: "cozy" | "forest" | "sky" | "ocean";
   locale?: string;
   paused?: boolean;
+  companion?: WorldCompanion | null;
   onEnterBuilding: (id: string) => void;
   onEnterRoom: (id: string) => void;
   onSelectArtwork: (id: string) => void;
@@ -42,6 +44,7 @@ const PALETTES = {
 export default function ExhibitionWorld(props: ExhibitionWorldProps) {
   const { stage, buildings, buildingName, rooms, artworks, roomTitle, theme = "cozy", locale = "ko", paused = false } = props;
   const english = locale.startsWith("en");
+  const companionKey = JSON.stringify(props.companion || null);
   const rootRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const callbacks = useRef(props);
@@ -460,7 +463,15 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         }
       }
 
-      const cat = character("cat", 0.82); scene.add(cat.group);
+      const look = JSON.parse(companionKey) as WorldCompanion | null;
+      const whiteknee = look?.pet === 'animal-whiteknee' ? createWhitekneeWorldModel(T, look) : null;
+      const cat = whiteknee || character("cat", 0.82); scene.add(cat.group);
+      const animatePlayer = (phase: number, moving: boolean) => {
+        if (whiteknee) {whiteknee.animate(phase, moving); return;}
+        const classic = cat as ReturnType<typeof character>;
+        classic.feet.forEach((foot, i) => {foot.position.y = .13 + (moving ? Math.max(0, Math.sin(phase + i * Math.PI)) * .11 : 0);});
+        classic.body.position.y = .61 + (moving ? Math.sin(phase * 2) * .015 : 0);
+      };
       const guide = character("otter", stage === "campus" ? 1.04 : 0.95);
       guide.group.position.set(stage === "campus" ? 2.7 : stage === "gallery" ? 3.2 : -4.8, 0, stage === "campus" ? 4.7 : stage === "gallery" ? -1.9 : 1.6);
       guide.group.rotation.y = stage === "campus" ? -0.25 : 0.3; scene.add(guide.group);
@@ -493,14 +504,15 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const cameraX = player.x - Math.sin(yaw) * follow, cameraZ = player.z + Math.cos(yaw) * follow;
         const portraitCampus = stage === 'campus' && camera.aspect < .85;
         camera.position.set(T.MathUtils.clamp(cameraX, bounds.minX + 0.15, bounds.maxX - 0.15), stage === "campus" ? (portraitCampus ? 5.6 : 3.6) : 2.3, T.MathUtils.clamp(cameraZ, bounds.minZ + 0.15, bounds.maxZ - 0.15));
-        const viewPitch = pitch - (portraitCampus ? .05 : 0);
+        const viewPitch = pitch - (portraitCampus ? .05 : 0) - (whiteknee ? (stage === 'campus' ? .10 : .30) : 0);
         camera.lookAt(camera.position.x + Math.sin(yaw) * 10, camera.position.y + Math.sin(viewPitch) * 10, camera.position.z - Math.cos(yaw) * 10);
         cat.group.position.copy(player);
         cat.group.visible = camera.position.distanceTo(new T.Vector3(player.x, 1.1, player.z)) > 1.65;
       }
       const stick={x:0,y:0};
       function canStand(x: number, z: number) {
-        return !obstacles.some(o => Math.abs(x - o.x) < o.halfX + 0.26 && Math.abs(z - o.z) < o.halfZ + 0.26);
+        const radius = whiteknee ? .67 : .26;
+        return !obstacles.some(o => Math.abs(x - o.x) < o.halfX + radius && Math.abs(z - o.z) < o.halfZ + radius);
       }
       function draw(now: number) {
         frame = 0;
@@ -519,9 +531,8 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
           if (canStand(player.x, nz)) player.z = nz;
           cat.group.rotation.y = Math.atan2(dx, dz);
           gait += dt * 12;
-          cat.feet.forEach((foot, i) => { foot.position.y = 0.13 + Math.max(0, Math.sin(gait + i * Math.PI)) * 0.11; });
-          cat.body.position.y = 0.61 + Math.sin(gait * 2) * 0.015;
-        } else { cat.feet.forEach(foot => { foot.position.y = 0.13; }); cat.body.position.y = 0.61; }
+          animatePlayer(gait, true);
+        } else { animatePlayer(gait, false); }
         updateCamera(); renderer.render(scene, camera);
         if (now - lastPositionStamp > 100 || !moving) {
           root!.dataset.playerPosition = `${player.x.toFixed(3)},${player.z.toFixed(3)}`;
@@ -633,6 +644,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         if (transitionTimer) clearTimeout(transitionTimer);
         resize.disconnect(); intersection.disconnect(); events.forEach(remove => remove());
         controlsRef.current = null;
+        whiteknee?.dispose();
         textures.forEach(texture => texture.dispose()); materials.forEach(material => material.dispose()); geometries.forEach(geometry => geometry.dispose());
         renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
       };
@@ -640,14 +652,14 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
     }
     createWorld().catch(() => { cleanup?.(); if (!disposed) setStatus("fallback"); });
     return () => { disposed = true; cleanup?.(); };
-  }, [data, stage, theme, english, wing]);
+  }, [data, stage, theme, english, wing, companionKey]);
 
   const title = stage === "campus" ? (english ? "Our little exhibition school" : "우리들의 작은 전시학교") : stage === "classroom" ? buildingName || (english ? "Our classroom" : "우리 반 교실") : roomTitle || (english ? "Our exhibition" : "우리들의 전시회");
   const indexTitle = stage === "campus" ? (english ? "Choose a classroom" : "우리 반 찾기") : stage === "classroom" ? (english ? "All exhibitions" : "전시실 모두 보기") : (english ? "All artworks" : "작품 모두 보기");
   const indexVisible = indexOpen || status === "fallback";
 
   return <section ref={rootRef} className={`ex-world ex-world--${stage}${paused || screenExpanded ? " ex-world--paused" : ""}`} data-world-stage={stage} data-world-status={status} data-visible-artwork-count={data.artworks.length} data-loaded-artwork-count={loadedArtworkIds.length} data-loaded-artwork-ids={loadedArtworkIds.join(",")} data-total-artwork-count={artworks.length} data-world-wing={wing + 1} aria-label={title}>
-    <div ref={hostRef} className="ex-world-viewport" />
+    <div ref={hostRef} className="ex-world-viewport" data-player-pet={props.companion?.pet === 'animal-whiteknee' ? 'animal-whiteknee' : 'friend-cat'} />
     <div className="ex-world-topbar">
       {stage === "campus" ? <span className="ex-world-back" /> : <button type="button" className="ex-world-pill ex-world-back" onClick={props.onExit} aria-label={english ? "Back" : "뒤로"}><ArrowLeft size={17} /><span>{stage === "gallery" ? (english ? "Classroom" : "교실로") : (english ? "Schoolyard" : "학교 앞으로")}</span></button>}
       <div className="ex-world-title"><span><Sparkles size={13} />{stage === "campus" ? "OUR LITTLE SCHOOL" : stage === "classroom" ? "OUR CLASSROOM" : "LITTLE ART GALLERY"}</span><strong>{title}</strong></div>

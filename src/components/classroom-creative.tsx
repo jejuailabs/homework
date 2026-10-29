@@ -1,6 +1,7 @@
 'use client';
 import dynamic from 'next/dynamic';
 const LocalCanvas=dynamic(()=>import('./local-canvas'));
+const ClassroomChalkboard=dynamic(()=>import('./classroom-chalkboard'));
 
 import {useEffect, useRef, useState, type PointerEvent as ReactPointerEvent} from 'react';
 import QRCode from 'qrcode';
@@ -22,7 +23,7 @@ export function ClassroomNotes() {
 type Stroke = {color: string; width: number; points: Array<[number, number]>};
 const palette = ['#243b35', '#e66363', '#ed9e36', '#e2bf32', '#429474', '#4482d3', '#8c64c1', '#e47aac', '#ffffff'];
 function isStrokes(value: unknown): value is Stroke[] {return Array.isArray(value) && value.length <= 600 && value.every(stroke => stroke && typeof stroke.color === 'string' && /^#[0-9a-f]{6}$/i.test(stroke.color) && typeof stroke.width === 'number' && stroke.width >= 1 && stroke.width <= 40 && Array.isArray(stroke.points) && stroke.points.length <= 4000 && stroke.points.every((point: unknown) => Array.isArray(point) && point.length === 2 && point.every(n => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 1)));}
-export function ClassroomBoard({pencils=false}:{pencils?:boolean}) {return <LocalCanvas pencils={pencils}/>;}
+export function ClassroomBoard({pencils=false}:{pencils?:boolean}) {return pencils?<LocalCanvas pencils/>:<ClassroomChalkboard/>;}
 
 export function ClassroomQr() {
   const w = useWords(); const [value, setValue] = useClassroomSaved('qr-content', ''); const [image, setImage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const request = useRef(0);

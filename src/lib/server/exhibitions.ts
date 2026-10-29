@@ -24,6 +24,8 @@ import {readArtworkAuthors} from './ai';
 import {artworkAuthorImages} from './artwork-author-policy';
 import {moduleOptions} from '@/modules/artwork-extensions/types';
 import {effectiveOptions} from '@/modules/artwork-extensions/exhibition-adapter';
+import {companionProfile} from '@/modules/my-space/profile';
+import {wardrobeOutfit} from './points-policy';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -114,7 +116,14 @@ async function list(ctx: Context, request: Request) {
       readPage(ctx.classId),
       db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get(),
     ]);
-    return json({ ...page, viewerRole: 'student', viewerId: ctx.uid, selectedClassId: ctx.classId, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '' } });
+    const owned = profile.data()?.spaceOwned;
+    // Only Whiteknee owners need a room read for this first 3D companion release.
+    const room = process.env.MY_SPACE_DISABLED !== 'true' && Array.isArray(owned) && owned.includes('animal-whiteknee')
+      ? await db().doc(`classes/${ctx.classId}/students/${ctx.studentId}/mySpace/room`).get() : null;
+    const selected = room ? companionProfile(profile.data()!, room.data()) : null;
+    const worn = wardrobeOutfit(profile.data()?.wardrobeOutfit, profile.data()?.wardrobeOwned);
+    const companion = selected?.pet === 'animal-whiteknee' ? {pet: selected.pet, outfit: selected.outfit, wardrobe: {head: worn.head, face: worn.face, neck: worn.neck}} : null;
+    return json({ ...page, viewerRole: 'student', viewerId: ctx.uid, selectedClassId: ctx.classId, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '', companion } });
   }
   const readTeacherPage = async () => {
     const classQuery = db().collection('classes').where('ownerUid', '==', ctx.uid).limit(100);
