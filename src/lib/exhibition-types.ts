@@ -1,5 +1,6 @@
 /** Shared API contract: each class is a building, and exhibitions are rooms inside it. */
 import type {ArtworkModuleOptions} from '@/modules/artwork-extensions/types';
+import type {WorldCompanion} from './whiteknee-world-model';
 export type ExhibitionStatus = 'draft' | 'open' | 'closed';
 export type ExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean';
 export type ArtworkStatus = 'pending' | 'approved' | 'revision';
@@ -19,7 +20,7 @@ export type ExhibitionStudent = {
   id: string; name: string; number: number; character: string; xp: number;
 };
 export type ExhibitionClass = { id: string; name: string; grade: string; studentCount: number; year?: number };
-export type ExhibitionProfile = ExhibitionStudent & { classId: string; className: string };
+export type ExhibitionProfile = ExhibitionStudent & { classId: string; className: string; companion?: WorldCompanion | null };
 export type ExhibitionArtwork = {
   id: string; exhibitionId: string; studentId: string; studentName: string; studentNumber: number;
   title: string; description: string; status: ArtworkStatus; feedback: string;
