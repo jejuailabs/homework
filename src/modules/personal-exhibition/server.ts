@@ -6,6 +6,7 @@ import type {Context} from '@/lib/server/auth';
 import {ApiError} from '@/lib/server/policy';
 import {canViewArtwork, encodeExhibitionCursor, exhibitionCursor, EXHIBITION_ARTWORK_LIMIT} from '@/lib/server/exhibition-policy';
 import {stableReadUrl} from '@/lib/server/signed-urls';
+import {downloadDisposition, friendlyFileName} from '@/lib/file-naming';
 import {artworkToday} from '@/lib/exhibition-metadata';
 import {personalExhibition} from './identity';
 import type {PersonalArtwork, PersonalExhibitionPage} from './types';
@@ -42,7 +43,8 @@ export async function readPersonalExhibition(ctx: Context, cursor: string | null
     const works = await room.ref.collection('artworks').where('studentId', '==', studentId).limit(EXHIBITION_ARTWORK_LIMIT).get();
     return Promise.all(works.docs.filter(doc => doc.data().studentId === studentId && canViewArtwork(ctx, source, doc.data() as PersonalArtwork)).map(async doc => {
       const value = doc.data();
-      const [url, thumbnailUrl] = await Promise.all([stableReadUrl(value.displayPath), stableReadUrl(value.thumbnailPath)]);
+      const saveAs = downloadDisposition(friendlyFileName(value.studentName || value.artistName, room.data().title, 'webp', 1, '전시'));
+      const [url, thumbnailUrl] = await Promise.all([stableReadUrl(value.displayPath, {responseDisposition: saveAs}), stableReadUrl(value.thumbnailPath)]);
       // Explicit response fields keep private storage paths and uploader details on the server.
       return {
         id: doc.id, exhibitionId: room.id, exhibitionTitle: room.data().title,

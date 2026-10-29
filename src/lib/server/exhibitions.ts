@@ -6,6 +6,7 @@ import sharp, { type Metadata } from 'sharp';
 import { bucket, db } from './admin';
 import {awaitUploadTransfer, cancelUploadTransfer, createUploadTransfer} from './upload-transfer';
 import {stableReadUrl} from './signed-urls';
+import {downloadDisposition, friendlyFileName} from '../file-naming';
 import {assertTeacherStorage} from './teacher-storage';
 import {FILE_CACHE_CONTROL} from '../storage-cache';
 import { assertOrigin, getContext, type Context } from './auth';
@@ -71,7 +72,9 @@ function studentValue(snapshot: FirebaseFirestore.DocumentSnapshot): ExhibitionS
   return { id: snapshot.id, name: value.name, number: value.number, character: value.character ?? 'cat', xp: value.xp ?? 0 };
 }
 async function signedArtwork(ctx: Context, exhibition: Exhibition, value: Data, ownReaction?: string): Promise<ExhibitionArtwork> {
-  const [url, thumbnailUrl] = await Promise.all([stableReadUrl(value.displayPath), stableReadUrl(value.thumbnailPath)]);
+  // Saved as 학생이름_전시이름(10자); artworks a teacher made without a student use the artist name, then 선생님.
+  const saveAs = downloadDisposition(friendlyFileName(value.studentName || value.artistName || '선생님', exhibition.title, 'webp', 1, '전시'));
+  const [url, thumbnailUrl] = await Promise.all([stableReadUrl(value.displayPath, {responseDisposition: saveAs}), stableReadUrl(value.thumbnailPath)]);
   // Never expose original storage paths, tokenized URLs, uploader UIDs, or private manifests.
   return {
     id: value.id, exhibitionId: value.exhibitionId, studentId: value.studentId, artistName: value.artistName ?? value.studentName ?? '', artworkDate: value.artworkDate ?? artworkToday(new Date(value.createdAt)),

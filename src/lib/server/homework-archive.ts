@@ -50,8 +50,8 @@ async function files(task: Owned) {
   ]);
   const current = new Set(submissions.docs.flatMap(doc => (doc.data().uploads ?? []).map((upload: Data) => upload.id)));
   const byId = new Map(stored.map(doc => [doc.id, doc.data()]));
-  const names = archiveEntryNames(stored.map(doc => ({id: doc.id, studentId: String(doc.data().studentId || ''), fileName: String(doc.data().fileName || ''), size: Number(doc.data().size || 0), current: current.has(doc.id)})),
-    students.docs.map(doc => ({id: doc.id, number: doc.data().number, name: doc.data().name})));
+  const names = archiveEntryNames(stored.map(doc => ({id: doc.id, studentId: String(doc.data().studentId || ''), fileName: String(doc.data().fileName || ''), contentType: String(doc.data().contentType || ''), size: Number(doc.data().size || 0), current: current.has(doc.id)})),
+    students.docs.map(doc => ({id: doc.id, number: doc.data().number, name: doc.data().name})), task.title);
   return {
     id: task.id, title: task.title, zipName: archiveZipName(task.title, task.createdAt),
     files: await Promise.all(names.map(async file => ({...file, contentType: String(byId.get(file.uploadId)?.contentType || ''), url: await stableReadUrl(String(byId.get(file.uploadId)!.path))}))),

@@ -5,6 +5,7 @@ import {ApiError} from './policy';
 import {stableReadUrl} from './signed-urls';
 import {videoConfig} from './video-submissions';
 import {EXPORT_KEEP_DAYS, safeSegment, splitExportParts, type ExportFile} from '../storage-export';
+import {extensionOf, friendlyFileName} from '../file-naming';
 
 type Data = FirebaseFirestore.DocumentData;
 const exportRef = (exportId: string) => db().doc(`storageExports/${exportId}`);
@@ -17,10 +18,13 @@ async function homeworkFiles(uid: string): Promise<ExportFile[]> {
     const pupils = new Map(students.docs.map(doc => [doc.id, doc.data()]));
     const assignmentIds = [...new Set(uploads.docs.map(doc => String(doc.data().assignmentId)))];
     const assignments = new Map((assignmentIds.length ? await db().getAll(...assignmentIds.map(item => db().doc(`assignments/${item}`))) : []).map(doc => [doc.id, doc.data()]));
+    const counts = new Map<string, number>();
     return uploads.docs.map(doc => {
-      const value = doc.data(), pupil = pupils.get(value.studentId);
-      const owner = pupil ? `${String(pupil.number ?? '').padStart(2, '0')}_${safeSegment(pupil.name)}` : safeSegment(value.studentId, '학생');
-      return {paths: [value.path], size: Number(value.storedBytes ?? value.size ?? 0), name: `숙제/${safeSegment(cls.data().name, '학급')}/${safeSegment(assignments.get(value.assignmentId)?.title, '과제')}/${owner}_${safeSegment(value.fileName, '파일')}`};
+      const value = doc.data(), pupil = pupils.get(value.studentId), key = `${value.assignmentId}:${value.studentId}`, index = (counts.get(key) ?? 0) + 1;
+      counts.set(key, index);
+      const title = assignments.get(value.assignmentId)?.title, number = pupil ? `${String(pupil.number ?? '').padStart(2, '0')}_` : '';
+      // 03_심지후_레코더영상학교종이땡.mp4, then _2, _3 for the same student's other files.
+      return {paths: [value.path], size: Number(value.storedBytes ?? value.size ?? 0), name: `숙제/${safeSegment(cls.data().name, '학급')}/${safeSegment(title, '과제')}/${number}${friendlyFileName(pupil?.name, title, extensionOf(value.fileName, value.contentType), index, '숙제')}`};
     });
   }));
   return perClass.flat();
@@ -34,13 +38,14 @@ async function materialFiles(uid: string): Promise<ExportFile[]> {
 
 async function galleryFiles(uid: string): Promise<ExportFile[]> {
   const exhibitions = await db().collection('exhibitions').where('ownerUid', '==', uid).get();
-  const perRoom = await Promise.all(exhibitions.docs.map(async room => (await room.ref.collection('artworks').get()).docs.map(doc => {
+  const perRoom = await Promise.all(exhibitions.docs.map(async room => {const counts = new Map<string, number>(); return (await room.ref.collection('artworks').get()).docs.map(doc => {
     const art = doc.data(), fileId = art.uploadId || String(art.displayPath || '').split('/')[2];
     // Prefer the untouched original; the 2000px display copy is the fallback.
     const paths = [art.uploaderUid && fileId ? `exhibition-uploads/${art.uploaderUid}/${fileId}/original` : '', art.displayPath].filter(Boolean);
-    const artist = safeSegment(art.artistName || art.studentName, '작가');
-    return {paths, size: Number(art.storedBytes || 0), appendExtension: true, name: `전시실/${safeSegment(room.data().title, '전시실')}/${artist}_${safeSegment(art.title, doc.id)}`};
-  })));
+    const number = art.studentNumber ? `${String(art.studentNumber).padStart(2, '0')}_` : '', person = art.studentName || art.artistName || '선생님', index = (counts.get(person) ?? 0) + 1;
+    counts.set(person, index);
+    return {paths, size: Number(art.storedBytes || 0), appendExtension: true, name: `전시실/${safeSegment(room.data().title, '전시실')}/${number}${friendlyFileName(person, room.data().title, '', index, '전시')}`};
+  });}));
   return perRoom.flat().filter(file => file.paths.length);
 }
 

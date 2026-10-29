@@ -9,7 +9,7 @@ test('archive names use the homework title and the Korean date it was given', ()
   assert.equal(archiveZipName('', undefined), '숙제.zip');
 });
 
-test('entries are numbered by student, keep file names and separate earlier attempts', () => {
+test('entries are named 번호_이름_제목, number extra files per student and separate earlier attempts', () => {
   const students = [{id: 's1', number: 3, name: '김민준'}, {id: 's2', number: 12, name: '이서연'}];
   const names = archiveEntryNames([
     {id: 'u3', studentId: 's2', fileName: 'image.jpg', size: 3, current: true},
@@ -17,9 +17,10 @@ test('entries are numbered by student, keep file names and separate earlier atte
     {id: 'u2', studentId: 's1', fileName: 'image.jpg', size: 2, current: true},
     {id: 'u4', studentId: 's1', fileName: 'old.png', size: 4, current: false},
     {id: 'u5', studentId: 'gone', fileName: 'a.pdf', size: 5, current: true},
-  ], students);
-  assert.deepEqual(names.map(file => file.name), ['03_김민준_image.jpg', '03_김민준_image (2).jpg', '12_이서연_image.jpg', '학생_a.pdf', '이전 제출/03_김민준_old.png']);
-  assert.deepEqual(names.map(file => file.uploadId), ['u1', 'u2', 'u3', 'u5', 'u4']);
+    {id: 'u6', studentId: 's2', fileName: 'clip', contentType: 'video/mp4', size: 6, current: false},
+  ], students, '레코더 영상 학교종이 땡');
+  assert.deepEqual(names.map(file => file.name), ['03_김민준_레코더영상학교종이땡.jpg', '03_김민준_레코더영상학교종이땡_2.jpg', '12_이서연_레코더영상학교종이땡.jpg', '학생_레코더영상학교종이땡.pdf', '이전 제출/03_김민준_레코더영상학교종이땡.png', '이전 제출/12_이서연_레코더영상학교종이땡.mp4']);
+  assert.deepEqual(names.map(file => file.uploadId), ['u1', 'u2', 'u3', 'u5', 'u4', 'u6']);
 });
 
 test('files can only be cleared after every stored file was downloaded', () => {

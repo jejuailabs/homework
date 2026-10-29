@@ -1,4 +1,5 @@
 import {safeSegment, uniqueNames} from './storage-export';
+import {extensionOf, friendlyFileName} from './file-naming';
 
 /** Cleared homework files stay restorable this long before the daily cleanup deletes them from storage. */
 export const HOMEWORK_TRASH_KEEP_DAYS = 14;
@@ -7,7 +8,7 @@ export const HOMEWORK_ARCHIVE_MAX_BYTES = 1.5 * 1024 ** 3;
 export const HOMEWORK_ARCHIVE_MAX_ASSIGNMENTS = 20;
 
 export type ArchiveStudent = {id: string; number?: unknown; name?: unknown};
-export type ArchiveUpload = {id: string; studentId: string; fileName: string; size: number; current: boolean};
+export type ArchiveUpload = {id: string; studentId: string; fileName: string; contentType?: string; size: number; current: boolean};
 
 /** e.g. "받아쓰기 3단원_10-29.zip", dated by when the homework was given (Korean time). */
 export function archiveZipName(title: unknown, openedAt: unknown) {
@@ -16,17 +17,19 @@ export function archiveZipName(title: unknown, openedAt: unknown) {
   return `${safeSegment(title, '숙제')}${date ? `_${date}` : ''}.zip`;
 }
 
-/** "03_김민준_IMG_1234.jpg"; files from earlier attempts go under "이전 제출/". Duplicates get " (2)". */
-export function archiveEntryNames(uploads: ArchiveUpload[], students: ArchiveStudent[]) {
+/** "03_심지후_레코더영상학교종이땡.mp4", then _2, _3 for a student's later files; earlier attempts go under "이전 제출/". */
+export function archiveEntryNames(uploads: ArchiveUpload[], students: ArchiveStudent[], title?: unknown) {
   const pupils = new Map(students.map(student => [student.id, student]));
   const sorted = [...uploads].sort((a, b) => {
     const left = Number(pupils.get(a.studentId)?.number ?? 9999), right = Number(pupils.get(b.studentId)?.number ?? 9999);
     return Number(b.current) - Number(a.current) || left - right || a.fileName.localeCompare(b.fileName);
   });
+  const counts = new Map<string, number>();
   const named = sorted.map(upload => {
-    const pupil = pupils.get(upload.studentId);
-    const owner = pupil ? `${String(pupil.number ?? '').padStart(2, '0')}_${safeSegment(pupil.name, '학생')}` : '학생';
-    return {paths: [upload.id], size: upload.size, name: `${upload.current ? '' : '이전 제출/'}${owner}_${safeSegment(upload.fileName, '파일')}`};
+    const pupil = pupils.get(upload.studentId), key = `${upload.current}:${upload.studentId}`, index = (counts.get(key) ?? 0) + 1;
+    counts.set(key, index);
+    const name = friendlyFileName(pupil?.name, title, extensionOf(upload.fileName, upload.contentType), index, '숙제');
+    return {paths: [upload.id], size: upload.size, name: `${upload.current ? '' : '이전 제출/'}${pupil ? `${String(pupil.number ?? '').padStart(2, '0')}_` : ''}${name}`};
   });
   return uniqueNames(named).map(file => ({uploadId: file.paths[0], name: file.name, size: file.size}));
 }

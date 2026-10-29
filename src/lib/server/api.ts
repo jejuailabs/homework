@@ -1,6 +1,7 @@
 import 'server-only';
 import {prepareHomeworkUpload} from './homework-uploads';
 import {stableReadUrl} from './signed-urls';
+import {downloadDisposition, extensionOf, friendlyFileName} from '../file-naming';
 import {assertTeacherStorage} from './teacher-storage';
 import {createVideoSubmission,studentVideoJobs,videoConfig} from './video-submissions';
 import { createHash, randomUUID } from 'node:crypto';
@@ -59,14 +60,15 @@ function publicStudent(doc: FirebaseFirestore.DocumentSnapshot) {
   const value = doc.data()!;
   return { id: doc.id, number: value.number, name: value.name, character: value.character ?? 'cat', xp: value.xp ?? 0, points: pointBalance(value.points), wardrobeOutfit: wardrobeOutfit(value.wardrobeOutfit, value.wardrobeOwned), disabled: !!value.disabled };
 }
-async function withFileUrls(submission: Data): Promise<Data> {
+async function withFileUrls(submission: Data, title?: unknown): Promise<Data> {
   // Files the teacher cleared are never signed again; restoring removes the marker.
   if (submission.filesRemoved) {
     const {filesRemoved, ...rest} = submission;
     return {...rest, uploads: (submission.uploads ?? []).map(({path: _path, thumbnailPath: _thumb, ...upload}: Data) => ({...upload, removed: true, purgeAt: filesRemoved.purgeAt ?? null}))};
   }
-  const uploads = await Promise.all((submission.uploads ?? []).map(async (upload: Data) => {
-    const url = await stableReadUrl(upload.path);
+  const uploads = await Promise.all((submission.uploads ?? []).map(async (upload: Data, index: number) => {
+    // Saved as 이름_숙제제목(10자); the stored original name stays unchanged.
+    const url = await stableReadUrl(upload.path, {responseDisposition: downloadDisposition(friendlyFileName(submission.studentName, title, extensionOf(upload.fileName, upload.contentType), index + 1, '숙제'))});
     const thumbnailUrl=upload.thumbnailPath?await stableReadUrl(upload.thumbnailPath):undefined;
     return { ...upload, url, ...(thumbnailUrl?{thumbnailUrl}:{}) };
   }));
@@ -307,7 +309,7 @@ async function assignmentDetail(request: Request, assignmentId: string) {
   // Show each student's My Space friend and clothes, matching what they see at home.
   const rooms = process.env.MY_SPACE_DISABLED === 'true' || !targets.length ? [] : await db().getAll(...targets.map(doc => doc.ref.collection('mySpace').doc('room')));
   const students = targets.map((doc, index) => ({...publicStudent(doc), spaceCompanion: rooms.length ? companionProfile(doc.data(), rooms[index].data()) : null}));
-  return json({ assignment: {...assignment, materials: await signedAssignmentMaterials(assignment.materials)}, students: students.sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc)))) });
+  return json({ assignment: {...assignment, materials: await signedAssignmentMaterials(assignment.materials)}, students: students.sort((a, b) => a.number - b.number), submissions: await Promise.all(submissions.docs.map(doc => withFileUrls(mapped(doc), assignment.title))) });
 }
 async function home(request: Request) {
   const ctx = await requireStudent(request);
@@ -324,7 +326,7 @@ async function home(request: Request) {
   const assignments = await Promise.all(visible.map(async task => {
     const submission = byAssignment.get(task.id);
     const { targetStudentIds: _targets, ownerUid: _owner, ...visibleTask } = task;
-    return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission) : null,videoJob:jobs.get(task.id)||null };
+    return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission, task.title) : null,videoJob:jobs.get(task.id)||null };
   }));
   return json({ profile, assignments,videoProcessingEnabled:!!await videoConfig() });
 }
@@ -375,7 +377,7 @@ async function finalize(request: Request) {
   const previous = await ref.get();
   // A revision is a new attempt even when a student sends the same text.
   // Submitted/done content still returns the existing attempt on retries.
-  if (previous.data()?.fingerprint === fingerprint && previous.data()?.status !== 'revision') return json({ submission: await withFileUrls(mapped(previous)) });
+  if (previous.data()?.fingerprint === fingerprint && previous.data()?.status !== 'revision') return json({ submission: await withFileUrls(mapped(previous), assignment.title) });
   const uploadDocs = await Promise.all(uploadIds.map((uploadId: string) => db().doc(`uploads/${uploadId}`).get()));
   const uploads = await Promise.all(uploadDocs.map(async doc => {
     const value = doc.data();
@@ -407,7 +409,7 @@ async function finalize(request: Request) {
     return submission;
   });
   // The student can reopen the result immediately, before the home refresh.
-  return json({ submission: await withFileUrls(result) });
+  return json({ submission: await withFileUrls(result, assignment.title) });
 }
 async function reviewTask(request: Request, assignmentId: string) {
   const ctx = await requireTeacher(request);

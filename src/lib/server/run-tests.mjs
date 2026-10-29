@@ -12,7 +12,9 @@ await import(moduleUrl(compile('../tool-window-layout.test.ts').replace("'./tool
 const materialsUrl = moduleUrl(compile('../assignment-materials.ts'));
 await import(moduleUrl(compile('../assignment-materials.test.ts').replace("'./assignment-materials'", JSON.stringify(materialsUrl))));
 const exportNamesUrl = moduleUrl(compile('../storage-export.ts')), zipStoreUrl = moduleUrl(compile('../zip-store.ts'));
-const homeworkArchiveUrl = moduleUrl(compile('../homework-archive.ts').replace("'./storage-export'", JSON.stringify(exportNamesUrl)));
+const fileNamingUrl = moduleUrl(compile('../file-naming.ts'));
+await import(moduleUrl(compile('../file-naming.test.ts').replace("'./file-naming'", JSON.stringify(fileNamingUrl))));
+const homeworkArchiveUrl = moduleUrl(compile('../homework-archive.ts').replace("'./storage-export'", JSON.stringify(exportNamesUrl)).replace("'./file-naming'", JSON.stringify(fileNamingUrl)));
 await import(moduleUrl(compile('../homework-archive.test.ts').replace("'./homework-archive'", JSON.stringify(homeworkArchiveUrl)).replace("'./zip-store'", JSON.stringify(zipStoreUrl))));
 const studentAssignmentViewUrl = moduleUrl(compile('../student-assignment-view.ts'));
 await import(moduleUrl(compile('../student-assignment-view.test.ts').replace("'./student-assignment-view'", JSON.stringify(studentAssignmentViewUrl))));
