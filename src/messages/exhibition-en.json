@@ -227,5 +227,9 @@
   "personalEntryHint": "Find works you upload or your teacher links to you, all in one place",
   "studentGalleryLinkHint": "The work will also appear in the selected student’s gallery.",
   "detectedAuthorName": "Written name: {name}. Select the student to link.",
-  "duplicateArtistSelection": "More than one photo is linked to the same student. Each student keeps one work per exhibition; please check your selections."
+  "duplicateArtistSelection": "More than one photo is linked to the same student. Each student keeps one work per exhibition; please check your selections.",
+  "linkArtistsHint": "{count} artworks have no student linked. Link them to the student whose name matches the title so students see them as their own and can record a voice docent.",
+  "linkArtistsButton": "Link {count} students automatically",
+  "linkArtistsDone": "Linked {count} artworks to students.",
+  "linkArtistsPartial": "Linked {count} artworks. {failed} could not be linked."
 }

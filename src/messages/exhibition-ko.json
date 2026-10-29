@@ -227,5 +227,9 @@
   "personalEntryHint": "내가 올리거나 선생님이 연결한 작품을 한곳에서 만나요",
   "studentGalleryLinkHint": "선택한 학생의 개인 전시실에도 함께 모여요.",
   "detectedAuthorName": "사진에서 읽은 이름: {name} · 연결할 학생을 선택해 주세요.",
-  "duplicateArtistSelection": "같은 학생에게 사진이 두 장 이상 연결됐어요. 전시실마다 학생별 한 작품을 보관하므로 학생 선택을 확인해 주세요."
+  "duplicateArtistSelection": "같은 학생에게 사진이 두 장 이상 연결됐어요. 전시실마다 학생별 한 작품을 보관하므로 학생 선택을 확인해 주세요.",
+  "linkArtistsHint": "작가 학생이 연결되지 않은 작품이 {count}개 있어요. 작품 제목과 같은 이름의 학생에게 연결하면, 학생이 자기 작품으로 보고 목소리 도슨트를 녹음할 수 있어요.",
+  "linkArtistsButton": "학생 {count}명과 자동 연결",
+  "linkArtistsDone": "작품 {count}개를 학생과 연결했어요.",
+  "linkArtistsPartial": "작품 {count}개를 연결했어요. {failed}개는 연결하지 못했어요."
 }

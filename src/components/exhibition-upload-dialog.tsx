@@ -16,7 +16,7 @@ async function previewForReading(photo: Photo): Promise<string> {
   const context = canvas.getContext('2d');if(!context)throw new Error();context.fillStyle = '#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(image,0,0,canvas.width,canvas.height);
   const imageUrl = canvas.toDataURL('image/jpeg', .6);if(imageUrl.length > 160000)throw new Error();return imageUrl;
 }
-export default function ExhibitionUploadDialog({teacher, exhibitionId, students, voiceEnabled = false, storageUsage, studentName = '', onClose, onSaved, DialogComponent: Dialog, StorageUsageComponent}: {teacher: boolean; voiceEnabled?: boolean; exhibitionId: string; students: ExhibitionStudent[]; studentName?: string; storageUsage?: ExhibitionStorageUsage; StorageUsageComponent?: ComponentType<{usage:ExhibitionStorageUsage}>; onClose: () => void; onSaved: () => Promise<void>; DialogComponent: ComponentType<DialogProps>}) {
+export default function ExhibitionUploadDialog({teacher, exhibitionId, students, linkedStudentIds = [], voiceEnabled = false, storageUsage, studentName = '', onClose, onSaved, DialogComponent: Dialog, StorageUsageComponent}: {teacher: boolean; linkedStudentIds?: string[]; voiceEnabled?: boolean; exhibitionId: string; students: ExhibitionStudent[]; studentName?: string; storageUsage?: ExhibitionStorageUsage; StorageUsageComponent?: ComponentType<{usage:ExhibitionStorageUsage}>; onClose: () => void; onSaved: () => Promise<void>; DialogComponent: ComponentType<DialogProps>}) {
   const en = useLocale() === 'en';
   const t = useTranslations('exhibition'), [photos, setPhotos] = useState<Photo[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(''), [warning, setWarning] = useState(''), [progress, setProgress] = useState(0), [autoRead, setAutoRead] = useState(true);
   const input = useRef<HTMLInputElement>(null), camera = useRef<HTMLInputElement>(null), urls = useRef(new Set<string>()), uploads = useRef(new Map<string,string>()), controllers = useRef(new Set<AbortController>()), alive = useRef(true), sending = useRef(false), transfers = useRef(new Map<string, string>());
@@ -29,7 +29,7 @@ export default function ExhibitionUploadDialog({teacher, exhibitionId, students,
       const result = {names: [] as string[]};
       for(let start=0;start<images.length;start+=20){const batch=await request<{names:string[]}>(`/api/exhibitions/${exhibitionId}/read-authors`,{method:'POST',body:JSON.stringify({images:images.slice(start,start+20)}),signal:controller.signal});result.names.push(...batch.names);}
       if(!alive.current)return;
-      setPhotos(previous=>previous.map(photo=>{const index=added.findIndex(row=>row.id===photo.id);if(index<0)return photo;return photo.touched?{...photo,reading:false}:{...photo,reading:false,...matchArtworkStudent(result.names[index]||'',students)};}));
+      setPhotos(previous=>previous.map(photo=>{const index=added.findIndex(row=>row.id===photo.id);if(index<0)return photo;const read=(result.names[index]||'').trim();return photo.touched||!read?{...photo,reading:false}:{...photo,reading:false,...matchArtworkStudent(read,students)};}));
     } catch {if(alive.current){setWarning(t('authorReadFallback'));setPhotos(previous=>previous.map(photo=>added.some(row=>row.id===photo.id)?{...photo,reading:false}:photo));}}
     finally {controllers.current.delete(controller);}
   }
@@ -38,7 +38,10 @@ export default function ExhibitionUploadDialog({teacher, exhibitionId, students,
     setError('');const added:Photo[]=[];
     for(const file of Array.from(files)){
       if(!['image/jpeg','image/png','image/webp'].includes(file.type)){setError(t('fileType'));continue;}if(!file.size||file.size>100*1024*1024){setError(t('fileSize'));continue;}
-      const preview=URL.createObjectURL(file);urls.current.add(preview);added.push({id:crypto.randomUUID(),file,preview,title:file.name.replace(/\.[^.]+$/,'').slice(0,120)||file.name.slice(0,120),artistName:teacher?'':studentName,artworkDate:artworkToday(),description:'',studentId:'',touched:false,reading:teacher&&autoRead});
+      const preview=URL.createObjectURL(file);urls.current.add(preview);const title=file.name.replace(/\.[^.]+$/,'').slice(0,120)||file.name.slice(0,120);
+      // A photo saved as "장유석.jpg" is linked to that student so the student can record a voice docent and see it as their own work.
+      const match=teacher?matchArtworkStudent(title,students):null,byName=match?.studentId&&!linkedStudentIds.includes(match.studentId)&&!photos.concat(added).some(row=>row.studentId===match.studentId)?match:null;
+      added.push({id:crypto.randomUUID(),file,preview,title,artistName:teacher?(byName?.studentId?byName.artistName:''):studentName,artworkDate:artworkToday(),description:'',studentId:byName?.studentId||'',touched:false,reading:teacher&&autoRead});
     }
     setPhotos(previous=>[...previous,...added]);if(teacher&&autoRead&&added.length)void readNames(added);
   }
