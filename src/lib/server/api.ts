@@ -60,6 +60,11 @@ function publicStudent(doc: FirebaseFirestore.DocumentSnapshot) {
   return { id: doc.id, number: value.number, name: value.name, character: value.character ?? 'cat', xp: value.xp ?? 0, points: pointBalance(value.points), wardrobeOutfit: wardrobeOutfit(value.wardrobeOutfit, value.wardrobeOwned), disabled: !!value.disabled };
 }
 async function withFileUrls(submission: Data): Promise<Data> {
+  // Files the teacher cleared are never signed again; restoring removes the marker.
+  if (submission.filesRemoved) {
+    const {filesRemoved, ...rest} = submission;
+    return {...rest, uploads: (submission.uploads ?? []).map(({path: _path, thumbnailPath: _thumb, ...upload}: Data) => ({...upload, removed: true, purgeAt: filesRemoved.purgeAt ?? null}))};
+  }
   const uploads = await Promise.all((submission.uploads ?? []).map(async (upload: Data) => {
     const url = await stableReadUrl(upload.path);
     const thumbnailUrl=upload.thumbnailPath?await stableReadUrl(upload.thumbnailPath):undefined;

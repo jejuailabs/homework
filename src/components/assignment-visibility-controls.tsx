@@ -11,11 +11,11 @@ export type VisibilityAssignment = {
   visibilityVersion?: number; hiddenAt?: string | null; hiddenBy?: string | null;
 };
 
-export function AssignmentVisibilityList<T extends VisibilityAssignment>({assignments, selectedId, view, busy, onViewChange, onSelect, onCreate, onRequest, renderContents}: {
+export function AssignmentVisibilityList<T extends VisibilityAssignment>({assignments, selectedId, view, busy, onViewChange, onSelect, onCreate, onRequest, renderContents, selectionActions}: {
   assignments: T[]; selectedId: string; view: AssignmentVisibility; busy: boolean;
   onViewChange: (view: AssignmentVisibility) => void; onSelect: (id: string) => void;
   onCreate: () => void; onRequest: (action: "hide" | "restore", tasks: T[]) => void;
-  renderContents: (assignment: T) => ReactNode;
+  renderContents: (assignment: T) => ReactNode; selectionActions?: (tasks: T[]) => ReactNode;
 }) {
   const t = useTranslations("product");
   const [selecting, setSelecting] = useState(false), [selected, setSelected] = useState<string[]>([]), [limit, setLimit] = useState(50);
@@ -34,7 +34,7 @@ export function AssignmentVisibilityList<T extends VisibilityAssignment>({assign
     {filtered.length > 0 && <div className="av-toolbar"><button type="button" className="ws-button ws-button-light" disabled={busy} aria-pressed={selecting} onClick={() => {setSelecting(value => !value); setSelected([]);}}><ListChecks size={15}/>{t(selecting ? "teacher.selectionExit" : "teacher.selectionStart")}</button>{selecting && <>
       <button type="button" className="av-text-button" disabled={busy} onClick={() => setSelected(allShownSelected ? [] : shown.slice(0, 100).map(task => task.id))}>{t(allShownSelected ? "teacher.selectionClear" : "teacher.selectionPage")}</button>
       {view === "visible" && <button type="button" className="av-text-button" disabled={busy} onClick={() => setSelected(filtered.filter(task => task.dueAt && Number.isFinite(Date.parse(task.dueAt)) && Date.parse(task.dueAt) < Date.now()).slice(0, 100).map(task => task.id))}>{t("teacher.selectionOverdue")}</button>}
-      <span className="av-selection-count">{t("teacher.assignmentSelected", {count: selectedTasks.length})}</span><button type="button" className="ws-button ws-button-primary" disabled={busy || !selectedTasks.length} onClick={() => onRequest(action, selectedTasks)}>{view === "hidden" ? <Eye size={15}/> : <EyeOff size={15}/>} {t(view === "hidden" ? "teacher.restoreSelected" : "teacher.hideSelected")}</button><small className="av-selection-limit">{t("teacher.selectionLimit")}</small>
+      <span className="av-selection-count">{t("teacher.assignmentSelected", {count: selectedTasks.length})}</span><button type="button" className="ws-button ws-button-primary" disabled={busy || !selectedTasks.length} onClick={() => onRequest(action, selectedTasks)}>{view === "hidden" ? <Eye size={15}/> : <EyeOff size={15}/>} {t(view === "hidden" ? "teacher.restoreSelected" : "teacher.hideSelected")}</button>{selectionActions?.(selectedTasks)}<small className="av-selection-limit">{t("teacher.selectionLimit")}</small>
     </>}</div>}
     <div className="ws-assignment-list av-list">{!filtered.length && <div className="td-list-empty"><FileText size={28}/><p>{t(view === "hidden" ? "teacher.emptyHiddenAssignments" : "teacher.emptyVisibleAssignments")}</p></div>}{shown.map(assignment => <div className={`av-assignment-row${selectedId === assignment.id ? " is-current" : ""}`} key={assignment.id}>
       {selecting && <label className="av-select"><input type="checkbox" checked={selected.includes(assignment.id)} disabled={busy || (!selected.includes(assignment.id) && selectedTasks.length >= 100)} onChange={() => toggle(assignment.id)}/><span className="ws-visually-hidden">{t("teacher.selectNamedAssignment", {title: assignment.title})}</span></label>}

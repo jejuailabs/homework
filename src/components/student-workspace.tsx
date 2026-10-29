@@ -22,7 +22,7 @@ import {missingActiveVideoJobIds, studentAssignmentSections, videoReconciliation
 import "@/styles/student-assignment-sections.css";
 
 type Status = "pending" | "submitted" | "done" | "revision";
-type Upload = {id: string; fileName: string; contentType: string; url?: string; thumbnailUrl?:string; size: number};
+type Upload = {id: string; fileName: string; contentType: string; url?: string; thumbnailUrl?:string; size: number; removed?: boolean};
 type Submission = {id: string; text: string; uploads: Upload[]; feedback?: string; status: Status};
 type Assignment = {materials?: AssignmentMaterial[]; id: string; title: string; description: string; dueAt?: string | null; status: Status; visibility?: 'visible' | 'hidden'; submissionType?: AssignmentSubmissionType; submission?: Submission;videoJob?:VideoJobView|null};
 type Home = {profile: {id: string; name: string; number: number; classId: string; className: string; character: Character; xp: number; points?: number; pointSettings?: PointSettings; wardrobeOutfit?: WardrobeOutfit; mySpaceEnabled?:boolean;spaceCompanion?:{pet:string;art:string;name:string;pose?:'rest'|'raised';outfit:Partial<Record<'body'|'bag',string>>}}; assignments: Assignment[]};
@@ -58,7 +58,7 @@ function SubmittedImage({upload, onRefresh}: {upload: Upload; onRefresh: () => P
 function SubmittedFiles({uploads, revision, onRefresh}: {uploads: Upload[]; revision: boolean; onRefresh: () => Promise<void>}) {
   const t = useTranslations("product");
   if (!uploads.length) return null;
-  return <section className="ws-submitted-files sd-sent-files"><h3>{t(revision ? "student.previousFiles" : "student.submittedFiles", {count: uploads.length})}</h3>{uploads.map(upload => <div className="sd-submitted-attachment" key={upload.id}>
+  return <section className="ws-submitted-files sd-sent-files"><h3>{t(revision ? "student.previousFiles" : "student.submittedFiles", {count: uploads.length})}</h3>{uploads.map(upload => upload.removed ? <div className="sd-submitted-attachment" key={upload.id}><div className="ws-file-link"><Paperclip size={17}/><span>{upload.fileName}<small>{t("homeworkArchive.removedFile")}</small></span></div></div> : <div className="sd-submitted-attachment" key={upload.id}>
     {imageSubmissionMimeTypes.includes(upload.contentType as (typeof imageSubmissionMimeTypes)[number]) ? <SubmittedImage upload={upload} onRefresh={onRefresh}/> : upload.url && upload.contentType.startsWith("video/") ? <VideoPreview url={upload.url} name={upload.fileName} poster={upload.thumbnailUrl} usageId={upload.id}/> : null}
     {upload.url ? <a className="ws-file-link" href={upload.url} target="_blank" rel="noopener noreferrer"><Paperclip size={17}/><span>{upload.fileName}</span><ArrowRight size={16}/></a> : <div className="ws-file-link"><Paperclip size={17}/><span>{upload.fileName}</span></div>}
   </div>)}</section>;
