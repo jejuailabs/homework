@@ -1,6 +1,5 @@
 'use client';
 import Link from 'next/link';
-import dynamic from 'next/dynamic';
 import {usePathname,useRouter} from 'next/navigation';
 import {useTranslations} from 'next-intl';
 import {useEffect,useState,type ReactNode} from 'react';
@@ -11,12 +10,11 @@ import {auth} from '@/lib/firebase-client';
 import {usePreferences,type Palette} from './providers';
 import InstallShortcut from './install-shortcut';
 import StudentCompanion from '@/modules/my-space/companion';
-import LearningKingBeta from './learning-king-beta';
+import TestZone from './test-zone';
 import {useVerifiedViewer} from './viewer-context';
 import MyPageLink from '@/modules/teacher-notebook/my-page-link';
 // Card Play is hidden from the top menu for now; its pages still work by direct link.
 const cardsMenuVisible = false;
-const RegionQuestBeta = dynamic(() => import('@/modules/region-quest/beta/launcher'), {ssr:false});
 
 export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled=true}:{children:ReactNode;mySpaceEnabled?:boolean;playgroundEnabled?:boolean}) {
   const t=useTranslations('common'), path=usePathname(), router=useRouter();
@@ -73,6 +71,6 @@ export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled
     <main id="main" className={isLogin?'login-main':'app-main'}>{children}</main>
     <footer className="app-footer"><span>{t('brand')}</span><InstallShortcut/><span>{t('tagline')}</span></footer>
     {isStudent&&mySpaceEnabled&&<StudentCompanion/>}
-    {viewer&&['teacher','admin','superadmin'].includes(viewer.role)&&/^\/(teacher|admin)(\/|$)/.test(path)&&<><RegionQuestBeta key={`region:${path}:${viewer.uid}`}/><LearningKingBeta key={`${path}:${viewer.uid}`}/></>}
+    {viewer&&['teacher','admin','superadmin'].includes(viewer.role)&&/^\/(teacher|admin)(\/|$)/.test(path)&&<TestZone key={`${path}:${viewer.uid}`}/>}
   </>;
 }

@@ -13,6 +13,7 @@ import CharacterAvatar from "./character-avatar";
 import {petPersonality} from "@/modules/my-space/personality";
 import {AssignmentMaterials} from "./assignment-materials";
 import VideoSubmissionStatus from './video-submission-status';
+import DeveloperMailbox from './developer-mailbox';
 import {videoSelectionError,type VideoJobView} from '@/lib/video-submission';
 import {compressImage} from "@/lib/image-compression";
 import {countUsage, countUsageOnce} from "@/lib/usage-beacon";
@@ -319,6 +320,7 @@ export default function StudentWorkspace() {
   return <div className="ws ws-student">
     {error && <div className="ws-alert" role="alert">{error}<button onClick={() => void load()}>{t("common.retry")}</button></div>}
     <section className="ws-kids-hero">
+      <DeveloperMailbox audience="student" authorName={home.profile.name} className={home.profile.className}/>
       <div className="ws-hero-copy"><span className="ws-eyebrow"><Heart size={14}/>{t("student.greeting", {name: home.profile.name})}</span><h1>{t("student.heroTitle")}</h1><p>{t("student.heroSubtitle")}</p><div className="sd-hero-actions">{nextTask && <button className="ws-button ws-button-primary sd-next-task" onClick={() => openTask(nextTask)}><PencilLine size={19}/>{t("student.taskAction")}<ArrowRight size={17}/></button>}<span className="ws-class-pill"><BookOpen size={14}/>{home.profile.className || t("student.classroom")}</span></div></div>
       <div className={`ws-hero-friends ${celebrate ? "is-celebrating" : ""}`}><div className="sd-friend-hill" aria-hidden="true"/><Cloud className="sd-cloud sd-cloud-one" aria-hidden="true"/><Cloud className="sd-cloud sd-cloud-two" aria-hidden="true"/><Sparkles className="ws-hero-sparkle" size={32} aria-hidden="true"/><Star className="sd-star" size={22} aria-hidden="true"/><img className="ws-secondary-friend" src={`/characters/${companions[0].file}.webp`} alt=""/><img className="sd-third-friend" src={`/characters/${companions[1].file}.webp`} alt=""/><CharacterAvatar imageSrc={home.profile.spaceCompanion?.art} spaceOutfit={home.profile.spaceCompanion?.outfit} pose={home.profile.spaceCompanion?.pose} className="ws-primary-friend" character={character.id} outfit={home.profile.pointSettings?.enabled ? home.profile.wardrobeOutfit : {}} alt={t("common.characterAlt", {name: t(`characters.${character.id}`)})}/><Flower2 className="ws-hero-flower" size={38} aria-hidden="true"/><span className="ws-buddy-name"><Heart size={12}/>{t("student.buddyLabel")} · {home.profile.spaceCompanion?.name||t(`characters.${character.id}`)}</span></div>
     </section>

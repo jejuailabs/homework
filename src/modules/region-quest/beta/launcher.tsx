@@ -6,7 +6,7 @@ import {useVerifiedViewer} from '@/components/viewer-context';
 import {createRegionQuestStorageSession, isRegionQuestFrameMessage} from './storage';
 import styles from './launcher.module.css';
 
-export default function RegionQuestBeta() {
+export default function RegionQuestBeta({embedded = false}: {embedded?: boolean}) {
   const {viewer} = useVerifiedViewer();
   const [open, setOpen] = useState(false);
   const [openedForUid, setOpenedForUid] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export default function RegionQuestBeta() {
   }, [open, attempt]);
 
   return <>
-    <button type="button" ref={trigger} className={styles.launcher} onClick={() => {setOpenedForUid(viewer?.uid ?? null);setOpen(true);}} aria-haspopup="dialog" aria-expanded={open}>
+    <button type="button" ref={trigger} className={embedded ? 'test-zone-item' : styles.launcher} onClick={() => {setOpenedForUid(viewer?.uid ?? null);setOpen(true);}} aria-haspopup="dialog" aria-expanded={open}>
       <Compass size={18} aria-hidden="true"/><span>우리동네 탐험</span>
     </button>
     {open && <dialog ref={dialog} className={styles.dialog} aria-labelledby="region-quest-beta-title" onCancel={event => {event.preventDefault();close();}} onClose={close}>

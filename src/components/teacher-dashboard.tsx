@@ -9,6 +9,7 @@ import {assignmentInPeriod, schoolYearAt, type DashboardPeriod} from "@/lib/teac
 import BoardDashboardSummary from './board-dashboard-summary';
 import TeacherDashboardDetails from './teacher-dashboard-details';
 import StorageGuide from './storage-guide';
+import DeveloperMailbox from './developer-mailbox';
 
 function homeworkHref(classId?: string, assignmentId?: string, status?: string, action?: string) {
   const query = new URLSearchParams();
@@ -74,6 +75,7 @@ export default function TeacherDashboard() {
 
   return <div className="ws thd" aria-busy={loading}>
     <section className="thd-welcome" aria-labelledby="dashboard-title">
+      <DeveloperMailbox audience="teacher" authorName={data.viewer.displayName || ''}/>
       <div className="thd-welcome-copy">
         <span className="thd-kicker"><House size={15}/>{t("classHome")}</span>
         <h1 id="dashboard-title">{classroom?.name || t("classesEmpty")}</h1>

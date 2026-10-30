@@ -5,7 +5,7 @@ import {FlaskConical, LoaderCircle, RotateCcw, ShieldAlert, X} from 'lucide-reac
 import {useVerifiedViewer} from './viewer-context';
 import {createJourneyStorageSession, isJourneyFrameMessage, type JourneyStorageResult} from '@/modules/learning-king/journey-storage';
 
-export default function LearningKingBeta() {
+export default function LearningKingBeta({embedded = false}: {embedded?: boolean}) {
   const {viewer} = useVerifiedViewer();
   const [open, setOpen] = useState(false);
   const [openedForUid, setOpenedForUid] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export default function LearningKingBeta() {
   }, [open, attempt]);
 
   return <>
-    <button type="button" ref={trigger} className="learning-king-beta-launcher" onClick={() => {setOpenedForUid(viewer?.uid ?? null);setOpen(true);}} aria-haspopup="dialog" aria-expanded={open}>
+    <button type="button" ref={trigger} className={embedded ? 'test-zone-item' : 'learning-king-beta-launcher'} onClick={() => {setOpenedForUid(viewer?.uid ?? null);setOpen(true);}} aria-haspopup="dialog" aria-expanded={open}>
       <FlaskConical size={17} aria-hidden="true"/><span>학습왕 베타</span>
     </button>
     {open && <dialog ref={dialog} className="learning-king-beta-dialog" aria-labelledby="learning-king-beta-title" aria-describedby="learning-king-beta-description" onCancel={event => {event.preventDefault();close();}} onClose={close}>
