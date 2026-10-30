@@ -227,7 +227,7 @@ export async function renderDiaryPdf(pages: DiaryPage[], signal?: AbortSignal): 
   const {PDFDocument} = await import('pdf-lib');
   checkExport(signal);
   const pdf = await PDFDocument.create();
-  pdf.setTitle('나의 비밀일기'); pdf.setCreator('Homework Friends · 나의 비밀일기');
+  pdf.setTitle('나의 비밀일기'); pdf.setCreator('Our Classroom · 나의 비밀일기');
   // A 2x PNG keeps Hangul, translucent ink, vector stickers and every layer in their visible order.
   // The fixed 720:960 paper ratio is preserved; title/date are outside the decorated page.
   for (const page of pages) {

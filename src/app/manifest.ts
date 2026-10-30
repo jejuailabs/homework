@@ -2,7 +2,7 @@ import type {MetadataRoute} from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    id: '/', name: '모두의 숙제 · Homework Friends', short_name: '모두의 숙제', lang: 'ko',
+    id: '/', name: '모두의 교실 · Our Classroom', short_name: '모두의 교실', lang: 'ko',
     description: '동물 친구와 함께하는 우리 반 숙제와 수업 활동',
     start_url: '/', scope: '/', display: 'standalone',
     background_color: '#fff8ee', theme_color: '#397960', prefer_related_applications: false,

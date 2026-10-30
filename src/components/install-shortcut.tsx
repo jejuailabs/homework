@@ -39,7 +39,7 @@ export default function InstallShortcut() {
   function download() {
     const blob = new Blob([`[InternetShortcut]\r\nURL=${location.origin}/\r\n`], {type: 'application/internet-shortcut'});
     const url = URL.createObjectURL(blob), link = document.createElement('a');
-    link.href = url; link.download = 'homework-friends.url'; link.click();
+    link.href = url; link.download = 'our-classroom.url'; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   if (installed) return null;
