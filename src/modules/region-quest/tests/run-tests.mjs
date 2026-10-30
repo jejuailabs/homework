@@ -1,4 +1,5 @@
 // Local pure-function tests; no Firebase, AI, map API, or network calls.
+await import('./beta-access.test.mjs');
 await import('./prototype.test.mjs');
 await import('./continuous-motion.test.mjs');
 await import('./continuous-data.test.mjs');

@@ -1,11 +1,13 @@
-import {requireTeacher} from '@/lib/server/auth';
+import {getContext} from '@/lib/server/auth';
 import {ApiError} from '@/lib/server/policy';
 import {loadRegionQuestPreview} from './preview';
+import {canPreviewRegionQuest} from './access';
 
 const privateHeaders = {'Cache-Control': 'private, no-store', 'Vary': 'Cookie', 'X-Content-Type-Options': 'nosniff'};
 export async function GET(request: Request) {
   try {
-    await requireTeacher(request);
+    const ctx = await getContext(request);
+    if (!canPreviewRegionQuest(ctx.role)) throw new ApiError(403, '관리자만 우리동네 탐험을 열 수 있어요.', 'FORBIDDEN');
     const document = await loadRegionQuestPreview();
     return new Response(document, {headers: {...privateHeaders, 'Content-Type': 'text/html; charset=utf-8'}});
   } catch (error) {

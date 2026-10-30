@@ -5,9 +5,11 @@ import {lockBodyScroll} from '@/lib/body-scroll-lock';
 import {useVerifiedViewer} from '@/components/viewer-context';
 import {createRegionQuestStorageSession, isRegionQuestFrameMessage} from './storage';
 import styles from './launcher.module.css';
+import {canPreviewRegionQuest} from './access';
 
 export default function RegionQuestBeta({embedded = false}: {embedded?: boolean}) {
   const {viewer} = useVerifiedViewer();
+  const permitted = canPreviewRegionQuest(viewer?.role);
   const [open, setOpen] = useState(false);
   const [openedForUid, setOpenedForUid] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -19,16 +21,16 @@ export default function RegionQuestBeta({embedded = false}: {embedded?: boolean}
   const close = () => {setOpen(false);setOpenedForUid(null);setContent('');setError('');};
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !permitted) return;
     const element = dialog.current!;
     const release = lockBodyScroll();
     element.showModal();
     return () => {element.close();release();trigger.current?.focus();};
-  }, [open]);
+  }, [open, permitted]);
 
   useEffect(() => {
     if (!open) return;
-    if (!viewer || viewer.role === 'student' || viewer.uid !== openedForUid) {close();return;}
+    if (!viewer || !canPreviewRegionQuest(viewer.role) || viewer.uid !== openedForUid) {close();return;}
     let session: ReturnType<typeof createRegionQuestStorageSession> | null = null;
     let storageFrame: Window | null = null;
     const onMessage = (event: MessageEvent) => {
@@ -57,23 +59,26 @@ export default function RegionQuestBeta({embedded = false}: {embedded?: boolean}
   }, [open, openedForUid, viewer?.uid, viewer?.role]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !permitted || viewer?.uid !== openedForUid) return;
     const controller = new AbortController();
     setContent('');setError('');
     void fetch('/api/region-quest/beta', {cache: 'no-store', credentials: 'same-origin', signal: controller.signal})
       .then(async response => {
         if (controller.signal.aborted) return;
-        if (response.status === 401 || response.status === 403) {
+        if (response.status === 401) {
           window.dispatchEvent(new Event('homework-session-ended'));
-          throw new Error('교사 또는 관리자 계정으로 다시 로그인해 주세요.');
+          throw new Error('관리자 계정으로 다시 로그인해 주세요.');
         }
+        if (response.status === 403) throw new Error('관리자만 우리동네 탐험을 열 수 있어요.');
         if (!response.ok || !response.headers.get('content-type')?.includes('text/html')) throw new Error('탐험을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
         const html = await response.text();
         if (!controller.signal.aborted) setContent(html);
       })
       .catch(cause => {if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : '연결을 확인해 주세요.');});
     return () => controller.abort();
-  }, [open, attempt]);
+  }, [open, attempt, permitted, viewer?.uid, openedForUid]);
+
+  if (!permitted) return null;
 
   return <>
     <button type="button" ref={trigger} className={embedded ? 'test-zone-item' : styles.launcher} onClick={() => {setOpenedForUid(viewer?.uid ?? null);setOpen(true);}} aria-haspopup="dialog" aria-expanded={open}>
@@ -81,7 +86,7 @@ export default function RegionQuestBeta({embedded = false}: {embedded?: boolean}
     </button>
     {open && <dialog ref={dialog} className={styles.dialog} aria-labelledby="region-quest-beta-title" onCancel={event => {event.preventDefault();close();}} onClose={close}>
       <header className={styles.header}>
-        <div><h2 id="region-quest-beta-title">우리동네 탐험 <small>베타</small></h2><p>교사·관리자 미리보기 · 애월 장난감 마을</p></div>
+        <div><h2 id="region-quest-beta-title">우리동네 탐험 <small>베타</small></h2><p>관리자 전용 미리보기 · 애월 장난감 마을</p></div>
         <button type="button" className={styles.close} aria-label="우리동네 탐험 닫기" onClick={close} autoFocus><X size={20} aria-hidden="true"/><span>닫기</span></button>
       </header>
       <div className={styles.body} aria-busy={!content && !error}>
