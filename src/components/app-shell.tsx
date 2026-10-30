@@ -13,6 +13,7 @@ import StudentCompanion from '@/modules/my-space/companion';
 import TestZone from './test-zone';
 import {useVerifiedViewer} from './viewer-context';
 import MyPageLink from '@/modules/teacher-notebook/my-page-link';
+import '@/styles/brand.css';
 // Card Play is hidden from the top menu for now; its pages still work by direct link.
 const cardsMenuVisible = false;
 
@@ -42,7 +43,7 @@ export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled
   return <>
     <a href="#main" className="skip-link">{t('skip')}</a>
     <header className="app-header"><div className="header-inner">
-      <Link href={isLogin||isPublicGallery?'/':isAdmin?'/admin':isStudent?'/student':'/teacher'} className="brand"><span className="brand-mark"><img src="/characters/otter-moa.webp" alt=""/></span><span>{t('brand')}<small>{t('tagline')}</small></span></Link>
+      <Link href={isLogin||isPublicGallery?'/':isAdmin?'/admin':isStudent?'/student':'/teacher'} className="brand"><span className="brand-mark brand-mark-classroom"><img src="/branding/our-classroom-mark.svg" alt="" width="46" height="46"/></span><span>{t('brand')}<small>{t('tagline')}</small></span></Link>
       {!isLogin&&!isPublicGallery && <nav className={`top-nav ${isStudent?'student-nav':!isAdmin?'teacher-nav':''}`} aria-label={t('home')}>
         {!isStudent&&!isAdmin&&<Link href="/teacher" className={`nav-dashboard ${path==='/teacher'?'active':''}`} aria-current={path==='/teacher'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><LayoutDashboard size={18}/></span>{locale==='en'?'Home':'홈'}</Link>}
         <Link className={`nav-homework ${path===homeworkPath?'active':''}`} aria-current={path===homeworkPath?'page':undefined} href={homeworkPath}><span className="nav-pictogram" aria-hidden="true">{isAdmin?<ShieldCheck size={18}/>:<BookOpen size={18}/>}</span>{isAdmin?t('admin'):t('homework')}</Link>

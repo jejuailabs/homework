@@ -47,7 +47,7 @@ export default function InstallShortcut() {
     <button type="button" className="install-shortcut-link" onClick={() => dialog.current?.showModal()}><Download size={15}/>{t('installShortcut')}</button>
     <dialog ref={dialog} className="install-shortcut-dialog" aria-labelledby="install-shortcut-title">
       <div className="section-heading"><h2 id="install-shortcut-title">{t('installTitle')}</h2><button type="button" className="icon-button" aria-label={t('close')} onClick={() => dialog.current?.close()}><X size={20}/></button></div>
-      <div className="install-shortcut-intro"><img src="/icons/app-192.png" alt="" width="64" height="64"/><p>{t('installIntro')}</p></div>
+      <div className="install-shortcut-intro"><img src="/icons/app-192.png?v=classroom-4" alt="" width="64" height="64"/><p>{t('installIntro')}</p></div>
       {inApp && <p className="install-shortcut-note" role="status">{t('installInApp')}</p>}
       {prompt && <button type="button" className="button primary wide" disabled={busy} onClick={() => void install()}><Download size={17}/>{t('installApp')}</button>}
       {!prompt && <p className="install-shortcut-note">{t('installManualHint')}</p>}

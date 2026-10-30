@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><title>모두의 교실 · 학부모, 선생님, 아이</title>
+    <circle cx="34" cy="28" r="14" fill="#D7AD56"/><circle cx="94" cy="28" r="14" fill="#559293"/>
+    <path d="M64 69C47 45 18 43 17 65c-1 20 25 40 47 49 22-9 48-29 47-49-1-22-30-20-47 4Z" fill="#EDF3E7" stroke="#2D7375" stroke-width="7" stroke-linejoin="round"/>
+    <circle cx="64" cy="48" r="11" fill="#E8957D"/>
+    <path d="M49 82v-5q0-16 15-16t15 16v5Z" fill="#E8957D"/>
+    <path d="M40 85q13-5 24 2 11-7 24-2v15q-13-3-24 4-11-7-24-4Z" fill="#FFFAEC" stroke="#2D7375" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M64 89v12" stroke="#2D7375" stroke-width="3" stroke-linecap="round"/>
+  </svg>

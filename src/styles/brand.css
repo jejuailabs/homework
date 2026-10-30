@@ -1,0 +1,5 @@
+.brand .brand-mark-classroom{width:46px;height:46px;flex:none;padding:2px;border:1px solid #e1e9dc;border-radius:14px;background:#fffaec;box-shadow:0 2px 0 #2d737510;transform:none}
+.brand .brand-mark-classroom::after{content:none}
+.brand-mark-classroom img{display:block;width:100%;height:100%;object-fit:contain}
+.eyebrow .login-brand-mark{width:25px;height:25px;flex:none;object-fit:contain}
+@media(max-width:740px){.brand .brand-mark-classroom{width:36px;height:36px;padding:1px;border-radius:11px}}
