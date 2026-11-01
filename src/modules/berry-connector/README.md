@@ -43,7 +43,7 @@ featureAccess/berryConnector   {mode: 'off'|'allowlist'|'all', teacherUids: []}
 ## 켜는 방법
 
 1. 운영 환경변수 `BERRY_ISSUER=https://ourclass.co.kr`. 비우면 요청 헤더에서 origin을 추정하므로 운영에서는 꼭 설정한다.
-2. Firestore `featureAccess/berryConnector` 문서를 `{mode: 'allowlist', teacherUids: ['<uid>']}`로 만든다. 문서가 없으면 `off`다.
+2. Firestore `featureAccess/berryConnector` 문서를 `{mode: 'allowlist', teacherUids: ['<uid>']}`로 만든다. 문서가 없으면 `off`다. 서버 인증 정보가 있는 환경에서 `npm run berry:allow -- --email teacher@example.com`으로 교사를 추가한다(`--remove`로 제외, `--mode all|off`로 모드 변경).
 3. Claude 데스크톱·웹의 커넥터 추가에 `https://ourclass.co.kr/api/mcp`를 넣는다. 동적 등록 → 동의 화면 → 토큰 순으로 진행된다.
 4. 끄려면 `BERRY_CONNECTOR_DISABLED=true`. 데이터는 지우지 않는다.
 5. 로컬 개발에서는 `.env.local`에 `BERRY_CONNECTOR_MODE=all`을 두면 Firestore 문서 없이 열린다. 운영에서는 비워 둔다.
