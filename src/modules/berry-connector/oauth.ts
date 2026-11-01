@@ -4,7 +4,7 @@ import {Timestamp} from 'firebase-admin/firestore';
 import {db} from '@/lib/server/admin';
 import {assertOrigin, contextForUid, getContext, type Context} from '@/lib/server/auth';
 import {ApiError} from '@/lib/server/policy';
-import {ACCESS_TOKEN_SECONDS, AUTH_CODE_SECONDS, BerryError, accessConfig, accessDays, authorizeRequest, clientRegistration, connectorAllowed, hashToken, parseScopes, randomToken, redirectWith, resourceMetadataChallenge, safeId, scopesWithin, verifyPkce} from './policy';
+import {ACCESS_TOKEN_SECONDS, AUTH_CODE_SECONDS, BerryError, REGISTRATIONS_PER_HOUR, accessConfig, accessDays, authorizeRequest, clientRegistration, connectorAllowed, hashToken, parseScopes, randomToken, redirectWith, resourceMetadataChallenge, safeId, scopesWithin, trustedRedirectHost, verifyPkce} from './policy';
 import {BERRY_SCOPE_LABELS, type AuthorizeRequest, type BearerContext, type BerryAccessConfig, type BerryGrant, type BerryScope} from './types';
 
 type Input = Record<string, unknown>;
@@ -54,8 +54,19 @@ export function errorResponse(error: unknown, headers: Record<string, string> = 
 }
 
 // ---- RFC 7591 dynamic client registration (public clients only) ----
+/** Registration is unauthenticated, so cap it per source address to keep abuse from filling berryClients. */
+async function registrationLimit(request: Request) {
+  const address = request.headers.get('x-vercel-forwarded-for') ?? request.headers.get('x-forwarded-for') ?? 'local', ip = address.split(',')[0].trim();
+  const hour = Math.floor(Date.now() / 3_600_000), ref = db().doc(`rateLimits/berry_register_${hashToken(`${ip}:${hour}`)}`);
+  await db().runTransaction(async tx => {
+    const count = Number((await tx.get(ref)).data()?.count ?? 0);
+    if (count >= REGISTRATIONS_PER_HOUR) throw new BerryError('등록 요청이 너무 잦아요. 잠시 후 다시 시도해 주세요.', 429, 'rate_limited');
+    tx.set(ref, {kind: 'berry-quota', count: count + 1, expiresAt: Timestamp.fromMillis((hour + 1) * 3_600_000 + 86_400_000)}, {merge: true});
+  });
+}
 async function register(request: Request) {
   const value = clientRegistration(await input(request));
+  await registrationLimit(request);
   const ref = clients().doc(), at = now();
   await ref.create({name: value.name, redirectUris: value.redirectUris, createdAt: at});
   return json({client_id: ref.id, client_name: value.name, redirect_uris: value.redirectUris, token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], client_id_issued_at: Math.floor(Date.parse(at) / 1000)}, 201, cors);
@@ -74,7 +85,7 @@ async function consentInfo(request: Request, ctx: Context) {
   const app = await client(params.get('client_id') ?? '');
   const value = authorizeRequest(params, app);
   const scopes = value.scopes.map(scope => ({scope, ...BERRY_SCOPE_LABELS[scope]}));
-  return json({client: {id: app!.id, name: app!.name, redirectHost: new URL(value.redirectUri).host}, scopes, teacher: {email: ctx.email, displayName: ctx.displayName}});
+  return json({client: {id: app!.id, name: app!.name, redirectHost: new URL(value.redirectUri).host, trusted: trustedRedirectHost(value.redirectUri)}, scopes, teacher: {email: ctx.email, displayName: ctx.displayName}});
 }
 async function approve(request: Request, ctx: Context) {
   const body = await input(request), params = new URLSearchParams();
@@ -106,7 +117,9 @@ async function token(request: Request) {
     const ref = codes().doc(hashToken(body.code));
     const record = await db().runTransaction(async tx => {
       const doc = await tx.get(ref), data = doc.data();
-      if (!data || data.usedAt || (data.expiresAt as Timestamp).toMillis() < Date.now()) throw new BerryError('코드가 만료됐거나 이미 사용됐어요.', 400, 'invalid_grant');
+      if (!data || (data.expiresAt as Timestamp).toMillis() < Date.now()) throw new BerryError('코드가 만료됐거나 이미 사용됐어요.', 400, 'invalid_grant');
+      // OAuth 2.1 §4.1.2: a replayed code means it leaked; end the grant that was minted from it.
+      if (data.usedAt) {if (data.grantId) tx.set(grants().doc(data.grantId), {revokedAt: now(), revokedReason: 'code_reuse'}, {merge: true}); throw new BerryError('이미 사용한 코드예요. 안전을 위해 연결을 해제했어요.', 400, 'invalid_grant');}
       if (data.clientId !== body.client_id || data.redirectUri !== body.redirect_uri) throw new BerryError('client_id 또는 redirect_uri가 달라요.', 400, 'invalid_grant');
       if (!verifyPkce(body.code_verifier, data.codeChallenge)) throw new BerryError('code_verifier를 확인해 주세요.', 400, 'invalid_grant');
       tx.update(ref, {usedAt: now()});
@@ -114,6 +127,7 @@ async function token(request: Request) {
     });
     const app = await client(record.clientId), grantRef = grants().doc(), grantExpiresAt = plus(record.accessDays * 86_400);
     await grantRef.create({uid: record.uid, clientId: record.clientId, clientName: app?.name ?? '', scopes: record.scopes, resource: record.resource ?? null, createdAt: now(), expiresAt: grantExpiresAt, lastUsedAt: null, revokedAt: null});
+    await ref.set({grantId: grantRef.id}, {merge: true});
     return json(await issueTokens(grantRef.id, record.uid, record.scopes, grantExpiresAt), 200, cors);
   }
   if (grantType === 'refresh_token') {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, clientRegistration, connectorAllowed, deriveEvents, parseScopes, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
+import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, clientRegistration, connectorAllowed, deriveEvents, parseScopes, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
 
 assert.deepEqual(accessConfig(undefined), {mode: 'off', teacherUids: []});
 assert.deepEqual(accessConfig({mode: 'allowlist', teacherUids: ['t1', 'bad/uid', 7]}), {mode: 'allowlist', teacherUids: ['t1']});
@@ -75,4 +75,10 @@ assert.equal(meta.authorization_endpoint, 'https://ourclass.co.kr/oauth/authoriz
 assert.equal(meta.token_endpoint, 'https://ourclass.co.kr/api/oauth/token');
 assert.deepEqual(meta.code_challenge_methods_supported, ['S256']);
 assert.equal(protectedResourceMetadata('https://ourclass.co.kr').resource, 'https://ourclass.co.kr/api/mcp');
+assert.equal(trustedRedirectHost('https://claude.ai/api/mcp/auth_callback'), true);
+assert.equal(trustedRedirectHost('https://app.claude.com/cb'), true);
+assert.equal(trustedRedirectHost('https://chatgpt.com/connector_platform_oauth_redirect'), true);
+assert.equal(trustedRedirectHost('https://claude.ai.evil.example/cb'), false, 'suffix must be a real domain boundary');
+assert.equal(trustedRedirectHost('https://evilclaude.ai/cb'), false);
+assert.equal(trustedRedirectHost('http://localhost:3999/cb'), false, 'loopback is allowed but never trusted');
 console.log('berry-connector policy tests passed');

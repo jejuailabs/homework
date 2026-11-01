@@ -3,7 +3,7 @@ import {useEffect, useState} from 'react';
 import {LoaderCircle, PlugZap, ShieldAlert, ShieldCheck} from 'lucide-react';
 import './styles.css';
 
-type Info = {client: {id: string; name: string; redirectHost: string}; scopes: {scope: string; title: string; detail: string; warning?: string}[]; teacher: {email: string | null; displayName: string | null}};
+type Info = {client: {id: string; name: string; redirectHost: string; trusted: boolean}; scopes: {scope: string; title: string; detail: string; warning?: string}[]; teacher: {email: string | null; displayName: string | null}};
 const PARAMS = ['response_type', 'client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method', 'resource'];
 
 /** OAuth consent screen at /oauth/authorize. The server validates the request; the teacher may narrow scopes and pick an access period. */
@@ -39,6 +39,7 @@ export default function BerryConsent() {
       {info && <>
         <h1><b>{info.client.name}</b>이(가) 선생님의 모두의 교실을 읽어도 될까요?</h1>
         <p className="bc-muted">돌아갈 주소: {info.client.redirectHost} · 계정: {info.teacher.email ?? info.teacher.displayName ?? '선생님'}</p>
+        {!info.client.trusted && <p className="bc-error" role="note"><ShieldAlert size={16}/>모두의 교실이 확인하지 않은 앱이에요. 선생님이 직접 연결을 시작한 경우가 아니라면 거부해 주세요.</p>}
         <ul className="bc-scopes">
           {info.scopes.map(item => <li key={item.scope} className={item.warning ? 'is-warning' : ''}>
             <label><input type="checkbox" checked={chosen.includes(item.scope)} onChange={() => toggle(item.scope)} disabled={busy}/><span><strong>{item.title}</strong><small>{item.detail}</small>{item.warning && <em><ShieldAlert size={13}/>{item.warning}</em>}</span></label>
