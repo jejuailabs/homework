@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, clientRegistration, connectorAllowed, deriveEvents, mergeEvents, parseScopes, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
+import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, canonicalJson, checkedByDefault, clientRegistration, confirmationProblem, connectorAllowed, deriveEvents, maskNames, mergeEvents, parseScopes, payloadHash, toolAllowed, CONFIRM_SECONDS, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
 
 assert.deepEqual(accessConfig(undefined), {mode: 'off', teacherUids: []});
 assert.deepEqual(accessConfig({mode: 'allowlist', teacherUids: ['t1', 'bad/uid', 7]}), {mode: 'allowlist', teacherUids: ['t1']});
@@ -13,7 +13,7 @@ assert.equal(connectorAllowed({mode: 'off', teacherUids: []}, 't1', 'teacher', u
 assert.equal(connectorAllowed({mode: 'all', teacherUids: []}, 't1', 'teacher', undefined, 'off'), false, 'env mode override can close access');
 assert.equal(connectorAllowed({mode: 'all', teacherUids: []}, 't1', 'teacher', undefined, 'bogus'), true, 'unknown override is ignored');
 
-assert.deepEqual(parseScopes(undefined), ['classes:read', 'homework:read', 'events:read'], 'defaults are read-only and name-free');
+assert.deepEqual(parseScopes(undefined), ['classes:read', 'homework:read', 'workspace:read', 'events:read'], 'defaults are read-only and name-free');
 assert.deepEqual(parseScopes('names homework:read classes:read'), ['classes:read', 'homework:read', 'names'], 'catalog order, de-duplicated');
 assert.throws(() => parseScopes('homework:write'), /지원하지 않는 권한/);
 assert.equal(scopesWithin(['classes:read', 'names'], ['names']), true);
@@ -84,4 +84,36 @@ assert.equal(trustedRedirectHost('https://chatgpt.com/connector_platform_oauth_r
 assert.equal(trustedRedirectHost('https://claude.ai.evil.example/cb'), false, 'suffix must be a real domain boundary');
 assert.equal(trustedRedirectHost('https://evilclaude.ai/cb'), false);
 assert.equal(trustedRedirectHost('http://localhost:3999/cb'), false, 'loopback is allowed but never trusted');
+// Write scopes: never default, unchecked on consent, cannot be added on refresh.
+assert.deepEqual(parseScopes('notebook:write calendar:write workspace:read'), ['workspace:read', 'calendar:write', 'notebook:write']);
+assert.ok(parseScopes(undefined).every(scope => !scope.endsWith(':write')));
+assert.deepEqual(['classes:read', 'names', 'calendar:write', 'workspace:write', 'notebook:write', 'workspace:read'].map(scope => checkedByDefault(scope as never)), [true, false, false, false, false, true]);
+assert.equal(scopesWithin(['workspace:read'], ['workspace:write']), false, 'a read grant never widens to write');
+assert.equal(toolAllowed({scope: ['calendar:write', 'workspace:write']}, ['workspace:write']), true);
+assert.equal(toolAllowed({scope: 'workspace:read'}, ['calendar:write']), false);
+
+// Confirmation tokens
+assert.equal(canonicalJson({b: 1, a: {d: [2, {f: 1, e: 0}], c: undefined}}), '{"a":{"d":[2,{"e":0,"f":1}]},"b":1}');
+const payload = {date: '2026-11-03', entry: {subject: '국어', note: '비유'}};
+const hash = payloadHash('add_lesson_log', payload);
+assert.equal(hash, payloadHash('add_lesson_log', {entry: {note: '비유', subject: '국어'}, date: '2026-11-03'}), 'key order does not matter');
+assert.notEqual(hash, payloadHash('add_lesson_log', {...payload, date: '2026-11-04'}), 'content is bound');
+assert.notEqual(hash, payloadHash('add_work_item', payload), 'the tool is bound');
+const t0 = 1_800_000_000_000, ctx = {uid: 't1', grantId: 'g1', clientId: 'c1', scopes: ['workspace:write'] as const};
+const record = {uid: 't1', grantId: 'g1', clientId: 'c1', tool: 'add_lesson_log', payloadHash: hash, expiresAtMs: t0 + CONFIRM_SECONDS * 1000, usedAt: null};
+assert.equal(confirmationProblem(record, {...ctx, scopes: [...ctx.scopes]}, t0, hash), null);
+assert.equal(confirmationProblem(record, {...ctx, scopes: [...ctx.scopes]}, t0, hash, hash), null, 'the preview hash may be echoed back');
+assert.match(confirmationProblem(null, {...ctx, scopes: [...ctx.scopes]}, t0, hash)!, /찾을 수 없/);
+assert.match(confirmationProblem(record, {...ctx, uid: 't2', scopes: [...ctx.scopes]}, t0, hash)!, /이 연결/, 'another teacher');
+assert.match(confirmationProblem(record, {...ctx, grantId: 'g2', scopes: [...ctx.scopes]}, t0, hash)!, /이 연결/, 'another connection');
+assert.match(confirmationProblem(record, {...ctx, clientId: 'c2', scopes: [...ctx.scopes]}, t0, hash)!, /이 연결/, 'another app');
+assert.match(confirmationProblem({...record, usedAt: '2026-11-01T00:00:00Z'}, {...ctx, scopes: [...ctx.scopes]}, t0, hash)!, /이미/, 'single use');
+assert.match(confirmationProblem(record, {...ctx, scopes: [...ctx.scopes]}, t0 + CONFIRM_SECONDS * 1000, hash)!, /시간이 지났/, 'ten minutes');
+assert.match(confirmationProblem(record, {...ctx, scopes: ['workspace:read']}, t0, hash)!, /쓰기 권한/, 'scope narrowed after preview');
+assert.match(confirmationProblem(record, {...ctx, scopes: [...ctx.scopes]}, t0, payloadHash('add_lesson_log', {...payload, date: '2026-11-09'}))!, /바뀌었/, 'stored payload altered');
+assert.match(confirmationProblem(record, {...ctx, scopes: [...ctx.scopes]}, t0, hash, 'other')!, /달라요/, 'different content presented');
+
+// Names typed into free text leave as aliases
+const people = [{name: '김민준', number: 1}, {name: '김민준호', number: 2}, {name: '이서연', number: 3}, {name: '이서연', number: 9}, {name: '김', number: 4}];
+assert.equal(maskNames('김민준호와 김민준, 이서연 상담 김밥', people), '학생 02와 학생 01, 학생 상담 김밥', 'longest first; shared names lose the number; one-letter names are left alone');
 console.log('berry-connector policy tests passed');

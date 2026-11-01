@@ -19,7 +19,7 @@ export default function TeacherMyPage() {
       {workspace && <Link href="/teacher/me/workspace" className="mp-card"><h3><BriefcaseBusiness size={20}/>업무 공간</h3><p>일정·시간표·수업 일지·업무 폴더를 한곳에서 관리해요. 학교 캘린더(ICS)를 가져오고 숙제 마감이 함께 보여요.</p><span className="mp-badge"><ShieldCheck size={12}/> 본인만 · 내보내기 가능</span></Link>}
       <div className="mp-card is-soon"><h3><GraduationCap size={20}/>학습 커리어 · 인계카드</h3><p>학년이 바뀌어도 이어지는 학생 기록과, 선생님이 골라서 넘기는 인계카드예요.</p><span className="mp-badge">준비 중</span></div>
       {connector ?
-        <Link href="/teacher/me/connections" className="mp-card"><h3><PlugZap size={20}/>외부 연결 (MCP)</h3><p>베리 앱, Claude, ChatGPT에서 “이번 주 마감 숙제”, “어제 미제출 학생”처럼 우리 반 일을 바로 물어봐요. 범위와 기간을 정해 연결하고 언제든 끊어요.</p><span className="mp-badge"><ShieldCheck size={12}/> 읽기 전용 · 가명 기본</span></Link> :
+        <Link href="/teacher/me/connections" className="mp-card"><h3><PlugZap size={20}/>외부 연결 (MCP)</h3><p>베리 앱, Claude, ChatGPT에서 “이번 주 마감 숙제”, “어제 미제출 학생”처럼 우리 반 일을 바로 물어봐요. 범위와 기간을 정해 연결하고 언제든 끊어요.</p><span className="mp-badge"><ShieldCheck size={12}/> 가명 기본 · 쓰기는 확인 후</span></Link> :
         <div className="mp-card is-soon"><h3><PlugZap size={20}/>외부 연결 (MCP)</h3><p>Claude·ChatGPT에서 “어제 숙제 안 낸 학생과 안내문”처럼 우리 반 일을 바로 처리해요.</p><span className="mp-badge">준비 중</span></div>}
     </div>
   </section>;

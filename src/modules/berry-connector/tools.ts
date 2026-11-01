@@ -3,14 +3,15 @@ import {db} from '@/lib/server/admin';
 import {openBody} from '@/modules/teacher-notebook/vault';
 import {NotebookError} from '@/modules/teacher-notebook/policy';
 import {NOTEBOOK_TAG_LABELS, type NotebookTag} from '@/modules/teacher-notebook/types';
-import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, safeId, studentLabel} from './policy';
+import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, maskNames, safeId, studentLabel, toolAllowed} from './policy';
+import {WORKSPACE_TOOLS, callWorkspaceTool} from './workspace-tools';
 import type {BearerContext, McpTool} from './types';
 
 type Data = Record<string, any>;
 type Student = {id: string; number: number; name: string};
 const assignmentFields = ['classId', 'className', 'title', 'submissionType', 'dueAt', 'createdAt', 'targetStudentIds', 'targetCount', 'submittedCount', 'reviewedCount', 'visibility'] as const;
 
-/** Tool catalog exposed through tools/list. Every tool is read-only in this phase. */
+/** Tool catalog exposed through tools/list. Writes only preview; confirm_write saves (see workspace-tools.ts). */
 export const TOOLS: McpTool[] = [
   {name: 'list_classes', scope: 'classes:read', description: '선생님이 운영하는 학급 목록(이름·학년·학년도·학생 수)을 돌려줍니다.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'get_roster', scope: 'classes:read', description: '학급 명단을 번호 순으로 돌려줍니다. 기본은 "학생 07" 같은 가명이며, 실명 권한이 있는 연결에서 reveal_names=true일 때만 이름을 돌려줍니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, reveal_names: {type: 'boolean', description: '실명 반환. names 권한이 있어야 동작합니다.'}}, required: ['class_id'], additionalProperties: false}},
@@ -19,6 +20,7 @@ export const TOOLS: McpTool[] = [
   {name: 'get_review_queue', scope: 'homework:read', description: '검사(확인)를 기다리는 제출이 있는 숙제와 건수를 돌려줍니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}}, additionalProperties: false}},
   {name: 'list_deadlines', scope: 'homework:read', description: '앞으로 days일 안에 마감되는 숙제를 마감 순으로 돌려줍니다.', inputSchema: {type: 'object', properties: {days: {type: 'integer', minimum: 1, maximum: 60}}, additionalProperties: false}},
   {name: 'search_notebook', scope: 'notebook:read', description: '교무수첩 관찰 기록을 기간·학급·학생 번호·검색어로 찾습니다. 상담·건강·가정 등 민감 기록은 항상 제외되며, 본문은 300자까지만 돌려줍니다.', inputSchema: {type: 'object', properties: {from: {type: 'string', description: 'YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM-DD'}, class_id: {type: 'string'}, student_number: {type: 'integer', minimum: 1, maximum: 999}, query: {type: 'string', maxLength: 100}, reveal_names: {type: 'boolean'}, limit: {type: 'integer', minimum: 1, maximum: 100}}, required: ['from', 'to'], additionalProperties: false}},
+  ...WORKSPACE_TOOLS,
 ];
 
 const seoulDate = (iso: string) => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(iso));
@@ -53,7 +55,8 @@ async function missingFor(task: Data, students: Student[], ctx: BearerContext, r
 export async function callTool(name: string, args: Data, ctx: BearerContext) {
   const tool = TOOLS.find(tool => tool.name === name);
   if (!tool) throw new BerryError(`알 수 없는 도구예요: ${name}`, 404, 'not_found');
-  if (!ctx.scopes.includes(tool.scope)) throw new BerryError(`이 도구에는 ${tool.scope} 권한이 필요해요.`, 403, 'insufficient_scope');
+  if (!toolAllowed(tool, ctx.scopes)) throw new BerryError(`이 도구에는 ${[tool.scope].flat().join(' 또는 ')} 권한이 필요해요.`, 403, 'insufficient_scope');
+  if (WORKSPACE_TOOLS.includes(tool)) return callWorkspaceTool(name, args, ctx);
   switch (name) {
     case 'list_classes': return {classes: await ownedClasses(ctx.uid)};
     case 'get_roster': {
@@ -107,7 +110,10 @@ async function searchNotebook(args: Data, ctx: BearerContext) {
   const classIds = new Set<string>();
   snap.docs.forEach(doc => (doc.data().students ?? []).forEach((ref: Data) => classIds.add(ref.classId)));
   const rosters = new Map<string, Student[]>();
-  for (const id of classIds) {const cls = await db().doc(`classes/${id}`).get(); if (cls.exists && cls.data()!.ownerUid === ctx.uid) rosters.set(id, await roster(id));}
+  // Every owned class, so names typed into a body are masked even when the entry links no student.
+  for (const cls of await ownedClasses(ctx.uid)) rosters.set(cls.id, await roster(cls.id));
+  for (const id of classIds) if (!rosters.has(id)) {const cls = await db().doc(`classes/${id}`).get(); if (cls.exists && cls.data()!.ownerUid === ctx.uid) rosters.set(id, await roster(id));}
+  const reveal = args.reveal_names === true && ctx.scopes.includes('names'), everyone = [...rosters.values()].flat();
   const entries = [];
   for (const doc of snap.docs.sort((a, b) => String(b.data().date).localeCompare(String(a.data().date)))) {
     const data = doc.data();
@@ -119,7 +125,8 @@ async function searchNotebook(args: Data, ctx: BearerContext) {
     let body = '';
     try {body = openBody(data.body, ctx.uid, doc.id) ?? '';} catch (error) {if (error instanceof NotebookError) throw new BerryError('교무수첩 보안 설정이 준비되지 않았어요.', 503, 'server_error'); throw error;}
     if (query && !body.toLowerCase().includes(query)) continue;
-    entries.push({date: data.date, tags: ((data.tags ?? []) as NotebookTag[]).map(tag => NOTEBOOK_TAG_LABELS[tag] ?? tag), students: people.map(student => ({number: student.number, label: studentLabel(student, ctx.scopes, args.reveal_names)})), body: body.length > 300 ? `${body.slice(0, 300)}…` : body});
+    const shown = reveal ? body : maskNames(body, everyone);
+    entries.push({date: data.date, tags: ((data.tags ?? []) as NotebookTag[]).map(tag => NOTEBOOK_TAG_LABELS[tag] ?? tag), students: people.map(student => ({number: student.number, label: studentLabel(student, ctx.scopes, args.reveal_names)})), body: shown.length > 300 ? `${shown.slice(0, 300)}…` : shown, ...(data.pending ? {pending: true} : {})});
     if (entries.length >= limit) break;
   }
   return {from, to, entries, note: '민감 기록(상담·건강·가정)은 포함되지 않습니다.', alias: alias(7)};
