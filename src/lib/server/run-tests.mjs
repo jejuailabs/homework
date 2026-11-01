@@ -75,6 +75,7 @@ await import('../../modules/daily-quiz/run-tests.mjs');
 await import('../../modules/playground/run-tests.mjs');
 await import('../../modules/lesson-review/run-tests.mjs');
 await import('../../modules/teacher-notebook/run-tests.mjs');
+await import('../../modules/berry-connector/run-tests.mjs');
 
 const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
 await import(moduleUrl(compile('../admin-console-policy.test.ts').replace("'./admin-console-policy'",JSON.stringify(adminConsolePolicyUrl))));

@@ -33,3 +33,10 @@ test('poll and canvas QR destinations return to the matching student or teacher 
  assert.equal(loginDestination('teacher','/student/canvases?canvas=shared-doc'),'/teacher/tools/canvas?canvas=shared-doc');
  assert.equal(loginDestination('student','https://evil.example/student/polls?poll=x'),'/student');
 });
+
+test('the OAuth consent page survives sign-in for teachers only', () => {
+  assert.equal(loginDestination('teacher', '/oauth/authorize?client_id=c1&redirect_uri=https%3A%2F%2Fclaude.ai%2Fcb&state=s&evil=1'), '/oauth/authorize?client_id=c1&redirect_uri=https%3A%2F%2Fclaude.ai%2Fcb&state=s', 'consent page keeps only OAuth params');
+  assert.equal(loginDestination('student', '/oauth/authorize?client_id=c1'), '/student', 'students never reach consent');
+  assert.equal(loginDestination('teacher', '/oauth/authorize'), '/teacher', 'consent without a client goes home');
+  assert.equal(loginDestination('teacher', '/oauth/authorize/../teacher?client_id=c1'), '/teacher');
+});
