@@ -4,7 +4,7 @@ export const NOTEBOOK_TAG_LABELS: Record<NotebookTag, string> = {learning: 'í•™ì
 /** Entries with these tags are always sensitive: excluded from reports, handoff and MCP unless chosen. */
 export const SENSITIVE_TAGS: readonly NotebookTag[] = ['counsel', 'health', 'family'];
 export type NotebookStudentRef = {classId: string; studentId: string};
-export type NotebookEntry = {id: string; date: string; body: string; students: NotebookStudentRef[]; tags: NotebookTag[]; sensitive: boolean; createdAt: string; updatedAt: string};
+export type NotebookEntry = {id: string; date: string; body: string; students: NotebookStudentRef[]; tags: NotebookTag[]; sensitive: boolean; createdAt: string; updatedAt: string; pending?: boolean};
 export type NotebookDaySummary = {entries: number; students: number; sensitive: number};
 export type NotebookRosterStudent = {id: string; name: string; number: number};
 export type NotebookRosterClass = {id: string; name: string; students: NotebookRosterStudent[]};

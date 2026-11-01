@@ -2,7 +2,7 @@
 import {useEffect, useState} from 'react';
 import Link from 'next/link';
 import {Copy, LoaderCircle, PlugZap, ShieldCheck, Unplug} from 'lucide-react';
-import {BERRY_SCOPE_LABELS, type BerryGrant, type BerryScope} from './types';
+import {BERRY_SCOPE_LABELS, WRITE_SCOPES, type BerryGrant, type BerryScope} from './types';
 import './styles.css';
 
 /** Teacher page listing connected apps (Berry, Claude, ChatGPT …) with revoke and setup instructions. */
@@ -37,7 +37,7 @@ export default function BerryConnections() {
         {!grants ? <p className="bc-muted"><LoaderCircle className="spin" size={18}/></p> : !active.length ? <p className="bc-muted">아직 연결된 앱이 없어요.</p> : <ul className="bc-grants">
           {active.map(grant => <li key={grant.id}>
             <div><strong>{grant.clientName || '이름 없는 앱'}</strong><small>{new Date(grant.createdAt).toLocaleDateString('ko-KR')} 연결 · {new Date(grant.expiresAt).toLocaleDateString('ko-KR')}까지{grant.lastUsedAt ? ` · 마지막 사용 ${new Date(grant.lastUsedAt).toLocaleString('ko-KR')}` : ''}</small>
-              <span className="bc-scope-list">{grant.scopes.map(scope => <em key={scope} className={scope === 'names' ? 'is-warning' : ''}>{BERRY_SCOPE_LABELS[scope as BerryScope]?.title ?? scope}</em>)}</span></div>
+              <span className="bc-scope-list">{grant.scopes.map(scope => <em key={scope} className={scope === 'names' || WRITE_SCOPES.includes(scope as BerryScope) ? 'is-warning' : ''}>{BERRY_SCOPE_LABELS[scope as BerryScope]?.title ?? scope}</em>)}</span></div>
             <button type="button" className="button soft" onClick={() => void revoke(grant)}><Unplug size={14}/> 해제</button>
           </li>)}
         </ul>}

@@ -27,6 +27,19 @@
           "order": "ASCENDING"
         }
       ]
+    },    {
+      "collectionGroup": "workspaceFiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ownerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expiresAt",
+          "order": "ASCENDING"
+        }
+      ]
     },
     {
       "collectionGroup": "participationBoards",
@@ -3064,6 +3077,12 @@
     },
     {
       "collectionGroup": "rateLimits",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "berryConfirmations",
       "fieldPath": "expiresAt",
       "ttl": true,
       "indexes": []

@@ -174,7 +174,7 @@ export async function bearer(request: Request, needed?: BerryScope): Promise<Bea
   if (needed && !scopes.includes(needed)) throw Object.assign(new BerryError(`이 작업에는 ${BERRY_SCOPE_LABELS[needed].title} 권한이 필요해요.`, 403, 'insufficient_scope'), {headers: challenge('insufficient_scope')});
   const ctx = await contextForUid(data.uid as string);
   if (disabled() || !connectorAllowed(await access(), ctx.uid, ctx.role, process.env.BERRY_CONNECTOR_DISABLED, process.env.BERRY_CONNECTOR_MODE)) throw Object.assign(new BerryError('외부 연결을 아직 사용할 수 없어요.', 403, 'access_denied'), {headers: challenge()});
-  return {uid: ctx.uid, grantId: data.grantId as string, clientId: grant.clientId as string, scopes};
+  return {uid: ctx.uid, role: ctx.role, grantId: data.grantId as string, clientId: grant.clientId as string, scopes};
 }
 
 // ---- Teacher-facing grant management (session cookie) ----

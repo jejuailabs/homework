@@ -41,16 +41,17 @@ async function measureUsage(uid: string) {
     return {video: video + processing, photo: submitted - video, pending};
   }));
   const materials = db().collection('assignmentMaterials').where('ownerUid', '==', uid);
-  const [gallery, boards, materialsUsed, materialsPending] = await Promise.all([
-    db().doc(`exhibitionStorage/${uid}`).get(), db().doc(`participationStorage/${uid}`).get(),
+  const [gallery, boards, workspace, materialsUsed, materialsPending] = await Promise.all([
+    db().doc(`exhibitionStorage/${uid}`).get(), db().doc(`participationStorage/${uid}`).get(), db().doc(`teacherWorkspaces/${uid}`).get(),
     // Equality filters only, so no composite index is needed.
     total(materials, 'size'), total(materials.where('status', 'in', ['pending', 'cleanup']), 'size'),
   ]);
   const categories: Record<StorageCategory, number> = {
     homeworkVideo: sum(perClass, row => row.video), homeworkPhoto: sum(perClass, row => row.photo),
     gallery: Number(gallery.data()?.usedBytes || 0), materials: materialsUsed - materialsPending, boards: Number(boards.data()?.usedBytes || 0),
+    workspace: Number(workspace.data()?.storageBytes || 0),
   };
-  const reservedBytes = sum(perClass, row => row.pending) + Number(gallery.data()?.reservedBytes || 0) + materialsPending + Number(boards.data()?.reservedBytes || 0);
+  const reservedBytes = sum(perClass, row => row.pending) + Number(gallery.data()?.reservedBytes || 0) + materialsPending + Number(boards.data()?.reservedBytes || 0) + Number(workspace.data()?.reservedBytes || 0);
   return {categories, usedBytes: storageCategories.reduce((value, key) => value + categories[key], 0), reservedBytes};
 }
 
@@ -61,7 +62,7 @@ export async function teacherStorage(uid: string, maxAgeMs = 0): Promise<Storage
   if (usage !== cached) await planRef(uid).set({usage}, {merge: true});
   const quotaBytes = Number(plan.baseBytes || BASE_PLAN_BYTES) + Number(plan.extraBytes || 0);
   return {baseBytes: Number(plan.baseBytes || BASE_PLAN_BYTES), extraBytes: Number(plan.extraBytes || 0), quotaBytes, usedBytes: usage.usedBytes, reservedBytes: usage.reservedBytes,
-    remainingBytes: Math.max(0, quotaBytes - usage.usedBytes - usage.reservedBytes), categories: usage.categories, periodStart: plan.periodStart, periodEnd: plan.periodEnd,
+    remainingBytes: Math.max(0, quotaBytes - usage.usedBytes - usage.reservedBytes), categories: {...Object.fromEntries(storageCategories.map(key => [key, 0])) as Record<StorageCategory, number>, ...usage.categories}, periodStart: plan.periodStart, periodEnd: plan.periodEnd,
     daysLeft: daysUntil(plan.periodEnd), level: usageLevel(usage.usedBytes + usage.reservedBytes, quotaBytes), computedAt: usage.computedAt};
 }
 

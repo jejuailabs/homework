@@ -5,10 +5,11 @@ import {assertOrigin, getContext, type Context} from '@/lib/server/auth';
 import {ApiError} from '@/lib/server/policy';
 import {accessConfig, entryInput, monthRange, notebookAllowed, notebookDate, NotebookError, MAX_REPORT_ENTRIES, recentAuthentication, reportRange, studentKey, unlockToken, verifyUnlock, UNLOCK_SECONDS} from './policy';
 import {notebookKeys, openBody, sealBody} from './vault';
+import {logWorkspaceEvent} from '@/modules/teacher-workspace/event-log';
 import {NOTEBOOK_TAGS, type NotebookAccessConfig, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStudentRef, type NotebookTag} from './types';
 
 type Input = Record<string, unknown>;
-type Stored = {date: string; body: unknown; students: NotebookStudentRef[]; studentKeys: string[]; classIds: string[]; tags: NotebookTag[]; sensitive: boolean; length: number; createdAt: string; updatedAt: string};
+type Stored = {date: string; body: unknown; students: NotebookStudentRef[]; studentKeys: string[]; classIds: string[]; tags: NotebookTag[]; sensitive: boolean; length: number; createdAt: string; updatedAt: string; source?: string; pending?: boolean};
 const UNLOCK_COOKIE = '__notebook_unlock', COOKIE_PATH = '/api/teacher-notebook';
 const json = (value: unknown, status = 200) => NextResponse.json(value, {status, headers: {'Cache-Control': 'private, no-store'}});
 const now = () => new Date().toISOString();
@@ -41,6 +42,8 @@ function setUnlockCookie(response: NextResponse, value: string, maxAge: number) 
 async function audit(uid: string, action: string, target: string | null = null, details: Input = {}) {
   await notebook(uid).collection('audit').add({action, target, details, at: now()});
 }
+/** For the Berry connector: the notebook pilot gate applies to chat writes too. */
+export async function notebookAvailableFor(uid: string, role: string) {return notebookAllowed(await access(), uid, role, process.env.TEACHER_NOTEBOOK_DISABLED);}
 async function teacher(request: Request) {
   const ctx = await getContext(request);
   if (!notebookAllowed(await access(), ctx.uid, ctx.role, process.env.TEACHER_NOTEBOOK_DISABLED)) throw new NotebookError('교무수첩을 아직 사용할 수 없어요.', 403, 'NOTEBOOK_NOT_ENABLED');
@@ -69,7 +72,7 @@ async function assertOwnStudents(uid: string, refs: NotebookStudentRef[]) {
 }
 function publicEntry(uid: string, doc: FirebaseFirestore.DocumentSnapshot): NotebookEntry {
   const data = doc.data() as Stored, body = openBody(data.body, uid, doc.id);
-  return {id: doc.id, date: data.date, body: body ?? '(이 기록을 열지 못했어요.)', students: data.students ?? [], tags: (data.tags ?? []).filter(tag => NOTEBOOK_TAGS.includes(tag)), sensitive: !!data.sensitive, createdAt: data.createdAt, updatedAt: data.updatedAt};
+  return {id: doc.id, date: data.date, body: body ?? '(이 기록을 열지 못했어요.)', students: data.students ?? [], tags: (data.tags ?? []).filter(tag => NOTEBOOK_TAGS.includes(tag)), sensitive: !!data.sensitive, createdAt: data.createdAt, updatedAt: data.updatedAt, ...(data.pending ? {pending: true} : {})};
 }
 function stored(uid: string, entryId: string, value: ReturnType<typeof entryInput>, createdAt: string): Stored {
   return {date: value.date, body: sealBody(value.body, uid, entryId), students: value.students, studentKeys: value.students.map(studentKey), classIds: [...new Set(value.students.map(ref => ref.classId))], tags: value.tags, sensitive: value.sensitive, length: value.body.length, createdAt, updatedAt: now()};
@@ -97,6 +100,24 @@ async function create(uid: string, data: Input) {
   await notebook(uid).set({updatedAt: at}, {merge: true});
   await ref.create(stored(uid, ref.id, value, at));
   await audit(uid, 'entry.create', ref.id, {date: value.date, students: value.students.length, sensitive: value.sensitive});
+  return {entry: publicEntry(uid, await ref.get())};
+}
+/** A chat-made entry (Berry) stays marked until the teacher confirms it in the notebook. */
+export async function createChatEntry(uid: string, value: ReturnType<typeof entryInput>) {
+  await assertOwnStudents(uid, value.students);
+  const ref = entries(uid).doc(), at = now();
+  await notebook(uid).set({updatedAt: at}, {merge: true});
+  await ref.create({...stored(uid, ref.id, value, at), source: 'chat', pending: true});
+  await audit(uid, 'entry.create', ref.id, {date: value.date, students: value.students.length, sensitive: value.sensitive, source: 'chat'});
+  await logWorkspaceEvent(uid, 'notebook.created', {collection: 'notebook', id: ref.id}, {sensitive: value.sensitive});
+  return ref.id;
+}
+async function confirmEntry(uid: string, entryId: string) {
+  const ref = entries(uid).doc(entryId), doc = await ref.get();
+  if (!doc.exists) throw new NotebookError('기록을 찾을 수 없어요.', 404, 'NOT_FOUND');
+  await ref.update({pending: false});
+  await audit(uid, 'entry.confirm', entryId);
+  await logWorkspaceEvent(uid, 'notebook.confirmed', {collection: 'notebook', id: entryId}, {sensitive: !!doc.data()!.sensitive});
   return {entry: publicEntry(uid, await ref.get())};
 }
 async function update(uid: string, entryId: string, data: Input) {
@@ -186,6 +207,7 @@ export async function handleNotebook(request: Request, segments: string[]) {
     if (segments[0] === 'entries') {
       if (method === 'POST' && segments.length === 1) return json(await create(ctx.uid, await input(request)), 201);
       const entryId = segments[1] ?? '';
+      if (segments.length === 3 && segments[2] === 'confirm' && method === 'POST' && /^[A-Za-z0-9]{1,40}$/.test(entryId)) return json(await confirmEntry(ctx.uid, entryId));
       if (segments.length === 2 && /^[A-Za-z0-9]{1,40}$/.test(entryId)) {
         if (method === 'POST') return json(await update(ctx.uid, entryId, await input(request)));
         if (method === 'DELETE') return json(await remove(ctx.uid, entryId));

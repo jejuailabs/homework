@@ -201,6 +201,9 @@ export default function TeacherNotebook() {
     if (!confirm('이 기록을 삭제할까요? 삭제하면 되돌릴 수 없어요.')) return;
     try {await call(`entries/${entry.id}`, {method: 'DELETE'}); loadDay(); loadMonth();} catch (e) {fail(e);}
   }
+  async function accept(entry: NotebookEntry) {
+    try {await call(`entries/${entry.id}/confirm`, {body: {}}); loadDay();} catch (e) {fail(e);}
+  }
   if (!status) return <div className="center-state">{error ? <p>{error}</p> : <LoaderCircle className="spin" size={28}/>}</div>;
   if (!status.available) return <section className="nb-shell"><div className="nb-lock"><Lock size={30}/><h2>교무수첩은 아직 준비 중이에요</h2><p>시범 운영 중인 기능이에요. 열리면 마이페이지에서 바로 쓸 수 있어요.</p><Link className="button soft" href="/teacher/me">마이페이지로</Link></div></section>;
   return <section className="nb-shell">
@@ -223,6 +226,7 @@ export default function TeacherNotebook() {
           {!entries ? <p className="nb-muted"><LoaderCircle className="spin" size={16}/> 불러오는 중…</p> : entries.length === 0 ? <p className="nb-muted">아직 이 날의 기록이 없어요.</p> :
             <ul className="nb-entries">{entries.map(entry => <li key={entry.id} className={entry.sensitive ? 'is-sensitive' : ''}>
               <div className="nb-entry-meta"><span>{entry.students.length ? entry.students.map(ref => names.get(studentKey(ref)) ?? '명단에 없음').join(', ') : '학급 전체'}</span><span className="nb-entry-tags">{entry.tags.map(tag => NOTEBOOK_TAG_LABELS[tag]).join(' · ')}{entry.sensitive && <b> 민감</b>}</span></div>
+              {entry.pending && <span className="nb-berry">🍇 베리 제안 <button onClick={() => accept(entry)}>확정</button></span>}
               <p>{entry.body}</p>
               <div className="nb-entry-actions"><button className="icon-button" aria-label="고치기" onClick={() => setDraft({id: entry.id, body: entry.body, students: entry.students, tags: entry.tags, sensitive: entry.sensitive})}><Pencil size={15}/></button><button className="icon-button" aria-label="삭제" onClick={() => remove(entry)}><Trash2 size={15}/></button></div>
             </li>)}</ul>}
