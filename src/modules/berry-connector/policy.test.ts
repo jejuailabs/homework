@@ -87,6 +87,8 @@ assert.equal(trustedRedirectHost('https://chatgpt.com/connector_platform_oauth_r
 assert.equal(trustedRedirectHost('https://claude.ai.evil.example/cb'), false, 'suffix must be a real domain boundary');
 assert.equal(trustedRedirectHost('https://evilclaude.ai/cb'), false);
 assert.equal(trustedRedirectHost('http://localhost:3999/cb'), false, 'loopback is allowed but never trusted');
+assert.equal(trustedRedirectHost('https://berry-brain-x.a.run.app/cb', ['berry-brain-x.a.run.app']), true, 'our own brain host');
+assert.equal(trustedRedirectHost('https://other.a.run.app/cb', ['berry-brain-x.a.run.app']), false, 'exact host only');
 // Write scopes: never default, unchecked on consent, cannot be added on refresh.
 assert.deepEqual(parseScopes('notebook:write calendar:write workspace:read'), ['workspace:read', 'calendar:write', 'notebook:write']);
 assert.ok(parseScopes(undefined).every(scope => !scope.endsWith(':write')));

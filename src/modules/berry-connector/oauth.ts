@@ -85,7 +85,7 @@ async function consentInfo(request: Request, ctx: Context) {
   const app = await client(params.get('client_id') ?? '');
   const value = authorizeRequest(params, app);
   const scopes = value.scopes.map(scope => ({scope, ...BERRY_SCOPE_LABELS[scope]}));
-  return json({client: {id: app!.id, name: app!.name, redirectHost: new URL(value.redirectUri).host, trusted: trustedRedirectHost(value.redirectUri)}, scopes, teacher: {email: ctx.email, displayName: ctx.displayName}});
+  return json({client: {id: app!.id, name: app!.name, redirectHost: new URL(value.redirectUri).host, trusted: trustedRedirectHost(value.redirectUri, (process.env.BERRY_TRUSTED_REDIRECT_HOSTS ?? '').split(',').map(host => host.trim()).filter(Boolean))}, scopes, teacher: {email: ctx.email, displayName: ctx.displayName}});
 }
 async function approve(request: Request, ctx: Context) {
   const body = await input(request), params = new URLSearchParams();
