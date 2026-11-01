@@ -2,7 +2,7 @@ import {createHash, randomBytes, timingSafeEqual} from 'node:crypto';
 import {BERRY_SCOPES, DEFAULT_SCOPES, WRITE_SCOPES, type AuthorizeRequest, type BerryAccessConfig, type BerryDerivedEvent, type BerryEvent, type BerryScope, type McpTool} from './types';
 
 export class BerryError extends Error {constructor(message: string, public status = 400, public code = 'invalid_request') {super(message);}}
-export const ACCESS_TOKEN_SECONDS = 60 * 60, AUTH_CODE_SECONDS = 10 * 60, MIN_ACCESS_DAYS = 1, MAX_ACCESS_DAYS = 30, DEFAULT_ACCESS_DAYS = 30;
+export const ACCESS_TOKEN_SECONDS = 60 * 60, AUTH_CODE_SECONDS = 10 * 60, MIN_ACCESS_DAYS = 1, MAX_ACCESS_DAYS = 365, DEFAULT_ACCESS_DAYS = 30;
 export const MAX_REDIRECT_URIS = 10, MAX_CLIENT_NAME = 80;
 export const CALLS_PER_MINUTE = 60, CALLS_PER_DAY = 2000, MAX_TOOL_RESULT_ITEMS = 300;
 export const REGISTRATIONS_PER_HOUR = 20;

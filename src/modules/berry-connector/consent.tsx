@@ -46,7 +46,7 @@ export default function BerryConsent() {
             <label><input type="checkbox" checked={chosen.includes(item.scope)} onChange={() => toggle(item.scope)} disabled={busy}/><span><strong>{item.title}</strong><small>{item.detail}</small>{item.warning && <em><ShieldAlert size={13}/>{item.warning}</em>}</span></label>
           </li>)}
         </ul>
-        <label className="bc-days">접근 기간 <select value={days} onChange={e => setDays(e.target.value)} disabled={busy}><option value="7">7일</option><option value="14">14일</option><option value="30">30일</option></select><small>기간이 지나면 자동으로 끊겨요. 마이페이지에서 언제든 해제할 수 있어요.</small></label>
+        <label className="bc-days">접근 기간 <select value={days} onChange={e => setDays(e.target.value)} disabled={busy}><option value="7">7일</option><option value="14">14일</option><option value="30">30일</option><option value="180">6개월</option><option value="365">12개월</option></select><small>기간이 지나면 자동으로 끊겨요. 마이페이지에서 언제든 해제할 수 있어요.</small></label>
         <p className="bc-note"><ShieldCheck size={14}/> 학생은 기본적으로 "학생 07"처럼 가명으로 나가고, 상담·건강·가정 기록은 어떤 권한으로도 나가지 않아요. 쓰기 권한은 직접 체크해야 켜지고, 미리보기를 확인한 뒤에만 저장되며 선생님이 화면에서 확정해요.</p>
         <div className="bc-actions">
           <button type="button" className="button soft" onClick={() => decide('deny')} disabled={busy}>거부</button>

@@ -9,7 +9,7 @@ ourclass 데이터를 **베리 에이전트 서버, Claude, ChatGPT** 같은 외
 | `GET /.well-known/oauth-authorization-server` | RFC 8414 인가 서버 메타데이터 |
 | `GET /.well-known/oauth-protected-resource` | RFC 9728 보호 자원 메타데이터 (`resource` = `/api/mcp`) |
 | `POST /api/oauth/register` | RFC 7591 동적 클라이언트 등록. 공개 클라이언트(PKCE)만 |
-| `GET /oauth/authorize` | 교사 동의 화면. 범위를 좁히고 접근 기간(1~30일)을 고른다 |
+| `GET /oauth/authorize` | 교사 동의 화면. 범위를 좁히고 접근 기간(7일·14일·30일·6개월·12개월, 서버는 1~365일)을 고른다 |
 | `GET/POST /api/oauth/consent` | 동의 화면이 쓰는 검증·승인 API (세션 쿠키) |
 | `POST /api/oauth/token` | `authorization_code`(PKCE S256) · `refresh_token`(회전, 재사용 시 연결 전체 해제) |
 | `POST /api/oauth/revoke` | RFC 7009 |
