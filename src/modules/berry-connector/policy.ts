@@ -8,11 +8,12 @@ export const CALLS_PER_MINUTE = 60, CALLS_PER_DAY = 2000, MAX_TOOL_RESULT_ITEMS 
 export const REGISTRATIONS_PER_HOUR = 20;
 /** Redirect hosts of clients we recognise. Anything else is shown to the teacher with an "unverified app" warning. */
 export const TRUSTED_REDIRECT_SUFFIXES = ['claude.ai', 'claude.com', 'anthropic.com', 'chatgpt.com', 'openai.com'] as const;
-export function trustedRedirectHost(redirectUri: string): boolean {
+/** `extraHosts` (env BERRY_TRUSTED_REDIRECT_HOSTS) adds exact hosts we run ourselves, such as the Berry brain on Cloud Run. */
+export function trustedRedirectHost(redirectUri: string, extraHosts: readonly string[] = []): boolean {
   try {
     const url = new URL(redirectUri), host = url.hostname;
     if (url.protocol === 'http:') return false;
-    return TRUSTED_REDIRECT_SUFFIXES.some(suffix => host === suffix || host.endsWith(`.${suffix}`));
+    return extraHosts.includes(host) || TRUSTED_REDIRECT_SUFFIXES.some(suffix => host === suffix || host.endsWith(`.${suffix}`));
   } catch {return false;}
 }
 

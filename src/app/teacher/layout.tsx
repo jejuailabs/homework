@@ -1,2 +1,3 @@
 import ToolWindowsProvider from '@/components/tool-windows';
-export default function TeacherLayout({children}: {children: React.ReactNode}) {return <ToolWindowsProvider>{children}</ToolWindowsProvider>;}
+import BerryPanel from '@/modules/berry-panel/panel';
+export default function TeacherLayout({children}: {children: React.ReactNode}) {return <ToolWindowsProvider>{children}<BerryPanel/></ToolWindowsProvider>;}
