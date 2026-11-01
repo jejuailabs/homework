@@ -1,6 +1,7 @@
 import 'server-only';
 import {db} from '@/lib/server/admin';
 import {openBody} from '@/modules/teacher-notebook/vault';
+import {NotebookError} from '@/modules/teacher-notebook/policy';
 import {NOTEBOOK_TAG_LABELS, type NotebookTag} from '@/modules/teacher-notebook/types';
 import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, safeId, studentLabel} from './policy';
 import type {BearerContext, McpTool} from './types';
@@ -101,7 +102,8 @@ async function searchNotebook(args: Data, ctx: BearerContext) {
   const limit = boundedInt(args.limit, 30, 1, 100, 'limit'), number = args.student_number === undefined ? null : boundedInt(args.student_number, 0, 1, 999, 'student_number');
   const query = typeof args.query === 'string' ? args.query.trim().slice(0, 100).toLowerCase() : '';
   const classId = args.class_id === undefined ? null : (await ownedClass(ctx.uid, args.class_id)).id;
-  const snap = await db().collection(`teacherNotebooks/${ctx.uid}/entries`).where('date', '>=', from).where('date', '<=', to).where('sensitive', '==', false).limit(1000).get();
+  // Range on a single field only: no composite index is required. Sensitive rows are dropped below, never returned.
+  const snap = await db().collection(`teacherNotebooks/${ctx.uid}/entries`).where('date', '>=', from).where('date', '<=', to).limit(1500).get();
   const classIds = new Set<string>();
   snap.docs.forEach(doc => (doc.data().students ?? []).forEach((ref: Data) => classIds.add(ref.classId)));
   const rosters = new Map<string, Student[]>();
@@ -114,7 +116,8 @@ async function searchNotebook(args: Data, ctx: BearerContext) {
     if (classId && !refs.some(ref => ref.classId === classId)) continue;
     const people = refs.map(ref => rosters.get(ref.classId)?.find(student => student.id === ref.studentId)).filter((student): student is Student => !!student);
     if (number !== null && !people.some(student => student.number === number)) continue;
-    const body = openBody(data.body, ctx.uid, doc.id) ?? '';
+    let body = '';
+    try {body = openBody(data.body, ctx.uid, doc.id) ?? '';} catch (error) {if (error instanceof NotebookError) throw new BerryError('교무수첩 보안 설정이 준비되지 않았어요.', 503, 'server_error'); throw error;}
     if (query && !body.toLowerCase().includes(query)) continue;
     entries.push({date: data.date, tags: ((data.tags ?? []) as NotebookTag[]).map(tag => NOTEBOOK_TAG_LABELS[tag] ?? tag), students: people.map(student => ({number: student.number, label: studentLabel(student, ctx.scopes, args.reveal_names)})), body: body.length > 300 ? `${body.slice(0, 300)}…` : body});
     if (entries.length >= limit) break;

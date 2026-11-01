@@ -3,6 +3,7 @@ import {NextResponse} from 'next/server';
 import {Timestamp} from 'firebase-admin/firestore';
 import {db} from '@/lib/server/admin';
 import {ApiError} from '@/lib/server/policy';
+import {NotebookError} from '@/modules/teacher-notebook/policy';
 import {bearer, cors, disabled, errorResponse, json} from './oauth';
 import {BerryError, CALLS_PER_DAY, CALLS_PER_MINUTE, hashToken} from './policy';
 import {TOOLS, callTool} from './tools';
@@ -56,11 +57,15 @@ async function dispatch(message: Rpc, ctx: BearerContext) {
       await audit(ctx, name, true, {classId: typeof input.class_id === 'string' ? input.class_id : null, revealNames: input.reveal_names === true});
       return rpcResult(id, {content: [{type: 'text', text: JSON.stringify(result)}], structuredContent: result, isError: false});
     } catch (error) {
-      if (error instanceof BerryError || error instanceof ApiError) {
+      if (error instanceof BerryError || error instanceof ApiError || error instanceof NotebookError) {
         await audit(ctx, name, false, {code: error.code});
         return rpcResult(id, {content: [{type: 'text', text: error.message}], isError: true});
       }
-      throw error;
+      // Unexpected failures become a tool error, not a transport failure, so the client shows the message.
+      const code = (error as {code?: string | number}).code ?? 'INTERNAL';
+      console.error('Berry tool failed', name, code);
+      await audit(ctx, name, false, {code: String(code)});
+      return rpcResult(id, {content: [{type: 'text', text: `도구를 실행하지 못했어요 (${code}). 잠시 후 다시 시도해 주세요.`}], isError: true});
     }
   }
   if (method.startsWith('notifications/')) return null;
