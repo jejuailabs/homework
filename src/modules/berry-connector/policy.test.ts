@@ -22,7 +22,10 @@ assert.equal(scopesWithin(['classes:read'], ['names']), false, 'refresh cannot w
 assert.equal(accessDays(undefined), 30);
 assert.equal(accessDays('7'), 7);
 assert.throws(() => accessDays(0));
-assert.throws(() => accessDays(31));
+assert.equal(accessDays('180'), 180, 'six months');
+assert.equal(accessDays(365), 365, 'twelve months');
+assert.throws(() => accessDays(366));
+assert.throws(() => accessDays(30.5));
 
 assert.equal(validRedirectUri('https://claude.ai/api/mcp/auth_callback'), true);
 assert.equal(validRedirectUri('http://localhost:6274/oauth/callback'), true);
