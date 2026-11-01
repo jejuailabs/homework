@@ -4,7 +4,7 @@ export const BASE_PLAN_BYTES = 200 * GIB;
 export const PLAN_PERIOD_DAYS = 365;
 // Per-feature ledgers keep their accounting but no longer cap usage on their own.
 export const FEATURE_STORAGE_CEILING = 1024 ** 4;
-export const storageCategories = ['homeworkVideo', 'homeworkPhoto', 'gallery', 'materials', 'boards'] as const;
+export const storageCategories = ['homeworkVideo', 'homeworkPhoto', 'gallery', 'materials', 'boards', 'workspace'] as const;
 export type StorageCategory = (typeof storageCategories)[number];
 export type StoragePlanView = {
   baseBytes: number; extraBytes: number; quotaBytes: number;

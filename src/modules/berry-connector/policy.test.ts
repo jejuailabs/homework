@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, clientRegistration, connectorAllowed, deriveEvents, parseScopes, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
+import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, clientRegistration, connectorAllowed, deriveEvents, mergeEvents, parseScopes, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
 
 assert.deepEqual(accessConfig(undefined), {mode: 'off', teacherUids: []});
 assert.deepEqual(accessConfig({mode: 'allowlist', teacherUids: ['t1', 'bad/uid', 7]}), {mode: 'allowlist', teacherUids: ['t1']});
@@ -69,6 +69,9 @@ assert.deepEqual(all.find(e => e.id === 'review:a1:25')!.data, {pending: 5});
 assert.deepEqual(deriveEvents(tasks, '2026-11-02T05:00:00.000Z', now).map(e => e.id), ['passed:a2', 'soon:a1', 'review:a1:25'], 'cursor drops older events');
 assert.deepEqual(deriveEvents(tasks, '2026-11-02T07:00:00.000Z', now).map(e => e.id), ['review:a1:25'], 'soon fired at due-48h, before this cursor');
 assert.deepEqual(deriveEvents(tasks, now, now).map(e => e.id), [], 'nothing after now');
+assert.ok(all.every(e => e.source === 'derived'));
+const logLine = {id: 'log:x1', type: 'item.created', source: 'log' as const, at: '2026-11-02T07:00:00.000Z', ref: {collection: 'items', id: 'i1'}, summary: '업무 항목 추가 1건'};
+assert.deepEqual(mergeEvents([logLine], all).map(e => e.id), ['created:a2', 'created:a1', 'created:a4', 'passed:a2', 'soon:a1', 'log:x1', 'review:a1:25'], 'log lines interleave by time');
 
 const meta = authorizationServerMetadata('https://ourclass.co.kr');
 assert.equal(meta.authorization_endpoint, 'https://ourclass.co.kr/oauth/authorize');

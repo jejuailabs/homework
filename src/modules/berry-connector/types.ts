@@ -21,4 +21,8 @@ export type AuthorizeRequest = {clientId: string; redirectUri: string; scopes: B
 
 export type McpTool = {name: string; description: string; inputSchema: Record<string, unknown>; scope: BerryScope};
 
-export type BerryEvent = {id: string; type: 'assignment.created' | 'deadline.soon' | 'deadline.passed' | 'review.pending'; at: string; classId: string; assignmentId: string; title: string; data: Record<string, number | string | null>};
+/** Derived from assignment summaries on each poll. */
+export type BerryDerivedEvent = {id: string; type: 'assignment.created' | 'deadline.soon' | 'deadline.passed' | 'review.pending'; source: 'derived'; at: string; classId: string; assignmentId: string; title: string; data: Record<string, number | string | null>};
+/** Written by workspace and notebook writes. The summary is generic: no title, body or student name. */
+export type BerryLogEvent = {id: string; type: string; source: 'log'; at: string; ref: {collection: string; id: string}; summary: string};
+export type BerryEvent = BerryDerivedEvent | BerryLogEvent;

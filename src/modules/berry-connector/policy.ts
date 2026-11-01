@@ -1,5 +1,5 @@
 import {createHash, randomBytes, timingSafeEqual} from 'node:crypto';
-import {BERRY_SCOPES, DEFAULT_SCOPES, type AuthorizeRequest, type BerryAccessConfig, type BerryEvent, type BerryScope} from './types';
+import {BERRY_SCOPES, DEFAULT_SCOPES, type AuthorizeRequest, type BerryAccessConfig, type BerryDerivedEvent, type BerryEvent, type BerryScope} from './types';
 
 export class BerryError extends Error {constructor(message: string, public status = 400, public code = 'invalid_request') {super(message);}}
 export const ACCESS_TOKEN_SECONDS = 60 * 60, AUTH_CODE_SECONDS = 10 * 60, MIN_ACCESS_DAYS = 1, MAX_ACCESS_DAYS = 30, DEFAULT_ACCESS_DAYS = 30;
@@ -130,11 +130,11 @@ export function boundedInt(value: unknown, fallback: number, min: number, max: n
 
 export type AssignmentSummary = {id: string; classId: string; title: string; dueAt: string | null; createdAt: string; targetCount: number; submittedCount: number; reviewedCount: number; visibility?: string};
 /** Derive a teacher's event feed from assignment summaries. Deterministic ids let a consumer de-duplicate across polls. */
-export function deriveEvents(assignments: AssignmentSummary[], since: string | null, now: string, soonHours = 48): BerryEvent[] {
-  const events: BerryEvent[] = [], nowMs = Date.parse(now), sinceMs = since ? Date.parse(since) : Number.NEGATIVE_INFINITY;
+export function deriveEvents(assignments: AssignmentSummary[], since: string | null, now: string, soonHours = 48): BerryDerivedEvent[] {
+  const events: BerryDerivedEvent[] = [], nowMs = Date.parse(now), sinceMs = since ? Date.parse(since) : Number.NEGATIVE_INFINITY;
   for (const task of assignments) {
     if (task.visibility === 'hidden') continue;
-    const base = {classId: task.classId, assignmentId: task.id, title: task.title};
+    const base = {source: 'derived' as const, classId: task.classId, assignmentId: task.id, title: task.title};
     events.push({id: `created:${task.id}`, type: 'assignment.created', at: task.createdAt, ...base, data: {targetCount: task.targetCount, dueAt: task.dueAt}});
     if (task.dueAt) {
       const dueMs = Date.parse(task.dueAt), soonAt = new Date(Math.max(dueMs - soonHours * 3_600_000, Date.parse(task.createdAt))).toISOString();
@@ -147,6 +147,8 @@ export function deriveEvents(assignments: AssignmentSummary[], since: string | n
   }
   return events.filter(event => Date.parse(event.at) > sinceMs && Date.parse(event.at) <= nowMs).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 }
+/** One feed from the write-side log and the derived assignment facts, ordered by time; ids never collide (log ids start with "log:"). */
+export const mergeEvents = (log: BerryEvent[], derived: BerryEvent[]) => [...log, ...derived].sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 
 /** RFC 8414 / RFC 9728 discovery documents. The issuer is the site origin; the resource is the MCP endpoint. */
 export function authorizationServerMetadata(issuer: string) {

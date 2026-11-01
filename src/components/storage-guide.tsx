@@ -5,7 +5,7 @@ import {Download,HardDrive,LoaderCircle,RefreshCw} from 'lucide-react';
 import {formatStorage,storageCategories,type StorageCategory,type StoragePlanView} from '@/lib/storage-plan';
 
 type ExportView={id:string;status:'processing'|'complete'|'failed';createdAt:string;expiresAt:string;fileCount:number;bytes:number;parts:{index:number;status:string;fileCount:number;bytes:number;url?:string}[]};
-const labels:Record<StorageCategory,[string,string]>={homeworkVideo:['숙제 영상','Homework videos'],homeworkPhoto:['숙제 사진·파일','Homework photos & files'],gallery:['전시실','Exhibitions'],materials:['수업 자료','Class materials'],boards:['게시판','Boards']};
+const labels:Record<StorageCategory,[string,string]>={homeworkVideo:['숙제 영상','Homework videos'],homeworkPhoto:['숙제 사진·파일','Homework photos & files'],gallery:['전시실','Exhibitions'],materials:['수업 자료','Class materials'],boards:['게시판','Boards'],workspace:['업무 폴더','Work folders']};
 const day=(value:string,locale:string)=>new Intl.DateTimeFormat(locale,{year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
 
 /** Teacher plan: one shared allowance, its yearly period, and the final download before the reset. */
@@ -37,7 +37,7 @@ export default function StorageGuide() {
           {plan.level!=='ok'&&<p className={`sp-alert sp-${plan.level}`} role="status">{plan.level==='critical'?w('저장 공간이 거의 찼어요. 가득 차면 학생들이 숙제를 올릴 수 없어요.','Storage is almost full. Students cannot upload once it is full.'):w('저장 공간을 80% 넘게 사용했어요.','Over 80% of storage is used.')}</p>}
           {plan.daysLeft<=30&&<p className="sp-alert sp-critical" role="status">{w(`${plan.daysLeft}일 뒤 이용 기간이 끝나면 저장된 자료가 정리돼요. 그 전에 최종 다운로드로 내려받아 주세요.`,`Stored files are cleared when the period ends in ${plan.daysLeft} days. Download them before then.`)}</p>}
         </>}
-        <p className="sp-muted sp-note">{w('숙제·작품전시·게시판·수업 자료는 기능별 용량 제한 없이 이 저장 공간 하나를 함께 써요.','Homework, exhibitions, boards and materials all share this one allowance, with no per-feature limits.')}</p>
+        <p className="sp-muted sp-note">{w('숙제·작품전시·게시판·수업 자료·업무 폴더는 기능별 용량 제한 없이 이 저장 공간 하나를 함께 써요.','Homework, exhibitions, boards and materials all share this one allowance, with no per-feature limits.')}</p>
       </div>
       <aside className="sp-side">
         {plan&&<div className="sp-side-block">
