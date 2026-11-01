@@ -5,6 +5,16 @@ export class BerryError extends Error {constructor(message: string, public statu
 export const ACCESS_TOKEN_SECONDS = 60 * 60, AUTH_CODE_SECONDS = 10 * 60, MIN_ACCESS_DAYS = 1, MAX_ACCESS_DAYS = 30, DEFAULT_ACCESS_DAYS = 30;
 export const MAX_REDIRECT_URIS = 10, MAX_CLIENT_NAME = 80;
 export const CALLS_PER_MINUTE = 60, CALLS_PER_DAY = 2000, MAX_TOOL_RESULT_ITEMS = 300;
+export const REGISTRATIONS_PER_HOUR = 20;
+/** Redirect hosts of clients we recognise. Anything else is shown to the teacher with an "unverified app" warning. */
+export const TRUSTED_REDIRECT_SUFFIXES = ['claude.ai', 'claude.com', 'anthropic.com', 'chatgpt.com', 'openai.com'] as const;
+export function trustedRedirectHost(redirectUri: string): boolean {
+  try {
+    const url = new URL(redirectUri), host = url.hostname;
+    if (url.protocol === 'http:') return false;
+    return TRUSTED_REDIRECT_SUFFIXES.some(suffix => host === suffix || host.endsWith(`.${suffix}`));
+  } catch {return false;}
+}
 
 const ID = /^[A-Za-z0-9_-]{1,200}$/, DATE = /^\d{4}-\d{2}-\d{2}$/;
 export const sha256 = (value: string) => createHash('sha256').update(value).digest();
