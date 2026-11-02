@@ -33,7 +33,7 @@ function Preview({card, onDecide}: {card: Card; onDecide: (card: Card, decision:
     {card.state === 'open' || card.state === 'saving' ? <div className="bp-card-actions">
       <button type="button" className="button soft" disabled={card.state === 'saving'} onClick={() => onDecide(card, 'reject')}>취소</button>
       <button type="button" className="button primary" disabled={card.state === 'saving'} onClick={() => onDecide(card, 'approve')}>{card.state === 'saving' ? <LoaderCircle className="spin" size={14}/> : <Check size={14}/>}저장</button>
-    </div> : <p className="bp-card-note">{card.state === 'saved' ? '저장했어요. 업무 공간·교무수첩에서 "🍇 베리 제안"을 확정하면 반영돼요.' : card.state === 'rejected' ? '저장하지 않았어요.' : card.note}</p>}
+    </div> : <p className="bp-card-note">{card.state === 'saved' ? '저장했어요. 업무 공간·교무수첩에서 "베리 제안"을 확정하면 반영돼요.' : card.state === 'rejected' ? '저장하지 않았어요.' : card.note}</p>}
   </div>;
 }
 
@@ -108,10 +108,10 @@ export default function BerryPanel() {
   const newChat = () => {conversation.current = null; try {sessionStorage.removeItem(CONVERSATION);} catch {} setMessages([]);};
 
   return <>
-    <button type="button" className="bp-fab" aria-label="베리 열기" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X size={22}/> : <span aria-hidden="true">🍇</span>}</button>
+    <button type="button" className="bp-fab" aria-label="베리 열기" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X size={22}/> : <img src="/berry/raspberry-160.webp" alt="" width="46" height="46"/>}</button>
     {open && <section className="bp-panel" aria-label="베리">
       <header className="bp-head">
-        <strong>🍇 베리</strong>
+        <strong className="bp-title"><img src="/berry/raspberry-64.webp" alt="" width="28" height="28"/>베리</strong>
         {status.connected && <div className="bp-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'is-active' : ''} onClick={() => setTab('chat')}><MessageCircle size={14}/>대화</button>
           <button type="button" role="tab" aria-selected={tab === 'inbox'} className={tab === 'inbox' ? 'is-active' : ''} onClick={() => setTab('inbox')}><Inbox size={14}/>알림함</button>
@@ -121,13 +121,15 @@ export default function BerryPanel() {
       {notice && <p className="bp-notice">{notice}</p>}
       {error && <p className="bp-error" role="alert">{error}</p>}
       {!status.connected ? <div className="bp-connect">
+        <div className="bp-duo" aria-hidden="true"><img src="/berry/blueberry-160.webp" alt="" width="72" height="72"/><img src="/berry/raspberry-160.webp" alt="" width="64" height="64"/></div>
         <p>베리가 우리 반 숙제·일정·업무 공간을 보고 도와드리려면 모두의 교실과 한 번 연결해야 해요.</p>
         <ul><li>학생은 "학생 07"처럼 가명으로만 봐요.</li><li>상담·건강·가정 기록은 볼 수 없어요.</li><li>저장은 선생님이 카드에서 [저장]을 눌러야만 돼요.</li></ul>
         <button type="button" className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? <LoaderCircle className="spin" size={16}/> : <PlugZap size={16}/>}모두의 교실 연결하기</button>
       </div> : tab === 'chat' ? <>
         <div className="bp-messages" ref={list}>
-          {!messages.length && <div className="bp-empty"><p>무엇을 도와드릴까요?</p>{['이번 주 마감 숙제 알려 줘', '어제 숙제 안 낸 학생이랑 안내문 초안', '오늘 3교시 국어 수업 일지 써 줘'].map(example => <button type="button" key={example} onClick={() => setText(example)}>{example}</button>)}</div>}
+          {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요?</p>{['이번 주 마감 숙제 알려 줘', '어제 숙제 안 낸 학생이랑 안내문 초안', '오늘 3교시 국어 수업 일지 써 줘'].map(example => <button type="button" key={example} onClick={() => setText(example)}>{example}</button>)}</div>}
           {messages.map((message, index) => <div key={index} className={`bp-msg is-${message.role}`}>
+            {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
             {message.text && <p>{message.text}</p>}
             {message.cards?.map(card => <Preview key={card.inbox_id} card={card} onDecide={(c, d) => void decide(c, d)}/>)}
           </div>)}
