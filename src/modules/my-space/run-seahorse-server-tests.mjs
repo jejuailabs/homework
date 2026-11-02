@@ -45,6 +45,7 @@ function load(filename) {
 const server = load('src/modules/my-space/server.ts');
 const {defaultRoom, starterSpaceIds} = load('src/modules/my-space/catalog.ts');
 const {seahorsePets} = load('src/modules/my-space/seahorse.ts');
+const {marinePets, marineFamilies} = load('src/modules/my-space/marine.ts');
 const points = load('src/lib/server/points-policy.ts');
 const studentPath = 'classes/demo/students/pupil', roomPath = studentPath + '/mySpace/room';
 const ctx = {classId: 'demo', studentId: 'pupil', uid: 'learner', authVersion: 0};
@@ -56,6 +57,23 @@ function fixture() {
   ]);
 }
 const buy = (itemId, requestId) => server.buy(ctx, {itemId, requestId});
+
+test('each new sea species shares one purchase between its pair and preserves saved complete looks', async () => {
+  for (const family of marineFamilies) {
+    fixture(); const pets = marinePets.filter(p => p.family === family.id), set = family.id + '-set-scholar';
+    for (const pet of pets) await buy(pet.id, 'adopt-' + pet.id);
+    await Promise.all(Array.from({length: 4}, (_, i) => buy(set, 'set-' + i)));
+    assert.equal(data.get(studentPath).points, 500 - 120 - 50);
+    let boot = await server.bootstrap(ctx);
+    for (const pet of pets) {
+      await server.saveRoom(ctx, {...boot.room, pet: pet.id, outfit: {body: set}});
+      boot = await server.bootstrap(ctx); assert.equal(boot.room.outfit.body, set); assert.equal(boot.room.pet, pet.id);
+    }
+    await server.saveRoom(ctx, {...boot.room, outfit: {}});
+    boot = await server.bootstrap(ctx);assert.deepEqual(boot.room.outfit, {});assert.equal(boot.profile.points, 330);
+    assert.equal([...data.keys()].filter(k => k.includes('/pointLedger/')).length, 3);
+  }
+});
 test('concurrent adoption and shared outfit purchase charge once and persist ownership', async () => {
   fixture();
   await Promise.all(Array.from({length: 6}, (_, i) => buy(seahorsePets[0].id, 'adopt-' + i)));

@@ -5,7 +5,7 @@ import ts from 'typescript';
 const cache = new Map();
 const root = new URL('../src/modules/my-space/', import.meta.url);
 export function seahorseTestImports(code) {
-  return code.replace(/(['"])([^'"]*\/(?:seahorse|wardrobe-compatibility))\1/g, (match, quote, specifier) => {
+  return code.replace(/(['"])([^'"]*\/(?:seahorse|marine|complete-outfits|wardrobe-compatibility))\1/g, (match, quote, specifier) => {
     if (!specifier.startsWith('.') && !specifier.startsWith('@/')) return match;
     const name = specifier.split('/').at(-1);
     if (!cache.has(name)) {

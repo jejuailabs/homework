@@ -1,4 +1,4 @@
-import {isSeahorse} from './seahorse';
+import {isCompletePet} from './complete-outfits';
 import {exclusiveItemCompatible} from './wardrobe-compatibility';
 import {isWhiteknee} from './whiteknee';
 
@@ -109,7 +109,7 @@ export const newPets = [
 export type NewPetId = typeof newPets[number]['id'];
 export const newPet = (id: string) => newPets.find(pet => pet.id === id);
 export const newPetFromArt = (src?: string) => newPets.find(pet => pet.art === src);
-export const supportsSharedWearables = (pet: string) => !newPet(pet) && !isWhiteknee(pet) && !isSeahorse(pet);
+export const supportsSharedWearables = (pet: string) => !newPet(pet) && !isWhiteknee(pet) && !isCompletePet(pet);
 
 export const juniorBodyStates = ['knit', 'overalls', 'raincoat', 'sailor', 'pajamas', 'cape'] as const;
 export const juniorAttachmentIds = ['junior-head-beret', 'junior-head-crown', 'junior-head-flower', 'junior-head-beanie', 'junior-head-party', 'junior-neck-bow', 'junior-neck-scarf', 'junior-neck-bandana', 'junior-neck-moon'] as const;
@@ -121,6 +121,6 @@ export function juniorWearState(outfit: {body?: string} = {}) {
 export function compatibleWearable(pet: string, item: {id: string; slot?: string}) {
   if (item.slot === 'background' || item.slot === 'frame') return true;
   if (!exclusiveItemCompatible(pet, item)) return false;
-  if (isWhiteknee(pet) || isSeahorse(pet)) return true;
+  if (isWhiteknee(pet) || isCompletePet(pet)) return true;
   return !!newPet(pet) === item.id.startsWith('junior-');
 }
