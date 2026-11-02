@@ -125,7 +125,8 @@ async function exhibitionArtwork(assignment: Data, submission: Data, exhibitionI
       tx.set(ref, {
         id: ref.id, uploadId: fileId, exhibitionId, classId: assignment.classId, uploaderUid: room.ownerUid,
         studentId: submission.studentId, studentName: submission.studentName || roster?.name || '', studentNumber: roster?.number || 0,
-        title: assignment.title, description: '', artworkDate: artworkToday(), artistName: submission.studentName || roster?.name || '', status: 'approved', feedback: '',
+        // The day the child handed it in, not the day it reached the room.
+        title: assignment.title, description: '', artworkDate: artworkToday(new Date(Date.parse(submission.submittedAt) || Date.now())), artistName: submission.studentName || roster?.name || '', status: 'approved', feedback: '',
         ...image, ...(video ? {mediaType: 'video', videoPath: media.upload.path, videoContentType: media.upload.contentType} : {}),
         source: {kind: 'assignment', assignmentId: assignment.id, submissionId: submission.id, attemptId: submission.attemptId},
         createdAt: previous.data()?.createdAt || stamp, reviewedAt: stamp, commentCount: previous.data()?.commentCount || 0, reactionCounts: previous.data()?.reactionCounts || {colors: 0, idea: 0, story: 0},
