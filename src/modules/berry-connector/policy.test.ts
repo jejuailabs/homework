@@ -13,7 +13,10 @@ assert.equal(connectorAllowed({mode: 'off', teacherUids: []}, 't1', 'teacher', u
 assert.equal(connectorAllowed({mode: 'all', teacherUids: []}, 't1', 'teacher', undefined, 'off'), false, 'env mode override can close access');
 assert.equal(connectorAllowed({mode: 'all', teacherUids: []}, 't1', 'teacher', undefined, 'bogus'), true, 'unknown override is ignored');
 
-assert.deepEqual(parseScopes(undefined), ['classes:read', 'homework:read', 'workspace:read', 'events:read'], 'defaults are read-only and name-free');
+assert.deepEqual(parseScopes(undefined), ['classes:read', 'homework:read', 'workspace:read', 'events:read', 'classroom:read'], 'defaults are read-only and name-free');
+assert.equal(checkedByDefault('classroom:read'), true, 'class activity summaries are read-only, so checked by default');
+assert.equal(checkedByDefault('classroom:write'), false, 'opening rooms for students is opt-in');
+assert.equal(toolAllowed({scope: 'classroom:read'}, ['classroom:write']), false, 'the write scope does not unlock the summaries');
 assert.deepEqual(parseScopes('names homework:read classes:read'), ['classes:read', 'homework:read', 'names'], 'catalog order, de-duplicated');
 assert.throws(() => parseScopes('homework:write'), /지원하지 않는 권한/);
 assert.equal(scopesWithin(['classes:read', 'names'], ['names']), true);

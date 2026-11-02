@@ -170,7 +170,7 @@ export const resourceMetadataChallenge = (issuer: string, error?: string) => `Be
 
 // ---- Two-step writes: preview returns a confirm token; confirm_write saves exactly the previewed payload ----
 export const CONFIRM_SECONDS = 600;
-export const WRITE_TOOL_SCOPES: Record<string, BerryScope> = {add_calendar_event: 'calendar:write', add_lesson_log: 'workspace:write', add_work_item: 'workspace:write', add_notebook_entry: 'notebook:write', create_assignment: 'classroom:write', create_exhibition: 'classroom:write', create_board: 'classroom:write'};
+export const WRITE_TOOL_SCOPES: Record<string, BerryScope> = {add_calendar_event: 'calendar:write', add_lesson_log: 'workspace:write', add_work_item: 'workspace:write', add_notebook_entry: 'notebook:write', create_assignment: 'classroom:write', create_exhibition: 'classroom:write', create_board: 'classroom:write', approve_artworks: 'classroom:write', approve_posts: 'classroom:write', publish_review: 'classroom:write'};
 /** JSON with sorted keys, so the same content always hashes the same. */
 export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;

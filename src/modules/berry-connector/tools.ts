@@ -5,6 +5,8 @@ import {NotebookError} from '@/modules/teacher-notebook/policy';
 import {NOTEBOOK_TAG_LABELS, type NotebookTag} from '@/modules/teacher-notebook/types';
 import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, maskNames, safeId, studentLabel, toolAllowed} from './policy';
 import {WORKSPACE_TOOLS, callWorkspaceTool} from './workspace-tools';
+import {CLASSROOM_TOOLS, callClassroomTool, menuFlags} from './classroom-tools';
+import {buildCatalog} from './catalog';
 import type {BearerContext, McpTool} from './types';
 
 type Data = Record<string, any>;
@@ -20,6 +22,7 @@ export const TOOLS: McpTool[] = [
   {name: 'get_review_queue', scope: 'homework:read', description: '검사(확인)를 기다리는 제출이 있는 숙제와 건수를 돌려줍니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}}, additionalProperties: false}},
   {name: 'list_deadlines', scope: 'homework:read', description: '앞으로 days일 안에 마감되는 숙제를 마감 순으로 돌려줍니다.', inputSchema: {type: 'object', properties: {days: {type: 'integer', minimum: 1, maximum: 60}}, additionalProperties: false}},
   {name: 'search_notebook', scope: 'notebook:read', description: '교무수첩 관찰 기록을 기간·학급·학생 번호·검색어로 찾습니다. 상담·건강·가정 등 민감 기록은 항상 제외되며, 본문은 300자까지만 돌려줍니다.', inputSchema: {type: 'object', properties: {from: {type: 'string', description: 'YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM-DD'}, class_id: {type: 'string'}, student_number: {type: 'integer', minimum: 1, maximum: 999}, query: {type: 'string', maxLength: 100}, reveal_names: {type: 'boolean'}, limit: {type: 'integer', minimum: 1, maximum: 100}}, required: ['from', 'to'], additionalProperties: false}},
+  ...CLASSROOM_TOOLS,
   ...WORKSPACE_TOOLS,
 ];
 
@@ -56,6 +59,12 @@ export async function callTool(name: string, args: Data, ctx: BearerContext) {
   const tool = TOOLS.find(tool => tool.name === name);
   if (!tool) throw new BerryError(`알 수 없는 도구예요: ${name}`, 404, 'not_found');
   if (!toolAllowed(tool, ctx.scopes)) throw new BerryError(`이 도구에는 ${[tool.scope].flat().join(' 또는 ')} 권한이 필요해요.`, 403, 'insufficient_scope');
+  if (name === 'get_catalog') {
+    // Built from the tools this connection may use, so the table never lists something the client cannot call.
+    const catalog = buildCatalog(TOOLS.filter(entry => toolAllowed(entry, ctx.scopes)), menuFlags());
+    return typeof args.known_version === 'string' && args.known_version === catalog.version ? {version: catalog.version, unchanged: true} : catalog;
+  }
+  if (CLASSROOM_TOOLS.includes(tool)) return callClassroomTool(name, args, ctx);
   if (WORKSPACE_TOOLS.includes(tool)) return callWorkspaceTool(name, args, ctx);
   switch (name) {
     case 'list_classes': return {classes: await ownedClasses(ctx.uid)};

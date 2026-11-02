@@ -146,6 +146,26 @@ async function create(ctx: Context, request: Request, source?: StoredBoard) {
   });
   return json({ board: publicBoard(ctx, result) }, 201);
 }
+/** Publishes waiting posts of one board (all, or the given ids), as the teacher's 공개 does. Berry's approve_posts uses it. */
+export async function publishPendingPosts(ownerUid: string, boardId: string, postIds?: string[]) {
+  const board = await boardRef(boardId).get();
+  if (!board.exists || board.data()?.ownerUid !== ownerUid || board.data()?.status === 'archived') throw new ApiError(404, '참여보드를 찾을 수 없어요.', 'NOT_FOUND');
+  const pending = await boardRef(boardId).collection('posts').where('status', '==', 'pending').limit(100).get();
+  const targets = pending.docs.filter(doc => !doc.data().deleted && (!postIds || postIds.includes(doc.id))).slice(0, 50);
+  let published = 0;
+  for (const doc of targets) {
+    const done = await db().runTransaction(async tx => {
+      const fresh = await tx.get(doc.ref), value = fresh.data();
+      if (!value || value.status !== 'pending' || value.deleted) return false;
+      tx.update(doc.ref, {status: 'published', updatedAt: now()});
+      tx.update(boardRef(boardId), {updatedAt: now()});
+      return true;
+    });
+    if (done) published++;
+  }
+  return {published, remaining: pending.size - published};
+}
+
 async function detail(ctx: Context, board: StoredBoard, request: Request) {
   // A board fed by a homework room catches up on submissions finished while nobody watched (throttled per minute).
   const linked = (board as StoredBoard & {linkedAssignmentId?: string}).linkedAssignmentId;

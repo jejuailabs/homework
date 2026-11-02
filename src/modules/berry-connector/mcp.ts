@@ -6,7 +6,8 @@ import {ApiError} from '@/lib/server/policy';
 import {NotebookError} from '@/modules/teacher-notebook/policy';
 import {WorkspaceError} from '@/modules/teacher-workspace/policy';
 import {bearer, cors, disabled, errorResponse, json} from './oauth';
-import {BerryError, CALLS_PER_DAY, CALLS_PER_MINUTE, hashToken, toolAllowed} from './policy';
+import {BerryError, WRITE_TOOL_SCOPES, CALLS_PER_DAY, CALLS_PER_MINUTE, hashToken, toolAllowed} from './policy';
+import {LessonReviewError} from '@/modules/lesson-review/engine';
 import {TOOLS, callTool} from './tools';
 import type {BearerContext} from './types';
 
@@ -55,10 +56,10 @@ async function dispatch(message: Rpc, ctx: BearerContext) {
     try {
       await throttle(ctx);
       const result = await callTool(name, input, ctx);
-      await audit(ctx, name, true, {classId: typeof input.class_id === 'string' ? input.class_id : null, revealNames: input.reveal_names === true, ...(name === 'confirm_write' || name.startsWith('add_') ? {write: name === 'confirm_write' ? 'confirm' : 'preview'} : {})});
+      await audit(ctx, name, true, {classId: typeof input.class_id === 'string' ? input.class_id : null, revealNames: input.reveal_names === true, ...(name === 'confirm_write' || name in WRITE_TOOL_SCOPES ? {write: name === 'confirm_write' ? 'confirm' : 'preview'} : {})});
       return rpcResult(id, {content: [{type: 'text', text: JSON.stringify(result)}], structuredContent: result, isError: false});
     } catch (error) {
-      if (error instanceof BerryError || error instanceof ApiError || error instanceof NotebookError || error instanceof WorkspaceError) {
+      if (error instanceof BerryError || error instanceof ApiError || error instanceof NotebookError || error instanceof WorkspaceError || error instanceof LessonReviewError) {
         await audit(ctx, name, false, {code: error.code});
         return rpcResult(id, {content: [{type: 'text', text: error.message}], isError: true});
       }
