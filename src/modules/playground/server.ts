@@ -44,7 +44,7 @@ async function input(request: Request): Promise<Record<string, unknown>> {
   try {const value = JSON.parse(text || '{}'); if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(); return value;}
   catch {throw new ApiError(400, '입력 내용을 확인해 주세요.', 'PLAY_INPUT');}
 }
-async function rankings(classId: string, week: string): Promise<PlayRankings> {
+export async function rankings(classId: string, week: string): Promise<PlayRankings> {
   const students = await db().collection(`classes/${classId}/students`).limit(500).get();
   const pupils = students.docs.filter(row => !row.data().disabled);
   if (!pupils.length) return {solo: [], duel: [], steady: []};

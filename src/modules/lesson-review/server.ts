@@ -100,6 +100,22 @@ async function save(ctx: Context, request: Request) {
   await ref.create({...meta, ...content, classId, ownerUid: ctx.uid, status: 'draft', source: value.source === 'ai' ? 'ai' : 'manual', createdAt: stamp, updatedAt: stamp, publishedAt: null});
   return json({lesson: lessonOf(await ref.get())}, 201);
 }
+/** Throws the 배포 button's content error, so a preview never promises a publish that would fail. */
+export function assertLessonPublishable(data: FirebaseFirestore.DocumentData | undefined) {validateContent(data);}
+
+/** Publishes one draft review for a teacher's class, with the same content check as the 배포 button. Berry's publish_review uses it. */
+export async function publishLessonReview(ownerUid: string, classId: string, lessonId: string) {
+  const ref = lessonRef(classId, lessonId), stamp = now();
+  return db().runTransaction(async tx => {
+    const doc = await tx.get(ref);
+    if (!doc.exists || doc.data()?.ownerUid !== ownerUid) throw new ApiError(404, '복습을 찾을 수 없어요.');
+    if (doc.data()?.status === 'published') return {already: true};
+    validateContent(doc.data());
+    tx.update(ref, {status: 'published', publishedAt: doc.data()?.publishedAt || stamp, updatedAt: stamp});
+    return {already: false};
+  });
+}
+
 async function setStatus(ctx: Context, request: Request, action: 'publish' | 'hide' | 'delete') {
   const value = await body(request), classId = id(value.classId);
   await teacherClass(ctx, classId);

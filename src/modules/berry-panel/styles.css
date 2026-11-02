@@ -23,3 +23,4 @@
 .bp-title{display:flex;align-items:center;gap:6px}.bp-title img{width:28px;height:28px;object-fit:contain}
 .bp-hero{align-self:center;width:84px;height:84px;object-fit:contain;margin-bottom:2px}.bp-empty>p{text-align:center}
 .bp-duo{display:flex;align-items:flex-end;justify-content:center}.bp-duo img{object-fit:contain}.bp-duo img+img{margin-left:-14px}
+.bp-routine{white-space:pre-wrap;line-height:1.65;font-size:13px}

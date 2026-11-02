@@ -15,6 +15,9 @@ import {createAssignment} from '@/lib/server/api';
 import {boardRoomValue, exhibitionRoomValue} from '@/lib/server/homework-sync';
 import {homeworkSyncTargets} from '@/lib/server/homework-sync-policy';
 import {requiredSubmissionType, text} from '@/lib/server/policy';
+import {approvePendingArtworks} from '@/lib/server/exhibitions';
+import {publishPendingPosts} from '@/lib/server/participation';
+import {assertLessonPublishable, publishLessonReview} from '@/modules/lesson-review/server';
 
 type Data = Record<string, any>;
 type Student = {classId: string; id: string; number: number; name: string};
@@ -38,6 +41,9 @@ export const WORKSPACE_TOOLS: McpTool[] = [
   {name: 'create_assignment', scope: 'classroom:write', description: `우리 반 전체에게 숙제방을 엽니다. submission_type은 text(글)·image(사진)·video(동영상) 중 하나입니다. sync_exhibition을 켜면 같은 이름의 전시실이, sync_board를 켜면 같은 이름의 참여보드가 함께 열리고 학생 제출물이 자동으로 올라갑니다(글 숙제는 전시실 연동 불가). 둘 다 기본은 꺼짐입니다. ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, title: {type: 'string', maxLength: 120}, description: {type: 'string', maxLength: 5000}, submission_type: {type: 'string', enum: ['text', 'image', 'video']}, due_at: {type: 'string', description: 'YYYY-MM-DD HH:mm (Asia/Seoul), 없으면 마감 없음'}, sync_exhibition: {type: 'boolean'}, sync_board: {type: 'boolean'}}, required: ['class_id', 'title', 'submission_type'], additionalProperties: false}},
   {name: 'create_exhibition', scope: 'classroom:write', description: `우리 반 전시실을 바로 열어 둡니다(학생 업로드는 꺼짐, 선생님이 작품을 올림). ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, title: {type: 'string', maxLength: 120}, description: {type: 'string', maxLength: 2000}}, required: ['class_id', 'title'], additionalProperties: false}},
   {name: 'create_board', scope: 'classroom:write', description: `우리 반 참여보드를 엽니다. 학생들이 글·사진·영상을 카드로 올릴 수 있습니다. ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, title: {type: 'string', maxLength: 120}, description: {type: 'string', maxLength: 2000}}, required: ['class_id', 'title'], additionalProperties: false}},
+  {name: 'approve_artworks', scope: 'classroom:write', description: `전시실의 승인 대기 작품을 승인합니다. artwork_ids를 비우면 그 전시실의 대기 작품 전체(최대 50점)입니다. get_moderation_queue로 먼저 확인하세요. ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {exhibition_id: {type: 'string'}, artwork_ids: {type: 'array', items: {type: 'string'}, maxItems: 50}}, required: ['exhibition_id'], additionalProperties: false}},
+  {name: 'approve_posts', scope: 'classroom:write', description: `참여보드의 승인 대기 게시물을 공개합니다. post_ids를 비우면 그 보드의 대기 게시물 전체(최대 50개)입니다. ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {board_id: {type: 'string'}, post_ids: {type: 'array', items: {type: 'string'}, maxItems: 50}}, required: ['board_id'], additionalProperties: false}},
+  {name: 'publish_review', scope: 'classroom:write', description: `복습하기 초안 하나를 학생에게 배포합니다. lesson_id는 get_review_status에서 확인합니다. ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, lesson_id: {type: 'string'}}, required: ['class_id', 'lesson_id'], additionalProperties: false}},
   {name: 'confirm_write', scope: WRITE_SCOPES, description: '미리보기에서 받은 confirm_token으로 실제 저장합니다. 토큰은 10분 동안 한 번만 쓸 수 있고, 같은 연결·같은 내용에만 유효합니다. 선생님이 미리보기를 확인한 뒤에만 호출하세요.', inputSchema: {type: 'object', properties: {confirm_token: {type: 'string'}, payload_hash: {type: 'string', description: '미리보기 응답의 payload_hash (선택)'}}, required: ['confirm_token'], additionalProperties: false}},
 ];
 
@@ -64,7 +70,9 @@ function mcpRange(from: unknown, to: unknown) {
 // ---- Two-step writes ----
 type Pending = {tool: 'add_calendar_event'; payload: {event: CalendarInput}} | {tool: 'add_lesson_log'; payload: {date: string; entry: LessonEntryInput}}
   | {tool: 'add_work_item'; payload: {item: ItemInput}} | {tool: 'add_notebook_entry'; payload: {entry: ReturnType<typeof entryInput>}}
-  | {tool: 'create_assignment'; payload: {assignment: AssignmentInput}} | {tool: 'create_exhibition' | 'create_board'; payload: {room: RoomInput}};
+  | {tool: 'create_assignment'; payload: {assignment: AssignmentInput}} | {tool: 'create_exhibition' | 'create_board'; payload: {room: RoomInput}}
+  | {tool: 'approve_artworks'; payload: {exhibitionId: string; ids: string[] | null}} | {tool: 'approve_posts'; payload: {boardId: string; ids: string[] | null}} | {tool: 'publish_review'; payload: {classId: string; lessonId: string}};
+const idList = (value: unknown) => Array.isArray(value) && value.length ? [...new Set(value.slice(0, 50).map(item => safeId(item, '항목')))] : null;
 type AssignmentInput = {classId: string; title: string; description: string; submissionType: string; dueAt: string | null; sync: {exhibition: boolean; board: boolean}};
 type RoomInput = {classId: string; title: string; description: string};
 
@@ -122,6 +130,25 @@ async function prepare(name: string, args: Data, ctx: BearerContext): Promise<Pe
     await assertOwnClass(ctx.uid, assignment.classId);
     return {tool: name, payload: {assignment}};
   }
+  if (name === 'approve_artworks') {
+    const exhibitionId = safeId(args.exhibition_id, '전시실'), room = (await db().doc(`exhibitions/${exhibitionId}`).get()).data();
+    if (!room || room.ownerUid !== ctx.uid) throw new BerryError('이 전시실을 찾을 수 없어요.', 404, 'not_found');
+    return {tool: name, payload: {exhibitionId, ids: idList(args.artwork_ids)}};
+  }
+  if (name === 'approve_posts') {
+    const boardId = safeId(args.board_id, '보드'), board = (await db().doc(`participationBoards/${boardId}`).get()).data();
+    if (!board || board.ownerUid !== ctx.uid) throw new BerryError('이 보드를 찾을 수 없어요.', 404, 'not_found');
+    return {tool: name, payload: {boardId, ids: idList(args.post_ids)}};
+  }
+  if (name === 'publish_review') {
+    const classId = safeId(args.class_id, '학급'), lessonId = safeId(args.lesson_id, '복습');
+    await assertOwnClass(ctx.uid, classId);
+    const lesson = (await db().doc(`classes/${classId}/lessonReviews/${lessonId}`).get()).data();
+    if (!lesson || lesson.ownerUid !== ctx.uid) throw new BerryError('이 복습을 찾을 수 없어요.', 404, 'not_found');
+    if (lesson.status !== 'draft') throw new BerryError('이미 배포했거나 숨긴 복습이에요.');
+    assertLessonPublishable(lesson);
+    return {tool: name, payload: {classId, lessonId}};
+  }
   if (name === 'create_exhibition' || name === 'create_board') {
     const room = roomInput(args);
     await assertOwnClass(ctx.uid, room.classId);
@@ -144,6 +171,21 @@ async function previewView(pending: Pending, ctx: BearerContext) {
     case 'create_assignment': {
       const a = pending.payload.assignment, cls = (await db().doc(`classes/${a.classId}`).get()).data();
       return {class: cls?.name ?? a.classId, title: mask(a.title), body: mask(a.description), submission: SUBMISSION_LABELS[a.submissionType], due_at: a.dueAt, sync_exhibition: a.sync.exhibition, sync_board: a.sync.board, note: '저장하면 학생 화면에 바로 열려요.'};
+    }
+    case 'approve_artworks': {
+      const {exhibitionId, ids} = pending.payload, room = (await db().doc(`exhibitions/${exhibitionId}`).get()).data();
+      const waiting = (await db().collection(`exhibitions/${exhibitionId}/artworks`).where('status', '==', 'pending').limit(100).get()).docs.filter(doc => !ids || ids.includes(doc.id));
+      const students = (await teacherStudents(ctx.uid)).filter(student => student.classId === room?.classId);
+      return {exhibition: mask(String(room?.title ?? '')), count: Math.min(50, waiting.length), body: waiting.slice(0, 10).map(doc => `${mask(String(doc.data().title ?? ''))} · ${studentLabel(students.find(s => s.id === doc.data().studentId) ?? {number: 0, name: ''}, ctx.scopes, false)}`).join('\n'), note: '저장하면 학생 화면에 바로 전시돼요.'};
+    }
+    case 'approve_posts': {
+      const {boardId, ids} = pending.payload, board = (await db().doc(`participationBoards/${boardId}`).get()).data();
+      const waiting = (await db().collection(`participationBoards/${boardId}/posts`).where('status', '==', 'pending').limit(100).get()).docs.filter(doc => !doc.data().deleted && (!ids || ids.includes(doc.id)));
+      return {board: mask(String(board?.title ?? '')), count: Math.min(50, waiting.length), body: waiting.slice(0, 10).map(doc => mask(String(doc.data().title || doc.data().body || '')).slice(0, 60)).join('\n'), note: '저장하면 학생 화면에 바로 공개돼요.'};
+    }
+    case 'publish_review': {
+      const {classId, lessonId} = pending.payload, lesson = (await db().doc(`classes/${classId}/lessonReviews/${lessonId}`).get()).data(), cls = (await db().doc(`classes/${classId}`).get()).data();
+      return {class: cls?.name ?? classId, title: mask(String(lesson?.title ?? '')), subject: lesson?.subject ?? null, note: '저장하면 학생들이 바로 복습할 수 있어요.'};
     }
     case 'create_exhibition': case 'create_board': {
       const r = pending.payload.room, cls = (await db().doc(`classes/${r.classId}`).get()).data();
@@ -172,7 +214,7 @@ async function confirmWrite(args: Data, ctx: BearerContext) {
     return {tool: data!.tool, payload} as Pending;
   });
   const saved = await save(pending, ctx);
-  if (pending.tool === 'create_assignment' || pending.tool === 'create_exhibition' || pending.tool === 'create_board') return {saved, pending: false, note: '열었어요. 학생 화면에 바로 보여요.'};
+  if (['create_assignment', 'create_exhibition', 'create_board', 'approve_artworks', 'approve_posts', 'publish_review'].includes(pending.tool)) return {saved, pending: false, note: '반영했어요. 학생 화면에 바로 보여요.'};
   return {saved, pending: true, note: '저장했어요. 선생님이 모두의 교실 화면에서 확정하면 "베리 제안" 표시가 사라져요.'};
 }
 /** Re-validates the stored payload and re-checks ownership at save time. */
@@ -191,6 +233,9 @@ async function save(pending: Pending, ctx: BearerContext) {
       const created = await createAssignment(teacher, {classId: a.classId, title: a.title, description: a.description, submissionType: a.submissionType, dueAt: a.dueAt, materialIds: [], sync: a.sync});
       return {collection: 'assignments', id: created.id, exhibition_id: created.sync.exhibitionId, board_id: created.sync.boardId};
     }
+    case 'approve_artworks': {const result = await approvePendingArtworks(ctx.uid, pending.payload.exhibitionId, pending.payload.ids ?? undefined); return {collection: 'exhibitions', id: pending.payload.exhibitionId, approved: result.approved, remaining: result.remaining};}
+    case 'approve_posts': {const result = await publishPendingPosts(ctx.uid, pending.payload.boardId, pending.payload.ids ?? undefined); return {collection: 'participationBoards', id: pending.payload.boardId, published: result.published, remaining: result.remaining};}
+    case 'publish_review': {await assertOwnClass(ctx.uid, pending.payload.classId); const result = await publishLessonReview(ctx.uid, pending.payload.classId, pending.payload.lessonId); return {collection: 'lessonReviews', id: pending.payload.lessonId, already: result.already};}
     case 'create_exhibition': case 'create_board': {
       const r = pending.payload.room;
       await assertOwnClass(ctx.uid, r.classId);

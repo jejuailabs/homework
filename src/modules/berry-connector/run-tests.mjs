@@ -5,3 +5,4 @@ const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toS
 const types = moduleUrl(compile('./types.ts'));
 const policy = moduleUrl(compile('./policy.ts').replace("'./types'", JSON.stringify(types)));
 await import(moduleUrl(compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policy))));
+await import(moduleUrl(compile('./catalog.test.ts').replace("'./catalog'", JSON.stringify(moduleUrl(compile('./catalog.ts'))))));

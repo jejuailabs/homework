@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {DOMAINS, buildCatalog} from './catalog';
+
+const tool = (name: string) => ({name, description: `${name} 설명입니다. 두 번째 문장.`, scope: 'classroom:read'});
+const tools = DOMAINS.flatMap(domain => domain.tools).map(tool);
+
+const full = buildCatalog(tools, {playground: true, cards: false});
+assert.ok(full.domains.every(domain => domain.tools.every(name => tools.some(entry => entry.name === name))), 'only real tools are listed');
+assert.equal(full.domains.find(domain => domain.key === 'cards')?.enabled, false, 'switched-off menus are marked');
+assert.equal(full.domains.find(domain => domain.key === 'kids_daily')?.tools.length, 0, 'Kids Daily has no reading tool, only a count in signals');
+assert.ok(full.rules.some(rule => rule.includes('가명')), 'privacy rules travel with the table');
+assert.equal(full.tools.find(row => row.name === 'get_signals')?.summary, 'get_signals 설명입니다.', 'summaries keep the first sentence');
+
+// A tool nobody filed still shows up, so the table never falls behind the code.
+const grown = buildCatalog([...tools, tool('get_new_menu_status')], {playground: true, cards: false});
+assert.deepEqual(grown.domains.at(-1)?.tools, ['get_new_menu_status']);
+assert.equal(grown.tools.at(-1)?.domain, 'other');
+assert.notEqual(grown.version, full.version, 'a new tool changes the version');
+assert.equal(buildCatalog(tools, {playground: true, cards: false}).version, full.version, 'same inputs, same version');
+assert.notEqual(buildCatalog(tools, {playground: false, cards: false}).version, full.version, 'a switch change changes the version');
+
+// A grant without write scopes sees a smaller table: domains with no usable tool disappear.
+const readOnly = buildCatalog(tools.filter(entry => !entry.name.startsWith('create_') && !entry.name.startsWith('approve_') && entry.name !== 'publish_review' && entry.name !== 'confirm_write'), {});
+assert.ok(!readOnly.domains.some(domain => domain.key === 'confirm'));
+assert.ok(new TextEncoder().encode(JSON.stringify(full)).length < 12_000, 'the whole table stays small');
+console.log('catalog tests ok');

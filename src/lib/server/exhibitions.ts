@@ -514,6 +514,29 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
   }
 }
 
+/** Approves waiting artworks of one exhibition (all of them, or the given ids), exactly as a teacher's 승인 does. Berry's approve_artworks uses it. */
+export async function approvePendingArtworks(ownerUid: string, exhibitionId: string, artworkIds?: string[]) {
+  const room = await exhibitionRef(exhibitionId).get();
+  if (!room.exists || room.data()?.ownerUid !== ownerUid) throw new ApiError(404, '전시회를 찾을 수 없어요.', 'NOT_FOUND');
+  const pending = await exhibitionRef(exhibitionId).collection('artworks').where('status', '==', 'pending').limit(100).get();
+  const targets = pending.docs.filter(doc => !artworkIds || artworkIds.includes(doc.id)).slice(0, 50);
+  let approved = 0;
+  for (const doc of targets) {
+    const done = await uploadTransaction(async tx => {
+      await tx.get(exhibitionRef(exhibitionId));
+      const fresh = await tx.get(doc.ref), value = fresh.data();
+      if (!value || value.status !== 'pending') return false;
+      const stampRef = value.studentId ? passportRef(exhibitionId, value.studentId) : null, stamp = stampRef ? await tx.get(stampRef) : null;
+      tx.update(doc.ref, {status: 'approved', reviewedAt: now()});
+      tx.update(exhibitionRef(exhibitionId), {approvedCount: FieldValue.increment(approvalCountDelta(value.status, 'approved')), updatedAt: now()});
+      if (stampRef) tx.set(stampRef, {...nextPassport(stamp?.data(), 'artist'), updatedAt: now()});
+      return true;
+    });
+    if (done) approved++;
+  }
+  return {approved, remaining: pending.size - approved};
+}
+
 async function reviewArtwork(ctx: Context, exhibition: Exhibition, artworkId: string, request: Request) {
   owner(ctx, exhibition);
   const input = await body(request);

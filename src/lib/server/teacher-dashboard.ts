@@ -10,7 +10,16 @@ const records = (snapshot: FirebaseFirestore.QuerySnapshot): DashboardRecord[] =
 
 export async function teacherDashboard(request: Request) {
   try {
-    const ctx = await requireTeacher(request);
+    return json(await dashboardFor(await requireTeacher(request)));
+  } catch (error) {
+    if (error instanceof ApiError) return json({ error: error.message, code: error.code }, error.status);
+    console.error('Teacher dashboard failed', (error as { code?: string }).code ?? 'INTERNAL');
+    return json({ error: '대시보드를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'INTERNAL_ERROR' }, 500);
+  }
+}
+
+/** The home dashboard summary for one teacher; Berry's overview reuses it. */
+export async function dashboardFor(ctx: {uid: string; role: string}) {
     // Project only summary fields. No child names, answers, photos, or signed URLs are read.
     const [classes, assignments, exhibitions] = await Promise.all([
       db().collection('classes').where('ownerUid', '==', ctx.uid).select('ownerUid', 'name', 'grade', 'year', 'studentCount').get(),
@@ -28,10 +37,5 @@ export async function teacherDashboard(request: Request) {
       ));
       snapshots.forEach(snapshot => submissions.push(...records(snapshot)));
     }
-    return json(summarizeTeacherDashboard(ctx, { classes: records(classes), assignments: records(assignments), exhibitions: records(exhibitions), submissions }));
-  } catch (error) {
-    if (error instanceof ApiError) return json({ error: error.message, code: error.code }, error.status);
-    console.error('Teacher dashboard failed', (error as { code?: string }).code ?? 'INTERNAL');
-    return json({ error: '대시보드를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'INTERNAL_ERROR' }, 500);
-  }
+    return summarizeTeacherDashboard(ctx as Parameters<typeof summarizeTeacherDashboard>[0], { classes: records(classes), assignments: records(assignments), exhibitions: records(exhibitions), submissions });
 }
