@@ -1,11 +1,11 @@
-import {isSeahorse} from './seahorse';
+import {isSeahorse, seahorseSet, unlockedSeahorseSets} from './seahorse';
 import {exclusiveItemCompatible} from './wardrobe-compatibility';
 import { spaceCatalog, spaceItem, starterSpaceIds, type Room, type Placement, type DiaryPage, type DiaryLayer } from './catalog';
 import {isWhiteknee, normalizeWhitekneePose, whitekneePoses} from './whiteknee';
 export class SpaceError extends Error {
     constructor(message: string, public status = 400) { super(message); }
 }
-export const ownedItems = (v: unknown) => [...new Set([...starterSpaceIds, ...(Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string' && !!spaceItem(s)) : [])])];
+export const ownedItems = (v: unknown, wardrobeOwned?: unknown) => [...new Set([...starterSpaceIds, ...unlockedSeahorseSets(v, wardrobeOwned), ...(Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string' && !!spaceItem(s)) : [])])];
 export function growth(earned: number, adopted = 0) { const total = Math.max(0, earned - adopted); return { stage: total >= 200 ? 2 : total >= 60 ? 1 : 0, total, next: total >= 200 ? null : total >= 60 ? 200 : 60 }; }
 const object = (v: unknown): Record<string, any> => { if (!v || typeof v !== 'object' || Array.isArray(v))
     throw new SpaceError('꾸미기 내용을 확인해 주세요.'); return v as Record<string, any>; };
@@ -24,16 +24,24 @@ function unique(layers: {
 }[], limit: number) { if (layers.length > limit || new Set(layers.map(p => p.id)).size !== layers.length)
     throw new SpaceError(`한 화면에 ${limit}개까지 꾸밀 수 있어요.`); }
 /** Normalize saved appearance when another screen changes the active companion. */
-export function roomCompanionAppearance(value: unknown, items: string[], pet: string): Pick<Room, 'pet' | 'pose' | 'outfit'> {
+export function roomCompanionAppearance(value: unknown, items: string[], pet: string, legacyWardrobe?: Record<string, unknown>): Pick<Room, 'pet' | 'pose' | 'outfit'> {
     const selectedPet = owned(pet, 'pet', items);
     const v = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
     const outfit: Room['outfit'] = {};
     for (const slot of ['body', 'bag'] as const) {
-        const key = v.outfit?.[slot];
+        const requested = v.outfit?.[slot];
+        const key = isSeahorse(selectedPet) && slot === 'body' && typeof requested === 'string' ? seahorseSet(requested)?.id : requested;
         const item = typeof key === 'string' ? spaceItem(key) : undefined;
         if (item?.kind === 'clothes' && item.slot === slot && items.includes(item.id) && exclusiveItemCompatible(selectedPet, item)) outfit[slot] = item.id;
     }
-    return {pet: selectedPet, pose: (isWhiteknee(selectedPet) || isSeahorse(selectedPet)) ? normalizeWhitekneePose(v.pose) : 'rest', outfit};
+    // An accessory-only old look becomes its matching full set, if already unlocked.
+    if (isSeahorse(selectedPet) && !v.outfit?.body && !outfit.body && legacyWardrobe) {
+        for (const slot of ['head', 'face', 'neck']) {
+            const id = legacyWardrobe[slot], set = typeof id === 'string' ? seahorseSet(id) : undefined;
+            if (set && items.includes(set.id)) {outfit.body = set.id; break;}
+        }
+    }
+    return {pet: selectedPet, pose: isWhiteknee(selectedPet) ? normalizeWhitekneePose(v.pose) : 'rest', outfit};
 }
 export function validateRoom(value: unknown, items: string[], previousPet?: string): Room {
     const v = object(value);
@@ -55,7 +63,8 @@ export function validateRoom(value: unknown, items: string[], previousPet?: stri
     const o = object(v.outfit || {}), outfit: Room['outfit'] = {};
     for (const slot of ['body', 'bag'] as const) {
         if (!o[slot]) continue;
-        const key = owned(o[slot], 'clothes', items), item = spaceItem(key)!;
+        const requested = owned(o[slot], 'clothes', items);
+        const key = isSeahorse(pet) && slot === 'body' ? seahorseSet(requested)?.id || requested : requested, item = spaceItem(key)!;
         if (item.slot !== slot) throw new SpaceError('옷 위치를 확인해 주세요.');
         if (!exclusiveItemCompatible(pet, item)) {
             // Changing the companion may carry the previous friend's clothes in an older client.
@@ -67,7 +76,7 @@ export function validateRoom(value: unknown, items: string[], previousPet?: stri
     }
     return {
         version: revision(v.version), theme: owned(v.theme, 'theme', items), pet,
-        pose: (isWhiteknee(pet) || isSeahorse(pet)) ? normalizeWhitekneePose(v.pose) : 'rest',
+        pose: isWhiteknee(pet) ? normalizeWhitekneePose(v.pose) : 'rest',
         nicknames, outfit, placements,
     };
 }

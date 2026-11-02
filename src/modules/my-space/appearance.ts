@@ -18,7 +18,7 @@ const accessories = ['head-sprout', 'head-crown', 'head-beret', 'head-party', 'h
 
 export function avatarPet(character = 'cat', imageSrc?: string): AvatarPet {
   if (isSeahorse(character)) return character;
-  const sea = seahorsePets.find(pet => imageSrc?.startsWith(`${SEAHORSE_ROOT}/${pet.id}/`));
+  const sea = seahorsePets.find(pet => imageSrc?.startsWith(`${SEAHORSE_ROOT}/${pet.id}/`) || imageSrc?.startsWith(`/my-space/seahorse/v1/${pet.id}/`));
   if (sea) return sea.id;
   if (isWhiteknee(character) || imageSrc?.startsWith(WHITEKNEE_ROOT + '/poses/')) return WHITEKNEE_ID;
   const added = newPetFromArt(imageSrc) || newPet(character);

@@ -1,0 +1,15 @@
+.ms-set-details{display:grid;gap:6px;margin:10px 0;text-align:left;font-size:12px;line-height:1.5;color:#52685f}
+.ms-set-details>div{display:grid;grid-template-columns:58px 1fr;gap:8px;align-items:start}
+.ms-set-details dt{font-weight:700;color:#466053}
+.ms-set-details dd{margin:0;overflow-wrap:anywhere}
+.ms-set-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px}
+.ms-page .ms-set-picker>button{display:flex;flex-direction:column;align-items:stretch;text-align:center;border:1px solid #dedfce;border-radius:16px;background:#fffdf7;padding:12px;color:#355147;cursor:pointer}
+.ms-set-picker>button[aria-pressed=true]{border-color:#557e6b;box-shadow:0 0 0 2px #a9c5b280}
+.ms-set-picker>button:focus-visible{outline:3px solid #557e6b;outline-offset:3px}
+.ms-set-picker>button:disabled{opacity:.6;cursor:default}
+.ms-set-picker .ms-clothes-preview{display:block;width:100%;height:160px}
+.ms-set-picker .ms-clothes-preview>.character-avatar{width:100%;height:100%}
+.ms-set-basic{margin:12px 0}
+.ms-set-basic button{border:1px solid #a9c5b2;border-radius:20px;background:#fffdf7;padding:8px 16px;color:#355147}
+.ms-set-note{border-radius:12px;padding:12px;background:#f2f5eb;color:#52685f;font-size:13px;line-height:1.7}
+@media(max-width:600px){.ms-product .ms-set-details>div{display:block}.ms-product .ms-set-details dt{font-size:11px;color:#788474}.ms-set-details{font-size:11px}.ms-set-picker{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}

@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {defaultPointSettings, starterWardrobeIds, wardrobeCatalog, type PointSettings, type WardrobeOutfit, type WardrobeSlot} from '../points-types';
 import {ApiError, id, text} from './policy';
+import {isRetiredSeahorseItem} from '@/modules/my-space/seahorse';
 import {exclusiveItemCompatible} from '../../modules/my-space/wardrobe-compatibility';
 
 export function pointInteger(value: unknown, min: number, max: number) {
@@ -53,6 +54,7 @@ export function pointRevokeDecision(balance: number, amount: number) {
 export function pointPurchaseDecision(balance: number, owned: unknown, itemId: unknown) {
   const item = wardrobeItem(itemId), ownership = wardrobeOwnership(owned);
   if (ownership.includes(item.id)) return {item, balance, owned: ownership, purchased: false};
+  if (isRetiredSeahorseItem(item.id)) throw new ApiError(400, '해마 완성 착장 세트를 골라 주세요.', 'ITEM_RETIRED');
   if (balance < item.price) throw new ApiError(409, '포인트를 조금 더 모아 주세요.', 'POINTS_INSUFFICIENT');
   return {item, balance: addPointBalance(balance, -item.price), owned: [...ownership, item.id], purchased: true};
 }

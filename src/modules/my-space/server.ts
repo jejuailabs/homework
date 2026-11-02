@@ -1,4 +1,5 @@
 import 'server-only';
+import {isSeahorse, isRetiredSeahorseItem} from './seahorse';
 import { createHash, randomUUID } from 'node:crypto';
 import { FieldPath } from 'firebase-admin/firestore';
 import sharp from 'sharp';
@@ -7,7 +8,7 @@ import { requireStudent, type Context } from '@/lib/server/auth';
 import { ApiError, id } from '@/lib/server/policy';
 import { pointBalance, pointSettings, wardrobeOutfit, wardrobeOwnership } from '@/lib/server/points-policy';
 import { defaultRoom, spaceCatalog, spaceItem, type DiaryPage } from './catalog';
-import { ownedItems, revision, SpaceError, validateRoom, validateDiary } from './policy';
+import { ownedItems, roomCompanionAppearance, revision, SpaceError, validateRoom, validateDiary } from './policy';
 type Data = Record<string, any>;
 type StudentContext = Context & {
     classId: string;
@@ -31,7 +32,19 @@ async function active(ctx: StudentContext, tx?: FirebaseFirestore.Transaction, w
         throw new ApiError(403, '선생님이 보말 꾸미기를 켜면 사용할 수 있어요.');
     return { s: s.data()!, settings: pointSettings(c.data()?.pointSettings) };
 }
-export async function bootstrap(ctx: StudentContext) { const [{ s, settings }, r] = await Promise.all([active(ctx), room(ctx).get()]); return { settings, profile: { name: s.name, character: s.character || 'cat', points: pointBalance(s.points), earned: pointBalance(s.pointsEarnedTotal), xp: pointBalance(s.xp), wardrobe: wardrobeOutfit(s.wardrobeOutfit, s.wardrobeOwned), wardrobeOwned: wardrobeOwnership(s.wardrobeOwned), adopted: s.spaceAdopted || {} }, owned: ownedItems(s.spaceOwned), room: r.exists ? r.data() : defaultRoom(s.character || 'cat'), catalogVersion: 1 }; }
+export async function bootstrap(ctx: StudentContext) {
+    const [{s, settings}, snapshot] = await Promise.all([active(ctx), room(ctx).get()]);
+    const items = ownedItems(s.spaceOwned, s.wardrobeOwned);
+    const saved = snapshot.exists ? snapshot.data()! : defaultRoom(s.character || 'cat');
+    const selected = isSeahorse(saved.pet) && items.includes(saved.pet)
+        ? {...saved, ...roomCompanionAppearance(saved, items, saved.pet, wardrobeOutfit(s.wardrobeOutfit, s.wardrobeOwned))}
+        : saved;
+    return {
+        settings,
+        profile: {name: s.name, character: s.character || 'cat', points: pointBalance(s.points), earned: pointBalance(s.pointsEarnedTotal), xp: pointBalance(s.xp), wardrobe: wardrobeOutfit(s.wardrobeOutfit, s.wardrobeOwned), wardrobeOwned: wardrobeOwnership(s.wardrobeOwned), adopted: s.spaceAdopted || {}},
+        owned: items, room: selected, catalogVersion: 2,
+    };
+}
 export async function buy(ctx: StudentContext, input: Data) {
     const key = id(input.itemId), requestId = id(input.requestId), item = spaceItem(key);
     if (!item)
@@ -44,11 +57,12 @@ export async function buy(ctx: StudentContext, input: Data) {
                 throw new ApiError(409, '같은 구매 요청의 물건이 바뀌었어요.');
             return { purchased: false, repeated: true };
         }
-        const items = ownedItems(s.spaceOwned);
+        const items = ownedItems(s.spaceOwned, s.wardrobeOwned);
         if (items.includes(key)) {
             tx.create(receipt, { itemId: key, at: new Date().toISOString() });
             return { purchased: false, repeated: false };
         }
+        if (isRetiredSeahorseItem(key)) throw new ApiError(400, '해마 완성 착장 세트를 골라 주세요.');
         const points = pointBalance(s.points);
         if (points < item.price)
             throw new ApiError(409, '보말을 조금 더 모아 주세요.');
@@ -67,7 +81,7 @@ export async function saveRoom(ctx: StudentContext, input: Data) {
     return db().runTransaction(async tx => {
         const {s} = await active(ctx, tx, true), old = await tx.get(room(ctx));
         const previousPet = old.data()?.pet || defaultRoom(s.character || 'cat').pet;
-        const value = validateRoom(input, ownedItems(s.spaceOwned), previousPet);
+        const value = validateRoom(input, ownedItems(s.spaceOwned, s.wardrobeOwned), previousPet);
         if ((old.data()?.version || 0) !== value.version) throw new ApiError(409, '다른 화면에서 방이 바뀌었어요. 새로 불러온 뒤 꾸며 주세요.', 'VERSION_CONFLICT');
         const next = {...value, version: value.version + 1, updatedAt: new Date().toISOString()};
         tx.set(room(ctx), next);
@@ -91,7 +105,7 @@ async function art(ctx: StudentContext, key: string, tx?: FirebaseFirestore.Tran
 export async function saveDiary(ctx: StudentContext, key: string, input: Data) {
     id(key);
     return db().runTransaction(async (tx) => {
-        const { s } = await active(ctx, tx, true), ref = diaries(ctx).doc(key), old = await tx.get(ref), value = validateDiary(input, ownedItems(s.spaceOwned)), countRef = pupil(ctx).collection('mySpace').doc('diaries'), count = await tx.get(countRef);
+        const { s } = await active(ctx, tx, true), ref = diaries(ctx).doc(key), old = await tx.get(ref), value = validateDiary(input, ownedItems(s.spaceOwned, s.wardrobeOwned)), countRef = pupil(ctx).collection('mySpace').doc('diaries'), count = await tx.get(countRef);
         if ((old.data()?.version || 0) !== value.version)
             throw new ApiError(409, '다른 화면에서 노트가 바뀌었어요. 새로 불러와 주세요.', 'VERSION_CONFLICT');
         if (!old.exists && (count.data()?.count || 0) >= 60)

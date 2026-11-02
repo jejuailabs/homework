@@ -60,45 +60,77 @@ test('concurrent adoption and shared outfit purchase charge once and persist own
   fixture();
   await Promise.all(Array.from({length: 6}, (_, i) => buy(seahorsePets[0].id, 'adopt-' + i)));
   await buy(seahorsePets[1].id, 'adopt-purple');
-  await Promise.all(Array.from({length: 6}, (_, i) => buy('seahorse-body-overalls', 'clothes-' + i)));
+  await Promise.all(Array.from({length: 6}, (_, i) => buy('seahorse-set-scholar', 'clothes-' + i)));
   assert.equal(data.get(studentPath).points, 500 - 60 - 60 - 50);
   const before = data.get(studentPath).points;
-  await buy('seahorse-body-overalls', 'clothes-owned');
+  await buy('seahorse-set-scholar', 'clothes-owned');
   assert.equal(data.get(studentPath).points, before);
   assert(data.get(studentPath).spaceOwned.includes(seahorsePets[0].id));
   assert.equal([...data.keys()].filter(key => key.includes('/pointLedger/')).length, 3);
 });
-test('save, bootstrap, switch to the other seahorse and reload preserve shared clothing and pose', async () => {
+test('save, bootstrap, switch to the other seahorse and reload preserve a complete set and normalized pose', async () => {
   fixture(); for (const pet of seahorsePets) await buy(pet.id, 'adopt-' + pet.id);
-  await buy('seahorse-body-pajamas', 'buy-pajamas');
-  let result = await server.saveRoom(ctx, {...defaultRoom(), pet: seahorsePets[0].id, pose: 'raised', outfit: {body: 'seahorse-body-pajamas'}, nicknames: {[seahorsePets[0].id]: '반짝이'}});
+  await buy('seahorse-set-dreamy', 'buy-pajamas');
+  let result = await server.saveRoom(ctx, {...defaultRoom(), pet: seahorsePets[0].id, pose: 'raised', outfit: {body: 'seahorse-set-dreamy'}, nicknames: {[seahorsePets[0].id]: '반짝이'}});
   assert.equal(result.room.version, 1);
-  let boot = await server.bootstrap(ctx);assert.equal(boot.room.pose, 'raised');assert.equal(boot.room.nicknames[seahorsePets[0].id], '반짝이');
+  let boot = await server.bootstrap(ctx);assert.equal(boot.room.pose, 'rest');assert.equal(boot.room.nicknames[seahorsePets[0].id], '반짝이');
   const balance = boot.profile.points;
   result = await server.saveRoom(ctx, {...boot.room, pet: seahorsePets[1].id});
   boot = await server.bootstrap(ctx);
   assert.equal(boot.room.version, 2);assert.equal(boot.room.pet, seahorsePets[1].id);
-  assert.equal(boot.room.outfit.body, 'seahorse-body-pajamas');assert.equal(boot.profile.points, balance);
+  assert.equal(boot.room.outfit.body, 'seahorse-set-dreamy');assert.equal(boot.profile.points, balance);
   await assert.rejects(server.saveRoom(ctx, {...boot.room, version: 0}), e => e.code === 'VERSION_CONFLICT');
   assert.equal(data.get(roomPath).version, 2);
 });
 test('unowned friends, unowned outfits and cross-family clothing cannot be saved', async () => {
   fixture(); await buy(seahorsePets[0].id, 'adopt-yellow');
   await assert.rejects(server.saveRoom(ctx, {...defaultRoom(), pet: seahorsePets[1].id}));
-  await assert.rejects(server.saveRoom(ctx, {...defaultRoom(), pet: seahorsePets[0].id, outfit: {body: 'seahorse-body-knit'}}));
+  await assert.rejects(server.saveRoom(ctx, {...defaultRoom(), pet: seahorsePets[0].id, outfit: {body: 'seahorse-set-winter'}}));
   await buy('body-knit', 'classic-knit');
   await server.saveRoom(ctx, {...defaultRoom(), pet: seahorsePets[0].id});
   await assert.rejects(server.saveRoom(ctx, {...data.get(roomPath), outfit: {body: 'body-knit'}}));
 });
-test('one accessory purchase equips either seahorse, rejects other friends and can be removed', () => {
+test('retired detached accessories cannot be bought or equipped, and ownership stays readable', () => {
   fixture();
-  const decision = points.pointPurchaseDecision(100, [], 'seahorse-face-glasses');
-  assert.equal(decision.balance, 65);
-  assert.equal(points.pointPurchaseDecision(decision.balance, decision.owned, 'seahorse-face-glasses').balance, 65);
-  for (const pet of seahorsePets) assert.equal(points.equipWardrobe({}, decision.owned, 'face', 'seahorse-face-glasses', pet.id).face, 'seahorse-face-glasses');
-  for (const pet of ['friend-cat', 'animal-whiteknee', 'dog-bichon']) assert.throws(() => points.equipWardrobe({}, decision.owned, 'face', 'seahorse-face-glasses', pet));
-  assert.throws(() => points.equipWardrobe({}, [], 'face', 'seahorse-face-glasses', seahorsePets[0].id));
-  assert.deepEqual(points.equipWardrobe({face: 'seahorse-face-glasses'}, decision.owned, 'face', null, seahorsePets[0].id), {});
+  assert.throws(() => points.pointPurchaseDecision(100, [], 'seahorse-face-glasses'), e => e.code === 'ITEM_RETIRED');
+  const oldOwned = ['seahorse-face-glasses'];
+  assert(points.wardrobeOwnership(oldOwned).includes(oldOwned[0]));
+  assert.equal(points.pointPurchaseDecision(65, oldOwned, oldOwned[0]).balance, 65);
+  for (const pet of seahorsePets) assert.throws(() => points.equipWardrobe({}, oldOwned, 'face', oldOwned[0], pet.id));
+  assert.deepEqual(points.equipWardrobe({face: oldOwned[0]}, oldOwned, 'face', null, seahorsePets[0].id), {});
+});
+test('old purchases unlock matching complete sets without another charge and survive reload', async () => {
+  fixture();
+  const pupil = data.get(studentPath);
+  pupil.spaceOwned = [seahorsePets[0].id, seahorsePets[1].id, 'seahorse-body-pajamas'];
+  pupil.wardrobeOwned = ['seahorse-face-glasses', 'seahorse-head-beanie'];
+  pupil.wardrobeOutfit = {face: 'seahorse-face-glasses'};
+  data.set(roomPath, {...defaultRoom(), pet: seahorsePets[0].id, outfit: {body: 'seahorse-body-pajamas'}, pose: 'raised'});
+  let boot = await server.bootstrap(ctx);
+  for (const id of ['dreamy', 'scholar', 'winter']) assert(boot.owned.includes('seahorse-set-'+id));
+  assert.equal(boot.room.outfit.body, 'seahorse-set-dreamy');
+  assert.equal(boot.room.pose, 'rest');
+  await buy('seahorse-set-scholar', 'legacy-unlock');
+  assert.equal(data.get(studentPath).points, 500);
+  await assert.rejects(buy('seahorse-body-knit', 'retired-clothes'));
+  data.get(roomPath).outfit = {};
+  boot = await server.bootstrap(ctx);
+  assert.equal(boot.room.outfit.body, 'seahorse-set-scholar');
+  await server.saveRoom(ctx, {...boot.room, outfit: {body: 'seahorse-set-winter'}});
+  boot = await server.bootstrap(ctx); assert.equal(boot.room.outfit.body, 'seahorse-set-winter');
+  await server.saveRoom(ctx, {...boot.room, outfit: {}});
+  boot = await server.bootstrap(ctx); assert.deepEqual(boot.room.outfit, {});
+  assert(data.get(studentPath).wardrobeOwned.includes('seahorse-face-glasses'));
+  assert.equal(boot.profile.points, 500);
+});
+test('switching owned sets and returning to basic never charges more points', async () => {
+  fixture(); await buy(seahorsePets[0].id, 'pet');
+  for(const set of ['scholar', 'dreamy']) await buy('seahorse-set-'+set, 'buy-'+set);
+  let boot = await server.bootstrap(ctx); const balance = boot.profile.points;
+  for(const id of ['seahorse-set-scholar', 'seahorse-set-dreamy', null, 'seahorse-set-scholar']) {
+    await server.saveRoom(ctx, {...boot.room, pet: seahorsePets[0].id, outfit: id ? {body: id} : {}});
+    boot = await server.bootstrap(ctx);assert.equal(boot.room.outfit.body, id || undefined);assert.equal(boot.profile.points, balance);
+  }
 });
 test('teacher disabling decoration blocks adoption and room changes', async () => {
   fixture(); data.set('classes/demo', {pointSettings: {enabled: false}});

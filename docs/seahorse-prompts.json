@@ -29,5 +29,7 @@
       "prompt": "Use case: stylized-concept. Production transparent dress-up ACCESSORY PARTS atlas. Input image is the exact baby seahorse identity/style/view reference ONLY. Do not render any animal, head, eyes, skin or body. Exactly 8 separate wearable objects in a strict 4-column 2-row grid, one object centered in each equal cell, ample transparent gutters. Row 1 left to right: (1) oatmeal knitted pompom beanie, (2) lilac star-patterned floppy sleep cap with cream trim and pompom, (3) peach-pink fabric bow hair clip, (4) navy-white little sailor cap. Row 2 left to right: (5) large round warm-brown eyeglass frame with completely transparent empty lens apertures, (6) pastel blue swim goggle frame with transparent empty lens apertures, no snorkel, (7) cozy blush pink knitted scarf wrapping around a small curved neck, two short rounded hanging ends, (8) delicate cream pearl necklace with one tiny golden seashell pendant. Soft 3D fabric collectible-toy rendering matching the referenced seahorse; all objects viewed in the SAME slight three-quarter view facing viewer-right as the character, suitable to attach to its head/eyes/chest; near lens slightly larger than far lens. Only accessories, no mannequins or facial features. Consistent soft diffuse lighting. No text, no grid lines, no borders. Actual alpha transparency everywhere outside objects AND inside eyeglass and goggle lenses. Prefer a large 2048x1024 atlas.",
       "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
     }
-  }
+  },
+  "status": "superseded",
+  "current": "docs/seahorse-complete-sets.json"
 }

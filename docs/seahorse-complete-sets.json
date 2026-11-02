@@ -1,0 +1,262 @@
+{
+  "version": 2,
+  "mode": "built-in-imagegen",
+  "productionSpec": {
+    "butter": "Use case: identity-preserve. Production sprite atlas for the referenced butter yellow baby seahorse. Preserve the large glossy eyes, rosy cheeks, tiny tubular snout, rounded crown bumps, translucent fin and thick spiral tail. Soft polished 3D plush-toy finish. Exactly 20 fully dressed whole-body characters in 5 columns and 4 rows. Same rest pose facing viewer-right, consistent identity and proportions, one complete outfit per cell, naturally fitted clothes AND accessories all integrated into each character. Never detached accessories or parts. Genuinely transparent alpha background. No text, labels, grid lines or floor shadows. Keep all hats and tails intact with transparent gutters. Row-major costumes: 1. blue denim overalls, round brown glasses, cream canvas satchel; 2. lilac star pajamas and matching floppy nightcap; 3. navy-white sailor shirt, white sailor cap with navy band and gold shell clasp; 4. pink knit pullover, oatmeal pompom beanie and pink scarf; 5. cream-peach scalloped tunic, peach bow and pearl necklace; 6. blue diving suit, goggles and short snorkel; 7. tan explorer vest, safari hat and brown satchel; 8. cream chef apron, white toque and red neckerchief; 9. yellow raincoat and rain hat, teal pouch; 10. mint artist smock, lavender beret, pencil in pocket; 11. sage green overalls, floral straw hat and flower pin; 12. navy star cape, wizard hat and moon pendant; 13. blue hero torso suit, red cape and gold star badge; 14. plum waistcoat, cream bowtie and pastel headphones; 15. teal zip jacket, cream visor and lavender short scarf; 16. ivory party shirt, peach bowtie and dotted cone hat; 17. cream velvet royal cape, rounded gold crown and pearls; 18. peach cardigan, flower headband and shell pendant; 19. cream bedtime shirt, lavender bonnet and pink neck ribbon; 20. red holiday coat with ivory trim, Santa cap and green bowtie.",
+    "lilac": "Use case: identity-preserve. Production sprite atlas for the referenced pastel lilac purple baby seahorse. Preserve the large glossy eyes, rosy cheeks, tiny tubular snout, rounded crown bumps, translucent fin and thick spiral tail. Soft polished 3D plush-toy finish. Exactly 20 fully dressed whole-body characters in 5 columns and 4 rows. Same rest pose facing viewer-right, consistent identity and proportions, one complete outfit per cell, naturally fitted clothes AND accessories all integrated into each character. Never detached accessories or parts. Genuinely transparent alpha background. No text, labels, grid lines or floor shadows. Keep all hats and tails intact with transparent gutters. Row-major costumes: 1. blue denim overalls, round brown glasses, cream canvas satchel; 2. lilac star pajamas and matching floppy nightcap; 3. navy-white sailor shirt, white sailor cap with navy band and gold shell clasp; 4. pink knit pullover, oatmeal pompom beanie and pink scarf; 5. cream-peach scalloped tunic, peach bow and pearl necklace; 6. blue diving suit, goggles and short snorkel; 7. tan explorer vest, safari hat and brown satchel; 8. cream chef apron, white toque and red neckerchief; 9. yellow raincoat and rain hat, teal pouch; 10. mint artist smock, lavender beret, pencil in pocket; 11. sage green overalls, floral straw hat and flower pin; 12. navy star cape, wizard hat and moon pendant; 13. blue hero torso suit, red cape and gold star badge; 14. plum waistcoat, cream bowtie and pastel headphones; 15. teal zip jacket, cream visor and lavender short scarf; 16. ivory party shirt, peach bowtie and dotted cone hat; 17. cream velvet royal cape, rounded gold crown and pearls; 18. peach cardigan, flower headband and shell pendant; 19. cream bedtime shirt, lavender bonnet and pink neck ribbon; 20. red holiday coat with ivory trim, Santa cap and green bowtie."
+  },
+  "layout": {
+    "columns": 5,
+    "rows": 4,
+    "order": "row-major"
+  },
+  "sources": {
+    "butter": "public/my-space/seahorse/v2/sheets/animal-seahorse-butter.png",
+    "lilac": "public/my-space/seahorse/v2/sheets/animal-seahorse-lilac.png"
+  },
+  "sets": [
+    {
+      "id": "seahorse-set-scholar",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 소풍하는 책벌레 세트",
+      "en": "Picnic scholar set",
+      "price": 50,
+      "motif": "scholar",
+      "clothes": "데님 멜빵옷",
+      "accessories": "동그란 안경 · 크림 가방",
+      "color": "#93b7d4"
+    },
+    {
+      "id": "seahorse-set-dreamy",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 별빛 꿈나라 세트",
+      "en": "Starlight dreamer set",
+      "price": 40,
+      "motif": "dreamy",
+      "clothes": "보라 별 잠옷",
+      "accessories": "별 수면모자",
+      "color": "#b7a0df"
+    },
+    {
+      "id": "seahorse-set-captain",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 꼬마 바다 선장 세트",
+      "en": "Little sea captain set",
+      "price": 45,
+      "motif": "captain",
+      "clothes": "줄무늬 세일러복",
+      "accessories": "선원 모자 · 조개 브로치",
+      "color": "#526d93"
+    },
+    {
+      "id": "seahorse-set-winter",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 포근한 겨울 산책 세트",
+      "en": "Cozy winter walk set",
+      "price": 45,
+      "motif": "winter",
+      "clothes": "복숭아 니트",
+      "accessories": "방울모자 · 분홍 목도리",
+      "color": "#e6a8b5"
+    },
+    {
+      "id": "seahorse-set-ribbon",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 복숭아 리본 요정 세트",
+      "en": "Peach ribbon fairy set",
+      "price": 40,
+      "motif": "ribbon",
+      "clothes": "복숭아 물결 원피스",
+      "accessories": "복숭아 리본 · 진주 목걸이",
+      "color": "#e8a2a0"
+    },
+    {
+      "id": "seahorse-set-diver",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 산호초 탐험대 세트",
+      "en": "Coral reef diver set",
+      "price": 50,
+      "motif": "diver",
+      "clothes": "파란 잠수복",
+      "accessories": "물안경 · 스노클",
+      "color": "#91c8e4"
+    },
+    {
+      "id": "seahorse-set-explorer",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 두근두근 탐험가 세트",
+      "en": "Little explorer set",
+      "price": 50,
+      "motif": "explorer",
+      "clothes": "모래빛 탐험 조끼",
+      "accessories": "탐험 모자 · 갈색 가방",
+      "color": "#bb9a70"
+    },
+    {
+      "id": "seahorse-set-chef",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 달콤한 바다 요리사 세트",
+      "en": "Sweet sea chef set",
+      "price": 45,
+      "motif": "chef",
+      "clothes": "크림 요리사복",
+      "accessories": "요리사 모자 · 빨간 스카프",
+      "color": "#e8d6b9"
+    },
+    {
+      "id": "seahorse-set-rain",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 빗방울 소풍 세트",
+      "en": "Rainy day picnic set",
+      "price": 45,
+      "motif": "rain",
+      "clothes": "노란 우비",
+      "accessories": "노란 모자 · 청록 가방",
+      "color": "#efc64e"
+    },
+    {
+      "id": "seahorse-set-artist",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 꿈을 그리는 화가 세트",
+      "en": "Dream painter set",
+      "price": 45,
+      "motif": "artist",
+      "clothes": "민트 작업복",
+      "accessories": "보라 베레모 · 주머니 연필",
+      "color": "#a3c6b4"
+    },
+    {
+      "id": "seahorse-set-gardener",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 꽃밭의 작은 정원사 세트",
+      "en": "Little gardener set",
+      "price": 45,
+      "motif": "gardener",
+      "clothes": "세이지 멜빵옷",
+      "accessories": "꽃 밀짚모자 · 꽃 브로치",
+      "color": "#9aaf84"
+    },
+    {
+      "id": "seahorse-set-wizard",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 달빛 꼬마 마법사 세트",
+      "en": "Moonlight wizard set",
+      "price": 55,
+      "motif": "wizard",
+      "clothes": "남색 별 망토",
+      "accessories": "별 마법모자 · 달 목걸이",
+      "color": "#536099"
+    },
+    {
+      "id": "seahorse-set-hero",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 바다를 지키는 영웅 세트",
+      "en": "Little sea hero set",
+      "price": 50,
+      "motif": "hero",
+      "clothes": "파란 영웅복",
+      "accessories": "빨간 망토 · 별 배지",
+      "color": "#5b94c9"
+    },
+    {
+      "id": "seahorse-set-musician",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 조개빛 음악가 세트",
+      "en": "Seashell musician set",
+      "price": 45,
+      "motif": "musician",
+      "clothes": "자주색 조끼",
+      "accessories": "크림 나비넥타이 · 헤드폰",
+      "color": "#a383b9"
+    },
+    {
+      "id": "seahorse-set-sport",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 신나는 바다 운동회 세트",
+      "en": "Seaside sports day set",
+      "price": 45,
+      "motif": "sport",
+      "clothes": "청록 운동 재킷",
+      "accessories": "선캡 · 보라 목도리",
+      "color": "#8bbab2"
+    },
+    {
+      "id": "seahorse-set-party",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 생일 축하 파티 세트",
+      "en": "Birthday party set",
+      "price": 40,
+      "motif": "party",
+      "clothes": "아이보리 파티 셔츠",
+      "accessories": "고깔모자 · 복숭아 나비넥타이",
+      "color": "#efc0a3"
+    },
+    {
+      "id": "seahorse-set-royal",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 진주 궁전의 왕자 세트",
+      "en": "Pearl palace royal set",
+      "price": 55,
+      "motif": "royal",
+      "clothes": "크림 왕실 망토",
+      "accessories": "금빛 왕관 · 진주 목걸이",
+      "color": "#dfc282"
+    },
+    {
+      "id": "seahorse-set-flower",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 봄꽃 바다 산책 세트",
+      "en": "Spring flower walk set",
+      "price": 45,
+      "motif": "flower",
+      "clothes": "복숭아 카디건",
+      "accessories": "꽃 머리띠 · 조개 목걸이",
+      "color": "#eab4a4"
+    },
+    {
+      "id": "seahorse-set-bedtime",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 잘 자요 작은 별 세트",
+      "en": "Goodnight little star set",
+      "price": 40,
+      "motif": "bedtime",
+      "clothes": "크림 잠옷",
+      "accessories": "보라 보닛 · 분홍 리본",
+      "color": "#c1afd3"
+    },
+    {
+      "id": "seahorse-set-holiday",
+      "kind": "clothes",
+      "slot": "body",
+      "name": "해마 선물 배달 산타 세트",
+      "en": "Little holiday Santa set",
+      "price": 50,
+      "motif": "holiday",
+      "clothes": "빨간 산타 코트",
+      "accessories": "산타 모자 · 초록 나비넥타이",
+      "color": "#c86360"
+    }
+  ],
+  "output": "public/my-space/seahorse/v2/{pet}/{motif}.webp",
+  "base": "public/my-space/seahorse/v2/{pet}/bare.webp",
+  "rendering": "One complete character image; clothing and accessories are descriptive fields, never independently composited."
+}

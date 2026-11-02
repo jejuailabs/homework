@@ -1,6 +1,5 @@
 'use client';
 import {isSeahorse, seahorseBodyState, normalizeSeahorsePose} from '@/modules/my-space/seahorse';
-import SeahorseAccessories from '@/modules/my-space/seahorse-avatar';
 import type {CSSProperties} from 'react';
 import {wardrobeCatalog, type WardrobeItem, type WardrobeOutfit} from '@/lib/points-types';
 import '@/styles/points.css';
@@ -26,7 +25,7 @@ export default function CharacterAvatar({character = 'cat', outfit = {}, classNa
     {presentation === 'portrait' && <span className="character-avatar-scene"/>}
     <img className="character-avatar-base" src={sprite} alt="" draggable={false}/>
     {isSeahorse(pet)
-      ? <SeahorseAccessories pet={pet} outfit={safeOutfit} pose={pose} body={spaceOutfit.body}/>
+      ? null
       : isWhiteknee(pet)
       ? <WhitekneeAccessories outfit={safeOutfit} pose={pose} body={spaceOutfit.body}/>
       : isWearablePet(pet)

@@ -354,7 +354,7 @@ async function character(request: Request) {
       wardrobeOutfit: wardrobeOutfit(student.wardrobeOutfit, student.wardrobeOwned, pet),
     });
     if (room.exists) tx.update(space, {
-      ...roomCompanionAppearance(room.data(), ownedItems(student.spaceOwned), pet),
+      ...roomCompanionAppearance(room.data(), ownedItems(student.spaceOwned, student.wardrobeOwned), pet),
       version: (room.data()?.version || 0) + 1,
     });
   });
