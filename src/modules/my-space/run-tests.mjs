@@ -1,10 +1,11 @@
+import {seahorseTestImports} from '../../../scripts/seahorse-test-imports.mjs';
 import ts from 'typescript';
 import {readFileSync} from 'node:fs';
 
 const compile = p => ts.transpileModule(readFileSync(new URL(p, import.meta.url), 'utf8'), {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext},
 }).outputText;
-const url = s => 'data:text/javascript;base64,' + Buffer.from(s).toString('base64');
+const url = s => 'data:text/javascript;base64,' + Buffer.from(seahorseTestImports(s)).toString('base64');
 const replaceImports = (source, imports) => Object.entries(imports).reduce((code, [name, target]) =>
   code.replaceAll(`'${name}'`, JSON.stringify(target)).replaceAll(`"${name}"`, JSON.stringify(target)), source);
 const module = (path, imports = {}) => url(replaceImports(compile(path), imports));
@@ -46,6 +47,10 @@ await import(module('./junior-wardrobe.test.ts', {
 
 const groups = module('./wardrobe-groups.ts', {'./catalog': catalog, './new-pets': newPets, './whiteknee': whiteknee});
 await import(module('./wardrobe-groups.test.ts', {'./wardrobe-groups': groups}));
+await import(module('./seahorse.test.ts', {
+  './catalog': catalog, './new-pets': newPets, './appearance': appearance,
+  './policy': policy, './profile': profile, './wardrobe-groups': groups,
+}));
 
 const diaryCalendar = module('./diary-calendar.ts');
 await import(module('./diary-policy.test.ts', {'./catalog': catalog, './policy': policy, './diary-calendar': diaryCalendar}));

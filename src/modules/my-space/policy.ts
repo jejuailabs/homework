@@ -1,5 +1,7 @@
+import {isSeahorse} from './seahorse';
+import {exclusiveItemCompatible} from './wardrobe-compatibility';
 import { spaceCatalog, spaceItem, starterSpaceIds, type Room, type Placement, type DiaryPage, type DiaryLayer } from './catalog';
-import {isWhiteknee, normalizeWhitekneePose, whitekneeItemCompatible, whitekneePoses} from './whiteknee';
+import {isWhiteknee, normalizeWhitekneePose, whitekneePoses} from './whiteknee';
 export class SpaceError extends Error {
     constructor(message: string, public status = 400) { super(message); }
 }
@@ -29,9 +31,9 @@ export function roomCompanionAppearance(value: unknown, items: string[], pet: st
     for (const slot of ['body', 'bag'] as const) {
         const key = v.outfit?.[slot];
         const item = typeof key === 'string' ? spaceItem(key) : undefined;
-        if (item?.kind === 'clothes' && item.slot === slot && items.includes(item.id) && whitekneeItemCompatible(selectedPet, item)) outfit[slot] = item.id;
+        if (item?.kind === 'clothes' && item.slot === slot && items.includes(item.id) && exclusiveItemCompatible(selectedPet, item)) outfit[slot] = item.id;
     }
-    return {pet: selectedPet, pose: isWhiteknee(selectedPet) ? normalizeWhitekneePose(v.pose) : 'rest', outfit};
+    return {pet: selectedPet, pose: (isWhiteknee(selectedPet) || isSeahorse(selectedPet)) ? normalizeWhitekneePose(v.pose) : 'rest', outfit};
 }
 export function validateRoom(value: unknown, items: string[], previousPet?: string): Room {
     const v = object(value);
@@ -55,7 +57,7 @@ export function validateRoom(value: unknown, items: string[], previousPet?: stri
         if (!o[slot]) continue;
         const key = owned(o[slot], 'clothes', items), item = spaceItem(key)!;
         if (item.slot !== slot) throw new SpaceError('옷 위치를 확인해 주세요.');
-        if (!whitekneeItemCompatible(pet, item)) {
+        if (!exclusiveItemCompatible(pet, item)) {
             // Changing the companion may carry the previous friend's clothes in an older client.
             // Remove only the worn selection; inventory ownership is never changed here.
             if (previousPet && previousPet !== pet) continue;
@@ -65,7 +67,7 @@ export function validateRoom(value: unknown, items: string[], previousPet?: stri
     }
     return {
         version: revision(v.version), theme: owned(v.theme, 'theme', items), pet,
-        pose: isWhiteknee(pet) ? normalizeWhitekneePose(v.pose) : 'rest',
+        pose: (isWhiteknee(pet) || isSeahorse(pet)) ? normalizeWhitekneePose(v.pose) : 'rest',
         nicknames, outfit, placements,
     };
 }

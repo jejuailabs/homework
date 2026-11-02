@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "mode": "built-in-imagegen",
+  "files": [
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/rest/bare.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 54226,
+      "sha256": "1c013a200aafc5e5a46259ede6a36ec047bc8f49336bd71bbf26511c247e36dd",
+      "source": "exec-49c19c22-c5fe-455a-bd38-2e42fbb5b2ba.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/raised/bare.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 56078,
+      "sha256": "7ca81d95e59d03ff8feacf12778a92f7def6d957834c9120d8d4162adee869fe",
+      "source": "exec-49c19c22-c5fe-455a-bd38-2e42fbb5b2ba.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/rest/overalls.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 61714,
+      "sha256": "e6d55c7bf1d6c5eba8198b94aab9927630eba7fe5a8e7c0e98f486a11215de49",
+      "source": "exec-5ddfd7fa-11ab-4786-a18d-968b16527a6a.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/rest/pajamas.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 59500,
+      "sha256": "5b2739e5c6f36ea76232efa55873430ccdadcdba5933a4cef82888508005267a",
+      "source": "exec-5ddfd7fa-11ab-4786-a18d-968b16527a6a.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/rest/sailor.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 61074,
+      "sha256": "438efd4f9dedefdcda5280b11e8dd0baca3006a6788e91bd0d77462aaffe2797",
+      "source": "exec-5ddfd7fa-11ab-4786-a18d-968b16527a6a.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/rest/knit.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 61238,
+      "sha256": "d83ff0a5805edd57c71ae38ac4f0cf8a5d16451485b9e54784197b884c753511",
+      "source": "exec-5ddfd7fa-11ab-4786-a18d-968b16527a6a.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/raised/overalls.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 65386,
+      "sha256": "abf9501af2fe879dfa6b482af79633fcee9231e1e9de0973de83191c667b68f2",
+      "source": "exec-a6e0c928-18d5-4381-9202-10d8d7880581.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/raised/pajamas.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 61596,
+      "sha256": "24f62f3690ed654ec2aca3c5aeb51f70cce11abd2062163c8a9d9d5181e6ddb1",
+      "source": "exec-a6e0c928-18d5-4381-9202-10d8d7880581.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/raised/sailor.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 61852,
+      "sha256": "48a146687632a342507c14d72d4dd5ad2eacd765af6708c175464b7b176ed195",
+      "source": "exec-a6e0c928-18d5-4381-9202-10d8d7880581.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/poses/raised/knit.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 63080,
+      "sha256": "4846cfb26e5b82ca873ef4f1af19293433b99f88af9ce71c98c67c588d833d3c",
+      "source": "exec-a6e0c928-18d5-4381-9202-10d8d7880581.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/head-beanie.webp",
+      "width": 390,
+      "height": 357,
+      "bytes": 45132,
+      "sha256": "7746a0a71ec040c5613c71238a9b94c84d3d2f2b1081f488664dfdeae1ae47c9",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/head-sleep.webp",
+      "width": 424,
+      "height": 347,
+      "bytes": 42516,
+      "sha256": "4ca8ced56052ba125725e16d6f10f38d8b0c6159e7d1a3eaad693b8621b7f396",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/head-bow.webp",
+      "width": 367,
+      "height": 319,
+      "bytes": 41976,
+      "sha256": "ab6523e0d91e40a8715033c1b5f0a089eb30103952ecc6ada5eef51f890d5986",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/head-sailor.webp",
+      "width": 361,
+      "height": 256,
+      "bytes": 29874,
+      "sha256": "9d4ea9f551f52639bafc29a1c71a8f397efb1c02341872cd6b2089c46b625831",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/face-glasses.webp",
+      "width": 421,
+      "height": 227,
+      "bytes": 34164,
+      "sha256": "e695aa560e6d56ab0514721fd9151cc56aabd36ee602f9501cb91a19a499aa6b",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/face-goggles.webp",
+      "width": 413,
+      "height": 211,
+      "bytes": 32170,
+      "sha256": "866805324ee8bdb461fec1d46b9f440a2a30be706f518a724f14e2bcff792dac",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/neck-scarf.webp",
+      "width": 443,
+      "height": 313,
+      "bytes": 41186,
+      "sha256": "1f3b3b18a6b99c644e32c8abbf3e0232add636cec34429117ba801fdc4d8875a",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-butter/accessories/neck-shell.webp",
+      "width": 408,
+      "height": 260,
+      "bytes": 25856,
+      "sha256": "d3e8c95eec1a2c6e27f4675236875bd96f3a542945bf18414e9587dd81fc1c8b",
+      "source": "exec-bb69c66f-79e5-4162-9916-eae220ac4ef8.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/rest/bare.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 58698,
+      "sha256": "44c1e8b39e259ee7e4d3bb7fe23659c73de49a823c4c2bb27e1773ba9d861fc7",
+      "source": "exec-5a8e7d44-de7a-427d-a5ab-1e4d522f7a74.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/raised/bare.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 59996,
+      "sha256": "c8d649c19e467b0141b65530f50954e2302002be8a713207cedc1f2603ddb75c",
+      "source": "exec-5a8e7d44-de7a-427d-a5ab-1e4d522f7a74.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/rest/overalls.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 64892,
+      "sha256": "330e21f4392b883d8eaf3351a4059db8d157a6a5fcf9055061b8fc57f69ee746",
+      "source": "exec-7edddd4d-b7e3-4676-872f-165755f0e469.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/rest/pajamas.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 62344,
+      "sha256": "4bfe10670f17bbd9ebdf26343cbe5057555ef91334a7bad798780253b28be87a",
+      "source": "exec-7edddd4d-b7e3-4676-872f-165755f0e469.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/rest/sailor.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 64440,
+      "sha256": "9cb9d60ab370ef595121a85cc2b8dba811468480815c978bd5206fa4e6d77ee7",
+      "source": "exec-7edddd4d-b7e3-4676-872f-165755f0e469.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/rest/knit.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 62458,
+      "sha256": "58a948ae49ec284669b27e5dcc07bf62ad31e73950c11b25fcbf23273982ed95",
+      "source": "exec-7edddd4d-b7e3-4676-872f-165755f0e469.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/raised/overalls.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 68650,
+      "sha256": "616a8b79d21cec40463e4f0e4c5e7c1136a863d72d8e1a02522351795cb1daf0",
+      "source": "exec-5b91d171-74a1-4d54-b514-da37b5b2e38b.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/raised/pajamas.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 64654,
+      "sha256": "ebbb587349f2118b82f2dfe1e36ba8c1f569fd6a5a9489b40d1d20e662b6ead5",
+      "source": "exec-5b91d171-74a1-4d54-b514-da37b5b2e38b.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/raised/sailor.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 65616,
+      "sha256": "bf798c2789fd808900a275c886a6a75f66dabb2a1e999f1302cdd74e1b9a000d",
+      "source": "exec-5b91d171-74a1-4d54-b514-da37b5b2e38b.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/poses/raised/knit.webp",
+      "width": 768,
+      "height": 768,
+      "bytes": 65594,
+      "sha256": "7234817ebfa65f19d7dac3fd0378c9f6a9f8cef2863d82c577572ff3facf20ad",
+      "source": "exec-5b91d171-74a1-4d54-b514-da37b5b2e38b.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/head-beanie.webp",
+      "width": 385,
+      "height": 389,
+      "bytes": 50570,
+      "sha256": "2df8f5236ae3642a869855b1ffaade2b2a348749dbbf93518846f216a2f25fad",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/head-sleep.webp",
+      "width": 392,
+      "height": 330,
+      "bytes": 42236,
+      "sha256": "754f6a99a1e6dad2e92b22b45054df2a203ce828e0537ae54b8e7db2f8e47578",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/head-bow.webp",
+      "width": 362,
+      "height": 319,
+      "bytes": 40470,
+      "sha256": "d10736ecfc6a7cc731ecad457eb10bef23cc921deac28e4c26077cdc826c43d6",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/head-sailor.webp",
+      "width": 378,
+      "height": 257,
+      "bytes": 33666,
+      "sha256": "47e6f4f3a61a5a05f82d0b27bfab45d98c3c63fc20bc6930b2e4d40877e06311",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/face-glasses.webp",
+      "width": 409,
+      "height": 238,
+      "bytes": 35270,
+      "sha256": "af85a9f0dc249261bcb54476ee47125e8c8e6a7f5e164aed0b0fbcf0910a82c1",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/face-goggles.webp",
+      "width": 444,
+      "height": 234,
+      "bytes": 39128,
+      "sha256": "105ca32ee7e008f22abf9d58fb7663e480c80580c26dcc7a600918fc181eb7ce",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/neck-scarf.webp",
+      "width": 443,
+      "height": 307,
+      "bytes": 44174,
+      "sha256": "4773bb98a926e5ce25f80a82b0c94ace2eb33d83db6ff50cbf1d40a7746460ae",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    },
+    {
+      "path": "/my-space/seahorse/v1/animal-seahorse-lilac/accessories/neck-shell.webp",
+      "width": 409,
+      "height": 270,
+      "bytes": 24778,
+      "sha256": "7da9272093d740ff5a6a1ab16228a3fab705a3c73e3d3db708d3aeacc88ef533",
+      "source": "exec-dbf9fc05-7fbd-4495-9269-049417561570.png"
+    }
+  ]
+}

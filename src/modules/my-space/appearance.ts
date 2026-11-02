@@ -1,3 +1,4 @@
+import {isSeahorse, SEAHORSE_ROOT, seahorsePets, seahorseSprite, seahorseAccessoryArt, type SeahorseId} from './seahorse';
 import {characterFiles} from '@/lib/characters';
 import {newPet, newPetFromArt, type NewPetId, juniorWearState, newPets} from './new-pets';
 import {juniorAttachmentAssets} from './junior-assets';
@@ -7,7 +8,7 @@ import {isWhiteknee, WHITEKNEE_ID, WHITEKNEE_ROOT, whitekneeAccessoryArt, whitek
 
 export const wearablePets = ['friend-cat', 'friend-dog', 'friend-hamster', 'friend-alpaca', 'friend-rabbit', 'friend-otter', 'cat-american', 'cat-british', 'cat-siamese', 'cat-persian', 'cat-ragdoll', 'cat-maine'] as const;
 export type WearablePet = typeof wearablePets[number];
-export type AvatarPet = WearablePet | NewPetId | typeof WHITEKNEE_ID;
+export type AvatarPet = WearablePet | NewPetId | typeof WHITEKNEE_ID | SeahorseId;
 export const isWearablePet = (pet: AvatarPet): pet is WearablePet => wearablePets.includes(pet as WearablePet);
 export const wearStates = ['bare', 'knit', 'sailor', 'apron', 'raincoat', 'hoodie', 'overalls', 'dino', 'pajamas', 'bare-bag', 'knit-bag', 'sailor-bag', 'apron-bag', 'raincoat-bag', 'hoodie-bag', 'overalls-bag', 'dino-bag', 'pajamas-bag'] as const;
 export type WearState = typeof wearStates[number];
@@ -16,6 +17,9 @@ const root = '/my-space/v2/wardrobe';
 const accessories = ['head-sprout', 'head-crown', 'head-beret', 'head-party', 'head-flower', 'neck-bow', 'neck-scarf', 'neck-medal', 'neck-bandana'];
 
 export function avatarPet(character = 'cat', imageSrc?: string): AvatarPet {
+  if (isSeahorse(character)) return character;
+  const sea = seahorsePets.find(pet => imageSrc?.startsWith(`${SEAHORSE_ROOT}/${pet.id}/`));
+  if (sea) return sea.id;
   if (isWhiteknee(character) || imageSrc?.startsWith(WHITEKNEE_ROOT + '/poses/')) return WHITEKNEE_ID;
   const added = newPetFromArt(imageSrc) || newPet(character);
   if (added) return added.id;
@@ -30,6 +34,7 @@ export function wearState(outfit: SpaceOutfit = {}): WearState {
   return (body + (outfit.bag === 'bag-leaf' ? '-bag' : '')) as WearState;
 }
 export function wornSprite(pet: AvatarPet, outfit: SpaceOutfit = {}, pose?: WhitekneePose) {
+  if (isSeahorse(pet)) return seahorseSprite(pet, pose, outfit.body);
   if (isWhiteknee(pet)) return whitekneeSprite(pose, outfit.body);
   const added = newPet(pet);
   if (added) {
@@ -39,6 +44,7 @@ export function wornSprite(pet: AvatarPet, outfit: SpaceOutfit = {}, pose?: Whit
   return `${root}/${pet}/${wearState(outfit)}.webp`;
 }
 export function accessoryArt(itemId: string, pet: AvatarPet = 'friend-cat') {
+  if (itemId.startsWith('seahorse-')) return seahorseAccessoryArt(itemId, isSeahorse(pet) ? pet : undefined);
   if (itemId.startsWith('whiteknee-')) return whitekneeAccessoryArt(itemId);
   if (itemId.startsWith('junior-')) return juniorAttachmentAssets[(newPet(pet)?.id || newPets[0].id)+'/'+itemId]?.src;
   return accessories.includes(itemId) ? attachmentAssets[pet+'/'+itemId]?.src : undefined;

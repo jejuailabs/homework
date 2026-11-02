@@ -1,3 +1,4 @@
+import {seahorseTestImports} from '../../../scripts/seahorse-test-imports.mjs';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync, readdirSync} from 'node:fs';
@@ -15,7 +16,7 @@ function moduleUrl(file) {
       : name.startsWith('@/') ? moduleUrl(resolve(root, 'src', `${name.slice(2)}.ts`)) : import.meta.resolve(name);
     code = code.replaceAll(`'${name}'`, JSON.stringify(replacement)).replaceAll(`"${name}"`, JSON.stringify(replacement));
   }
-  const result = `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`;
+  const result = `data:text/javascript;base64,${Buffer.from(seahorseTestImports(code)).toString('base64')}`;
   cache.set(file, result); return result;
 }
 

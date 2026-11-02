@@ -1,3 +1,4 @@
+import {seahorsePets, seahorseSprite, seahorseBodyItems} from './seahorse';
 import { characterFiles } from '@/lib/characters';
 import {WHITEKNEE_ID, whitekneeBodyItems, whitekneeSprite, type WhitekneePose} from './whiteknee';
 import { diaryStickers } from './diary-stickers';
@@ -31,6 +32,8 @@ export const illustratedRoomThemes: SpaceItem[] = [
     {"id":"theme-sweets","kind":"theme","name":"딸기 크림 디저트 공방","en":"Strawberry cream dessert atelier","price":80,"art":"/my-space/v6/rooms/theme-sweets.webp","previewArt":"/my-space/v6/rooms/thumbs/theme-sweets.webp"},
 ];
 export const spaceCatalog: SpaceItem[] = [
+    ...seahorsePets.map(pet => ({id: pet.id, kind: 'pet' as const, name: pet.name, buddyName: pet.buddyName, en: pet.en, price: 60, base: 'otter', art: seahorseSprite(pet.id)})),
+    ...seahorseBodyItems,
     {id: WHITEKNEE_ID, kind: 'pet', name: '자이언트 화이트니', buddyName: '화이트니', en: 'Whiteknee', price: 60, base: 'cat', art: whitekneeSprite('rest')},
     ...whitekneeBodyItems,
     ...diaryStickers,

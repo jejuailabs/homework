@@ -1,3 +1,4 @@
+import {seahorseAccessoryItems} from '../modules/my-space/seahorse';
 import {whitekneeAccessoryItems, type WhitekneePose} from '../modules/my-space/whiteknee';
 
 export type WardrobeSlot = 'head' | 'face' | 'neck' | 'background' | 'frame';
@@ -6,6 +7,7 @@ export type WardrobeItem = {id: string; slot: WardrobeSlot; ko: string; en: stri
 /** Original CSS/SVG decorations. Prices are re-resolved from this catalogue on the server. */
 export const wardrobeCatalog: WardrobeItem[] = [
   ...whitekneeAccessoryItems,
+  ...seahorseAccessoryItems,
   {"id":"junior-head-beret","slot":"head","ko":"보송 별 베레모","en":"Fluffy star beret","price":40,"color":"#b5a0d2","motif":"beret"},
   {"id":"junior-head-crown","slot":"head","ko":"보송 별빛 왕관","en":"Fluffy starlight crown","price":60,"color":"#e5b95d","motif":"crown"},
   {"id":"junior-head-flower","slot":"head","ko":"보송 복숭아 꽃핀","en":"Fluffy peach blossom","price":25,"color":"#eea3ad","motif":"flower"},

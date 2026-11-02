@@ -6,9 +6,11 @@ import assert from 'node:assert/strict';
 import * as crypto from 'node:crypto';
 function load(path,imports={}) {
   const source=ts.transpileModule(fs.readFileSync(new URL(path,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
-  const module={exports:{}};new Function('require','module','exports',source)(name=>imports[name]||{},module,module.exports);return module.exports;
+  const module={exports:{}};new Function('require','module','exports',source)(name=>imports[name]||(name.endsWith('/seahorse')?seahorse:name.endsWith('/wardrobe-compatibility')?compatibility:{}),module,module.exports);return module.exports;
 }
 const whiteknee=load('../../modules/my-space/whiteknee.ts');
+const seahorse=load('../../modules/my-space/seahorse.ts');
+const compatibility=load('../../modules/my-space/wardrobe-compatibility.ts',{'./seahorse':seahorse});
 const characters=load('../characters.ts');
 const newPets=load('../../modules/my-space/new-pets.ts',{'./whiteknee':whiteknee});
 const catalog=load('../../modules/my-space/catalog.ts',{'@/lib/characters':characters,'./new-pets':newPets,'./whiteknee':whiteknee,'./diary-stickers':load('../../modules/my-space/diary-stickers.ts')});

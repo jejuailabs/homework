@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {wardrobeGroups, groupFriends, petWardrobeGroup, previewFriend, friendName, itemFriends} from './wardrobe-groups';
 
-test('the three wardrobes preserve the classic and fluffy groups and isolate Whiteknee', () => {
-  assert.equal(wardrobeGroups.length, 3);
+test('the four wardrobes preserve existing groups and isolate Whiteknee and seahorses', () => {
+  assert.equal(wardrobeGroups.length, 4);
   assert.equal(groupFriends('classic').length, 12);
   assert.equal(groupFriends('fluffy').length, 10);
   assert.deepEqual(groupFriends('whiteknee').map(pet => pet.id), ['animal-whiteknee']);

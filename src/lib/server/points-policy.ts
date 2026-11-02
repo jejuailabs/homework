@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {defaultPointSettings, starterWardrobeIds, wardrobeCatalog, type PointSettings, type WardrobeOutfit, type WardrobeSlot} from '../points-types';
 import {ApiError, id, text} from './policy';
-import {whitekneeItemCompatible} from '../../modules/my-space/whiteknee';
+import {exclusiveItemCompatible} from '../../modules/my-space/wardrobe-compatibility';
 
 export function pointInteger(value: unknown, min: number, max: number) {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max) throw new ApiError(400, '포인트 수를 확인해 주세요.', 'POINT_AMOUNT');
@@ -30,7 +30,7 @@ export function wardrobeOutfit(value: unknown, owned: unknown, pet?: string): Wa
   if (!value || typeof value !== 'object') return result;
   for (const [slot, itemId] of Object.entries(value)) {
     const item = wardrobeCatalog.find(item => item.id === itemId && item.slot === slot);
-    if (item && ownership.includes(item.id) && (!pet || whitekneeItemCompatible(pet, item))) result[slot as WardrobeSlot] = item.id;
+    if (item && ownership.includes(item.id) && (!pet || exclusiveItemCompatible(pet, item))) result[slot as WardrobeSlot] = item.id;
   }
   return result;
 }
@@ -62,6 +62,6 @@ export function equipWardrobe(current: unknown, owned: unknown, slot: unknown, i
   if (itemId === null) {delete outfit[slot as WardrobeSlot]; return outfit;}
   const item = wardrobeItem(itemId);
   if (item.slot !== slot || !wardrobeOwnership(owned).includes(item.id)) throw new ApiError(403, '보유한 아이템만 착용할 수 있어요.', 'ITEM_NOT_OWNED');
-  if (!whitekneeItemCompatible(pet, item)) throw new ApiError(403, '이 친구에게 맞는 전용 장식을 골라 주세요.', 'ITEM_INCOMPATIBLE');
+  if (!exclusiveItemCompatible(pet, item)) throw new ApiError(403, '이 친구에게 맞는 전용 장식을 골라 주세요.', 'ITEM_INCOMPATIBLE');
   return {...outfit, [slot as string]: item.id};
 }

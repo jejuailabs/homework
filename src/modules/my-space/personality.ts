@@ -1,3 +1,4 @@
+import {seahorsePets} from './seahorse';
 import {newPet} from './new-pets';
 
 export const personalities: Record<string, {
@@ -26,6 +27,8 @@ const breedPersonalities: Record<string, (typeof personalities)[string]> = {
     'cat-maine': { name: '솔이', en: 'Soli', trait: '숲속의 용기를 모으는 든든한 친구', hello: ['커다란 나무도 작은 새싹에서 시작한대.', '오늘의 용기를 작은 잎에 담아 보자.', '낯선 일도 한 발씩 함께 가면 괜찮아.'], cheer: '도전한 네 마음이 큰 나무처럼 자랐네!', rest: '나무 그늘에서 숨을 고르고 다시 가자.' },
 };
 export const petPersonality = (pet: string) => {
+    const sea = seahorsePets.find(item => item.id === pet);
+    if (sea) return {name: sea.buddyName, en: sea.en, trait: sea.trait, hello: [...sea.hello], cheer: '네가 해낸 오늘이 바다처럼 반짝여!', rest: '꼬리를 돌돌 말고 잠깐 쉬어 가자.'};
     const added = newPet(pet);
     return added ? {name: added.name, en: added.en, trait: added.trait, hello: [added.hello, '네가 오니까 오늘도 마음이 포근해졌어.', '오늘의 작은 기쁨을 함께 모아 볼까?'], cheer: '네가 한 걸음 해낸 순간을 나도 기억할게!', rest: '잠깐 쉬어도 좋아. 네 옆에서 기다릴게.'} : breedPersonalities[pet] || personalities[friendBase(pet)] || personalities.cat;
 };

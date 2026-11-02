@@ -1,4 +1,6 @@
 'use client';
+import {isSeahorse, seahorseBodyState, normalizeSeahorsePose} from '@/modules/my-space/seahorse';
+import SeahorseAccessories from '@/modules/my-space/seahorse-avatar';
 import type {CSSProperties} from 'react';
 import {wardrobeCatalog, type WardrobeItem, type WardrobeOutfit} from '@/lib/points-types';
 import '@/styles/points.css';
@@ -19,11 +21,13 @@ export default function CharacterAvatar({character = 'cat', outfit = {}, classNa
   const background = presentation === 'portrait' ? items.find(item => item.slot === 'background') : undefined, frame = presentation === 'portrait' ? items.find(item => item.slot === 'frame') : undefined;
   const safeOutfit = Object.fromEntries(items.map(item => [item.slot, item.id]));
   const sprite = wornSprite(pet, spaceOutfit, pose);
-  const state = isWhiteknee(pet) ? whitekneeBodyState(spaceOutfit.body) : isWearablePet(pet) ? wearState(spaceOutfit) : juniorWearState(spaceOutfit);
-  return <span role={alt ? 'img' : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : true} data-pet={pet} data-pose={isWhiteknee(pet) ? normalizeWhitekneePose(pose) : undefined} data-wear-state={state} className={`character-avatar character-${character} avatar-fitted ${className} ${background ? `avatar-background-${background.motif}` : ''} ${frame ? `avatar-frame-${frame.motif}` : ''}`} style={{'--avatar-background': background?.color || 'transparent', '--avatar-frame': frame?.color || 'transparent'} as CSSProperties}>
+  const state = isSeahorse(pet) ? seahorseBodyState(spaceOutfit.body) : isWhiteknee(pet) ? whitekneeBodyState(spaceOutfit.body) : isWearablePet(pet) ? wearState(spaceOutfit) : juniorWearState(spaceOutfit);
+  return <span role={alt ? 'img' : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : true} data-pet={pet} data-pose={isSeahorse(pet) ? normalizeSeahorsePose(pose) : isWhiteknee(pet) ? normalizeWhitekneePose(pose) : undefined} data-wear-state={state} className={`character-avatar character-${character} avatar-fitted ${className} ${background ? `avatar-background-${background.motif}` : ''} ${frame ? `avatar-frame-${frame.motif}` : ''}`} style={{'--avatar-background': background?.color || 'transparent', '--avatar-frame': frame?.color || 'transparent'} as CSSProperties}>
     {presentation === 'portrait' && <span className="character-avatar-scene"/>}
     <img className="character-avatar-base" src={sprite} alt="" draggable={false}/>
-    {isWhiteknee(pet)
+    {isSeahorse(pet)
+      ? <SeahorseAccessories pet={pet} outfit={safeOutfit} pose={pose} body={spaceOutfit.body}/>
+      : isWhiteknee(pet)
       ? <WhitekneeAccessories outfit={safeOutfit} pose={pose} body={spaceOutfit.body}/>
       : isWearablePet(pet)
         ? <AccessoryLayers pet={pet} body={spaceOutfit} outfit={safeOutfit}/>

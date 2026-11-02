@@ -1,7 +1,8 @@
+import {seahorseTestImports} from '../../../scripts/seahorse-test-imports.mjs';
 import fs from 'node:fs';
 import ts from 'typescript';
 const compile=filename=>ts.transpileModule(fs.readFileSync(new URL(filename,import.meta.url),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
-const data=code=>'data:text/javascript;base64,'+Buffer.from(code).toString('base64');
+const data=code=>'data:text/javascript;base64,'+Buffer.from(seahorseTestImports(code)).toString('base64');
 const chars=data(compile('../characters.ts')),submission=data(compile('../assignment-submission.ts'));
 const policy=data(compile('./policy.ts').replace("'../characters'",JSON.stringify(chars)).replace("'../assignment-submission'",JSON.stringify(submission)));
 const report=data(compile('./lesson-report-policy.ts').replace("'./policy'",JSON.stringify(policy)));
