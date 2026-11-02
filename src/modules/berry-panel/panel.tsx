@@ -8,12 +8,12 @@ type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | 
 type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]};
 type InboxItem = {id: string; kind: string; rule: string | null; title_generic: string; payload: Record<string, unknown>; status: string; created_at: string};
 const TOOL_LABELS: Record<string, string> = {
-  add_calendar_event: '일정 추가', add_lesson_log: '수업 일지 추가', add_work_item: '업무 항목 추가', add_notebook_entry: '교무수첩 기록 추가',
+  add_calendar_event: '일정 추가', add_lesson_log: '수업 일지 추가', add_work_item: '업무 항목 추가', add_notebook_entry: '교무수첩 기록 추가', create_assignment: '숙제방 열기', create_exhibition: '전시실 열기', create_board: '참여보드 열기',
   get_calendar: '일정 확인', get_timetable: '시간표 확인', get_lesson_log: '수업 일지 확인', search_workspace: '업무 폴더 찾기', get_work_item: '업무 항목 열기',
   list_classes: '학급 확인', get_roster: '명단 확인', list_assignments: '숙제 확인', get_missing_submissions: '미제출 확인', get_review_queue: '검사 대기 확인',
   list_deadlines: '마감 확인', search_notebook: '교무수첩 찾기', set_reminder: '알림 예약', list_schedule: '알림 확인', remember: '기억하기', forget: '기억 지우기',
 };
-const PREVIEW_LABELS: Record<string, string> = {title: '제목', date: '날짜', start: '시작', end: '끝', kind: '종류', subject: '과목', period: '교시', unit: '단원', note: '메모', body: '내용', type: '종류', due_at: '기한', tags: '태그', students: '학생', checklist: '체크리스트', url: '링크'};
+const PREVIEW_LABELS: Record<string, string> = {title: '제목', date: '날짜', start: '시작', end: '끝', kind: '종류', subject: '과목', period: '교시', unit: '단원', note: '메모', body: '내용', type: '종류', due_at: '기한', tags: '태그', students: '학생', checklist: '체크리스트', url: '링크', class: '학급', submission: '제출 방식', sync_exhibition: '전시실 연동', sync_board: '보드 연동'};
 const CONVERSATION = 'berry.conversation';
 
 async function api<T>(path: string, body?: object): Promise<T> {
@@ -33,7 +33,7 @@ function Preview({card, onDecide}: {card: Card; onDecide: (card: Card, decision:
     {card.state === 'open' || card.state === 'saving' ? <div className="bp-card-actions">
       <button type="button" className="button soft" disabled={card.state === 'saving'} onClick={() => onDecide(card, 'reject')}>취소</button>
       <button type="button" className="button primary" disabled={card.state === 'saving'} onClick={() => onDecide(card, 'approve')}>{card.state === 'saving' ? <LoaderCircle className="spin" size={14}/> : <Check size={14}/>}저장</button>
-    </div> : <p className="bp-card-note">{card.state === 'saved' ? '저장했어요. 업무 공간·교무수첩에서 "베리 제안"을 확정하면 반영돼요.' : card.state === 'rejected' ? '저장하지 않았어요.' : card.note}</p>}
+    </div> : <p className="bp-card-note">{card.state === 'saved' ? (card.tool.startsWith('create_') ? '열었어요. 학생 화면에 바로 보여요.' : '저장했어요. 업무 공간·교무수첩에서 "베리 제안"을 확정하면 반영돼요.') : card.state === 'rejected' ? '저장하지 않았어요.' : card.note}</p>}
   </div>;
 }
 

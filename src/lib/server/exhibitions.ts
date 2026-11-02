@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { FieldPath, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import sharp, { type Metadata } from 'sharp';
 import { bucket, db } from './admin';
@@ -26,6 +26,7 @@ import {moduleOptions} from '@/modules/artwork-extensions/types';
 import {effectiveOptions} from '@/modules/artwork-extensions/exhibition-adapter';
 import {companionProfile} from '@/modules/my-space/profile';
 import {wardrobeOutfit} from './points-policy';
+import {reconcileHomeworkSync} from './homework-sync';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -76,14 +77,14 @@ function studentValue(snapshot: FirebaseFirestore.DocumentSnapshot): ExhibitionS
 async function signedArtwork(ctx: Context, exhibition: Exhibition, value: Data, ownReaction?: string): Promise<ExhibitionArtwork> {
   // Saved as 학생이름_전시이름(10자); artworks a teacher made without a student use the artist name, then 선생님.
   const saveAs = downloadDisposition(friendlyFileName(value.studentName || value.artistName || '선생님', exhibition.title, 'webp', 1, '전시'));
-  const [url, thumbnailUrl] = await Promise.all([stableReadUrl(value.displayPath, {responseDisposition: saveAs}), stableReadUrl(value.thumbnailPath)]);
+  const [url, thumbnailUrl, videoUrl] = await Promise.all([stableReadUrl(value.displayPath, {responseDisposition: saveAs}), stableReadUrl(value.thumbnailPath), value.videoPath ? stableReadUrl(value.videoPath) : null]);
   // Never expose original storage paths, tokenized URLs, uploader UIDs, or private manifests.
   return {
     id: value.id, exhibitionId: value.exhibitionId, studentId: value.studentId, artistName: value.artistName ?? value.studentName ?? '', artworkDate: value.artworkDate ?? artworkToday(new Date(value.createdAt)),
     studentName: value.studentName, studentNumber: value.studentNumber,
     title: value.title, description: value.description, status: value.status,
     feedback: canViewArtworkFeedback(ctx, exhibition, value.studentId) ? value.feedback : '',
-    width: value.width, height: value.height, url, thumbnailUrl,
+    width: value.width, height: value.height, url, thumbnailUrl, ...(videoUrl ? {videoUrl} : {}),
     createdAt: value.createdAt, reviewedAt: value.reviewedAt,
     ...(ownReaction ? { ownReaction: artReaction(ownReaction) } : {}),
     ...(canViewArtworkFeedback(ctx, exhibition, value.studentId) ? { reactionCounts: { colors: value.reactionCounts?.colors ?? 0, idea: value.reactionCounts?.idea ?? 0, story: value.reactionCounts?.story ?? 0 } } : {}),
@@ -165,7 +166,11 @@ async function create(ctx: Context, request: Request) {
   const ref = await db().collection('exhibitions').add(value);
   return json({ exhibition: { ...value, id: ref.id } }, 201);
 }
-async function detail(ctx: Context, exhibition: Exhibition) {
+async function detail(ctx: Context, exhibition: Exhibition, request: Request) {
+  // A room fed by a homework room catches up on submissions finished while nobody watched (throttled per minute).
+  if (exhibition.linkedAssignmentId) after(() => reconcileHomeworkSync(exhibition.linkedAssignmentId!));
+  // Cheap check used by the live refresh of linked rooms: one document read when nothing changed.
+  if (new URL(request.url).searchParams.get('since') === exhibition.updatedAt) return json({exhibition, unchanged: true});
   const isOwner = ownsExhibition(ctx, exhibition);
   const [works, roster, passport, reactions] = await Promise.all([
     exhibitionRef(exhibition.id).collection('artworks').limit(EXHIBITION_ARTWORK_LIMIT).get(),
@@ -672,7 +677,7 @@ export async function handleExhibitions(request: Request, segments: string[] = [
       const [exhibitionId, section, artworkId, action, commentId] = segments;
       segments.forEach(value => id(value));
       const exhibition = await loadExhibition(ctx, exhibitionId);
-      if (segments.length === 1 && request.method === 'GET') return await detail(ctx, exhibition);
+      if (segments.length === 1 && request.method === 'GET') return await detail(ctx, exhibition, request);
       if (segments.length === 1 && request.method === 'PATCH') return await edit(ctx, exhibition, request);
       if (segments.length === 1 && request.method === 'DELETE') return await deleteExhibition(ctx, exhibition, request);
       if (segments.length === 2 && section === 'share' && request.method === 'GET') return await shareExhibition(ctx, exhibition, request);

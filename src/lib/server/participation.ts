@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { FieldPath } from 'firebase-admin/firestore';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import sharp from 'sharp';
 import { bucket, db } from './admin';
 import { assertOrigin, getContext, type Context } from './auth';
@@ -14,6 +14,7 @@ import {FILE_CACHE_CONTROL} from '../storage-cache';
 import { visitor } from '@/modules/artwork-extensions/exhibition-adapter';
 import { consumeModuleRate } from '@/modules/artwork-extensions/server-utils';
 import { guestName, guestText } from '@/modules/warm-guestbook/policy';
+import {reconcileHomeworkSync} from './homework-sync';
 
 type Data = Record<string, any>;
 type StoredBoard = Data & { id: string; ownerUid: string; classId: string; status: string };
@@ -146,6 +147,9 @@ async function create(ctx: Context, request: Request, source?: StoredBoard) {
   return json({ board: publicBoard(ctx, result) }, 201);
 }
 async function detail(ctx: Context, board: StoredBoard, request: Request) {
+  // A board fed by a homework room catches up on submissions finished while nobody watched (throttled per minute).
+  const linked = (board as StoredBoard & {linkedAssignmentId?: string}).linkedAssignmentId;
+  if (linked) after(() => reconcileHomeworkSync(linked));
   const params = new URL(request.url).searchParams;
   const cursor = params.get('cursor');
   if (!cursor && params.get('since') === board.updatedAt) return json({ board: publicBoard(ctx, board), posts: [], nextCursor: null, viewerRole: ctx.role === 'student' ? 'student' : 'teacher', viewerId: ctx.uid, unchanged: true });

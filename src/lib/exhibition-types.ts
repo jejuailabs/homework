@@ -14,6 +14,8 @@ export type Exhibition = {
   ownerUid: string; status: ExhibitionStatus; commentsEnabled: boolean;
   allowStudentUploads?: boolean; publicSharingEnabled?: boolean;
   artworkModules?: ArtworkModuleOptions;
+  /** Set when a homework room created this exhibition and feeds it students' photos and videos. */
+  linkedAssignmentId?: string;
   artworkCount: number; approvedCount: number; createdAt: string; updatedAt: string;
 };
 export type ExhibitionStudent = {
@@ -26,6 +28,8 @@ export type ExhibitionArtwork = {
   title: string; description: string; status: ArtworkStatus; feedback: string;
   artistName?: string; artworkDate?: string;
   width: number; height: number; url: string; thumbnailUrl: string;
+  /** Homework videos synced into the room play from here; url and thumbnailUrl are the poster. */
+  videoUrl?: string;
   createdAt: string; reviewedAt: string | null; ownReaction?: ArtReaction;
   /** Only the author and owning teacher receive this private encouragement summary. */
   reactionCounts?: ArtReactionCounts;
