@@ -537,6 +537,23 @@ export async function approvePendingArtworks(ownerUid: string, exhibitionId: str
   return {approved, remaining: pending.size - approved};
 }
 
+/** Sets one artwork date on many artworks at once (all of the room, or the given ids). Teacher only. */
+async function bulkArtworkDate(ctx: Context, exhibition: Exhibition, request: Request) {
+  owner(ctx, exhibition);
+  const input = await body(request), day = text(input.artworkDate, '날짜', 10);
+  if (!validArtworkDate(day)) throw new ApiError(400, '날짜를 확인해 주세요.', 'INVALID_DATE');
+  if (input.artworkIds !== undefined && (!Array.isArray(input.artworkIds) || input.artworkIds.length > EXHIBITION_ARTWORK_LIMIT)) throw new ApiError(400, '바꿀 작품을 다시 골라 주세요.');
+  const wanted = Array.isArray(input.artworkIds) ? new Set(input.artworkIds.map((value: unknown) => id(value))) : null;
+  const works = (await exhibitionRef(exhibition.id).collection('artworks').limit(EXHIBITION_ARTWORK_LIMIT).get()).docs.filter(doc => !wanted || wanted.has(doc.id));
+  for (let start = 0; start < works.length; start += 400) {
+    const batch = db().batch();
+    works.slice(start, start + 400).forEach(doc => batch.update(doc.ref, {artworkDate: day}));
+    await batch.commit();
+  }
+  await exhibitionRef(exhibition.id).update({updatedAt: now()});
+  return json({updated: works.length, artworkDate: day});
+}
+
 async function reviewArtwork(ctx: Context, exhibition: Exhibition, artworkId: string, request: Request) {
   owner(ctx, exhibition);
   const input = await body(request);
@@ -706,6 +723,7 @@ export async function handleExhibitions(request: Request, segments: string[] = [
       if (segments.length === 2 && section === 'share' && request.method === 'GET') return await shareExhibition(ctx, exhibition, request);
       if (segments.length === 2 && section === 'read-authors' && request.method === 'POST') {owner(ctx, exhibition); const input = await readBoundedJson(request, 3_300_000) as {images?: unknown}; return json({names: await readArtworkAuthors(ctx.uid, artworkAuthorImages(input.images),exhibition.classId)});}
       if (segments.length === 2 && section === 'uploads' && request.method === 'POST') return await initUpload(ctx, exhibition, request);
+      if (segments.length === 2 && section === 'artwork-dates' && request.method === 'POST') return await bulkArtworkDate(ctx, exhibition, request);
       if (segments.length === 3 && section === 'uploads' && request.method === 'DELETE') return await cancelUpload(ctx, exhibition, artworkId);
       if (section === 'artworks') {
         if (segments.length === 2 && request.method === 'POST') return await finalize(ctx, exhibition, request);
