@@ -1,11 +1,14 @@
 'use client';
 import {useEffect, useState} from 'react';
-import {LoaderCircle, PlugZap, ShieldAlert, ShieldCheck} from 'lucide-react';
+import {Check, LoaderCircle, PlugZap, ShieldAlert, ShieldCheck} from 'lucide-react';
 import {WRITE_SCOPES, type BerryScope} from './types';
 import './styles.css';
 
-type Info = {client: {id: string; name: string; redirectHost: string; trusted: boolean}; scopes: {scope: string; title: string; detail: string; warning?: string}[]; teacher: {email: string | null; displayName: string | null}};
+type Scope = {scope: string; title: string; detail: string; warning?: string};
+type Info = {client: {id: string; name: string; redirectHost: string; trusted: boolean}; scopes: Scope[]; teacher: {email: string | null; displayName: string | null}};
 const PARAMS = ['response_type', 'client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method', 'resource'];
+const PERIODS = [['7', '7일'], ['30', '30일'], ['180', '6개월'], ['365', '12개월']] as const;
+const isWrite = (scope: string) => WRITE_SCOPES.includes(scope as BerryScope);
 
 /** OAuth consent screen at /oauth/authorize. The server validates the request; the teacher may narrow scopes and pick an access period. */
 export default function BerryConsent() {
@@ -17,7 +20,7 @@ export default function BerryConsent() {
       const body = await r.json();
       if (!r.ok) throw Error(body.error_description || '요청을 확인할 수 없어요.');
       return body as Info;
-    }).then(data => {if (data) {setInfo(data); setChosen(data.scopes.map(s => s.scope).filter(scope => scope !== 'names' && !WRITE_SCOPES.includes(scope as BerryScope)));}}).catch(e => setError(e instanceof Error ? e.message : '요청을 확인할 수 없어요.'));
+    }).then(data => {if (data) {setInfo(data); setChosen(data.scopes.map(s => s.scope).filter(scope => scope !== 'names' && !isWrite(scope)));}}).catch(e => setError(e instanceof Error ? e.message : '요청을 확인할 수 없어요.'));
   }, []);
   async function decide(decision: 'approve' | 'deny') {
     if (!info || busy) return;
@@ -32,27 +35,51 @@ export default function BerryConsent() {
     } catch (e) {setError(e instanceof Error ? e.message : '처리하지 못했어요.'); setBusy(false);}
   }
   const toggle = (scope: string) => setChosen(list => list.includes(scope) ? list.filter(s => s !== scope) : [...list, scope]);
-  return <main className="bc-consent">
-    <section className="bc-card">
-      <div className="bc-icon"><PlugZap size={28}/></div>
-      {error && <p className="bc-error" role="alert"><ShieldAlert size={16}/>{error}</p>}
-      {!info && !error && <p className="bc-muted"><LoaderCircle className="spin" size={18}/> 요청을 확인하고 있어요…</p>}
-      {info && <>
-        <h1><b>{info.client.name}</b>이(가) 선생님의 모두의 교실을 사용해도 될까요?</h1>
-        <p className="bc-muted">돌아갈 주소: {info.client.redirectHost} · 계정: {info.teacher.email ?? info.teacher.displayName ?? '선생님'}</p>
-        {!info.client.trusted && <p className="bc-error" role="note"><ShieldAlert size={16}/>모두의 교실이 확인하지 않은 앱이에요. 선생님이 직접 연결을 시작한 경우가 아니라면 거부해 주세요.</p>}
-        <ul className="bc-scopes">
-          {info.scopes.map(item => <li key={item.scope} className={item.warning ? 'is-warning' : ''}>
-            <label><input type="checkbox" checked={chosen.includes(item.scope)} onChange={() => toggle(item.scope)} disabled={busy}/><span><strong>{item.title}</strong><small>{item.detail}</small>{item.warning && <em><ShieldAlert size={13}/>{item.warning}</em>}</span></label>
-          </li>)}
-        </ul>
-        <label className="bc-days">접근 기간 <select value={days} onChange={e => setDays(e.target.value)} disabled={busy}><option value="7">7일</option><option value="14">14일</option><option value="30">30일</option><option value="180">6개월</option><option value="365">12개월</option></select><small>기간이 지나면 자동으로 끊겨요. 마이페이지에서 언제든 해제할 수 있어요.</small></label>
-        <p className="bc-note"><ShieldCheck size={14}/> 학생은 기본적으로 "학생 07"처럼 가명으로 나가고, 상담·건강·가정 기록은 어떤 권한으로도 나가지 않아요. 쓰기 권한은 직접 체크해야 켜지고, 미리보기를 확인한 뒤에만 저장되며 선생님이 화면에서 확정해요.</p>
-        <div className="bc-actions">
-          <button type="button" className="button soft" onClick={() => decide('deny')} disabled={busy}>거부</button>
-          <button type="button" className="button" onClick={() => decide('approve')} disabled={busy || !chosen.length}>{busy ? <LoaderCircle className="spin" size={16}/> : <ShieldCheck size={16}/>} 허용하기</button>
+  const row = (item: Scope) => <label key={item.scope} className={`bcx-scope${chosen.includes(item.scope) ? ' is-on' : ''}`}>
+    <input type="checkbox" checked={chosen.includes(item.scope)} onChange={() => toggle(item.scope)} disabled={busy}/>
+    <span className="bcx-check" aria-hidden="true"><Check size={13} strokeWidth={3}/></span>
+    <span className="bcx-scope-text"><strong>{item.title}</strong><small>{item.detail}</small></span>
+  </label>;
+  const reads = info?.scopes.filter(s => !isWrite(s.scope) && s.scope !== 'names') ?? [], writes = info?.scopes.filter(s => isWrite(s.scope)) ?? [], names = info?.scopes.find(s => s.scope === 'names');
+
+  return <main className="bcx-page">
+    <section className="bcx-sheet">
+      <header className="bcx-head">
+        <span className="bcx-mark"><PlugZap size={22}/></span>
+        <div>
+          <h1>{info ? <><b>{info.client.name}</b> 연결</> : '연결 요청'}</h1>
+          {info && <p>{info.teacher.email ?? info.teacher.displayName ?? '선생님'} · {info.client.redirectHost}</p>}
         </div>
+      </header>
+      {error && <p className="bcx-alert" role="alert"><ShieldAlert size={16}/>{error}</p>}
+      {!info && !error && <p className="bcx-loading"><LoaderCircle className="spin" size={18}/> 요청을 확인하고 있어요…</p>}
+      {info && <>
+        {!info.client.trusted && <p className="bcx-alert" role="note"><ShieldAlert size={16}/>모두의 교실이 확인하지 않은 앱이에요. 선생님이 직접 시작한 연결이 아니라면 거부해 주세요.</p>}
+        <div className="bcx-group">
+          <h2>읽기</h2>
+          <div className="bcx-grid">{reads.map(row)}</div>
+        </div>
+        {writes.length > 0 && <div className="bcx-group">
+          <h2>쓰기 <span>선택 · 미리보기 후 선생님이 확정해야 저장</span></h2>
+          <div className="bcx-grid">{writes.map(row)}</div>
+        </div>}
+        {names && <div className="bcx-group is-warning">{row(names)}{chosen.includes('names') && <p className="bcx-warn"><ShieldAlert size={13}/>{names.warning}</p>}</div>}
+        <div className="bcx-group">
+          <h2>접근 기간</h2>
+          <div className="bcx-periods" role="radiogroup" aria-label="접근 기간">
+            {PERIODS.map(([value, label]) => <button key={value} type="button" role="radio" aria-checked={days === value} className={days === value ? 'is-on' : ''} onClick={() => setDays(value)} disabled={busy}>{label}</button>)}
+          </div>
+        </div>
+        <ul className="bcx-promises">
+          <li><ShieldCheck size={14}/>학생은 "학생 07"처럼 가명으로 나가요.</li>
+          <li><ShieldCheck size={14}/>상담·건강·가정 기록은 어떤 권한으로도 나가지 않아요.</li>
+          <li><ShieldCheck size={14}/>기간이 지나면 끊기고, 마이페이지에서 언제든 해제해요.</li>
+        </ul>
       </>}
     </section>
+    {info && <footer className="bcx-actions">
+      <button type="button" className="button soft" onClick={() => decide('deny')} disabled={busy}>거부</button>
+      <button type="button" className="button primary" onClick={() => decide('approve')} disabled={busy || !chosen.length}>{busy ? <LoaderCircle className="spin" size={16}/> : <ShieldCheck size={16}/>} 허용하기 ({chosen.length})</button>
+    </footer>}
   </main>;
 }
