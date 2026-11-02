@@ -10,11 +10,18 @@ import {appendLessonEntry, assertOwnClass, createCalendarEvent, createWorkItem, 
 import {CALENDAR_KINDS, CALENDAR_KIND_LABELS, FOLDER_KINDS, FOLDER_KIND_LABELS, ITEM_TYPE_LABELS, type FolderKind} from '@/modules/teacher-workspace/types';
 import {BerryError, CONFIRM_SECONDS, WRITE_TOOL_SCOPES, alias, boundedInt, confirmationProblem, hashToken, maskNames, payloadHash, randomToken, safeId, studentLabel} from './policy';
 import {WRITE_SCOPES, type BearerContext, type McpTool} from './types';
+import {contextForUid} from '@/lib/server/auth';
+import {createAssignment} from '@/lib/server/api';
+import {boardRoomValue, exhibitionRoomValue} from '@/lib/server/homework-sync';
+import {homeworkSyncTargets} from '@/lib/server/homework-sync-policy';
+import {requiredSubmissionType, text} from '@/lib/server/policy';
 
 type Data = Record<string, any>;
 type Student = {classId: string; id: string; number: number; name: string};
 const date = {type: 'string', description: 'YYYY-MM-DD (Asia/Seoul)'};
 const reveal = {type: 'boolean', description: '실명 반환. names 권한이 있어야 동작합니다.'};
+const CLASSROOM_NOTE = '저장하지 않고 미리보기와 confirm_token을 돌려줍니다. 선생님이 카드에서 확인한 뒤 confirm_write로 저장하면 학생 화면에 바로 열립니다.';
+const SUBMISSION_LABELS: Record<string, string> = {text: '글', image: '사진', video: '동영상'};
 const WRITE_NOTE = '저장하지 않고 미리보기와 confirm_token을 돌려줍니다. 선생님이 내용을 확인한 뒤 confirm_write로 저장하세요. 저장된 항목은 선생님이 화면에서 확정할 때까지 "베리 제안"으로 표시됩니다.';
 
 /** Workspace reads, the four two-step writes and confirm_write. */
@@ -28,6 +35,9 @@ export const WORKSPACE_TOOLS: McpTool[] = [
   {name: 'add_lesson_log', scope: 'workspace:write', description: `수업 일지에 한 줄을 추가합니다. ${WRITE_NOTE}`, inputSchema: {type: 'object', properties: {date, subject: {type: 'string', maxLength: 40}, note: {type: 'string', maxLength: 500}, period: {type: 'integer', minimum: 1, maximum: 10}, unit: {type: 'string', maxLength: 80}}, required: ['date', 'subject'], additionalProperties: false}},
   {name: 'add_work_item', scope: 'workspace:write', description: `업무 폴더에 메모·체크리스트·링크를 추가합니다. folder_id는 search_workspace 결과나 선생님 안내에서 가져옵니다. ${WRITE_NOTE}`, inputSchema: {type: 'object', properties: {folder_id: {type: 'string'}, title: {type: 'string', maxLength: 120}, type: {type: 'string', enum: ['note', 'checklist', 'link']}, body: {type: 'string', maxLength: 8000}, url: {type: 'string'}, checklist: {type: 'array', items: {type: 'string', maxLength: 200}, maxItems: 50}, due_at: date, tags: {type: 'array', items: {type: 'string', maxLength: 20}, maxItems: 10}}, required: ['folder_id', 'title'], additionalProperties: false}},
   {name: 'add_notebook_entry', scope: 'notebook:write', description: `교무수첩에 관찰 기록을 추가합니다. 학생은 학급(class_id)과 번호(student_numbers)로 지정합니다. 상담·건강·가정 분류는 민감 기록으로 저장되고 응답에 본문을 돌려주지 않습니다. ${WRITE_NOTE}`, inputSchema: {type: 'object', properties: {date, body: {type: 'string', maxLength: 4000}, class_id: {type: 'string'}, student_numbers: {type: 'array', items: {type: 'integer', minimum: 1, maximum: 999}, maxItems: 40}, tags: {type: 'array', items: {type: 'string', enum: [...NOTEBOOK_TAGS]}}}, required: ['date', 'body'], additionalProperties: false}},
+  {name: 'create_assignment', scope: 'classroom:write', description: `우리 반 전체에게 숙제방을 엽니다. submission_type은 text(글)·image(사진)·video(동영상) 중 하나입니다. sync_exhibition을 켜면 같은 이름의 전시실이, sync_board를 켜면 같은 이름의 참여보드가 함께 열리고 학생 제출물이 자동으로 올라갑니다(글 숙제는 전시실 연동 불가). 둘 다 기본은 꺼짐입니다. ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, title: {type: 'string', maxLength: 120}, description: {type: 'string', maxLength: 5000}, submission_type: {type: 'string', enum: ['text', 'image', 'video']}, due_at: {type: 'string', description: 'YYYY-MM-DD HH:mm (Asia/Seoul), 없으면 마감 없음'}, sync_exhibition: {type: 'boolean'}, sync_board: {type: 'boolean'}}, required: ['class_id', 'title', 'submission_type'], additionalProperties: false}},
+  {name: 'create_exhibition', scope: 'classroom:write', description: `우리 반 전시실을 바로 열어 둡니다(학생 업로드는 꺼짐, 선생님이 작품을 올림). ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, title: {type: 'string', maxLength: 120}, description: {type: 'string', maxLength: 2000}}, required: ['class_id', 'title'], additionalProperties: false}},
+  {name: 'create_board', scope: 'classroom:write', description: `우리 반 참여보드를 엽니다. 학생들이 글·사진·영상을 카드로 올릴 수 있습니다. ${CLASSROOM_NOTE}`, inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, title: {type: 'string', maxLength: 120}, description: {type: 'string', maxLength: 2000}}, required: ['class_id', 'title'], additionalProperties: false}},
   {name: 'confirm_write', scope: WRITE_SCOPES, description: '미리보기에서 받은 confirm_token으로 실제 저장합니다. 토큰은 10분 동안 한 번만 쓸 수 있고, 같은 연결·같은 내용에만 유효합니다. 선생님이 미리보기를 확인한 뒤에만 호출하세요.', inputSchema: {type: 'object', properties: {confirm_token: {type: 'string'}, payload_hash: {type: 'string', description: '미리보기 응답의 payload_hash (선택)'}}, required: ['confirm_token'], additionalProperties: false}},
 ];
 
@@ -53,7 +63,21 @@ function mcpRange(from: unknown, to: unknown) {
 
 // ---- Two-step writes ----
 type Pending = {tool: 'add_calendar_event'; payload: {event: CalendarInput}} | {tool: 'add_lesson_log'; payload: {date: string; entry: LessonEntryInput}}
-  | {tool: 'add_work_item'; payload: {item: ItemInput}} | {tool: 'add_notebook_entry'; payload: {entry: ReturnType<typeof entryInput>}};
+  | {tool: 'add_work_item'; payload: {item: ItemInput}} | {tool: 'add_notebook_entry'; payload: {entry: ReturnType<typeof entryInput>}}
+  | {tool: 'create_assignment'; payload: {assignment: AssignmentInput}} | {tool: 'create_exhibition' | 'create_board'; payload: {room: RoomInput}};
+type AssignmentInput = {classId: string; title: string; description: string; submissionType: string; dueAt: string | null; sync: {exhibition: boolean; board: boolean}};
+type RoomInput = {classId: string; title: string; description: string};
+
+/** "YYYY-MM-DD HH:mm" in Seoul → ISO instant; must be in the future. A bare date means 23:59 that day. */
+function dueInstant(value: unknown) {
+  if (value === undefined || value === null || value === '') return null;
+  const match = typeof value === 'string' ? /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}))?$/.exec(value.trim()) : null;
+  if (!match) throw new BerryError('due_at은 YYYY-MM-DD HH:mm 형식으로 보내 주세요.');
+  const instant = Date.parse(`${match[1]}T${match[2] ?? '23'}:${match[3] ?? '59'}:00+09:00`);
+  if (!Number.isFinite(instant) || instant <= Date.now()) throw new BerryError('마감은 지금보다 뒤로 정해 주세요.');
+  return new Date(instant).toISOString();
+}
+const roomInput = (args: Data): RoomInput => ({classId: safeId(args.class_id, '학급'), title: text(args.title, '이름', 120), description: text(args.description ?? '', '소개', 2000, true)});
 
 /** Validates and checks ownership exactly as the save will, so a preview never promises what confirm cannot do. */
 async function prepare(name: string, args: Data, ctx: BearerContext): Promise<Pending> {
@@ -91,6 +115,18 @@ async function prepare(name: string, args: Data, ctx: BearerContext): Promise<Pe
     }
     return {tool: name, payload: {entry: entryInput({date: args.date, body: args.body, students, tags: args.tags})}};
   }
+  if (name === 'create_assignment') {
+    const submissionType = requiredSubmissionType(args.submission_type);
+    const sync = homeworkSyncTargets({exhibition: args.sync_exhibition === true, board: args.sync_board === true}, submissionType);
+    const assignment = {classId: safeId(args.class_id, '학급'), title: text(args.title, '숙제 제목', 120), description: text(args.description ?? '', '숙제 설명', 5000, true), submissionType, dueAt: dueInstant(args.due_at), sync};
+    await assertOwnClass(ctx.uid, assignment.classId);
+    return {tool: name, payload: {assignment}};
+  }
+  if (name === 'create_exhibition' || name === 'create_board') {
+    const room = roomInput(args);
+    await assertOwnClass(ctx.uid, room.classId);
+    return {tool: name, payload: {room}};
+  }
   throw new BerryError(`알 수 없는 도구예요: ${name}`, 404, 'not_found');
 }
 async function previewView(pending: Pending, ctx: BearerContext) {
@@ -104,6 +140,14 @@ async function previewView(pending: Pending, ctx: BearerContext) {
       const labels = e.students.map(ref => {const s = students.find(student => student.classId === ref.classId && student.id === ref.studentId); return s ? studentLabel(s, ctx.scopes, false) : '학생';});
       // Sensitive bodies are never echoed back, not even to the caller that wrote them.
       return {date: e.date, students: labels, tags: e.tags.map(tag => NOTEBOOK_TAG_LABELS[tag as NotebookTag]), sensitive: e.sensitive, body: e.sensitive ? null : mask(e.body), ...(e.sensitive ? {note: '민감 기록이라 본문을 돌려주지 않아요.'} : {})};
+    }
+    case 'create_assignment': {
+      const a = pending.payload.assignment, cls = (await db().doc(`classes/${a.classId}`).get()).data();
+      return {class: cls?.name ?? a.classId, title: mask(a.title), body: mask(a.description), submission: SUBMISSION_LABELS[a.submissionType], due_at: a.dueAt, sync_exhibition: a.sync.exhibition, sync_board: a.sync.board, note: '저장하면 학생 화면에 바로 열려요.'};
+    }
+    case 'create_exhibition': case 'create_board': {
+      const r = pending.payload.room, cls = (await db().doc(`classes/${r.classId}`).get()).data();
+      return {class: cls?.name ?? r.classId, title: mask(r.title), body: mask(r.description), note: '저장하면 학생 화면에 바로 열려요.'};
     }
   }
 }
@@ -127,7 +171,9 @@ async function confirmWrite(args: Data, ctx: BearerContext) {
     tx.update(ref, {usedAt: new Date().toISOString()});
     return {tool: data!.tool, payload} as Pending;
   });
-  return {saved: await save(pending, ctx), pending: true, note: '저장했어요. 선생님이 모두의 교실 화면에서 확정하면 "베리 제안" 표시가 사라져요.'};
+  const saved = await save(pending, ctx);
+  if (pending.tool === 'create_assignment' || pending.tool === 'create_exhibition' || pending.tool === 'create_board') return {saved, pending: false, note: '열었어요. 학생 화면에 바로 보여요.'};
+  return {saved, pending: true, note: '저장했어요. 선생님이 모두의 교실 화면에서 확정하면 "베리 제안" 표시가 사라져요.'};
 }
 /** Re-validates the stored payload and re-checks ownership at save time. */
 async function save(pending: Pending, ctx: BearerContext) {
@@ -138,6 +184,20 @@ async function save(pending: Pending, ctx: BearerContext) {
     case 'add_notebook_entry': {
       if (!(await notebookAvailableFor(ctx.uid, ctx.role))) throw new BerryError('교무수첩을 아직 사용할 수 없어요.', 403, 'access_denied');
       return {collection: 'notebook', id: await createChatEntry(ctx.uid, entryInput(pending.payload.entry as unknown as Data))};
+    }
+    case 'create_assignment': {
+      // The same path as the homework screen: roster targets, linked rooms and ownership, all rechecked now.
+      const a = pending.payload.assignment, teacher = await contextForUid(ctx.uid);
+      const created = await createAssignment(teacher, {classId: a.classId, title: a.title, description: a.description, submissionType: a.submissionType, dueAt: a.dueAt, materialIds: [], sync: a.sync});
+      return {collection: 'assignments', id: created.id, exhibition_id: created.sync.exhibitionId, board_id: created.sync.boardId};
+    }
+    case 'create_exhibition': case 'create_board': {
+      const r = pending.payload.room;
+      await assertOwnClass(ctx.uid, r.classId);
+      const cls = (await db().doc(`classes/${r.classId}`).get()).data()!;
+      const exhibition = pending.tool === 'create_exhibition', collection = exhibition ? 'exhibitions' : 'participationBoards';
+      const ref = await db().collection(collection).add(exhibition ? exhibitionRoomValue({...r, cls, ownerUid: ctx.uid}) : boardRoomValue({...r, cls, ownerUid: ctx.uid}));
+      return {collection, id: ref.id};
     }
   }
 }

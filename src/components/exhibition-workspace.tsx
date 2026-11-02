@@ -64,6 +64,7 @@ function ArtworkImage({artwork, full = false}: {artwork: ExhibitionArtwork; full
   const [failed, setFailed] = useState(false), t = useTranslations("exhibition");
   const url = full ? artwork.url : artwork.thumbnailUrl || artwork.url;
   useEffect(() => {setFailed(false);}, [url]);
+  if (full && artwork.videoUrl) return <video className="ex-artwork-video" src={artwork.videoUrl} poster={artwork.url} controls playsInline preload="metadata" aria-label={artwork.title}/>;
   return failed || !url ? <span className="ex-image-fallback"><Images size={32}/><small>{t("fileUnavailable")}</small></span> : <img src={url} alt={artwork.title} loading={full ? "eager" : "lazy"} onError={() => setFailed(true)}/>;
 }
 
@@ -233,6 +234,18 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     document.addEventListener("visibilitychange", refresh);
     return () => {window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh);};
   }, [selectedId, loadDetail, authorized]);
+  // Rooms fed by a homework room show new submissions within about 20 seconds; unchanged checks read one document.
+  const linkedSince = detail?.exhibition.linkedAssignmentId ? detail.exhibition.updatedAt : null;
+  useEffect(() => {
+    if (!selectedId || !authorized || !linkedSince) return;
+    const check = async () => {
+      if (document.visibilityState !== "visible") return;
+      const data = await request<{unchanged?: boolean}>(`/api/exhibitions/${selectedId}?since=${encodeURIComponent(linkedSince)}`).catch(() => null);
+      if (data && !data.unchanged) void loadDetail(selectedId);
+    };
+    const timer = window.setInterval(() => void check(), 20_000);
+    return () => window.clearInterval(timer);
+  }, [selectedId, authorized, linkedSince, loadDetail]);
 
   const selectShow = (id: string) => {
     activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); setReviewTarget(null); setError(""); setNotice(""); setFilter("all"); setPlace("classroom");

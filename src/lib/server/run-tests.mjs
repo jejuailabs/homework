@@ -47,6 +47,8 @@ const vaultUrl = moduleUrl(compile('./student-code-vault.ts').replace("import 's
 await import(moduleUrl(compile('./student-code-vault.test.ts').replace("'./student-code-vault'", JSON.stringify(vaultUrl))));
 const testCode = compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policyUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl));
 await import('data:text/javascript;base64,' + Buffer.from(testCode).toString('base64'));
+const homeworkSyncPolicyUrl = moduleUrl(compile('./homework-sync-policy.ts').replace("'./policy'", JSON.stringify(policyUrl)));
+await import(moduleUrl(compile('./homework-sync-policy.test.ts').replace("'./homework-sync-policy'", JSON.stringify(homeworkSyncPolicyUrl))));
 await import('./run-ai-tests.mjs');
 await import('./run-upload-transfer-tests.mjs');
 await import('./run-assignment-visibility-tests.mjs');

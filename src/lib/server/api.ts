@@ -5,7 +5,7 @@ import {downloadDisposition, extensionOf, friendlyFileName} from '../file-naming
 import {assertTeacherStorage} from './teacher-storage';
 import {createVideoSubmission,studentVideoJobs,videoConfig} from './video-submissions';
 import { createHash, randomUUID } from 'node:crypto';
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { assignmentSubmissionType } from '../assignment-submission';
 import { auth, bucket, db } from './admin';
@@ -25,6 +25,8 @@ import {companionProfile} from '@/modules/my-space/profile';
 import {ownedItems, roomCompanionAppearance} from '@/modules/my-space/policy';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
 import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
+import {createLinkedRooms, syncSubmission} from './homework-sync';
+import {homeworkSyncTargets} from './homework-sync-policy';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -270,7 +272,10 @@ async function assignments(request: Request) {
     // Include the complete class history: archived records must never displace current work.
     return json({ assignments: sorted((await list.get()).docs.map(mappedAssignment)) });
   }
-  const input = await body(request);
+  return json({ assignment: await createAssignment(ctx, await body(request)) }, 201);
+}
+/** Opens a homework room for a whole class. The homework screen and Berry's create_assignment both come through here. */
+export async function createAssignment(ctx: Context, input: Data) {
   const submissionType = requiredSubmissionType(input.submissionType);
   const classId = id(input.classId);
   const cls = await managedClass(ctx, classId);
@@ -278,13 +283,17 @@ async function assignments(request: Request) {
   const targetStudentIds = roster.docs.filter(doc => !doc.data().disabled).map(doc => doc.id);
   if (!targetStudentIds.length) throw new ApiError(400, '학생을 먼저 추가해 주세요.');
   const dueAt = input.dueAt ? new Date(input.dueAt).toISOString() : null;
+  homeworkSyncTargets(input.sync, submissionType);
   const value = { classId, className: cls.name, ownerUid: cls.ownerUid, title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), submissionType, dueAt, targetStudentIds, targetCount: targetStudentIds.length, submittedCount: 0, reviewedCount: 0, createdAt: now(), ...assignmentVisibility() };
   const ref = db().collection('assignments').doc();
+  let sync = {exhibitionId: null as string | null, boardId: null as string | null};
   const materials = await db().runTransaction(async tx => {
     const materials = await bindAssignmentMaterials(tx, ctx, classId, ref.id, input.materialIds ?? []);
-    tx.create(ref, {...value, materials}); return materials;
+    // Optional linked exhibition / board, created in the same transaction so a homework room never half-exists.
+    sync = createLinkedRooms(tx, {assignmentId: ref.id, title: value.title, description: value.description, submissionType, classId, cls, ownerUid: cls.ownerUid, sync: input.sync});
+    tx.create(ref, {...value, materials, sync}); return materials;
   });
-  return json({ assignment: { id: ref.id, ...value, materials: await signedAssignmentMaterials(materials) } }, 201);
+  return { id: ref.id, ...value, sync, materials: await signedAssignmentMaterials(materials) };
 }
 async function assignmentDetail(request: Request, assignmentId: string) {
   const ctx = await requireTeacher(request);
@@ -408,6 +417,8 @@ async function finalize(request: Request) {
     tx.update(db().doc(`assignments/${assignmentId}`), { submittedCount: FieldValue.increment(old ? 0 : 1), reviewedCount: FieldValue.increment(old && old.status !== 'submitted' ? -1 : 0) });
     return submission;
   });
+  // Linked exhibition / board copies happen after the response; the submission never waits for them.
+  if (assignment.sync?.exhibitionId || assignment.sync?.boardId) after(() => syncSubmission(assignmentId, ctx.studentId!));
   // The student can reopen the result immediately, before the home refresh.
   return json({ submission: await withFileUrls(result, assignment.title) });
 }
