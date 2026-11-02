@@ -21,7 +21,7 @@ export const shortDate = (date: string) => {const d = new Date(`${date}T00:00:00
 /** Shown on records Berry wrote through chat until the teacher accepts them. */
 export function BerryPending({onConfirm}: {onConfirm: () => Promise<unknown>}) {
   const [busy, setBusy] = useState(false);
-  return <span className="wsp-berry">🍇 베리 제안
+  return <span className="wsp-berry"><img src="/berry/raspberry-64.webp" alt="" width="16" height="16"/>베리 제안
     <button type="button" onClick={async () => {setBusy(true); try {await onConfirm();} finally {setBusy(false);}}} disabled={busy}>{busy ? <LoaderCircle className="spin" size={12}/> : <Check size={12}/>}확정</button>
   </span>;
 }

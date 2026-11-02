@@ -226,7 +226,7 @@ export default function TeacherNotebook() {
           {!entries ? <p className="nb-muted"><LoaderCircle className="spin" size={16}/> 불러오는 중…</p> : entries.length === 0 ? <p className="nb-muted">아직 이 날의 기록이 없어요.</p> :
             <ul className="nb-entries">{entries.map(entry => <li key={entry.id} className={entry.sensitive ? 'is-sensitive' : ''}>
               <div className="nb-entry-meta"><span>{entry.students.length ? entry.students.map(ref => names.get(studentKey(ref)) ?? '명단에 없음').join(', ') : '학급 전체'}</span><span className="nb-entry-tags">{entry.tags.map(tag => NOTEBOOK_TAG_LABELS[tag]).join(' · ')}{entry.sensitive && <b> 민감</b>}</span></div>
-              {entry.pending && <span className="nb-berry">🍇 베리 제안 <button onClick={() => accept(entry)}>확정</button></span>}
+              {entry.pending && <span className="nb-berry"><img src="/berry/raspberry-64.webp" alt="" width="16" height="16"/>베리 제안 <button onClick={() => accept(entry)}>확정</button></span>}
               <p>{entry.body}</p>
               <div className="nb-entry-actions"><button className="icon-button" aria-label="고치기" onClick={() => setDraft({id: entry.id, body: entry.body, students: entry.students, tags: entry.tags, sensitive: entry.sensitive})}><Pencil size={15}/></button><button className="icon-button" aria-label="삭제" onClick={() => remove(entry)}><Trash2 size={15}/></button></div>
             </li>)}</ul>}
