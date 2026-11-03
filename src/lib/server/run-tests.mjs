@@ -48,6 +48,7 @@ const vaultUrl = moduleUrl(compile('./student-code-vault.ts').replace("import 's
 await import(moduleUrl(compile('./student-code-vault.test.ts').replace("'./student-code-vault'", JSON.stringify(vaultUrl))));
 const testCode = compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policyUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl));
 await import('data:text/javascript;base64,' + Buffer.from(testCode).toString('base64'));
+await import(moduleUrl(compile('../activity.test.ts').replace("'./activity'", JSON.stringify(moduleUrl(compile('../activity.ts'))))));
 await import(moduleUrl(compile('../photo-taken-date.test.ts').replace("'./photo-taken-date'", JSON.stringify(moduleUrl(compile('../photo-taken-date.ts'))))));
 const homeworkSyncPolicyUrl = moduleUrl(compile('./homework-sync-policy.ts').replace("'./policy'", JSON.stringify(policyUrl)));
 await import(moduleUrl(compile('./homework-sync-policy.test.ts').replace("'./homework-sync-policy'", JSON.stringify(homeworkSyncPolicyUrl))));
