@@ -1,7 +1,7 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {usePathname} from 'next/navigation';
-import {Check, ChevronRight, Images, Inbox, LoaderCircle, MessageCircle, PlugZap, Send, X} from 'lucide-react';
+import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, StickyNote, Inbox, LoaderCircle, MessageCircle, PlugZap, Send, X} from 'lucide-react';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
@@ -24,16 +24,25 @@ async function api<T>(path: string, body?: object): Promise<T> {
 }
 const shown = (value: unknown) => Array.isArray(value) ? value.join(', ') : value === null || value === undefined || value === '' ? null : typeof value === 'boolean' ? (value ? '예' : '아니요') : String(value);
 /** Berry's [이름](/teacher/…) links become banners under the answer; only ourclass teacher pages, never outside links. */
-const BANNER_LINK = /\[([^\]\n]{1,120})\]\((\/teacher\/[^\s)]{0,400})\)/g;
+const BANNER_LINK = /\[([^\]\n]{1,120})\]\((\/teacher(?:[/?][^\s)]{0,400})?)\)/g;
 function withBanners(text: string) {
   const links = [...text.matchAll(BANNER_LINK)].map(match => ({label: match[1], href: match[2]}));
   return {text: text.replace(BANNER_LINK, '$1'), links: [...new Map(links.map(link => [link.href, link])).values()].slice(0, 12)};
 }
+function bannerKind(href: string) {
+  if (href.includes('archive=1')) return {icon: Images, label: '전시 보관함에서 보기'};
+  if (href.startsWith('/teacher/exhibitions')) return {icon: Images, label: '전시실 열기'};
+  if (href.startsWith('/teacher/homework')) return {icon: ClipboardList, label: href.includes('assignmentId=') ? '숙제 열기' : '숙제 메뉴 열기'};
+  if (href.startsWith('/teacher/boards')) return {icon: StickyNote, label: '참여보드 열기'};
+  return {icon: ArrowUpRight, label: '바로 열기'};
+}
+/** Berry's **굵게** shows as bold; no other markdown is interpreted. */
+const Bold = ({text}: {text: string}) => <>{text.split(/\*\*([^*\n]+)\*\*/).map((part, index) => index % 2 ? <strong key={index}>{part}</strong> : part)}</>;
 function Banners({links}: {links: {label: string; href: string}[]}) {
   if (!links.length) return null;
   return <div className="bp-banners">{links.map(link => <a key={link.href} className="bp-banner" href={link.href}>
-    <span className="bp-banner-icon"><Images size={17}/></span>
-    <span><strong>{link.label}</strong><small>{link.href.includes('archive=1') ? '전시 보관함에서 보기' : link.href.startsWith('/teacher/exhibitions') ? '전시실 열기' : '열어 보기'}</small></span>
+    <span className="bp-banner-icon">{(() => {const Icon = bannerKind(link.href).icon; return <Icon size={17}/>;})()}</span>
+    <span><strong>{link.label}</strong><small>{bannerKind(link.href).label}</small></span>
     <ChevronRight size={16}/>
   </a>)}</div>;
 }
@@ -144,7 +153,7 @@ export default function BerryPanel() {
           {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요?</p>{['이번 주 마감 숙제 알려 줘', '어제 숙제 안 낸 학생이랑 안내문 초안', '오늘 3교시 국어 수업 일지 써 줘'].map(example => <button type="button" key={example} onClick={() => setText(example)}>{example}</button>)}</div>}
           {messages.map((message, index) => <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
-            {message.text && (() => {const view = withBanners(message.text); return <><p>{view.text}</p><Banners links={view.links}/></>;})()}
+            {message.text && (() => {const view = withBanners(message.text); return <><p><Bold text={view.text}/></p><Banners links={view.links}/></>;})()}
             {message.cards?.map(card => <Preview key={card.inbox_id} card={card} onDecide={(c, d) => void decide(c, d)}/>)}
           </div>)}
           {activity && <p className="bp-activity"><LoaderCircle className="spin" size={14}/>{activity}</p>}
