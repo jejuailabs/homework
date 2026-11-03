@@ -45,7 +45,7 @@ async function ownedAssignments(uid: string, classId?: string) {
   const snap = await query.select(...assignmentFields).get();
   return snap.docs.map(doc => ({id: doc.id, ...doc.data()} as Data)).filter(task => task.visibility !== 'hidden');
 }
-const assignmentView = (task: Data) => ({id: task.id, classId: task.classId, className: task.className ?? '', title: task.title, submissionType: task.submissionType ?? 'legacy', dueAt: task.dueAt ?? null, createdAt: task.createdAt, targetCount: task.targetCount ?? 0, submittedCount: task.submittedCount ?? 0, reviewedCount: task.reviewedCount ?? 0, pendingReview: Math.max((task.submittedCount ?? 0) - (task.reviewedCount ?? 0), 0)});
+const assignmentView = (task: Data) => ({id: task.id, classId: task.classId, className: task.className ?? '', title: task.title, submissionType: task.submissionType ?? 'legacy', dueAt: task.dueAt ?? null, createdAt: task.createdAt, targetCount: task.targetCount ?? 0, submittedCount: task.submittedCount ?? 0, reviewedCount: task.reviewedCount ?? 0, pendingReview: Math.max((task.submittedCount ?? 0) - (task.reviewedCount ?? 0), 0), link: `/teacher/homework?classId=${task.classId}&assignmentId=${task.id}`});
 
 async function missingFor(task: Data, students: Student[], ctx: BearerContext, reveal: unknown) {
   const snap = await db().collection('submissions').where('assignmentId', '==', task.id).select('studentId', 'status').get();

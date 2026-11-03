@@ -66,7 +66,7 @@ async function exhibitionsOf(uid: string, classId?: string) {
   const docs = (await base.select('classId', 'className', 'title', 'status', 'artworkCount', 'approvedCount', 'publicSharingEnabled', 'linkedAssignmentId', 'updatedAt', 'ownerUid').get()).docs.filter(doc => doc.data().ownerUid === uid);
   return Promise.all(docs.map(async doc => {
     const value = doc.data(), pending = value.status === 'open' || value.status === 'draft' ? await count(doc.ref.collection('artworks').where('status', '==', 'pending')) : 0;
-    return {id: doc.id, class: value.className, title: value.title, status: value.status, artworks: value.artworkCount ?? 0, approved: value.approvedCount ?? 0, pending_artworks: pending, qr_open: value.publicSharingEnabled === true, homework_linked: !!value.linkedAssignmentId, updated_at: value.updatedAt};
+    return {id: doc.id, class: value.className, title: value.title, status: value.status, artworks: value.artworkCount ?? 0, approved: value.approvedCount ?? 0, pending_artworks: pending, qr_open: value.publicSharingEnabled === true, homework_linked: !!value.linkedAssignmentId, updated_at: value.updatedAt, link: `/teacher/exhibitions?exhibition=${doc.id}`};
   }));
 }
 /** Same rows and filter as the 보관함 menu; links open the room or the archive with the same filter. */
@@ -89,7 +89,7 @@ async function boardsOf(uid: string, classId?: string) {
   const docs = (await db().collection('participationBoards').where(classId ? 'classId' : 'ownerUid', '==', classId ?? uid).select('classId', 'className', 'title', 'status', 'postCount', 'participantCount', 'moderation', 'linkedAssignmentId', 'updatedAt', 'ownerUid').get()).docs.filter(doc => doc.data().ownerUid === uid);
   return Promise.all(docs.map(async doc => {
     const value = doc.data(), pending = value.status !== 'archived' && value.moderation ? await count(doc.ref.collection('posts').where('status', '==', 'pending')) : 0;
-    return {id: doc.id, class: value.className, title: value.title, status: value.status, posts: value.postCount ?? 0, participants: value.participantCount ?? 0, moderation: value.moderation === true, pending_posts: pending, homework_linked: !!value.linkedAssignmentId, updated_at: value.updatedAt};
+    return {id: doc.id, class: value.className, title: value.title, status: value.status, posts: value.postCount ?? 0, participants: value.participantCount ?? 0, moderation: value.moderation === true, pending_posts: pending, homework_linked: !!value.linkedAssignmentId, updated_at: value.updatedAt, link: `/teacher/boards?classId=${value.classId}&board=${doc.id}`};
   }));
 }
 async function quizRanges(classValue: Data) {
@@ -148,7 +148,7 @@ async function quizStatus(ctx: BearerContext, classId: unknown) {
     const entries = Object.values(score.data()?.entries ?? {}) as {correct?: number}[];
     return {student: alias(student.number), done_today: sessions.filter(doc => doc.data()?.completed).map(doc => doc.data()!.mode), week_correct: entries.reduce((sum, row) => sum + (row.correct ?? 0), 0)};
   }));
-  return {class: value.name, date: today, range_set: ranges, students: rows, completed_all_today: rows.filter(row => row.done_today.length === quizModes.length).length, total: rows.length};
+  return {class: value.name, link: '/teacher/daily-quiz', date: today, range_set: ranges, students: rows, completed_all_today: rows.filter(row => row.done_today.length === quizModes.length).length, total: rows.length};
 }
 
 async function reviewStatus(ctx: BearerContext, classId: unknown) {
@@ -159,7 +159,7 @@ async function reviewStatus(ctx: BearerContext, classId: unknown) {
     const runs = lesson.status === 'published' && students.length ? await db().getAll(...students.map(student => db().doc(`classes/${value.id}/students/${student.id}/lessonReviewRuns/${lesson.id}`))) : [];
     return {id: lesson.id, title: maskNames(String(lesson.title ?? ''), students), subject: lesson.subject, status: lesson.status, published_at: lesson.publishedAt ?? null, joined: runs.filter(doc => doc.exists).length, students: students.length};
   }));
-  return {class: value.name, reviews: rows, drafts: rows.filter(row => row.status === 'draft').length};
+  return {class: value.name, link: '/teacher/lesson-review', reviews: rows, drafts: rows.filter(row => row.status === 'draft').length};
 }
 
 async function playgroundStatus(ctx: BearerContext, classId: unknown) {
@@ -167,20 +167,20 @@ async function playgroundStatus(ctx: BearerContext, classId: unknown) {
   const [settings, ranks, rooms] = await Promise.all([db().doc(`classes/${value.id}/settings/playground`).get(), rankings(value.id, week), liveRooms(value.id)]);
   const top = (rows: {id: string; score: number; rank?: number}[]) => rows.slice(0, 10).map(row => ({student: label(students, row.id), score: row.score, rank: row.rank ?? null}));
   const s = settings.data() ?? {};
-  return {class: value.name, week, enabled: s.enabled !== false && process.env.PLAYGROUND_DISABLED !== 'true', settings: {duels: s.allowDuels ?? null, rankings_shown: s.showRankings ?? null, rewards: s.rewardsEnabled ?? null}, rankings: {solo: top(ranks.solo), duel: top(ranks.duel), steady: top(ranks.steady)}, live_rooms: rooms};
+  return {class: value.name, link: '/teacher/playground', week, enabled: s.enabled !== false && process.env.PLAYGROUND_DISABLED !== 'true', settings: {duels: s.allowDuels ?? null, rankings_shown: s.showRankings ?? null, rewards: s.rewardsEnabled ?? null}, rankings: {solo: top(ranks.solo), duel: top(ranks.duel), steady: top(ranks.steady)}, live_rooms: rooms};
 }
 
 async function points(ctx: BearerContext, classId: unknown) {
   const value = await ownedClass(ctx.uid, classId);
   const pupils = (await db().collection(`classes/${value.id}/students`).select('number', 'disabled', 'points', 'pointsEarnedTotal').get()).docs.filter(doc => !doc.data().disabled);
   const rows = pupils.map(doc => ({student: alias(Number(doc.data().number) || 0), balance: pointBalance(doc.data().points), earned_total: Number(doc.data().pointsEarnedTotal) || 0})).sort((a, b) => a.student.localeCompare(b.student));
-  return {class: value.name, enabled: value.pointSettings?.enabled === true, label: value.pointSettings?.label ?? '보말', students: rows, total_balance: rows.reduce((sum, row) => sum + row.balance, 0)};
+  return {class: value.name, link: `/teacher/points?classId=${value.id}`, enabled: value.pointSettings?.enabled === true, label: value.pointSettings?.label ?? '보말', students: rows, total_balance: rows.reduce((sum, row) => sum + row.balance, 0)};
 }
 
 async function cardSets(ctx: BearerContext, classId?: unknown) {
   const classes = classId === undefined ? await ownedClasses(ctx.uid) : [await ownedClass(ctx.uid, classId)];
   const lists = await Promise.all(classes.map(value => db().collection('cardClassSets').where('classId', '==', value.id).limit(LIST).get()));
-  return {card_sets: lists.flatMap((snap, index) => snap.docs.map(doc => ({id: doc.id, class: classes[index].name, title: doc.data().title, due_at: doc.data().dueAt ?? null, active: doc.data().active !== false, students: doc.data().targetCount ?? null}))).slice(0, LIST * 2)};
+  return {card_sets: lists.flatMap((snap, index) => snap.docs.map(doc => ({id: doc.id, class: classes[index].name, title: doc.data().title, due_at: doc.data().dueAt ?? null, active: doc.data().active !== false, students: doc.data().targetCount ?? null, link: doc.data().setId ? `/teacher/cards/${doc.data().setId}/report?classId=${classes[index].id}&distributionId=${doc.id}` : `/teacher/cards?classId=${classes[index].id}`}))).slice(0, LIST * 2)};
 }
 
 async function classTools(ctx: BearerContext, classId?: unknown) {
@@ -204,12 +204,12 @@ async function moderationQueue(ctx: BearerContext, classId?: unknown) {
   const artworks = await Promise.all(exhibitions.filter(row => row.pending_artworks).map(async room => {
     const doc = await db().doc(`exhibitions/${room.id}`).get(), students = await studentsOf(doc.data()!.classId);
     const items = await db().collection(`exhibitions/${room.id}/artworks`).where('status', '==', 'pending').limit(LIST).get();
-    return items.docs.map(item => ({exhibition: room.title, exhibition_id: room.id, artwork_id: item.id, title: maskNames(String(item.data().title ?? ''), students), student: label(students, item.data().studentId), uploaded_at: item.data().createdAt}));
+    return items.docs.map(item => ({exhibition: room.title, exhibition_id: room.id, link: room.link, artwork_id: item.id, title: maskNames(String(item.data().title ?? ''), students), student: label(students, item.data().studentId), uploaded_at: item.data().createdAt}));
   }));
   const posts = await Promise.all(boards.filter(row => row.pending_posts).map(async board => {
     const doc = await db().doc(`participationBoards/${board.id}`).get(), students = await studentsOf(doc.data()!.classId);
     const items = await db().collection(`participationBoards/${board.id}/posts`).where('status', '==', 'pending').limit(LIST).get();
-    return items.docs.filter(item => !item.data().deleted).map(item => ({board: board.title, board_id: board.id, post_id: item.id, title: maskNames(String(item.data().title ?? ''), students), preview: maskNames(String(item.data().body ?? '').slice(0, 120), students), student: item.data().authorStudentId ? label(students, item.data().authorStudentId) : '선생님', posted_at: item.data().createdAt}));
+    return items.docs.filter(item => !item.data().deleted).map(item => ({board: board.title, board_id: board.id, link: board.link, post_id: item.id, title: maskNames(String(item.data().title ?? ''), students), preview: maskNames(String(item.data().body ?? '').slice(0, 120), students), student: item.data().authorStudentId ? label(students, item.data().authorStudentId) : '선생님', posted_at: item.data().createdAt}));
   }));
   return {artworks: artworks.flat(), posts: posts.flat(), note: '사진·영상 원본은 모두의 교실 화면에서 확인해 주세요.'};
 }

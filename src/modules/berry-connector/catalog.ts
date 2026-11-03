@@ -37,7 +37,11 @@ export const CATALOG_RULES = [
   '학생은 "학생 07" 같은 가명으로만 다룬다. 비밀 일기 본문, 학생 사진·영상·음성 원본, 위치, 상담·건강·가정 기록은 볼 수 없다고 안내한다.',
   '점수·순위는 모두의 교실에 있는 기록을 그대로 전한다. 베리가 새로 평가하거나 매기지 않는다.',
   '쓰기 도구는 미리보기 카드만 만든다. 선생님이 카드에서 저장해야 반영된다.',
+  '숙제·전시실·보드처럼 항목이나 메뉴를 말할 때는 도구 결과의 link를, 없으면 아래 메뉴 바로가기를 [이름](link) 그대로 넣는다. 채팅창에서 누르면 바로 열리는 버튼이 된다. /teacher로 시작하는 주소만 쓰고 주소를 지어내지 않는다. 굵게(**) 같은 꾸밈 기호는 쓰지 않는다.',
 ];
+
+/** Where each menu opens; tools add item links (one homework, one room) on top of these. */
+export const MENU_LINKS: Partial<Record<string, string>> = {overview: '/teacher', classes: '/teacher/homework', homework: '/teacher/homework', exhibitions: '/teacher/exhibitions', boards: '/teacher/boards', quiz: '/teacher/daily-quiz', lesson_review: '/teacher/lesson-review', playground: '/teacher/playground', points: '/teacher/points', cards: '/teacher/cards', tools: '/teacher/tools', kids_daily: '/teacher/diary', storage: '/teacher', workspace: '/teacher/me/workspace', notebook: '/teacher/me/notebook'};
 
 /** Builds the catalog from the domain list and the live tool registry; unknown tools land in "기타" so nothing is ever missing. */
 export function buildCatalog(tools: CatalogTool[], enabled: Record<string, unknown>) {
@@ -45,12 +49,13 @@ export function buildCatalog(tools: CatalogTool[], enabled: Record<string, unkno
   const domains = DOMAINS.map(domain => {
     const present = domain.tools.filter(name => known.has(name));
     present.forEach(name => placed.add(name));
-    return {key: domain.key, menu: domain.menu, what: domain.what, holds: domain.holds, metrics: domain.metrics, tools: present, sensitivity: domain.sensitivity, cost: domain.cost, questions: domain.questions, enabled: domain.flag ? enabled[domain.flag] !== false : true};
+    return {key: domain.key, menu: domain.menu, link: MENU_LINKS[domain.key] ?? null, what: domain.what, holds: domain.holds, metrics: domain.metrics, tools: present, sensitivity: domain.sensitivity, cost: domain.cost, questions: domain.questions, enabled: domain.flag ? enabled[domain.flag] !== false : true};
   }).filter(domain => domain.tools.length || domain.key === 'kids_daily');
   const rest = tools.filter(tool => !placed.has(tool.name));
-  if (rest.length) domains.push({key: 'other', menu: '기타', what: '분류표에 아직 자리가 없는 새 도구', holds: [], metrics: [], tools: rest.map(tool => tool.name), sensitivity: '도구 설명을 따른다', cost: 'medium', questions: [], enabled: true});
+  if (rest.length) domains.push({key: 'other', menu: '기타', link: null, what: '분류표에 아직 자리가 없는 새 도구', holds: [], metrics: [], tools: rest.map(tool => tool.name), sensitivity: '도구 설명을 따른다', cost: 'medium', questions: [], enabled: true});
   const domainOf = new Map(domains.flatMap(domain => domain.tools.map(name => [name, domain.key] as const)));
   const toolRows = tools.map(tool => ({name: tool.name, domain: domainOf.get(tool.name) ?? 'other', scope: tool.scope, summary: tool.description.split(/(?<=[.다요])\s/)[0].slice(0, 160)}));
-  const body = {domains, tools: toolRows, rules: CATALOG_RULES};
+  const menuLinks = `메뉴 바로가기: ${domains.filter(domain => domain.link && domain.enabled).map(domain => `${domain.menu} ${domain.link}`).join(', ')}`;
+  const body = {domains, tools: toolRows, rules: [...CATALOG_RULES, menuLinks]};
   return {version: createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 16), ...body};
 }
