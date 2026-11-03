@@ -1,6 +1,6 @@
 /** Preferred working space, rather than a single size shared by every tool. */
 export function toolWindowLayout(id:string){
-  if(['canvas','board','pencils'].includes(id))return{kind:'board',width:1360,height:900,maximized:true};
+  if(['canvas','board','pencils','sketchbook'].includes(id))return{kind:'board',width:1360,height:900,maximized:true};
   if(id==='handwriting')return{kind:'document',width:1440,height:960,maximized:false};
   if(id.startsWith('ai-')||['report','notes','neighborhood','matching'].includes(id))return{kind:'document',width:1240,height:900,maximized:false};
   if(['seats','bracket','manipulatives','video','ceremony','checklist','roles','vote','scoreboard'].includes(id))return{kind:'workspace',width:1120,height:820,maximized:false};

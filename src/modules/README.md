@@ -50,3 +50,7 @@ STT implementation reference: [OpenAI file transcription guide](https://develope
 ## 나의 작은 세상
 
 `my-space/`은 기존 보말 지갑을 쓰는 학생 개인 공간 모듈이다. 동물 성장·옷·방·개인 다꾸와 카탈로그를 분리한다. `MY_SPACE_DISABLED=true`로 중지하며 보관 자료와 구매 내역을 유지한다. 연결 지점, 사진 예산, 성격·에셋과 검증은 `MY_SPACE_IMPLEMENTATION.md`를 따른다.
+
+## 스케치북
+
+`sketchbook/`은 선생님 도구의 래스터 그림판이다. 이미지 불러오기(사진 깔기·도안 선화 추출), 선 레이어 기준 채우기, "선 안에만 칠하기"를 제공한다. 저장은 기기 IndexedDB만 쓰고 서버 API·Firebase는 쓰지 않는다. `TOOLS_DISABLED=sketchbook`으로 끈다. 사용법·한도·검증은 `docs/sketchbook.md`를 따른다.

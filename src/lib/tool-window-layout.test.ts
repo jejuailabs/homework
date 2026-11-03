@@ -9,6 +9,7 @@ test('photo review, classroom work and small controls get different working spac
   assert.equal(toolWindowLayout('ai-feedback').kind,'document');
   assert.equal(toolWindowLayout('board').maximized,true);
   assert.equal(toolWindowLayout('canvas').maximized,true);
+  assert.equal(toolWindowLayout('sketchbook').maximized,true);
 });
 test('a document fills small screens while a large screen keeps a spacious movable window',()=>{
   assert.equal(initialToolWindow('handwriting',{width:1366,height:720}).maximized,true);
