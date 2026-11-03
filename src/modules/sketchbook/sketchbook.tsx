@@ -87,8 +87,8 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
   const fit = useCallback(() => {const box = stage.current, engine = engineRef.current; if (box && engine) {updateView(fitView(engine.width, engine.height, box.clientWidth, box.clientHeight, box.clientWidth < 600 ? 10 : 28)); fitted.current = true;}}, [updateView]);
 
   // ---------- saving ----------
-  const save = useCallback(async () => {
-    const engine = engineRef.current; if (!engine) return;
+  const save = useCallback(async (target?: SketchEngine) => {
+    const engine = target ?? engineRef.current; if (!engine) return;
     if (saving.current) {pendingSave.current = true; return;}
     saving.current = true; setStatus('saving');
     try {
@@ -98,7 +98,7 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
       await saveSketch(scope, {manifest: engine.manifest(), images, savedAt: now});
       setSavedAt(now); setStatus('saved');
     } catch {setStatus('error');}
-    finally {saving.current = false; if (pendingSave.current) {pendingSave.current = false; void save();}}
+    finally {saving.current = false; if (pendingSave.current) {pendingSave.current = false; void save(engine);}}
   }, [scope]);
   const scheduleSave = useCallback(() => {setStatus('dirty'); if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => {saveTimer.current = null; void save();}, 1200);}, [save]);
 
@@ -107,7 +107,11 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
     const canvas = canvasRef.current; if (!canvas) return;
     const engine = new SketchEngine(canvas, {version: 1, ...PAPER_SIZES.landscape, paper: 'white', activeId: 'paint', layers: defaultLayers(locale)});
     engineRef.current = engine;
-    engine.onChange = reason => {refresh(); if (reason !== 'history') scheduleSave();};
+    const live = (reason: 'pixels' | 'layers' | 'history') => {refresh(); if (reason !== 'history') scheduleSave();};
+    engine.onChange = live;
+    // Closing the window or the page within the autosave delay still writes the last strokes.
+    const flush = () => {if (saveTimer.current) {clearTimeout(saveTimer.current); saveTimer.current = null; void save(engine);}};
+    window.addEventListener('pagehide', flush);
     let alive = true;
     const prefs = readPrefs(storageScope);
     if (prefs.color) setColor(prefs.color); if (Array.isArray(prefs.recent)) setRecent(prefs.recent.slice(0, 8));
@@ -119,24 +123,23 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
       if (!alive) return;
       if (saved) {
         engine.onChange = () => {};
-        engine.reset(saved.manifest.width, saved.manifest.height, saved.manifest.paper, saved.manifest.layers, saved.manifest.activeId);
-        await engine.loadPixels(saved.images);
-        engine.onChange = reason => {refresh(); if (reason !== 'history') scheduleSave();};
+        try {
+          engine.reset(saved.manifest.width, saved.manifest.height, saved.manifest.paper, saved.manifest.layers, saved.manifest.activeId);
+          await engine.loadPixels(saved.images);
+        } finally {engine.onChange = live;}
         setSavedAt(saved.savedAt);
       }
       if (!alive) return;
       setStatus('saved'); setReady(true); refresh(); requestAnimationFrame(fit);
     }).catch(() => {if (alive) {setStatus('error'); setReady(true); requestAnimationFrame(fit);}});
-    return () => {alive = false; engine.dispose(); engineRef.current = null;};
-  }, [scope, storageScope, locale, refresh, scheduleSave, fit]);
+    return () => {alive = false; window.removeEventListener('pagehide', flush); flush(); engine.dispose(); engineRef.current = null;};
+  }, [scope, storageScope, locale, refresh, scheduleSave, save, fit]);
 
   // Keep preferences per scope; small values only, the drawing itself is in IndexedDB.
   useEffect(() => {
     if (!ready) return;
     try {localStorage.setItem(prefsKey(storageScope), JSON.stringify({color, recent, settings, simple, penOnly, autoLayer, clip, tolerance, gap, spread} satisfies Prefs));} catch {}
   }, [ready, storageScope, color, recent, settings, simple, penOnly, autoLayer, clip, tolerance, gap, spread]);
-
-  useEffect(() => () => {if (saveTimer.current) {clearTimeout(saveTimer.current); void save();}}, [save]);
 
   useEffect(() => {
     const box = stage.current; if (!box) return;
@@ -183,6 +186,8 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
       const pts = [...g.pointers.entries()].filter(([, p]) => p.type === 'touch').slice(0, 2).map(([, p]) => ({x: p.x, y: p.y}));
       g.mode = 'pinch'; g.startView = viewRef.current; g.from = pts; g.drawId = null; return;
     }
+    // A palm or another pointer while a pen/mouse stroke is open is ignored.
+    if (g.mode === 'draw' && g.drawId !== event.pointerId) return;
     const navigate = tool === 'picker' ? false : (g.space || event.button === 1 || handTool || (penOnly && g.penSeen && event.pointerType === 'touch'));
     if (navigate) {g.mode = 'pan'; g.startView = viewRef.current; g.from = [local(event)]; setPanning(true); return;}
     if (event.button !== 0 && event.pointerType === 'mouse') return;
@@ -199,7 +204,7 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
       return;
     }
     const started = tool === 'shape' ? eng.beginShape(shape, p, brushSettings(), strokeOptions()) : strokeBrush ? eng.beginStroke(strokeBrush, p, brushSettings(), strokeOptions()) : false;
-    if (!started) {lockedMessage(); return;}
+    if (!started) {if (eng.busy) say(w('앞 획을 마무리하는 중이에요. 다시 그어 주세요.', 'Finishing the last stroke; try again.')); else lockedMessage(); return;}
     g.mode = 'draw'; g.drawId = event.pointerId;
   };
 
@@ -227,7 +232,7 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
     if (g.mode === 'draw' && g.drawId === event.pointerId) {
       g.mode = 'none'; g.drawId = null;
       if (tool === 'shape') eng.updateShape(pagePoint(event));
-      void eng.endStroke(tool === 'shape' ? undefined : pagePoint(event)).then(changed => {if (changed && strokeBrush !== 'eraser' && strokeBrush !== 'smudge') setRecent(old => pushRecentColor(old, color));});
+      void eng.endStroke(tool === 'shape' ? undefined : pagePoint(event)).then(changed => {if (changed && strokeBrush !== 'eraser' && strokeBrush !== 'smudge') setRecent(old => pushRecentColor(old, color));}, () => {});
     } else if (g.mode === 'pinch' && [...g.pointers.values()].filter(p => p.type === 'touch').length < 2) {
       g.mode = 'none'; const box = stage.current!; updateView(settleRotation(viewRef.current, {x: box.clientWidth / 2, y: box.clientHeight / 2}));
     } else if (g.mode === 'pan' && !g.pointers.size) {g.mode = 'none'; setPanning(false);}
@@ -259,7 +264,11 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
       const node = root.current; if (!node || !node.offsetParent || typing(event.target) || importFile) return;
       const mod = event.ctrlKey || event.metaKey;
       if (event.key === 'Escape') {setDrawer(null); setMenuOpen(false); setImageMenu(false); return;}
-      if (event.code === 'Space') {gesture.current.space = true; setPanning(true); event.preventDefault(); return;}
+      if (event.code === 'Space') {
+        if (event.target instanceof HTMLElement && event.target !== document.body && !node.contains(event.target)) return;
+        if (event.target instanceof HTMLElement && (event.target.closest('button,a,[role]') || event.target.tagName === 'LABEL')) return;
+        gesture.current.space = true; setPanning(true); event.preventDefault(); return;
+      }
       if (mod && event.key.toLowerCase() === 'z') {event.preventDefault(); if (event.shiftKey) engineRef.current?.redo(); else engineRef.current?.undo(); return;}
       if (mod && event.key.toLowerCase() === 'y') {event.preventDefault(); engineRef.current?.redo(); return;}
       if (mod) return;
@@ -267,8 +276,9 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
       if (event.key === '0') fit();
     };
     const up = (event: KeyboardEvent) => {if (event.code === 'Space') {gesture.current.space = false; if (gesture.current.mode !== 'pan') setPanning(false);}};
-    window.addEventListener('keydown', down); window.addEventListener('keyup', up);
-    return () => {window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);};
+    const blur = () => {gesture.current.space = false; if (gesture.current.mode !== 'pan') setPanning(false);};
+    window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur);
+    return () => {window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur);};
   }, [tool, fit, importFile]);
 
   // Paste an image from the clipboard.
@@ -304,7 +314,7 @@ export default function Sketchbook({locale, storageScope}: {locale: 'ko' | 'en';
   };
   const openSketch = async (file: Blob) => {
     const eng = engineRef.current; if (!eng) return;
-    const saved = await decodeSketchFile(file);
+    const saved = await decodeSketchFile(file).catch(() => null);
     if (!saved) {say(w('스케치북 편집 파일이 아니에요.', 'Not a sketchbook file.')); return;}
     if (eng.layers.some(l => l.filled) && !confirm(w('지금 그림 대신 이 파일을 열까요? 지금 그림은 실행 취소로 되돌릴 수 없어요.', 'Replace the current drawing with this file?'))) return;
     eng.reset(saved.manifest.width, saved.manifest.height, saved.manifest.paper, saved.manifest.layers, saved.manifest.activeId);

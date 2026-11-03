@@ -58,7 +58,7 @@ export async function decodeSketchFile(file: Blob): Promise<SavedSketch | null> 
   const images: Record<string, Blob | null> = {};
   for (const layer of manifest.layers) {
     const url = value.layers?.[layer.id];
-    images[layer.id] = typeof url === 'string' && url.startsWith('data:image/png;base64,') ? await (await fetch(url)).blob() : null;
+    try {images[layer.id] = typeof url === 'string' && url.startsWith('data:image/png;base64,') ? await (await fetch(url)).blob() : null;} catch {images[layer.id] = null;}
   }
   return {manifest, images, savedAt: Date.now()};
 }

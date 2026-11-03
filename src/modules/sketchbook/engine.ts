@@ -150,6 +150,7 @@ export class SketchEngine {
   beginStroke(brush: StrokeBrush, p: InputPoint, settings: BrushSettings, options: StrokeOptions) {
     const layer = this.active;
     if (!this.canPaint(layer)) return false;
+    if (brush === 'smudge' && this.ending.length) return false;
     this.cancelStroke();
     const size = Math.max(1, settings.size);
     const bristles = brush === 'oil' ? Array.from({length: Math.max(6, Math.round(size / 2.2))}, () => ({offset: Math.random() * 2 - 1, radius: 0.08 + Math.random() * 0.12, alpha: 0.45 + Math.random() * 0.55})) : [];
@@ -175,7 +176,7 @@ export class SketchEngine {
     const stroke = this.stroke; if (!stroke) return Promise.resolve(false);
     if (final && !stroke.shape) {this.segment(stroke.last, final); stroke.last = final;}
     this.stroke = null; this.ending.push(stroke);
-    const done = this.commits.then(() => stroke.clipReady).then(() => this.commit(stroke));
+    const done = this.commits.then(() => stroke.clipReady?.catch(() => {})).then(() => this.commit(stroke));
     this.commits = done.catch(() => false);
     return done;
   }
@@ -333,7 +334,7 @@ export class SketchEngine {
         try {worker.postMessage({id, ...request} satisfies FillRequest, [image.data.buffer]);} catch {clearTimeout(timer); this.requests.delete(id); resolve('failed');}
       });
       if (result !== 'failed') return result;
-      this.worker = null;
+      this.worker?.terminate(); this.worker = null;
       return (await import('./fill-worker')).runFill({...request, data: this.fillReference().image.data});
     }
     return (await import('./fill-worker')).runFill(request);
@@ -478,8 +479,7 @@ export class SketchEngine {
   async loadPixels(images: Record<string, Blob | null>) {
     for (const layer of this.layers) {
       const blob = images[layer.id]; if (!blob) continue;
-      const bitmap = await createImageBitmap(blob);
-      layer.ctx.drawImage(bitmap, 0, 0); bitmap.close(); layer.filled = true;
+      try {const bitmap = await createImageBitmap(blob); layer.ctx.drawImage(bitmap, 0, 0); bitmap.close(); layer.filled = true;} catch { /* an unreadable layer stays empty */ }
     }
     this.render(); this.onChange('layers');
   }
