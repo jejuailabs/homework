@@ -27,7 +27,8 @@
           "order": "ASCENDING"
         }
       ]
-    },    {
+    },
+    {
       "collectionGroup": "workspaceFiles",
       "queryScope": "COLLECTION",
       "fields": [
@@ -3085,6 +3086,47 @@
       "collectionGroup": "berryConfirmations",
       "fieldPath": "expiresAt",
       "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activityDaily",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activityDaily",
+      "fieldPath": "screens",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activityDaily",
+      "fieldPath": "hours",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activitySummary",
+      "fieldPath": "screens",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activitySummary",
+      "fieldPath": "classes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activitySummary",
+      "fieldPath": "teachers",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activitySummary",
+      "fieldPath": "classNames",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "activitySummary",
+      "fieldPath": "teacherNames",
       "indexes": []
     }
   ]

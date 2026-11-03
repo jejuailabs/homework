@@ -13,6 +13,7 @@ import StudentCompanion from '@/modules/my-space/companion';
 import TestZone from './test-zone';
 import {useVerifiedViewer} from './viewer-context';
 import MyPageLink from '@/modules/teacher-notebook/my-page-link';
+import ActivityTracker from './activity-tracker';
 import '@/styles/brand.css';
 // Card Play is hidden from the top menu for now; its pages still work by direct link.
 const cardsMenuVisible = false;
@@ -71,6 +72,7 @@ export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled
     {settings&&<div className="settings-backdrop" onClick={()=>setSettings(false)}><section className="settings-panel" role="dialog" aria-modal="true" aria-label={t('settings')} onClick={e=>e.stopPropagation()}><div className="section-heading"><h2>{t('settings')}</h2><button className="icon-button" aria-label={t('close')} onClick={()=>setSettings(false)}><X size={20}/></button></div><label>{t('appearance')}</label><div className="segmented">{(['light','dark','system'] as const).map(value=><button key={value} className={appearance===value?'selected':''} onClick={()=>setPreference({appearance:value})}>{t(value)}</button>)}</div><label>{t('palette')}</label><div className="palette-grid">{(['mint','coral','sky','lavender','apricot','rose'] as Palette[]).map(value=><button key={value} className={palette===value?'selected':''} onClick={()=>setPreference({palette:value})} aria-pressed={palette===value}><span className={'swatch '+value}/>{t(value)}</button>)}</div><label htmlFor="locale-select">{t('language')}</label><select id="locale-select" value={locale} onChange={e=>setPreference({locale:e.target.value as 'ko'|'en'})}><option value="ko">{t('localeKorean')}</option><option value="en">{t('localeEnglish')}</option></select></section></div>}
     <main id="main" className={isLogin?'login-main':'app-main'}>{children}</main>
     <footer className="app-footer"><span>{t('brand')}</span><InstallShortcut/><span>{t('tagline')}</span></footer>
+    <ActivityTracker/>
     {isStudent&&mySpaceEnabled&&<StudentCompanion/>}
     {viewer&&['teacher','admin','superadmin'].includes(viewer.role)&&/^\/(teacher|admin)(\/|$)/.test(path)&&<TestZone key={`${path}:${viewer.uid}`}/>}
   </>;
