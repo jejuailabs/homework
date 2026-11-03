@@ -11,6 +11,9 @@ import {quizModes} from '@/modules/daily-quiz/types';
 import {rankings} from '@/modules/playground/server';
 import {playDate, weekStart} from '@/modules/playground/engine';
 import {listCalendar} from '@/modules/teacher-workspace/server';
+import {archiveRows} from '@/lib/server/exhibition-archive';
+import {filterArchive, tagCounts} from '@/lib/exhibition-tags';
+import {artworkToday} from '@/lib/exhibition-metadata';
 import {BerryError, alias, maskNames, safeId} from './policy';
 import type {BearerContext, McpTool} from './types';
 
@@ -29,6 +32,7 @@ export const CLASSROOM_TOOLS: McpTool[] = [
   {name: 'get_signals', scope: 'classroom:read', description: '모든 메뉴의 지금 숫자만 돌려줍니다: 학급별 미제출·검사 대기·마감 지남·다시 하기, 오늘·내일 퀴즈 범위 설정 여부, 진행 중 말놀이터 방, 복습 초안 수, 전시·보드 승인 대기, 저장 공간 단계, 받은 Kids Daily 공유 수, 오늘 일정 수. "지금 어때?"에 먼저 씁니다.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'get_storage', scope: 'classroom:read', description: '선생님 저장 공간: 전체 용량·사용량·남은 양, 항목별 사용량(숙제 영상·사진·전시·참고 자료·보드·업무 공간), 경고 단계, 이번 이용 기간 종료일.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'list_exhibitions', scope: 'classroom:read', description: '작품전시 전시실 목록: 상태(준비·열림·마감), 작품 수, 승인 대기 작품 수, QR 관람 허용, 숙제 연동 여부.', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
+  {name: 'search_exhibitions', scope: 'classroom:read', description: '전시 보관함 검색: 선생님의 모든 전시실을 주제 해시태그·기간·학급·들어온 길(직접 올림/숙제 연동)로 찾습니다. 작품전시 > 보관함 메뉴와 같은 조건입니다. "4월쯤"처럼 흐린 기간은 앞뒤 한 달을 넓혀 from·to로 줍니다. query는 제목·소개·태그의 낱말, tags는 꼭 붙어 있어야 할 태그입니다. 답할 때 전시마다 [전시 이름](link)을 그대로 넣으면 채팅창에 배너로 보이고, 결과가 많으면 [보관함에서 모두 보기](archive_link)도 넣습니다.', inputSchema: {type: 'object', properties: {query: {type: 'string', description: '제목·소개·태그 낱말(띄어쓰기로 여러 개)'}, tags: {type: 'array', items: {type: 'string'}, maxItems: 5}, from: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, class_id: cls, source: {type: 'string', enum: ['direct', 'homework']}}, additionalProperties: false}},
   {name: 'list_boards', scope: 'classroom:read', description: '참여보드 목록: 상태(열림·마감·보관), 게시물·참여자 수, 승인 대기 게시물 수, 숙제 연동 여부.', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
   {name: 'get_moderation_queue', scope: 'classroom:read', description: '선생님 승인을 기다리는 전시 작품과 보드 게시물 목록(제목·학생 가명·올린 시각).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
   {name: 'get_quiz_status', scope: 'classroom:read', description: '데일리 Quiz: 오늘·내일 범위 설정 여부, 오늘 학생별 완료(영어·수학·복습), 이번 주 맞힌 문제 수. 학생은 가명.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
@@ -64,6 +68,22 @@ async function exhibitionsOf(uid: string, classId?: string) {
     const value = doc.data(), pending = value.status === 'open' || value.status === 'draft' ? await count(doc.ref.collection('artworks').where('status', '==', 'pending')) : 0;
     return {id: doc.id, class: value.className, title: value.title, status: value.status, artworks: value.artworkCount ?? 0, approved: value.approvedCount ?? 0, pending_artworks: pending, qr_open: value.publicSharingEnabled === true, homework_linked: !!value.linkedAssignmentId, updated_at: value.updatedAt};
   }));
+}
+/** Same rows and filter as the 보관함 menu; links open the room or the archive with the same filter. */
+async function searchExhibitions(ctx: BearerContext, args: Data) {
+  const classId = args.class_id === undefined ? '' : (await ownedClass(ctx.uid, args.class_id)).id;
+  const tags = Array.isArray(args.tags) ? args.tags.slice(0, 5).map(String) : [];
+  const filter = {q: String(args.query ?? '').slice(0, 100), tags, from: String(args.from ?? ''), to: String(args.to ?? ''), classId, source: args.source === 'direct' || args.source === 'homework' ? args.source : ''} as const;
+  const found = filterArchive(await archiveRows(ctx.uid), filter);
+  const query = new URLSearchParams({archive: '1'});
+  for (const [key, value] of [['q', filter.q], ['tags', tags.join(',')], ['from', filter.from], ['to', filter.to], ['classId', classId], ['source', filter.source]]) if (value) query.set(key, value);
+  // Titles and tags are the teacher's words but may hold a child's name: mask with each room's own roster.
+  const shown = found.slice(0, LIST), rosters = new Map(await Promise.all([...new Set(shown.map(row => row.classId))].map(async id => [id, await roster(id)] as const)));
+  const masked = (row: typeof shown[number], value: string) => maskNames(value, rosters.get(row.classId) ?? []);
+  return {
+    count: found.length, top_tags: tagCounts(found, 10).filter(item => !shown.some(row => masked(row, item.tag) !== item.tag)), archive_link: `/teacher/exhibitions?${query}`,
+    exhibitions: shown.map(row => ({id: row.id, title: masked(row, row.title), class: row.className, opened_on: artworkToday(new Date(row.createdAt)), status: row.status, tags: row.tags.filter(tag => masked(row, tag) === tag), source: row.source, artworks: row.approvedCount, link: `/teacher/exhibitions?exhibition=${row.id}`})),
+  };
 }
 async function boardsOf(uid: string, classId?: string) {
   const docs = (await db().collection('participationBoards').where(classId ? 'classId' : 'ownerUid', '==', classId ?? uid).select('classId', 'className', 'title', 'status', 'postCount', 'participantCount', 'moderation', 'linkedAssignmentId', 'updatedAt', 'ownerUid').get()).docs.filter(doc => doc.data().ownerUid === uid);
@@ -208,6 +228,7 @@ export async function callClassroomTool(name: string, args: Data, ctx: BearerCon
     case 'get_signals': return signals(ctx);
     case 'get_storage': return storageView(ctx);
     case 'list_exhibitions': return {exhibitions: (await exhibitionsOf(ctx.uid, args.class_id === undefined ? undefined : (await ownedClass(ctx.uid, args.class_id)).id)).slice(0, LIST * 2)};
+    case 'search_exhibitions': return searchExhibitions(ctx, args);
     case 'list_boards': return {boards: (await boardsOf(ctx.uid, args.class_id === undefined ? undefined : (await ownedClass(ctx.uid, args.class_id)).id)).slice(0, LIST * 2)};
     case 'get_moderation_queue': return moderationQueue(ctx, args.class_id);
     case 'get_quiz_status': return quizStatus(ctx, args.class_id);

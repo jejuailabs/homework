@@ -1,14 +1,14 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {usePathname} from 'next/navigation';
-import {Check, Inbox, LoaderCircle, MessageCircle, PlugZap, Send, X} from 'lucide-react';
+import {Check, ChevronRight, Images, Inbox, LoaderCircle, MessageCircle, PlugZap, Send, X} from 'lucide-react';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
 type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]};
 type InboxItem = {id: string; kind: string; rule: string | null; title_generic: string; payload: Record<string, unknown>; status: string; created_at: string};
 const TOOL_LABELS: Record<string, string> = {
-  add_calendar_event: '일정 추가', add_lesson_log: '수업 일지 추가', add_work_item: '업무 항목 추가', add_notebook_entry: '교무수첩 기록 추가', create_assignment: '숙제방 열기', create_exhibition: '전시실 열기', create_board: '참여보드 열기', approve_artworks: '작품 승인', approve_posts: '게시물 공개', publish_review: '복습 배포', get_signals: '현황 확인', get_catalog: '메뉴 살펴보기', get_storage: '저장 공간 확인', list_exhibitions: '전시실 확인', list_boards: '보드 확인', get_moderation_queue: '승인 대기 확인', get_quiz_status: '퀴즈 확인', get_review_status: '복습 확인', get_playground_status: '말놀이터 확인', get_points: '보말 확인', list_card_sets: '카드 확인', list_class_tools: '수업 도구 확인',
+  add_calendar_event: '일정 추가', add_lesson_log: '수업 일지 추가', add_work_item: '업무 항목 추가', add_notebook_entry: '교무수첩 기록 추가', create_assignment: '숙제방 열기', create_exhibition: '전시실 열기', create_board: '참여보드 열기', approve_artworks: '작품 승인', approve_posts: '게시물 공개', publish_review: '복습 배포', get_signals: '현황 확인', get_catalog: '메뉴 살펴보기', get_storage: '저장 공간 확인', list_exhibitions: '전시실 확인', search_exhibitions: '전시 보관함 찾기', list_boards: '보드 확인', get_moderation_queue: '승인 대기 확인', get_quiz_status: '퀴즈 확인', get_review_status: '복습 확인', get_playground_status: '말놀이터 확인', get_points: '보말 확인', list_card_sets: '카드 확인', list_class_tools: '수업 도구 확인',
   get_calendar: '일정 확인', get_timetable: '시간표 확인', get_lesson_log: '수업 일지 확인', search_workspace: '업무 폴더 찾기', get_work_item: '업무 항목 열기',
   list_classes: '학급 확인', get_roster: '명단 확인', list_assignments: '숙제 확인', get_missing_submissions: '미제출 확인', get_review_queue: '검사 대기 확인',
   list_deadlines: '마감 확인', search_notebook: '교무수첩 찾기', set_reminder: '알림 예약', list_schedule: '알림 확인', remember: '기억하기', forget: '기억 지우기',
@@ -23,6 +23,20 @@ async function api<T>(path: string, body?: object): Promise<T> {
   return data as T;
 }
 const shown = (value: unknown) => Array.isArray(value) ? value.join(', ') : value === null || value === undefined || value === '' ? null : typeof value === 'boolean' ? (value ? '예' : '아니요') : String(value);
+/** Berry's [이름](/teacher/…) links become banners under the answer; only ourclass teacher pages, never outside links. */
+const BANNER_LINK = /\[([^\]\n]{1,120})\]\((\/teacher\/[^\s)]{0,400})\)/g;
+function withBanners(text: string) {
+  const links = [...text.matchAll(BANNER_LINK)].map(match => ({label: match[1], href: match[2]}));
+  return {text: text.replace(BANNER_LINK, '$1'), links: [...new Map(links.map(link => [link.href, link])).values()].slice(0, 12)};
+}
+function Banners({links}: {links: {label: string; href: string}[]}) {
+  if (!links.length) return null;
+  return <div className="bp-banners">{links.map(link => <a key={link.href} className="bp-banner" href={link.href}>
+    <span className="bp-banner-icon"><Images size={17}/></span>
+    <span><strong>{link.label}</strong><small>{link.href.includes('archive=1') ? '전시 보관함에서 보기' : link.href.startsWith('/teacher/exhibitions') ? '전시실 열기' : '열어 보기'}</small></span>
+    <ChevronRight size={16}/>
+  </a>)}</div>;
+}
 const clock = (iso: string) => {const d = new Date(Date.parse(iso) + 9 * 3_600_000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;};
 
 function Preview({card, onDecide}: {card: Card; onDecide: (card: Card, decision: 'approve' | 'reject') => void}) {
@@ -130,7 +144,7 @@ export default function BerryPanel() {
           {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요?</p>{['이번 주 마감 숙제 알려 줘', '어제 숙제 안 낸 학생이랑 안내문 초안', '오늘 3교시 국어 수업 일지 써 줘'].map(example => <button type="button" key={example} onClick={() => setText(example)}>{example}</button>)}</div>}
           {messages.map((message, index) => <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
-            {message.text && <p>{message.text}</p>}
+            {message.text && (() => {const view = withBanners(message.text); return <><p>{view.text}</p><Banners links={view.links}/></>;})()}
             {message.cards?.map(card => <Preview key={card.inbox_id} card={card} onDecide={(c, d) => void decide(c, d)}/>)}
           </div>)}
           {activity && <p className="bp-activity"><LoaderCircle className="spin" size={14}/>{activity}</p>}
