@@ -16,6 +16,8 @@ export type Exhibition = {
   artworkModules?: ArtworkModuleOptions;
   /** Set when a homework room created this exhibition and feeds it students' photos and videos. */
   linkedAssignmentId?: string;
+  /** Topic hashtags (no '#'): made automatically from the title, editable by the teacher. */
+  tags?: string[]; tagsEdited?: boolean;
   artworkCount: number; approvedCount: number; createdAt: string; updatedAt: string;
 };
 export type ExhibitionStudent = {

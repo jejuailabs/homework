@@ -27,6 +27,8 @@ import {effectiveOptions} from '@/modules/artwork-extensions/exhibition-adapter'
 import {companionProfile} from '@/modules/my-space/profile';
 import {wardrobeOutfit} from './points-policy';
 import {reconcileHomeworkSync} from './homework-sync';
+import {autoTags, effectiveTags, normalizeTags} from '../exhibition-tags';
+import {archiveFiles, archiveRows, archiveTags} from './exhibition-archive';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -39,7 +41,7 @@ const passportRef = (exhibitionId: string, studentId: string) => exhibitionRef(e
 const quotaRef = (ownerUid: string) => db().doc(`exhibitionStorage/${ownerUid}`);
 const storageValue = (value?: Data): ExhibitionStorageUsage => ({ usedBytes: value?.usedBytes ?? 0, reservedBytes: value?.reservedBytes ?? 0, limitBytes: exhibitionStorageLimit(process.env.EXHIBITION_STORAGE_LIMIT_BYTES) });
 const mapped = (snap: FirebaseFirestore.DocumentSnapshot): Data => ({ ...snap.data(), id: snap.id });
-const asExhibition = (snap: FirebaseFirestore.DocumentSnapshot) => ({ grade: '', year: 0, theme: 'cozy', ...mapped(snap), artworkModules:effectiveOptions(snap.data()?.artworkModules) }) as Exhibition;
+const asExhibition = (snap: FirebaseFirestore.DocumentSnapshot) => ({ grade: '', year: 0, theme: 'cozy', ...mapped(snap), artworkModules:effectiveOptions(snap.data()?.artworkModules), tags: effectiveTags(snap.data() ?? {}) }) as Exhibition;
 const json = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { 'Cache-Control': 'private, no-store' } });
 
 async function body(request: Request): Promise<Data> {
@@ -155,13 +157,14 @@ async function create(ctx: Context, request: Request) {
   const classId = id(input.classId);
   const cls = await db().doc(`classes/${classId}`).get();
   if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
+  const title = text(input.title, '전시 이름', 120), description = text(input.description, '전시 소개', 2000, true), grade = String(cls.data()!.grade ?? '').trim() || cls.data()!.name, createdAt = now();
   const value = {
-    title: text(input.title, '전시 이름', 120), description: text(input.description, '전시 소개', 2000, true),
+    title, description, tags: 'tags' in input ? normalizeTags(input.tags) : autoTags({title, description, grade, createdAt}), tagsEdited: 'tags' in input,
     classId, className: cls.data()!.name, ownerUid: ctx.uid, status: 'draft', commentsEnabled: true, allowStudentUploads: input.allowStudentUploads === true, publicSharingEnabled: input.publicSharingEnabled === true,
-    grade: String(cls.data()!.grade ?? '').trim() || cls.data()!.name, year: cls.data()!.year,
+    grade, year: cls.data()!.year,
     theme: input.theme === undefined ? 'cozy' : exhibitionTheme(input.theme),
     artworkModules: moduleOptions(input.artworkModules),
-    artworkCount: 0, approvedCount: 0, createdAt: now(), updatedAt: now(),
+    artworkCount: 0, approvedCount: 0, createdAt, updatedAt: createdAt,
   };
   const ref = await db().collection('exhibitions').add(value);
   return json({ exhibition: { ...value, id: ref.id } }, 201);
@@ -201,6 +204,9 @@ async function edit(ctx: Context, exhibition: Exhibition, request: Request) {
     changes.commentsEnabled = input.commentsEnabled;
   }
   for (const key of ['allowStudentUploads', 'publicSharingEnabled'] as const) if (key in input) {if (typeof input[key] !== 'boolean') throw new ApiError(400, '전시 설정을 확인해 주세요.'); changes[key] = input[key];}
+  // Tags the teacher never touched follow a renamed room; edited tags stay as the teacher left them.
+  if ('tags' in input) {if (!Array.isArray(input.tags)) throw new ApiError(400, '해시태그를 확인해 주세요.'); changes.tags = normalizeTags(input.tags); changes.tagsEdited = true;}
+  else if (!exhibition.tagsEdited && ('title' in changes || 'description' in changes)) changes.tags = autoTags({...exhibition, ...changes});
   await exhibitionRef(exhibition.id).update(changes);
   return json({ exhibition: { ...exhibition, ...changes } });
 }
@@ -710,6 +716,13 @@ export async function handleExhibitions(request: Request, segments: string[] = [
     if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
     const ctx = await getContext(request);
     if (segments.length === 1 && segments[0] === 'cleanup' && request.method === 'POST') return await cleanup(ctx);
+    if (segments[0] === 'archive') {
+      if (ctx.role === 'student') throw new ApiError(403, '선생님만 전시 보관함을 쓸 수 있어요.', 'FORBIDDEN');
+      if (segments.length === 1 && request.method === 'GET') return json({rows: await archiveRows(ctx.uid)});
+      if (segments.length === 2 && segments[1] === 'files' && request.method === 'POST') return json(await archiveFiles(ctx.uid, (await body(request)).ids));
+      if (segments.length === 2 && segments[1] === 'tags' && request.method === 'POST') return json(await archiveTags(ctx.uid, await body(request)));
+      throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
+    }
     if (!segments.length) {
       if (request.method === 'GET') return await list(ctx, request);
       if (request.method === 'POST') return await create(ctx, request);

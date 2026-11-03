@@ -7,6 +7,7 @@ import {FILE_CACHE_CONTROL} from '../storage-cache';
 import {BOARD_POST_LIMIT, changedReaction} from './participation-policy';
 import {EXHIBITION_ARTWORK_LIMIT, EXHIBITION_PIXEL_LIMIT, exhibitionStorageLimit, settleExhibitionBytes} from './exhibition-policy';
 import {artworkToday} from '../exhibition-metadata';
+import {autoTags} from '../exhibition-tags';
 import {moduleOptions} from '@/modules/artwork-extensions/types';
 import {homeworkSyncTargets, syncDue, syncableUploads, type HomeworkSync} from './homework-sync-policy';
 
@@ -31,6 +32,7 @@ export function exhibitionRoomValue(room: Room) {
     status: 'open', commentsEnabled: true, allowStudentUploads: false, publicSharingEnabled: false,
     grade: String(room.cls.grade ?? '').trim() || room.cls.name, year: room.cls.year ?? null, theme: 'cozy', artworkModules: moduleOptions(undefined),
     artworkCount: 0, approvedCount: 0, ...(room.linkedAssignmentId ? {linkedAssignmentId: room.linkedAssignmentId} : {}), createdAt: stamp, updatedAt: stamp,
+    tags: autoTags({title: room.title, description: room.description, grade: room.cls.grade, createdAt: stamp, linkedAssignmentId: room.linkedAssignmentId}), tagsEdited: false,
   };
 }
 /** An open wall board with the board screen's defaults. */
