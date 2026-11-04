@@ -1,6 +1,6 @@
 export type MapCenter = {lat: number; lon: number; radius: number};
 export type MapLine = {id: string; kind: 'road' | 'water' | 'boundary'; name: string; points: [number, number][]};
-export type NeighborhoodPlace = {id: string; name: string; category: string; lat: number; lon: number; sourceUrl: string; note: string; selected: boolean; verified: boolean};
+export type NeighborhoodPlace = {id: string; name: string; category: string; kind?: string; lat: number; lon: number; sourceUrl: string; note: string; selected: boolean; verified: boolean};
 export type NeighborhoodMap = {center: MapCenter; lines: MapLine[]; places: NeighborhoodPlace[]; attribution: string; sourceUrl: string; sourceDate: string; retrievedAt: string; source: 'osm' | 'vworld' | 'import'};
 export type NeighborhoodPack = {version: 1; title: string; region: string; grade: string; unit: string; classId: string; map: NeighborhoodMap | null; brief: string; teacherNotes: string; sources: {title: string; url: string}[]; referenceDate: string};
 export const NEIGHBORHOOD_PRESETS = [{id: 'jeju', ko: '제주시 중심', en: 'Central Jeju', lat: 33.4996, lon: 126.5312}, {id: 'seoul', ko: '서울 도심', en: 'Central Seoul', lat: 37.5665, lon: 126.9780}, {id: 'busan', ko: '부산 도심', en: 'Central Busan', lat: 35.1796, lon: 129.0756}];
@@ -19,7 +19,7 @@ export function parseNeighborhoodMap(value: unknown): NeighborhoodMap {
   const lines = input.lines.map(raw => {const line = record(raw); if (!['road','water','boundary'].includes(String(line.kind)) || !Array.isArray(line.points) || line.points.length < 2 || line.points.length > 200) throw new Error('MAP_LINE'); totalPoints += line.points.length;
     return {id:text(line.id,80,false),kind:line.kind as MapLine['kind'],name:text(line.name,100),points:line.points.map(rawPoint=>{if(!Array.isArray(rawPoint)||rawPoint.length!==2)throw new Error('MAP_POINT');return [number(rawPoint[0],120,136),number(rawPoint[1],28,43)] as [number,number];})};});
   if (totalPoints > 12000) throw new Error('MAP_SIZE');
-  const places = input.places.map(raw => {const place=record(raw);if(typeof place.selected!=='boolean'||typeof place.verified!=='boolean')throw new Error('MAP_PLACE');return {id:text(place.id,80,false),name:text(place.name,100,false),category:text(place.category,60),lat:number(place.lat,32,39),lon:number(place.lon,124,132),sourceUrl:neighborhoodUrl(place.sourceUrl),note:text(place.note,1500),selected:place.selected,verified:place.verified};});
+  const places = input.places.map(raw => {const place=record(raw);if(typeof place.selected!=='boolean'||typeof place.verified!=='boolean')throw new Error('MAP_PLACE');const kind=place.kind===undefined?undefined:text(place.kind,20,false);if(kind!==undefined&&!/^[a-z]+$/.test(kind))throw new Error('MAP_PLACE');return {id:text(place.id,80,false),name:text(place.name,100,false),category:text(place.category,60),...(kind?{kind}:{}),lat:number(place.lat,32,39),lon:number(place.lon,124,132),sourceUrl:neighborhoodUrl(place.sourceUrl),note:text(place.note,1500),selected:place.selected,verified:place.verified};});
   if(new Set(places.map(place=>place.id)).size!==places.length)throw new Error('DUPLICATE_PLACE');
   if(places.filter(place=>place.selected).length>12)throw new Error('PLACE_SELECTION');
   if(input.source!=='osm'&&input.source!=='vworld'&&input.source!=='import')throw new Error('MAP_SOURCE');
@@ -39,21 +39,21 @@ export function simplifyMapLine(points: [number,number][], epsilon = .00004): [n
   return furthest>epsilon?[...simplifyMapLine(points.slice(0,index+1),epsilon).slice(0,-1),...simplifyMapLine(points.slice(index),epsilon)]:[first,last];
 }
 /** VWorld (국토교통부 공간정보 오픈플랫폼) layers. Buildings are filtered by name because VWorld has no school/public-office point layer. */
-type VworldLayer = {key: string; data: string; svcIde: string; attrFilter?: string; kind?: MapLine['kind']; category?: string; name?: string};
+type VworldLayer = {key: string; data: string; svcIde: string; attrFilter?: string; kind?: MapLine['kind']; category?: string; placeKind?: string; name?: string};
 export const VWORLD_LAYERS: VworldLayer[] = [
   {key:'boundary',data:'LT_C_ADEMD_INFO',svcIde:'ademd',kind:'boundary',name:'emd_kor_nm'},
   {key:'water',data:'LT_C_WKMSTRM',svcIde:'wkmstrm',kind:'water',name:'riv_nm'},
   {key:'road',data:'LT_L_SPRD',svcIde:'sprd',kind:'road',name:'rn'},
-  {key:'school',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:학교',category:'학교',name:'buld_nm'},
-  {key:'office',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:행정복지센터',category:'공공·생활',name:'buld_nm'},
-  {key:'library',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:도서관',category:'공공·생활',name:'buld_nm'},
-  {key:'smallLibrary',data:'LT_P_SMALLLIBRARY',svcIde:'smalllibrary',category:'공공·생활',name:'lbr_name'},
-  {key:'museum',data:'LT_P_DGMUSEUMART',svcIde:'dgmuseumart',category:'문화·탐방',name:'mus_nam'},
-  {key:'market',data:'LT_P_TRADSIJANG',svcIde:'tradsijang',category:'생활·시장',name:'name'},
-  {key:'police',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:경찰',category:'공공·생활',name:'buld_nm'},
-  {key:'fire',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:소방',category:'공공·생활',name:'buld_nm'},
-  {key:'post',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:우체국',category:'공공·생활',name:'buld_nm'},
-  {key:'placeName',data:'LT_P_NSNMSSITENM',svcIde:'nsnmssitenm',category:'지명',name:'land_kpyo'},
+  {key:'school',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:학교',category:'학교',placeKind:'school',name:'buld_nm'},
+  {key:'office',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:행정복지센터',category:'공공·생활',placeKind:'office',name:'buld_nm'},
+  {key:'library',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:도서관',category:'공공·생활',placeKind:'library',name:'buld_nm'},
+  {key:'smallLibrary',data:'LT_P_SMALLLIBRARY',svcIde:'smalllibrary',category:'공공·생활',placeKind:'library',name:'lbr_name'},
+  {key:'museum',data:'LT_P_DGMUSEUMART',svcIde:'dgmuseumart',category:'문화·탐방',placeKind:'museum',name:'mus_nam'},
+  {key:'market',data:'LT_P_TRADSIJANG',svcIde:'tradsijang',category:'생활·시장',placeKind:'market',name:'name'},
+  {key:'police',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:경찰',category:'공공·생활',placeKind:'police',name:'buld_nm'},
+  {key:'fire',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:소방',category:'공공·생활',placeKind:'fire',name:'buld_nm'},
+  {key:'post',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:우체국',category:'공공·생활',placeKind:'post',name:'buld_nm'},
+  {key:'placeName',data:'LT_P_NSNMSSITENM',svcIde:'nsnmssitenm',category:'지명',placeKind:'other',name:'land_kpyo'},
 ];
 export function vworldRequestUrl(layer: VworldLayer, center: MapCenter, key: string, domain: string) {
   const [w,s,e,n]=mapBounds(center),url=new URL('https://api.vworld.kr/req/data');
@@ -105,7 +105,7 @@ export function parseVworldMap(responses: Record<string, unknown>, center: MapCe
       if(name&&points.length)grouped.set(name,[...(grouped.get(name)??[]),[points.reduce((sum,p)=>sum+p[0],0)/points.length,points.reduce((sum,p)=>sum+p[1],0)/points.length]]);}
     for(const [name,points] of grouped){const lon=points.reduce((sum,p)=>sum+p[0],0)/points.length,lat=points.reduce((sum,p)=>sum+p[1],0)/points.length;
       if(names.has(name)||lat<s||lat>n||lon<w||lon>e||places.length>=80)continue;names.add(name);
-      places.push({id:`vworld-${layer.key}-${places.length}`,name,category:layer.category!,lat,lon,sourceUrl,note:'',selected:places.length<10,verified:false});}
+      places.push({id:`vworld-${layer.key}-${places.length}`,name,category:layer.category!,...(layer.placeKind?{kind:layer.placeKind}:{}),lat,lon,sourceUrl,note:'',selected:places.length<10,verified:false});}
   }
   if(!lines.length&&!places.length)throw new Error('MAP_EMPTY');
   return parseNeighborhoodMap({center,lines,places,source:'vworld',attribution:'브이월드 공간정보 오픈플랫폼(국토교통부)',sourceUrl:'https://www.vworld.kr',sourceDate:now,retrievedAt:now});
