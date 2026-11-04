@@ -151,12 +151,13 @@ export default function BerryPanel() {
       </div> : tab === 'chat' ? <>
         <div className="bp-messages" ref={list}>
           {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요?</p>{['이번 주 마감 숙제 알려 줘', '어제 숙제 안 낸 학생이랑 안내문 초안', '오늘 3교시 국어 수업 일지 써 줘'].map(example => <button type="button" key={example} onClick={() => setText(example)}>{example}</button>)}</div>}
-          {messages.map((message, index) => <div key={index} className={`bp-msg is-${message.role}`}>
+          {/* The empty answer placeholder stays hidden until text or a card arrives, so Berry never shows an avatar with nothing beside it. */}
+          {messages.map((message, index) => !message.text && !message.cards?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
             {message.text && (() => {const view = withBanners(message.text); return <><p><Bold text={view.text}/></p><Banners links={view.links}/></>;})()}
             {message.cards?.map(card => <Preview key={card.inbox_id} card={card} onDecide={(c, d) => void decide(c, d)}/>)}
           </div>)}
-          {activity && <p className="bp-activity"><LoaderCircle className="spin" size={14}/>{activity}</p>}
+          {activity && <div className="bp-msg is-assistant" role="status"><img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/><p className="bp-thinking"><LoaderCircle className="spin" size={14}/>{activity}</p></div>}
         </div>
         <div className="bp-input">
           <textarea value={text} rows={2} maxLength={4000} placeholder="베리에게 물어보세요" aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
