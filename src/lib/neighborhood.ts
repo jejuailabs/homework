@@ -1,7 +1,7 @@
 export type MapCenter = {lat: number; lon: number; radius: number};
 export type MapLine = {id: string; kind: 'road' | 'water' | 'boundary'; name: string; points: [number, number][]};
 export type NeighborhoodPlace = {id: string; name: string; category: string; lat: number; lon: number; sourceUrl: string; note: string; selected: boolean; verified: boolean};
-export type NeighborhoodMap = {center: MapCenter; lines: MapLine[]; places: NeighborhoodPlace[]; attribution: string; sourceUrl: string; sourceDate: string; retrievedAt: string; source: 'osm' | 'import'};
+export type NeighborhoodMap = {center: MapCenter; lines: MapLine[]; places: NeighborhoodPlace[]; attribution: string; sourceUrl: string; sourceDate: string; retrievedAt: string; source: 'osm' | 'vworld' | 'import'};
 export type NeighborhoodPack = {version: 1; title: string; region: string; grade: string; unit: string; classId: string; map: NeighborhoodMap | null; brief: string; teacherNotes: string; sources: {title: string; url: string}[]; referenceDate: string};
 export const NEIGHBORHOOD_PRESETS = [{id: 'jeju', ko: '제주시 중심', en: 'Central Jeju', lat: 33.4996, lon: 126.5312}, {id: 'seoul', ko: '서울 도심', en: 'Central Seoul', lat: 37.5665, lon: 126.9780}, {id: 'busan', ko: '부산 도심', en: 'Central Busan', lat: 35.1796, lon: 129.0756}];
 const record = (value: unknown): Record<string, unknown> => {if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('INVALID'); return value as Record<string, unknown>;};
@@ -22,7 +22,7 @@ export function parseNeighborhoodMap(value: unknown): NeighborhoodMap {
   const places = input.places.map(raw => {const place=record(raw);if(typeof place.selected!=='boolean'||typeof place.verified!=='boolean')throw new Error('MAP_PLACE');return {id:text(place.id,80,false),name:text(place.name,100,false),category:text(place.category,60),lat:number(place.lat,32,39),lon:number(place.lon,124,132),sourceUrl:neighborhoodUrl(place.sourceUrl),note:text(place.note,1500),selected:place.selected,verified:place.verified};});
   if(new Set(places.map(place=>place.id)).size!==places.length)throw new Error('DUPLICATE_PLACE');
   if(places.filter(place=>place.selected).length>12)throw new Error('PLACE_SELECTION');
-  if(input.source!=='osm'&&input.source!=='import')throw new Error('MAP_SOURCE');
+  if(input.source!=='osm'&&input.source!=='vworld'&&input.source!=='import')throw new Error('MAP_SOURCE');
   return {center,lines,places,attribution:text(input.attribution,300,false),sourceUrl:neighborhoodUrl(input.sourceUrl),sourceDate:text(input.sourceDate,40),retrievedAt:text(input.retrievedAt,40),source:input.source};
 }
 export function validateNeighborhoodPack(value: unknown): NeighborhoodPack {
@@ -38,26 +38,77 @@ export function simplifyMapLine(points: [number,number][], epsilon = .00004): [n
   for(let i=1;i<points.length-1;i++){const point=points[i],t=length?Math.max(0,Math.min(1,((point[0]-first[0])*dx+(point[1]-first[1])*dy)/length)):0;const distance=Math.hypot(point[0]-(first[0]+t*dx),point[1]-(first[1]+t*dy));if(distance>furthest){furthest=distance;index=i;}}
   return furthest>epsilon?[...simplifyMapLine(points.slice(0,index+1),epsilon).slice(0,-1),...simplifyMapLine(points.slice(index),epsilon)]:[first,last];
 }
-export function overpassQuery(center: MapCenter) {const [w,s,e,n]=mapBounds(center), box=`${s.toFixed(6)},${w.toFixed(6)},${n.toFixed(6)},${e.toFixed(6)}`;return `[out:json][timeout:22][maxsize:16777216];(way[highway~"^(primary|secondary|tertiary|residential|unclassified|pedestrian|footway)$"](${box});way[waterway](${box});way[boundary=administrative](${box});nwr[amenity~"^(school|library|townhall|police|fire_station|post_office|community_centre)$"](${box});nwr[tourism~"^(museum|attraction)$"](${box});nwr[historic](${box}););out geom;`;}
-export function parseOverpassMap(value: unknown, center: MapCenter, now: string): NeighborhoodMap {
-  const raw=record(value);if(raw.remark||!Array.isArray(raw.elements))throw new Error('MAP_UPSTREAM');
-  const lines:MapLine[]=[],places:NeighborhoodPlace[]=[];let total=0;
-  const [w,s,e,n]=mapBounds(center);
-  for(const rawElement of raw.elements.slice(0,2500)){
-    const item=record(rawElement),tags=item.tags&&typeof item.tags==='object'?item.tags as Record<string,string>:{};
-    const id=`${item.type}-${item.id}`, sourceUrl=`https://www.openstreetmap.org/${item.type}/${item.id}`;
-    if(!/^(node|way|relation)-\d+$/.test(id))continue;
-    const geometry=Array.isArray(item.geometry)?item.geometry:[];
-    const points:[number,number][]=geometry.slice(0,2000).flatMap(rawPoint=>{if(!rawPoint||typeof rawPoint!=='object')return [];const p=rawPoint as {lat?:unknown;lon?:unknown};return typeof p.lat==='number'&&typeof p.lon==='number'&&p.lat>=28&&p.lat<=43&&p.lon>=120&&p.lon<=136?[[p.lon,p.lat] as [number,number]]:[];});
-    if(points.length>1&&(tags.highway||tags.waterway||tags.boundary)&&lines.length<450){let simplified=simplifyMapLine(points);if(simplified.length>200)simplified=simplified.filter((_,i)=>i%Math.ceil(simplified.length/199)===0||i===simplified.length-1);if(total+simplified.length<=12000){lines.push({id,kind:tags.waterway?'water':tags.boundary?'boundary':'road',name:(tags['name:ko']||tags.name||'').slice(0,100),points:simplified});total+=simplified.length;}}
-    const bounds=item.bounds&&typeof item.bounds==='object'?item.bounds as Record<string,number>:null;
-    const lat=typeof item.lat==='number'?item.lat:bounds?(bounds.minlat+bounds.maxlat)/2:points.length?points.reduce((sum,p)=>sum+p[1],0)/points.length:NaN;
-    const lon=typeof item.lon==='number'?item.lon:bounds?(bounds.minlon+bounds.maxlon)/2:points.length?points.reduce((sum,p)=>sum+p[0],0)/points.length:NaN;
-    if((tags.amenity||tags.tourism||tags.historic)&&(tags['name:ko']||tags.name)&&lat>=s&&lat<=n&&lon>=w&&lon<=e&&places.length<80)places.push({id,name:(tags['name:ko']||tags.name).slice(0,100),category:tags.historic?'문화유산':tags.tourism?'문화·탐방':'공공·생활',lat,lon,sourceUrl,note:'',selected:places.length<10,verified:false});
+/** VWorld (국토교통부 공간정보 오픈플랫폼) layers. Buildings are filtered by name because VWorld has no school/public-office point layer. */
+type VworldLayer = {key: string; data: string; svcIde: string; attrFilter?: string; kind?: MapLine['kind']; category?: string; name?: string};
+export const VWORLD_LAYERS: VworldLayer[] = [
+  {key:'boundary',data:'LT_C_ADEMD_INFO',svcIde:'ademd',kind:'boundary',name:'emd_kor_nm'},
+  {key:'water',data:'LT_C_WKMSTRM',svcIde:'wkmstrm',kind:'water',name:'riv_nm'},
+  {key:'road',data:'LT_L_SPRD',svcIde:'sprd',kind:'road',name:'rn'},
+  {key:'school',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:학교',category:'학교',name:'buld_nm'},
+  {key:'office',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:행정복지센터',category:'공공·생활',name:'buld_nm'},
+  {key:'library',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:도서관',category:'공공·생활',name:'buld_nm'},
+  {key:'smallLibrary',data:'LT_P_SMALLLIBRARY',svcIde:'smalllibrary',category:'공공·생활',name:'lbr_name'},
+  {key:'museum',data:'LT_P_DGMUSEUMART',svcIde:'dgmuseumart',category:'문화·탐방',name:'mus_nam'},
+  {key:'market',data:'LT_P_TRADSIJANG',svcIde:'tradsijang',category:'생활·시장',name:'name'},
+  {key:'police',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:경찰',category:'공공·생활',name:'buld_nm'},
+  {key:'fire',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:소방',category:'공공·생활',name:'buld_nm'},
+  {key:'post',data:'LT_C_SPBD',svcIde:'spbd',attrFilter:'buld_nm:like:우체국',category:'공공·생활',name:'buld_nm'},
+  {key:'placeName',data:'LT_P_NSNMSSITENM',svcIde:'nsnmssitenm',category:'지명',name:'land_kpyo'},
+];
+export function vworldRequestUrl(layer: VworldLayer, center: MapCenter, key: string, domain: string) {
+  const [w,s,e,n]=mapBounds(center),url=new URL('https://api.vworld.kr/req/data');
+  const params:Record<string,string>={service:'data',version:'2.0',request:'GetFeature',data:layer.data,key,geomFilter:`BOX(${w.toFixed(6)},${s.toFixed(6)},${e.toFixed(6)},${n.toFixed(6)})`,size:'1000',page:'1',format:'json',errorFormat:'json',crs:'EPSG:4326'};
+  if(domain)params.domain=domain;if(layer.attrFilter)params.attrFilter=layer.attrFilter;
+  for(const [name,value] of Object.entries(params))url.searchParams.set(name,value);
+  return url;
+}
+/** Returns the features of one VWorld GetFeature response; NOT_FOUND is an empty layer, ERROR carries VWorld's error code. */
+export function vworldFeatures(value: unknown): Record<string, unknown>[] {
+  const response=record(record(value).response);
+  if(response.status==='NOT_FOUND')return [];
+  if(response.status!=='OK'){const error=response.error&&typeof response.error==='object'?(response.error as Record<string,unknown>).code:'';throw new Error(`VWORLD_${typeof error==='string'?error:'ERROR'}`);}
+  const features=record(record(response.result).featureCollection).features;if(!Array.isArray(features))throw new Error('VWORLD_FORMAT');
+  return features.filter(feature=>feature&&typeof feature==='object') as Record<string,unknown>[];
+}
+const lonLat=(raw:unknown):[number,number]|null=>Array.isArray(raw)&&typeof raw[0]==='number'&&typeof raw[1]==='number'&&raw[1]>=28&&raw[1]<=43&&raw[0]>=120&&raw[0]<=136?[raw[0],raw[1]]:null;
+/** Line parts and polygon outer rings, as provided by VWorld. */
+function geometryParts(geometry: Record<string, unknown>): [number,number][][] {
+  const coordinates=geometry.coordinates;if(!Array.isArray(coordinates))return [];
+  const path=(raw:unknown)=>Array.isArray(raw)?raw.map(lonLat).filter((point):point is [number,number]=>!!point):[];
+  if(geometry.type==='Point')return [path([coordinates])].filter(part=>part.length);
+  if(geometry.type==='LineString'||geometry.type==='MultiPoint')return [path(coordinates)];
+  if(geometry.type==='MultiLineString'||geometry.type==='Polygon')return geometry.type==='Polygon'?[path(coordinates[0])]:coordinates.map(path);
+  if(geometry.type==='MultiPolygon')return coordinates.map(polygon=>Array.isArray(polygon)?path(polygon[0]):[]);
+  return [];
+}
+/** Keeps the runs of a line near the map area (plus one point either side) so long boundaries keep their detail where they are drawn. */
+function clipToArea(points: [number,number][], [w,s,e,n]: [number,number,number,number]): [number,number][][] {
+  const padLon=(e-w)*.2,padLat=(n-s)*.2,inside=([lon,lat]:[number,number])=>lon>=w-padLon&&lon<=e+padLon&&lat>=s-padLat&&lat<=n+padLat;
+  const runs:[number,number][][]=[];let run:[number,number][]=[];
+  points.forEach((point,index)=>{if(inside(point)){if(!run.length&&index>0)run.push(points[index-1]);run.push(point);}else if(run.length){run.push(point);runs.push(run);run=[];}});
+  if(run.length)runs.push(run);
+  return runs.filter(part=>part.length>1);
+}
+export function parseVworldMap(responses: Record<string, unknown>, center: MapCenter, now: string): NeighborhoodMap {
+  const bounds=mapBounds(center),[w,s,e,n]=bounds,lines:MapLine[]=[],places:NeighborhoodPlace[]=[],names=new Set<string>();let total=0;
+  for(const layer of VWORLD_LAYERS){
+    const features=vworldFeatures(responses[layer.key]),sourceUrl=`https://www.vworld.kr/dev/v4dv_2ddataguide2_s002.do?svcIde=${layer.svcIde}`;
+    if(layer.kind){for(const [index,feature] of features.entries()){
+      const props=feature.properties&&typeof feature.properties==='object'?feature.properties as Record<string,unknown>:{},name=typeof props[layer.name!]==='string'?(props[layer.name!] as string).slice(0,100):'';
+      const parts=feature.geometry&&typeof feature.geometry==='object'?geometryParts(feature.geometry as Record<string,unknown>).flatMap(part=>clipToArea(part,bounds)):[];
+      for(const [part,points] of parts.entries()){if(lines.length>=450)break;let simplified=simplifyMapLine(points);if(simplified.length>200)simplified=simplified.filter((_,i)=>i%Math.ceil(simplified.length/199)===0||i===simplified.length-1);if(total+simplified.length>12000)continue;lines.push({id:`${layer.key}-${index}-${part}`.slice(0,80),kind:layer.kind,name,points:simplified});total+=simplified.length;}
+    }continue;}
+    // One school can be several address buildings; group them by name and place the pin at their average position.
+    const grouped=new Map<string,[number,number][]>();
+    for(const feature of features){const props=feature.properties&&typeof feature.properties==='object'?feature.properties as Record<string,unknown>:{},name=typeof props[layer.name!]==='string'?(props[layer.name!] as string).trim().slice(0,100):'';
+      const points=feature.geometry&&typeof feature.geometry==='object'?geometryParts(feature.geometry as Record<string,unknown>).flat():[];
+      if(name&&points.length)grouped.set(name,[...(grouped.get(name)??[]),[points.reduce((sum,p)=>sum+p[0],0)/points.length,points.reduce((sum,p)=>sum+p[1],0)/points.length]]);}
+    for(const [name,points] of grouped){const lon=points.reduce((sum,p)=>sum+p[0],0)/points.length,lat=points.reduce((sum,p)=>sum+p[1],0)/points.length;
+      if(names.has(name)||lat<s||lat>n||lon<w||lon>e||places.length>=80)continue;names.add(name);
+      places.push({id:`vworld-${layer.key}-${places.length}`,name,category:layer.category!,lat,lon,sourceUrl,note:'',selected:places.length<10,verified:false});}
   }
   if(!lines.length&&!places.length)throw new Error('MAP_EMPTY');
-  const base=raw.osm3s&&typeof raw.osm3s==='object'?(raw.osm3s as Record<string,unknown>).timestamp_osm_base:now;
-  return parseNeighborhoodMap({center,lines,places,source:'osm',attribution:'© OpenStreetMap contributors · ODbL 1.0',sourceUrl:'https://www.openstreetmap.org/copyright',sourceDate:typeof base==='string'?base:now,retrievedAt:now});
+  return parseNeighborhoodMap({center,lines,places,source:'vworld',attribution:'브이월드 공간정보 오픈플랫폼(국토교통부)',sourceUrl:'https://www.vworld.kr',sourceDate:now,retrievedAt:now});
 }
 export function importNeighborhoodGeoJson(value: unknown, center: MapCenter, attribution: string, sourceUrl: string, now: string): NeighborhoodMap {
   const raw=record(value);if(raw.type!=='FeatureCollection'||!Array.isArray(raw.features)||raw.features.length>500)throw new Error('GEOJSON');
