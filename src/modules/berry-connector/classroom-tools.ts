@@ -14,6 +14,7 @@ import {listCalendar} from '@/modules/teacher-workspace/server';
 import {archiveRows} from '@/lib/server/exhibition-archive';
 import {filterArchive, tagCounts} from '@/lib/exhibition-tags';
 import {artworkToday} from '@/lib/exhibition-metadata';
+import {readingProfile} from '@/modules/speech-studio/scoring';
 import {BerryError, alias, maskNames, safeId} from './policy';
 import type {BearerContext, McpTool} from './types';
 
@@ -40,6 +41,7 @@ export const CLASSROOM_TOOLS: McpTool[] = [
   {name: 'get_playground_status', scope: 'classroom:read', description: '말놀이터: 켜짐 여부와 설정, 이번 주 혼자하기·대결·꾸준함 순위(가명, 모두의 교실 기록 그대로), 진행 중인 실시간 방.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'get_points', scope: 'classroom:read', description: '보말(포인트): 학급 설정과 학생별 잔액·누적 적립(가명).', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'list_card_sets', scope: 'classroom:read', description: '카드놀이: 학급에 배부한 카드 세트(제목·마감·진행 중 여부·대상 학생 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
+  {name: 'get_speech', scope: 'classroom:read', description: '말하기·읽기 스튜디오: 학생별(가명) 읽기 정확도·추세·실수·다음 책 수준. 말한 글·녹음은 제외.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'list_class_tools', scope: 'classroom:read', description: 'Tools에서 쓰는 우리 반 캔버스와 투표(상태·마감·참여 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
 ];
 
@@ -177,6 +179,29 @@ async function points(ctx: BearerContext, classId: unknown) {
   return {class: value.name, link: `/teacher/points?classId=${value.id}`, enabled: value.pointSettings?.enabled === true, label: value.pointSettings?.label ?? '보말', students: rows, total_balance: rows.reduce((sum, row) => sum + row.balance, 0)};
 }
 
+const advice = {up: '한 단계 위 책', stay: '같은 수준 더 읽기', down: '한 단계 쉬운 책'} as const;
+const mistake = {missed: '빠뜨리기', changed: '바꿔 읽기', inserted: '덧붙이기'} as const;
+async function speechProgress(ctx: BearerContext, classId: unknown) {
+  const value = await ownedClass(ctx.uid, classId), students = await roster(value.id);
+  // Numbers only: the transcript is the child's own speech and stays in ourclass.
+  const snap = await db().collection('speechRecords').where('classId', '==', value.id).select('ownerUid', 'studentId', 'mode', 'accuracy', 'level', 'counts', 'source', 'metrics', 'createdAt').limit(2000).get();
+  const records = snap.docs.map(doc => doc.data()).filter(row => row.ownerUid === ctx.uid);
+  const readings = records.filter(row => row.mode === 'reading' && typeof row.accuracy === 'number');
+  const checked = records.filter(row => row.source === 'ai' && typeof row.metrics?.corrections === 'number');
+  const people = students.map(student => {
+    const own = records.filter(row => row.studentId === student.id);
+    if (!own.length) return null;
+    const p = readingProfile(own.filter(row => row.mode === 'reading').map(row => ({accuracy: row.accuracy ?? undefined, level: row.level ?? undefined, createdAt: String(row.createdAt), counts: row.counts ?? undefined})));
+    return {student: alias(student.number), practices: own.length, recent_accuracy: p.recentAccuracy, trend: p.trend, next: p.advice ? advice[p.advice] : null, next_level: p.nextLevel, common_mistake: p.commonError ? mistake[p.commonError] : null, needs_help: p.needsHelp, last_at: own.map(row => String(row.createdAt)).sort().at(-1)};
+  }).filter(Boolean) as Data[];
+  return {
+    class: value.name, link: '/teacher/tools', practices: records.length, readings: readings.length,
+    average_accuracy: readings.length ? Math.round(readings.reduce((sum, row) => sum + row.accuracy, 0) / readings.length * 10) / 10 : null,
+    ai_misheard_percent: checked.length ? Math.round(checked.reduce((sum, row) => sum + row.metrics.corrections, 0) / checked.length) : null,
+    needs_help: people.filter(row => row.needs_help).map(row => row.student), students: people.slice(0, LIST * 2),
+  };
+}
+
 async function cardSets(ctx: BearerContext, classId?: unknown) {
   const classes = classId === undefined ? await ownedClasses(ctx.uid) : [await ownedClass(ctx.uid, classId)];
   const lists = await Promise.all(classes.map(value => db().collection('cardClassSets').where('classId', '==', value.id).limit(LIST).get()));
@@ -236,6 +261,7 @@ export async function callClassroomTool(name: string, args: Data, ctx: BearerCon
     case 'get_playground_status': return playgroundStatus(ctx, args.class_id);
     case 'get_points': return points(ctx, args.class_id);
     case 'list_card_sets': return cardSets(ctx, args.class_id);
+    case 'get_speech': return speechProgress(ctx, args.class_id);
     case 'list_class_tools': return classTools(ctx, args.class_id);
   }
   throw new BerryError(`알 수 없는 도구예요: ${name}`, 404, 'not_found');
