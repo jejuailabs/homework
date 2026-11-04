@@ -40,7 +40,9 @@
 
 읽기 수준 판단은 최근 5회를 기준으로 한다. 평균 95% 이상이면 한 단계 위, 90% 미만이면 한 단계 아래 책을 권하고, 그 사이는 같은 수준을 유지한다.
 
-AI 전사 때 원문을 프롬프트로 넘기지 않는다. 넘기면 아이가 실제로 읽은 말 대신 읽어야 할 말을 듣게 되기 때문이다. whisper-1의 구간별 신뢰도(`avg_logprob`, `no_speech_prob`, `compression_ratio`)가 낮은 부분은 "확인 필요"로 보여 준다.
+AI 전사 때 원문을 프롬프트로 넘기지 않는다. 넘기면 아이가 실제로 읽은 말 대신 읽어야 할 말을 듣게 되기 때문이다. 기본 모델 `gpt-transcribe`는 글만 돌려주므로 "확인 필요" 구간 표시가 없다. `SPEECH_TRANSCRIBE_MODEL=whisper-1`(2027-02-26 종료 예정)로 바꾸면 구간별 신뢰도(`avg_logprob`, `no_speech_prob`, `compression_ratio`)가 낮은 부분을 표시한다.
+
+`gpt-4o-mini-tts`는 숫자 속도 대신 말투 지시(`instructions`)로 빠르기를 전한다. `tts-1` 계열로 바꾸면 숫자 속도를 쓴다. 두 모델 모두 2027-01-06 종료 예정이며 후속 방식은 [AGENTS.md](../../../AGENTS.md)의 모델 종료 일정을 따른다.
 
 ## 저장과 개인정보
 
@@ -61,9 +63,9 @@ AI 전사 때 원문을 프롬프트로 넘기지 않는다. 넘기면 아이가
 
 | 기능 | API 경로 | 기본 모델 | 비용이 드는 때 |
 |---|---|---|---|
-| 전사 | `POST /api/speech-studio/transcribe` | `whisper-1` | 녹음 1건마다(분 단위) |
+| 전사 | `POST /api/speech-studio/transcribe` | `gpt-transcribe` | 녹음 1건마다(분 단위) |
 | 피드백 | `POST /api/speech-studio/feedback` | `gpt-6-luna` | 교사가 버튼을 누를 때마다 |
-| 읽어 주기 목소리 | `POST /api/speech-studio/voice` | `tts-1` | 문장마다 처음 1번. 이후는 기기 캐시를 쓴다 |
+| 읽어 주기 목소리 | `POST /api/speech-studio/voice` | `gpt-4o-mini-tts` | 문장마다 처음 1번. 이후는 기기 캐시를 쓴다 |
 | 그림 페이지 글 읽기 | `POST /api/speech-studio/page-text` | `gpt-6-luna` | 교사가 버튼을 누를 때마다 |
 
 - 모든 호출은 `runMeteredAi`의 교사·전체 한도를 따르고, 관리자 **API 사용량** 화면에 기능별로 집계된다.

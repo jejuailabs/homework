@@ -29,3 +29,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 사용자가 2026-11-03에 명시한 원칙이다.
 
+## 외부 AI 모델 종료 일정
+
+OpenAI가 종료를 예고한 모델을 쓰는 기능이다. 작업을 시작할 때 오늘 날짜가 종료일 30일 전 이후이면, 다른 일보다 먼저 사용자에게 알리고 교체 계획을 묻는다. 종료일이 지났으면 해당 기능이 멈췄을 수 있다고 바로 보고한다. 날짜는 [OpenAI Deprecations](https://developers.openai.com/api/docs/deprecations)에서 다시 확인한다.
+
+| 모델 | 종료일 | 쓰는 곳 | 공식 후속 | 메모 |
+|---|---|---|---|---|
+| `gpt-4o-mini-tts`, `tts-1`, `tts-1-hd` | 2027-01-06 | 말하기·읽기 스튜디오 읽어 주기(`SPEECH_TTS_MODEL`, 기본 `gpt-4o-mini-tts`) | `gpt-realtime-2.1-mini` | 후속 모델은 Realtime API 전용이라 `audio/speech`를 지원하지 않는다. 실시간 방식으로 다시 만들거나 다른 음성 서비스로 바꿔야 한다. 기기에 저장된 목소리는 계속 재생된다 |
+| `whisper-1` | 2027-02-26 | 작품 음성 자막(`VOICE_TRANSCRIBE_MODEL`, 기본 `whisper-1`) | `gpt-transcribe`, `gpt-live-transcribe` | `gpt-transcribe`는 문장 타임스탬프가 없어 자막이 글자 수 비례 배분으로 바뀐다. 말하기 스튜디오 전사는 이미 `gpt-transcribe`로 옮겼다 |
+
+사용자가 2026-11-04에 명시한 원칙이다. 로컬 예약 알림(2026-12-07, 2027-01-27)도 함께 걸어 두었다.
+
