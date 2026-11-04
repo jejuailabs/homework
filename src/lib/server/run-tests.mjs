@@ -44,6 +44,8 @@ await import('data:text/javascript;base64,' + Buffer.from(rosterTest).toString('
 const worldLayoutUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../exhibition-world-layout.ts')).toString('base64');
 const worldLayoutTest = compile('../exhibition-world-layout.test.ts').replace("'./exhibition-world-layout'", JSON.stringify(worldLayoutUrl));
 await import('data:text/javascript;base64,' + Buffer.from(worldLayoutTest).toString('base64'));
+const decorUrl = 'data:text/javascript;base64,' + Buffer.from(compile('../exhibition-decor.ts')).toString('base64');
+await import('data:text/javascript;base64,' + Buffer.from(compile('../exhibition-decor.test.ts').replace("'./exhibition-decor'", JSON.stringify(decorUrl))).toString('base64'));
 const policyUrl = 'data:text/javascript;base64,' + Buffer.from(compile('./policy.ts').replace("'../characters'", JSON.stringify(characterUrl)).replace("'../assignment-submission'", JSON.stringify(submissionUrl))).toString('base64');
 const vaultUrl = moduleUrl(compile('./student-code-vault.ts').replace("import 'server-only';", '').replace("'./policy'", JSON.stringify(policyUrl)).replace("'../student-entry-code'", JSON.stringify(studentEntryUrl)));
 await import(moduleUrl(compile('./student-code-vault.test.ts').replace("'./student-code-vault'", JSON.stringify(vaultUrl))));
