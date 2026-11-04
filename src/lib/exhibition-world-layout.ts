@@ -56,3 +56,24 @@ export function exhibitionWallSlots(count: number): WorldWallSlot[] {
 
 /** A quiet white mat follows the artwork; the monitor never stretches a portrait. */
 export function artScreenSize(width=16,height=9,overview=false){const ratio=Number.isFinite(width)&&Number.isFinite(height)&&width>0&&height>0?width/height:16/9;const imageHeight=overview?3:Math.min(4.2,6.4/ratio),imageWidth=overview?6.4:imageHeight*ratio,surfaceHeight=imageHeight+(overview?0:.42);return{imageWidth,imageHeight,surfaceHeight,width:imageWidth+.35,height:surfaceHeight+.35};}
+
+/** Exhibition posters in the class lobby: six per wall (two rows of three) on the back, left and right walls. */
+export const CLASSROOM_PER_WALL = 6, CLASSROOM_CAPACITY = CLASSROOM_PER_WALL * 3;
+export const CLASSROOM_POSTER = {width: 2.7, height: 1.65};
+/** The lobby window hangs on the entry wall, away from every poster wall. */
+export const CLASSROOM_WINDOW = {x: -4.7, y: 3, z: 6.86, width: 2.3, height: 3.1};
+
+export function classroomPosterSlot(index: number, total: number): WorldWallSlot {
+  const wall = Math.floor(index / CLASSROOM_PER_WALL), spot = index % CLASSROOM_PER_WALL;
+  const onWall = Math.min(CLASSROOM_PER_WALL, Math.min(total, CLASSROOM_CAPACITY) - wall * CLASSROOM_PER_WALL);
+  const rowCount = Math.max(1, Math.min(3, onWall - Math.floor(spot / 3) * 3)), along = (spot % 3) - (rowCount - 1) / 2, y = spot < 3 ? 3.95 : 1.95;
+  if (wall === 0) return {x: along * 3.55, y, z: -6.82, rotationY: 0, wall: "back"};
+  const left = wall === 1;
+  // Read left to right as you face each wall.
+  return {x: left ? -7.83 : 7.83, y, z: left ? along * 3.4 : -along * 3.4, rotationY: left ? Math.PI / 2 : -Math.PI / 2, wall: left ? "left" : "right"};
+}
+
+/** Oldest exhibition first (ties by id), so each room keeps its poster spot as new ones are added. */
+export function classroomOrder<T extends {id: string; createdAt?: string}>(rooms: T[]): T[] {
+  return [...rooms].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '') || a.id.localeCompare(b.id));
+}
