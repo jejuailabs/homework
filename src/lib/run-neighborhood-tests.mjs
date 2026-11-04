@@ -6,4 +6,6 @@ const core=url(compile('./neighborhood.ts'));
 await import(url(compile('./neighborhood.test.ts').replace("'./neighborhood'",JSON.stringify(core))));
 const spots=url(compile('./neighborhood-spots.ts').replace("'./neighborhood'",JSON.stringify(core)));
 await import(url(compile('./neighborhood-spots.test.ts').replace("'./neighborhood-spots'",JSON.stringify(spots))));
+const sketch=url(compile('./neighborhood-sketch.ts').replace("'./neighborhood'",JSON.stringify(core)).replace("'./neighborhood-spots'",JSON.stringify(spots)));
+await import(url(compile('./neighborhood-sketch.test.ts').replace("'./neighborhood-sketch'",JSON.stringify(sketch))));
 await import('./server/neighborhood.test.mjs');

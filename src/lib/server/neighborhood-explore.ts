@@ -5,7 +5,8 @@ import {assertOrigin, requireTeacher} from './auth';
 import {ApiError} from './policy';
 import {completedAiText, providerFailure, readBoundedJson} from './ai-policy';
 import {runMeteredAi} from './ai';
-import {validateMapCenter} from '../neighborhood';
+import {parseNeighborhoodMap,validateMapCenter} from '../neighborhood';
+import {sketchAiPlan,sketchAiRequest} from '../neighborhood-sketch';
 import {SPOT_KEYWORDS, spotAiPlaces, spotAiRequest, spotCandidates, vworldSearchItems, vworldSearchUrl} from '../neighborhood-spots';
 
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
@@ -71,5 +72,22 @@ export async function neighborhoodSpotsRoute(request:Request){
     let result;try{result=spotAiPlaces(text,candidates);}catch{throw new ApiError(502,'AI가 고른 장소를 읽지 못했어요. 다시 시도해 주세요.','SPOTS_FORMAT');}
     if(!result.places.length)throw new ApiError(502,'AI가 수업 장소를 고르지 못했어요. 다시 시도해 주세요.','SPOTS_EMPTY');
     return json({...result,candidates:candidates.length});
+  }catch(error){return failure(error);}
+}
+
+/** AI sketch plan (title, 큰길, short labels) for the 약도; the drawing itself happens in the browser from real geometry. */
+export async function neighborhoodSketchRoute(request:Request){
+  try{
+    assertOrigin(request);const ctx=await requireTeacher(request);
+    const raw=await readBoundedJson(request,800_000) as Record<string,unknown>|null;
+    let map;try{map=parseNeighborhoodMap(raw?.map);}catch{throw new ApiError(400,'지도를 다시 불러와 주세요.','NEIGHBORHOOD_INPUT');}
+    const school=typeof raw?.school==='string'?raw.school.trim().slice(0,100):'',grade=typeof raw?.grade==='string'?raw.grade.trim().slice(0,40):'초등 3학년';
+    const model=process.env.OPENAI_MODEL?.trim()||'gpt-6-luna',request_=sketchAiRequest(map,school,grade,model);
+    const text=await runMeteredAi(ctx.uid,'neighborhood-sketch',model,hash(JSON.stringify(request_.input)),async observe=>{
+      const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(request_),signal:AbortSignal.timeout(60_000),cache:'no-store'});
+      if(!response.ok){await response.body?.cancel();throw providerFailure(response.status);}
+      const payload=await readBoundedJson(response,256*1024);observe(payload);return completedAiText(payload);
+    });
+    try{return json({plan:sketchAiPlan(text,map)});}catch{throw new ApiError(502,'AI 약도 계획을 읽지 못했어요. 다시 시도해 주세요.','SKETCH_FORMAT');}
   }catch(error){return failure(error);}
 }
