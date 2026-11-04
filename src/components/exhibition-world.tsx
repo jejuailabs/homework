@@ -8,6 +8,7 @@ import {createArtScreenPainter, type ArtScreenFrame} from '@/lib/exhibition-scre
 import ExhibitionScreen from './exhibition-screen';
 import WorldJoystick from './world-joystick';
 import { createExhibitionLabelCanvas } from "@/lib/exhibition-label";
+import { courtyardDecor, DECOR_SLICES, DECOR_TILE, decorUrl, galleryDecor, lobbyDecor, nineSlice } from "@/lib/exhibition-decor";
 import {createWhitekneeWorldModel, type WorldCompanion} from '@/lib/whiteknee-world-model';
 import "@/styles/exhibition-world.css";
 
@@ -220,6 +221,62 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const surface = mesh(geo(new T.CircleGeometry(radius, 28)), mat(new T.MeshBasicMaterial({ color: "#71674d", transparent: true, opacity, depthWrite: false })), parent);
         surface.rotation.x = -Math.PI / 2; surface.position.set(x, 0.025, z); surface.castShadow = false;
       }
+      // Painted decor. Each piece stays hidden until its image arrives, then takes over from the plain shapes it
+      // replaces (fallbacks), so a slow or missing image never leaves a black surface.
+      const decorLoader = new T.TextureLoader();
+      const decorEntries = new Map<string, { texture: Three.Texture; ready: boolean; waiting: (() => void)[] }>();
+      function decorTexture(name: string, repeatX = 1, repeatY = 1, onReady?: () => void) {
+        const url = decorUrl(name);
+        let entry = decorEntries.get(url);
+        if (!entry) {
+          const created = { texture: null as unknown as Three.Texture, ready: false, waiting: [] as (() => void)[] };
+          created.texture = decorLoader.load(url, () => { if (disposed) return; created.ready = true; created.waiting.splice(0).forEach(run => run()); invalidate(); });
+          created.texture.colorSpace = T.SRGBColorSpace; textures.add(created.texture);
+          decorEntries.set(url, entry = created);
+        }
+        const base = entry, shared = repeatX === 1 && repeatY === 1;
+        const texture = shared ? base.texture : base.texture.clone();
+        if (!shared) { texture.wrapS = texture.wrapT = T.RepeatWrapping; texture.repeat.set(repeatX, repeatY); textures.add(texture); }
+        const done = () => { texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy()); texture.needsUpdate = true; onReady?.(); };
+        if (base.ready) done(); else base.waiting.push(done);
+        return texture;
+      }
+      type DecorOptions = { repeat?: [number, number]; opaque?: boolean; glow?: number; layer?: number; fallbacks?: Three.Object3D[] };
+      function decorPlane(parent: Three.Object3D, name: string, w: number, h: number, options: DecorOptions = {}) {
+        const layer = options.layer ?? 1;
+        const material = mat(options.glow !== undefined
+          ? new T.MeshBasicMaterial({ transparent: true, opacity: options.glow, depthWrite: false, toneMapped: false })
+          : new T.MeshStandardMaterial({ roughness: 0.9, transparent: !options.opaque, alphaTest: options.opaque ? 0 : 0.04, polygonOffset: true, polygonOffsetFactor: -layer, polygonOffsetUnits: -layer }));
+        const plane = mesh(geo(new T.PlaneGeometry(w, h)), material, parent);
+        plane.visible = false; plane.castShadow = false;
+        material.map = decorTexture(name, options.repeat?.[0] ?? 1, options.repeat?.[1] ?? 1, () => { plane.visible = true; options.fallbacks?.forEach(item => { item.visible = false; }); });
+        return plane;
+      }
+      /** Upright picture that always faces the viewer (plants, lamps, mobiles), standing on its bottom edge. */
+      function decorSprite(parent: Three.Object3D, name: string, x: number, y: number, z: number, size: number, fallbacks: Three.Object3D[] = []) {
+        const material = mat(new T.SpriteMaterial({ transparent: true, alphaTest: 0.05 }));
+        const sprite = new T.Sprite(material); sprite.center.set(0.5, 0); sprite.scale.set(size, size, 1); sprite.position.set(x, y, z);
+        sprite.visible = false; parent.add(sprite);
+        material.map = decorTexture(name, 1, 1, () => { sprite.visible = true; fallbacks.forEach(item => { item.visible = false; }); });
+        return sprite;
+      }
+      /** A frame or plaque image whose painted band keeps its width while the middle stretches. */
+      function decorSliced(parent: Three.Object3D, name: string, ux: number, uy: number, fallbacks: Three.Object3D[] = []) {
+        const geometry = geo(new T.BufferGeometry());
+        const material = mat(new T.MeshStandardMaterial({ roughness: 0.85, transparent: true, alphaTest: 0.04, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+        const object = mesh(geometry, material, parent); object.visible = false; object.castShadow = false;
+        material.map = decorTexture(name, 1, 1, () => { object.visible = true; fallbacks.forEach(item => { item.visible = false; }); });
+        const resize = (w: number, h: number, bx: number, by: number) => {
+          const data = nineSlice(w, h, bx, by, ux, uy);
+          geometry.setIndex(data.indices); geometry.setAttribute("position", new T.Float32BufferAttribute(data.positions, 3)); geometry.setAttribute("uv", new T.Float32BufferAttribute(data.uvs, 2));
+          geometry.computeVertexNormals(); geometry.computeBoundingSphere(); invalidate();
+        };
+        return { object, resize };
+      }
+      /** Swaps a shape's material for a painted one once its image is ready. */
+      function decorSkin(object: Three.Mesh, name: string, tile: number) {
+        const texture = decorTexture(name, 1 / tile, 1 / tile, () => { object.material = mat(new T.MeshStandardMaterial({ map: texture, roughness: 0.88 })); });
+      }
       function addAction(object: Three.Object3D, action: Action) { object.userData.worldAction = action; clickable.push(object); }
       function invoke(action: Action) {
         if (disposed || pausedRef.current || transitioning) return;
@@ -239,6 +296,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const pot = cylinder(group, 0.34, 0.25, 0.55, coral); pot.position.y = 0.3;
         cylinder(group, 0.055, 0.065, 0.75, wood).position.y = 0.82;
         [[0, 1.35, 0], [-0.28, 1.13, 0.08], [0.29, 1.02, 0.08]].forEach(([a, b, c]) => ball(group, a, b, c, 0.38, 0.49, 0.32, mint));
+        return group;
       }
       function cloud(x: number, y: number, z: number, scale = 1) {
         const g = new T.Group(); g.position.set(x, y, z); g.scale.setScalar(scale); scene.add(g);
@@ -286,37 +344,75 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       sunlight.shadow.camera.top = 22; sunlight.shadow.camera.bottom = -22; sunlight.shadow.normalBias = 0.04;
       scene.add(sunlight);
 
+      // The plain string lights give way to the painted garland (lobby) or title plaque (gallery) once those load.
+      const stringLights: Three.Object3D[] = [];
       function floorAndWalls() {
         const w = stage === "gallery" ? roomDimensions.width : 16, depth = stage === "gallery" ? roomDimensions.depth : 14, h = stage === "gallery" ? 7.2 : 6.3;
+        const decor = stage === "gallery" ? galleryDecor(theme) : lobbyDecor();
         box(scene, 0, -0.1, 0, w, 0.2, depth, matte("#e3c7a5"));
+        const seams: Three.Object3D[] = [];
         for (let row = 0; row < Math.ceil(depth / 0.72); row++) {
           const z = -depth / 2 + row * 0.72;
-          box(scene, 0, 0.006, z, w, 0.008, 0.014, matte("#d3b899"));
-          for (let col = 0; col < 4; col++) box(scene, -w / 2 + col * w / 4 + (row % 2 ? 1.4 : 0), 0.008, z + 0.36, 0.014, 0.008, 0.7, matte("#d3b899"));
+          seams.push(box(scene, 0, 0.006, z, w, 0.008, 0.014, matte("#d3b899")));
+          for (let col = 0; col < 4; col++) seams.push(box(scene, -w / 2 + col * w / 4 + (row % 2 ? 1.4 : 0), 0.008, z + 0.36, 0.014, 0.008, 0.7, matte("#d3b899")));
         }
+        const floor = decorPlane(scene, decor.floor, w, depth, { opaque: true, repeat: [w / DECOR_TILE.floor, depth / DECOR_TILE.floor], fallbacks: seams });
+        floor.rotation.x = -Math.PI / 2; floor.position.y = 0.012; floor.receiveShadow = true;
         box(scene, 0, h / 2, -depth / 2 - 0.12, w + 0.4, h, 0.24, matte(palette.wall));
         box(scene, -w / 2 - 0.12, h / 2, 0, 0.24, h, depth, matte(palette.wall));
         box(scene, w / 2 + 0.12, h / 2, 0, 0.24, h, depth, matte(palette.wall));
         const ceiling = box(scene, 0, h + 0.12, 0, w + 0.4, 0.24, depth, mat(new T.MeshBasicMaterial({ color: "#fff9ed", toneMapped: false })));
         ceiling.castShadow = false;
+        const paintedCeiling = decorPlane(scene, decor.ceiling, w, depth, { opaque: true, repeat: [w / DECOR_TILE.ceiling, depth / DECOR_TILE.ceiling] });
+        paintedCeiling.rotation.x = Math.PI / 2; paintedCeiling.position.y = h - 0.005;
+        // Wallpaper on the inside of every wall, including both sides of the doorway.
+        const wallpaper = (x: number, y: number, z: number, rotation: number, width: number, height: number) => {
+          const paper = decorPlane(scene, decor.wall, width, height, { opaque: true, repeat: [width / DECOR_TILE.wall, height / DECOR_TILE.wall] });
+          paper.position.set(x, y, z); paper.rotation.y = rotation; paper.receiveShadow = true;
+        };
+        wallpaper(0, h / 2, -depth / 2 + 0.005, 0, w, h);
+        wallpaper(-w / 2 + 0.005, h / 2, 0, Math.PI / 2, depth, h);
+        wallpaper(w / 2 - 0.005, h / 2, 0, -Math.PI / 2, depth, h);
+        for (const side of [-1, 1]) wallpaper(side * (w / 4 + 0.7), h / 2, depth / 2 - 0.115, Math.PI, w / 2 - 1.4, h);
+        wallpaper(0, 4.9, depth / 2 - 0.115, Math.PI, 2.8, 2.8);
         // The entry wall is behind the initial camera, keeping the experience inside an actual room.
         box(scene, -w / 4 - 0.7, h / 2, depth / 2, w / 2 - 1.4, h, 0.22, matte(palette.wall));
         box(scene, w / 4 + 0.7, h / 2, depth / 2, w / 2 - 1.4, h, 0.22, matte(palette.wall));
         box(scene, 0, 4.9, depth / 2, 2.8, 2.8, 0.22, matte(palette.wall));
-        box(scene, 0, 0.48, -depth / 2 + 0.015, w, 0.96, 0.08, mint);
-        for (const side of [-1, 1]) box(scene, side * (w / 2 - 0.03), 0.48, 0, 0.08, 0.96, depth, mint);
-        box(scene, 0, 0.99, -depth / 2 + 0.04, w, 0.08, 0.11, white);
-        for (const side of [-1, 1]) box(scene, side * (w / 2 - 0.04), 0.99, 0, 0.11, 0.08, depth, white);
+        const trim = [box(scene, 0, 0.48, -depth / 2 + 0.015, w, 0.96, 0.08, mint), ...[-1, 1].map(side => box(scene, side * (w / 2 - 0.03), 0.48, 0, 0.08, 0.96, depth, mint)),
+          box(scene, 0, 0.99, -depth / 2 + 0.04, w, 0.08, 0.11, white), ...[-1, 1].map(side => box(scene, side * (w / 2 - 0.04), 0.99, 0, 0.11, 0.08, depth, white))];
+        // Lobby panelling includes its own rail; the gallery strip's painted panel is the lower half of its image.
+        const panelHeight = stage === "gallery" ? 0.96 : 1.05, panelTile = panelHeight * (stage === "gallery" ? 16 : 8);
+        const panel = (x: number, z: number, rotation: number, width: number) => {
+          const strip = decorPlane(scene, decor.wainscot, width, panelHeight, { opaque: true, repeat: [width / panelTile, stage === "gallery" ? 0.5 : 1], fallbacks: trim });
+          strip.position.set(x, panelHeight / 2, z); strip.rotation.y = rotation;
+        };
+        panel(0, -depth / 2 + 0.105, 0, w);
+        for (const side of [-1, 1]) panel(side * (w / 2 - 0.105), 0, -side * Math.PI / 2, depth);
+        for (const side of [-1, 1]) panel(side * (w / 4 + 0.7), depth / 2 - 0.12, Math.PI, w / 2 - 1.4);
+        if ("crown" in decor) {
+          // A painted crown moulding just under the ceiling of each gallery wall.
+          const crown = (x: number, z: number, rotation: number, width: number) => {
+            const strip = decorPlane(scene, decor.crown, width, 0.6, { repeat: [width / 4.8, 1] });
+            strip.position.set(x, h - 0.3, z); strip.rotation.y = rotation;
+          };
+          crown(0, -depth / 2 + 0.02, 0, w);
+          for (const side of [-1, 1]) crown(side * (w / 2 - 0.02), 0, -side * Math.PI / 2, depth);
+        }
         const doorway = new T.Group(); doorway.position.set(0, 1.8, depth / 2 - 0.12); doorway.rotation.y = Math.PI; scene.add(doorway);
         arch(doorway, 2.5, 3.5, 0.13, white); arch(doorway, 2.15, 3.2, 0.16, deepMint).position.z = 0.1;
         const exitLabel = textPlane(doorway, english ? "← BACK" : "← 돌아가기", 1.8, 0.38, "#fffdf5"); exitLabel.position.set(0, 0.1, 0.21);
         addAction(doorway, { kind: "exit", id: "exit" });
         const rug = rounded(scene, 4.6, 3.1, 0.03, matte(palette.rug), 0.65); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.025, 2.6);
+        const paintedRug = decorPlane(scene, decor.rug, 4.4, 4.4, { fallbacks: [rug] }); paintedRug.rotation.x = -Math.PI / 2; paintedRug.position.set(0, 0.03, 2.6); paintedRug.receiveShadow = true;
         // Warm, small string lights sit well above the artwork rows.
         const points = Array.from({ length: 21 }, (_, i) => new T.Vector3(-w / 2 + 0.5 + i * (w - 1) / 20, h - .48 - Math.sin(i / 20 * Math.PI) * 0.3, -depth / 2 + 0.48));
-        mesh(geo(new T.TubeGeometry(new T.CatmullRomCurve3(points), 40, 0.016, 5, false)), wood);
-        points.filter((_, i) => i % 2 === 0).forEach(point => ball(scene, point.x, point.y - 0.1, point.z, 0.065, 0.09, 0.065, matte("#fff0bf")));
-        plant(-w / 2 + 0.65, -depth / 2 + 0.9, 1.3); plant(w / 2 - 0.65, -depth / 2 + 0.9, 1.3);
+        stringLights.push(mesh(geo(new T.TubeGeometry(new T.CatmullRomCurve3(points), 40, 0.016, 5, false)), wood));
+        points.filter((_, i) => i % 2 === 0).forEach(point => stringLights.push(ball(scene, point.x, point.y - 0.1, point.z, 0.065, 0.09, 0.065, matte("#fff0bf"))));
+        for (const side of [-1, 1]) {
+          const potted = plant(side * (w / 2 - 0.65), -depth / 2 + 0.9, 1.3);
+          decorSprite(scene, decor.plant, side * (w / 2 - 0.85), 0, -depth / 2 + 1.0, 2.2, [potted]);
+        }
       }
 
       function schoolBuilding(building: WorldBuilding, index: number) {
@@ -356,8 +452,10 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         group.position.set(slot.x, slot.y, slot.z); group.rotation.y = slot.rotationY;
         scene.add(group);
         const color = PALETTES[(room.theme && room.theme in PALETTES ? room.theme : "cozy") as keyof typeof PALETTES];
-        rounded(group, 2.7, 1.65, 0.13, wood, 0.13);
+        const board = rounded(group, 2.7, 1.65, 0.13, wood, 0.13);
         rounded(group, 2.52, 1.48, 0.1, matte(color.accent), 0.1).position.z = 0.095;
+        const frame = decorSliced(group, lobbyDecor().poster, DECOR_SLICES.poster.u, DECOR_SLICES.poster.v, [board]);
+        frame.object.position.z = 0.19; frame.resize(2.85, 1.8, DECOR_SLICES.poster.border, DECOR_SLICES.poster.border);
         // Every real room has a different little illustration, not an invented exhibition.
         const mini = new T.Group(); mini.position.set(-0.82, 0.1, 0.24); mini.scale.setScalar(0.43); group.add(mini);
         if (room.theme === "forest") { ball(mini, 0, 0.22, 0, 0.65, 0.9, 0.18, matte(color.dark)); box(mini, 0, -0.57, 0, 0.2, 0.55, 0.2, wood); }
@@ -379,8 +477,11 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const picture=new T.Mesh(geo(new T.PlaneGeometry(1,1)),mat(new T.MeshBasicMaterial({color:"#ffffff",toneMapped:false})));
         picture.position.z=.15;picture.visible=false;group.add(picture);
         const plaque=rounded(group,2.3,.27,.025,white,.045);
+        const look=galleryDecor(theme),frame=decorSliced(group,look.frame,DECOR_SLICES.frame.u,DECOR_SLICES.frame.v,[rim]);frame.object.position.z=.17;
+        const label=decorSliced(group,look.caption,.26,0,[plaque]);label.resize(2.55,1,.26,0);
+        const glow=decorPlane(group,look.spotlight,2.6,2.6,{glow:.5});glow.renderOrder=-1;
         const caption=textPlane(group,`${wing*WORLD_WING_CAPACITY+index+1}. ${artwork.title}${artwork.artistName||artwork.studentName?` · ${artwork.artistName||artwork.studentName}`:""}`,2.17,.25,"#655643",undefined,21);
-        function resize(width:number,height:number){const size=exhibitionFrameSize(width,height);rim.scale.set(size.width,size.height,.12);mount.scale.set(size.width-size.border*2,size.height-size.border*2,.025);picture.scale.set(size.imageWidth,size.imageHeight,1);plaque.position.set(0,-size.height/2-.23,.025);caption.position.set(0,-size.height/2-.23,.11);}
+        function resize(width:number,height:number){const size=exhibitionFrameSize(width,height);rim.scale.set(size.width,size.height,.12);mount.scale.set(size.width-size.border*2,size.height-size.border*2,.025);picture.scale.set(size.imageWidth,size.imageHeight,1);plaque.position.set(0,-size.height/2-.23,.025);frame.resize(size.imageWidth+.5,size.imageHeight+.5,DECOR_SLICES.frame.border,DECOR_SLICES.frame.border);label.object.position.set(0,-size.height/2-.23,.03);glow.position.set(0,Math.min(size.height/2+.55,7.2-slot.y-1.6),-.04);caption.position.set(0,-size.height/2-.23,.11);}
         resize(artwork.width||3,artwork.height||2);
         textureJobs.push({artwork,picture,placeholder,w:2.05,h:2.05,resize});
         addAction(group,{kind:"artwork",id:artwork.id});
@@ -389,6 +490,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const screen=GALLERY_SCREEN,group=new T.Group();scene.add(group);
         group.position.z=-roomDimensions.depth/2+.34;
         const rim=box(group,0,screen.y,.06,1,1,.12,matte("#bfb7a8"));
+        const border=decorSliced(group,galleryDecor(theme).screen,DECOR_SLICES.screen.u,DECOR_SLICES.screen.v,[rim]);border.object.position.set(0,screen.y,.17);
         const mount=box(group,0,screen.y,.125,1,1,.025,white);mount.castShadow=false;
         const surface=document.createElement('canvas');let texture=new T.CanvasTexture(surface),textureWidth=0,textureHeight=0;texture.colorSpace=T.SRGBColorSpace;textures.add(texture);
         const screenMaterial=mat(new T.MeshBasicMaterial({map:texture,toneMapped:false}));
@@ -402,7 +504,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
             texture.colorSpace=T.SRGBColorSpace;textures.add(texture);screenMaterial.map=texture;screenMaterial.needsUpdate=true;
             textureWidth=surface.width;textureHeight=surface.height;
           }
-          rim.scale.set(size.width,size.height,.12);mount.scale.set(size.width-.09,size.height-.09,.025);picture.scale.set(size.imageWidth,size.surfaceHeight,1);root!.dataset.screenFrameSize=`${size.width.toFixed(3)},${size.height.toFixed(3)}`;texture.needsUpdate=true;invalidate();
+          rim.scale.set(size.width,size.height,.12);mount.scale.set(size.width-.09,size.height-.09,.025);picture.scale.set(size.imageWidth,size.surfaceHeight,1);border.resize(size.imageWidth+.62,size.surfaceHeight+.62,DECOR_SLICES.screen.border,DECOR_SLICES.screen.border);root!.dataset.screenFrameSize=`${size.width.toFixed(3)},${size.height.toFixed(3)}`;texture.needsUpdate=true;invalidate();
         });
         screenPainter.current=frame=>{root!.dataset.screenIndex=String(frame.index+1);root!.dataset.screenMode=frame.overview?'overview':'slideshow';painter.show(frame);};
         screenPainter.current(screenFrame.current);
@@ -412,8 +514,13 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
       if (stage === "campus") {
         box(scene, 0, -0.25, -10, 110, 0.5, 110, matte("#c9dda9"));
+        const yard = courtyardDecor();
+        const lawn = decorPlane(scene, yard.grass, 110, 110, { opaque: true, repeat: [110 / DECOR_TILE.grass, 110 / DECOR_TILE.grass] }); lawn.rotation.x = -Math.PI / 2; lawn.position.set(0, 0.002, -10); lawn.receiveShadow = true;
         const path = rounded(scene, 5.2, 42, 0.04, matte("#f4e5cb"), 1.4); path.rotation.x = -Math.PI / 2; path.position.set(0, 0.014, 3);
         const crossPath = rounded(scene, Math.max(18, campusColumns * 12), 4.3, 0.04, matte("#f4e5cb"), 1.4); crossPath.rotation.x = -Math.PI / 2; crossPath.position.set(0, 0.019, 2.5);
+        decorSkin(path, yard.path, DECOR_TILE.path); decorSkin(crossPath, yard.path, DECOR_TILE.path);
+        const skyTexture = decorTexture(yard.sky, 1, 1, () => { skyTexture.mapping = T.EquirectangularReflectionMapping; scene.background = skyTexture; });
+        [[-3.5, 6.5, 0], [3.5, 6.5, 1], [-3.6, 11, 2], [3.6, 11, 0], [-3.5, 15.5, 1], [3.5, 15.5, 2]].forEach(([x, z, kind]) => decorSprite(scene, yard.bushes[kind], x, 0, z, 1.7));
         data.buildings.forEach(schoolBuilding);
         tree(-Math.max(7, campusColumns * 5.6), 0, 1.4); tree(Math.max(7, campusColumns * 5.6), 0, 1.3); tree(-9, 10, 0.8); tree(10, 11, 0.9);
         cloud(-12, 9, -17, 2); cloud(10, 9.5, -20, 2.2); cloud(0, 12, -30, 2);
@@ -432,14 +539,37 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         floorAndWalls();
         if (stage === "classroom") {
           data.rooms.forEach(poster);
-          const title = textPlane(scene, english ? `${data.buildingName || "Our class"} · EXHIBITIONS` : `${data.buildingName || "우리 반"}의 작은 전시회`, 9.5, 0.55, palette.dark); title.position.set(0, 5.4, -6.85);
+          const title = textPlane(scene, english ? `${data.buildingName || "Our class"} · EXHIBITIONS` : `${data.buildingName || "우리 반"}의 작은 전시회`, 8.4, 0.55, palette.dark); title.position.set(0, 5.4, -6.85);
+          const lobby = lobbyDecor();
+          const plaque = decorSliced(scene, lobby.plaque, DECOR_SLICES.lobbyPlaque.u, 0); plaque.object.position.set(0, 5.4, -6.9);
+          plaque.resize(10.6, 3.2, 3.2 * DECOR_SLICES.lobbyPlaque.u, 0);
+          const garland = decorPlane(scene, lobby.garland, 12, 1.5, { fallbacks: stringLights }); garland.position.set(0, 5.95, -6.93);
+          // Little lanterns, an open-window glow and a few wall stickers above the poster rows.
+          for (const [x, z] of [[-4.2, -1.5], [4.2, -1.5], [0, 2.4]]) decorSprite(scene, lobby.lantern, x, 4.95, z, 1.35);
+          lobby.stickers.forEach((name, i) => {
+            const side = i < 3 ? -1 : 1, sticker = decorPlane(scene, name, 0.62, 0.62, { layer: 2 });
+            sticker.position.set(side * 7.9, 5.45, (i % 3 - 1) * 3.6 * side); sticker.rotation.y = side * -Math.PI / 2;
+          });
           // Small window and a low book nook make the lobby feel like a classroom. The window sits on the entry wall so
           // the three poster walls stay free.
           const windowGroup = new T.Group(); windowGroup.position.set(CLASSROOM_WINDOW.x, CLASSROOM_WINDOW.y, CLASSROOM_WINDOW.z); windowGroup.rotation.y = Math.PI; scene.add(windowGroup);
-          arch(windowGroup, 2.3, 3.1, 0.1, white); arch(windowGroup, 2.03, 2.8, 0.1, matte(palette.sky)).position.z = 0.08;
+          arch(windowGroup, 2.3, 3.1, 0.1, white); const pane = arch(windowGroup, 2.03, 2.8, 0.1, matte(palette.sky)); pane.position.z = 0.08;
+          {
+            // The schoolyard through the window: the arch shape maps the picture across its full width and height.
+            const r = 2.03 / 2, outline = new T.Shape(); outline.moveTo(-r, -1.4); outline.lineTo(r, -1.4); outline.lineTo(r, 1.4 - r); outline.absarc(0, 1.4 - r, r, 0, Math.PI, false); outline.closePath();
+            const viewTexture = decorTexture(lobby.view, 1 / 2.03, 1 / 2.8, () => {
+              viewTexture.offset.set(0.5, 0.5);
+              const view = mesh(geo(new T.ShapeGeometry(outline, 24)), mat(new T.MeshBasicMaterial({ map: viewTexture, toneMapped: false })), windowGroup);
+              view.position.z = 0.12; view.castShadow = false; pane.visible = false; invalidate();
+            });
+          }
+          const curtains = decorPlane(windowGroup, lobby.curtains, 3.5, 3.5); curtains.position.set(0, 0.05, 0.2);
+          const sunPatch = decorPlane(scene, lobby.light, 2.8, 2.8, { glow: 0.55 }); sunPatch.rotation.x = -Math.PI / 2; sunPatch.position.set(CLASSROOM_WINDOW.x, 0.035, CLASSROOM_WINDOW.z - 2.2);
           box(windowGroup, 0, 0, 0.15, 0.07, 2.5, 0.025, white); box(windowGroup, 0, -0.15, 0.15, 2, 0.07, 0.025, white);
           const shelf = rounded(scene, 3.2, 0.8, 0.8, wood, 0.13); shelf.position.set(5.2, 0.44, 5.4);
-          ["#a9c8b5", "#e9b5a5", "#e7d39b", "#b9cae1", "#cbbbd3"].forEach((color, i) => box(scene, 4.2 + i * 0.39, 1.08, 5.4, 0.27, 0.5 + (i % 2) * 0.14, 0.43, matte(color)));
+          const books = ["#a9c8b5", "#e9b5a5", "#e7d39b", "#b9cae1", "#cbbbd3"].map((color, i) => box(scene, 4.2 + i * 0.39, 1.08, 5.4, 0.27, 0.5 + (i % 2) * 0.14, 0.43, matte(color)));
+          decorSprite(scene, lobby.shelf, 5.2, 0, 5.4, 3.3, [shelf, ...books]);
+          decorSprite(scene, lobby.pots[1], -6.9, 0, 6.1, 0.95); decorSprite(scene, lobby.pots[0], -2.5, 0, 6.2, 0.85); decorSprite(scene, lobby.pots[2], 2.4, 0, 6.2, 1.1);
           obstacles.push({ x: 5.2, z: 5.4, halfX: 1.8, halfZ: 0.6 });
           if (!data.rooms.length) {
             const board = rounded(scene, 6.6, 2.55, 0.15, mint, 0.25); board.position.set(0, 3.1, -6.82);
@@ -449,8 +579,16 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
           const slots = exhibitionWallSlots(data.artworks.length);
           data.artworks.forEach((artwork, index) => artworkFrame(artwork, index, slots[index]));
           artScreen();
-          textPlane(scene, data.roomTitle || (english ? "Our little gallery" : "우리들의 작은 전시회"), 8, 0.46, palette.dark).position.set(0, 6.75, -roomDimensions.depth / 2 + 0.18);
-          const bench = rounded(scene, 3.5, 0.28, 1.0, cream, 0.14); bench.position.set(0, 0.58, -0.45);
+          textPlane(scene, data.roomTitle || (english ? "Our little gallery" : "우리들의 작은 전시회"), 7, 0.46, palette.dark).position.set(0, 6.6, -roomDimensions.depth / 2 + 0.18);
+          const look = galleryDecor(theme);
+          const titlePlaque = decorSliced(scene, look.plaque, DECOR_SLICES.galleryPlaque.u, 0, stringLights); titlePlaque.object.position.set(0, 6.6, -roomDimensions.depth / 2 + 0.14);
+          titlePlaque.resize(9.6, 1.5, 1.5 * DECOR_SLICES.galleryPlaque.u, 0);
+          for (const side of [-1, 1]) decorSprite(scene, look.mobile, side * 6.5, 5.45, 1.5, 1.6);
+          look.stickers.forEach((name, i) => {
+            const side = i % 2 ? 1 : -1, sticker = decorPlane(scene, name, 0.6, 0.6, { layer: 2 });
+            sticker.position.set(side * (roomDimensions.width / 2 - 0.03), 6.2, (Math.floor(i / 2) - 1) * 5.2 * side); sticker.rotation.y = -side * Math.PI / 2;
+          });
+          const bench = rounded(scene, 3.5, 0.28, 1.0, cream, 0.14); bench.position.set(0, 0.58, -0.45); decorSkin(bench, look.cushion, DECOR_TILE.cushion);
           box(scene, -1.3, 0.26, -0.45, 0.23, 0.51, 0.7, wood); box(scene, 1.3, 0.26, -0.45, 0.23, 0.51, 0.7, wood);
           obstacles.push({ x: 0, z: -0.45, halfX: 1.95, halfZ: 0.75 });
           if (theme === "forest") { plant(-8.3, 5.7, 1.7); plant(8.3, 5.7, 1.6); }
