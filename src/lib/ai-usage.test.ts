@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {aiProviderUsage,aiUsagePeriod,summarizeAiUsage} from './ai-usage';
+import {aiProviderUsage,aiUsagePeriod,summarizeAiUsage,summarizeTeacherTokens} from './ai-usage';
 test('AI usage retains only metering metadata and prices cached input plus actual search calls',()=>{
   const usage=aiProviderUsage({usage:{input_tokens:10000,output_tokens:1000,total_tokens:11000,input_tokens_details:{cached_tokens:2000}},service_tier:'default',output:[{type:'web_search_call'},{type:'web_search_call'},{type:'message',content:'PRIVATE TEXT'}],image:'PRIVATE PHOTO'},'gpt-6-luna');
   assert.equal(usage.inputTokens,10000);assert.equal(usage.cachedInputTokens,2000);assert.equal(usage.webSearchCalls,2);assert(Math.abs(usage.estimatedUsd!-.02132)<1e-10);assert(!JSON.stringify(usage).includes('PRIVATE'));
@@ -22,4 +22,14 @@ test('whole-site and per-teacher/class summaries include failed paid calls and p
 test('usage dates use inclusive Korean calendar days and reject invalid or unbounded periods',()=>{
   assert.deepEqual(aiUsagePeriod(null,null,new Date('2026-10-23T16:00:00Z')),{from:'2026-10-24',to:'2026-10-24',start:'2026-10-23T15:00:00.000Z',end:'2026-10-24T15:00:00.000Z'});
   assert.equal(aiUsagePeriod('2026-10-01','2026-10-31').to,'2026-10-31');for(const dates of [['2026-10-01','2026-11-01'],['2026-10-31','2026-10-01'],['2026-02-30','2026-03-01'],['bad','2026-10-24']])assert.throws(()=>aiUsagePeriod(dates[0],dates[1]));
+});
+test('teacher token view splits each teacher by feature and token kind',()=>{
+  const gpt=aiProviderUsage({usage:{input_tokens:5000,output_tokens:800,total_tokens:5800,input_tokens_details:{cached_tokens:1000}},service_tier:'default'},'gpt-6-luna'),audio=aiProviderUsage({duration:90},'gpt-transcribe');
+  const rows=summarizeTeacherTokens([{actorUid:'a',tool:'resource',status:'done',createdAt:'2026-11-04',usage:gpt},{actorUid:'a',tool:'resource',status:'done',createdAt:'2026-11-04',usage:gpt},{actorUid:'a',tool:'speech-transcribe',status:'done',createdAt:'2026-11-04',usage:audio},{actorUid:'b',tool:'speech-voice',status:'done',createdAt:'2026-11-04'}]);
+  assert.deepEqual(rows.map(row=>row.uid),['a','b']);
+  assert.equal(rows[0].inputTokens,10000);assert.equal(rows[0].cachedInputTokens,2000);assert.equal(rows[0].outputTokens,1600);assert.equal(rows[0].audioSeconds,90);
+  assert.deepEqual(rows[0].tools.map(row=>row.tool),['resource','speech-transcribe']);
+  assert.equal(rows[0].tools[0].requests,2);
+  // Calls the provider does not meter still count as requests.
+  assert.equal(rows[1].requests,1);assert.equal(rows[1].measuredCalls,0);
 });
