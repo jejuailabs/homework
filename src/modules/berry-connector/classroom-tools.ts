@@ -16,6 +16,7 @@ import {filterArchive, tagCounts} from '@/lib/exhibition-tags';
 import {artworkToday} from '@/lib/exhibition-metadata';
 import {readingProfile} from '@/modules/speech-studio/scoring';
 import {BerryError, alias, maskNames, safeId} from './policy';
+import {PACK_LINK, filterPacks, packDetail, packSummary} from './neighborhood-packs';
 import type {BearerContext, McpTool} from './types';
 
 /**
@@ -43,6 +44,8 @@ export const CLASSROOM_TOOLS: McpTool[] = [
   {name: 'list_card_sets', scope: 'classroom:read', description: '카드놀이: 학급에 배부한 카드 세트(제목·마감·진행 중 여부·대상 학생 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
   {name: 'get_speech', scope: 'classroom:read', description: '말하기·읽기 스튜디오: 학생별(가명) 읽기 정확도·추세·실수·다음 책 수준. 말한 글·녹음은 제외.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'list_class_tools', scope: 'classroom:read', description: 'Tools에서 쓰는 우리 반 캔버스와 투표(상태·마감·참여 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
+  {name: 'list_neighborhood_packs', scope: 'classroom:read', description: 'Tools > 우리 동네 탐험에 저장한 수업 자료 목록: 제목·지역·학년·단원·연결 학급·저장한 날·AI 약도 여부, 최신순. 학급·기간(from·to)·낱말(제목·지역·단원)로 찾습니다. "지난달쯤"처럼 흐린 기간은 앞뒤 한 달을 넓혀 줍니다. 장소·출처는 get_neighborhood_pack으로 읽습니다.', inputSchema: {type: 'object', properties: {query: {type: 'string', description: '제목·지역·단원 낱말(띄어쓰기로 여러 개)'}, from: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, class_id: cls}, additionalProperties: false}},
+  {name: 'get_neighborhood_pack', scope: 'classroom:read', description: '우리 동네 탐험 자료 하나: 고른 수업 장소(이름·종류·분류·설명·교사 확인 여부, 최대 12곳), 약도 제목과 큰길, 지도 출처·기준일, 참고 자료 목록, 브리핑 앞부분. 좌표·도로 같은 지도 원본은 내보내지 않으니 지도는 링크로 열어 보게 합니다.', inputSchema: {type: 'object', properties: {pack_id: {type: 'string', description: 'list_neighborhood_packs의 자료 id'}}, required: ['pack_id'], additionalProperties: false}},
 ];
 
 
@@ -239,6 +242,22 @@ async function moderationQueue(ctx: BearerContext, classId?: unknown) {
   return {artworks: artworks.flat(), posts: posts.flat(), note: '사진·영상 원본은 모두의 교실 화면에서 확인해 주세요.'};
 }
 
+/** Packs live under the teacher's own path; free text is masked with the linked class's roster. */
+async function neighborhoodPacks(ctx: BearerContext, args: Data) {
+  const classId = args.class_id === undefined ? '' : (await ownedClass(ctx.uid, args.class_id)).id;
+  const snap = await db().collection(`users/${ctx.uid}/neighborhoodPacks`).orderBy('createdAt', 'desc').select('title', 'region', 'grade', 'unit', 'classId', 'createdAt', 'sketch').limit(200).get();
+  const found = filterPacks(snap.docs.map(doc => ({id: doc.id, data: doc.data()})), {q: String(args.query ?? '').slice(0, 100), classId, from: String(args.from ?? ''), to: String(args.to ?? '')});
+  const shown = found.slice(0, LIST), names = new Map((await ownedClasses(ctx.uid)).map(value => [value.id, String(value.name)]));
+  const rosters = new Map(await Promise.all([...new Set(shown.map(doc => String(doc.data.classId ?? '')).filter(id => names.has(id)))].map(async id => [id, await roster(id)] as const)));
+  return {count: found.length, link: PACK_LINK, packs: shown.map(doc => packSummary(doc, names.get(doc.data.classId) ?? null, text => maskNames(text, rosters.get(doc.data.classId) ?? [])))};
+}
+async function neighborhoodPack(ctx: BearerContext, packId: unknown) {
+  const doc = await db().doc(`users/${ctx.uid}/neighborhoodPacks/${safeId(packId, '동네 탐험 자료')}`).get();
+  if (!doc.exists) throw new BerryError('이 동네 탐험 자료를 찾을 수 없어요.', 404, 'not_found');
+  const data = doc.data()!, linked = data.classId ? await ownedClass(ctx.uid, data.classId).catch(() => null) : null, students = linked ? await roster(linked.id) : [];
+  return packDetail({id: doc.id, data}, linked ? String(linked.name) : null, text => maskNames(text, students));
+}
+
 async function storageView(ctx: BearerContext) {
   const plan = await teacherStorage(ctx.uid, 30_000);
   return {
@@ -263,6 +282,8 @@ export async function callClassroomTool(name: string, args: Data, ctx: BearerCon
     case 'list_card_sets': return cardSets(ctx, args.class_id);
     case 'get_speech': return speechProgress(ctx, args.class_id);
     case 'list_class_tools': return classTools(ctx, args.class_id);
+    case 'list_neighborhood_packs': return neighborhoodPacks(ctx, args);
+    case 'get_neighborhood_pack': return neighborhoodPack(ctx, args.pack_id);
   }
   throw new BerryError(`알 수 없는 도구예요: ${name}`, 404, 'not_found');
 }
