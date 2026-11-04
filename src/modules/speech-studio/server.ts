@@ -17,9 +17,9 @@ const hash = (value: string | Uint8Array) => createHash('sha256').update(value).
 const json = (value: unknown, status = 200) => NextResponse.json(value, {status, headers: {'Cache-Control': 'private, no-store'}});
 const RECORDS_LIMIT = 2000;
 const model = {
-  transcribe: () => process.env.SPEECH_TRANSCRIBE_MODEL?.trim() || 'whisper-1',
+  transcribe: () => process.env.SPEECH_TRANSCRIBE_MODEL?.trim() || 'gpt-transcribe',
   feedback: () => process.env.SPEECH_FEEDBACK_MODEL?.trim() || 'gpt-6-luna',
-  voice: () => process.env.SPEECH_TTS_MODEL?.trim() || 'tts-1',
+  voice: () => process.env.SPEECH_TTS_MODEL?.trim() || 'gpt-4o-mini-tts',
   pageText: () => process.env.SPEECH_FEEDBACK_MODEL?.trim() || 'gpt-6-luna',
 };
 /** Paid features stay off until the owner approves the cost and sets SPEECH_AI_ENABLED=true. */
@@ -122,7 +122,11 @@ async function voice(request: Request, ctx: Context) {
   const speed = typeof input.speed === 'number' && Number.isFinite(input.speed) ? Math.min(1.2, Math.max(0.7, input.speed)) : 1;
   const name = model.voice();
   const audio = await runMeteredAi(ctx.uid, 'speech-voice', name, hash(JSON.stringify(['speech-voice-v1', name, speaker, speed, text])), async () => {
-    const response = await openAi('audio/speech', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({model: name, voice: speaker, input: text, speed, response_format: 'mp3'})}, 60_000, '읽어 줄 목소리를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+    // tts-1 models take a numeric speed; gpt-4o-mini-tts takes spoken direction instead.
+    const legacy = name.startsWith('tts-1');
+    const request = legacy ? {model: name, voice: speaker, input: text, speed, response_format: 'mp3'}
+      : {model: name, voice: speaker, input: text, response_format: 'mp3', instructions: `초등학생에게 동화를 읽어 주듯 또렷하고 다정한 한국어로 읽어 주세요. ${speed < 0.95 ? '평소보다 천천히, 문장 끝에서 잠깐 쉬어 주세요.' : speed > 1.05 ? '조금 빠르고 경쾌하게 읽어 주세요.' : '알맞은 빠르기로 읽어 주세요.'}`};
+    const response = await openAi('audio/speech', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(request)}, 60_000, '읽어 줄 목소리를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
     const size = Number(response.headers.get('content-length'));
     if (size > 6 * 1024 * 1024) {await response.body?.cancel(); throw new ApiError(502, '음성이 너무 길어요. 페이지를 나눠 주세요.', 'VOICE_TOO_LARGE');}
     const bytes = new Uint8Array(await response.arrayBuffer());
