@@ -62,9 +62,10 @@ function CreatePanel({classId, aiConfigured, onDraft}: {classId: string; aiConfi
   }
   const ready = subject && unit.trim() && title.trim();
   return <section className="lr-card lr-create"><h2><Wand2 size={20}/>오늘 배운 내용 넣기</h2>
-    <div className="lr-fields"><label>과목<select value={subject} onChange={event => setSubject(event.target.value)}>{SUBJECTS.map(value => <option key={value}>{value}</option>)}</select></label>
-      <label>단원<input value={unit} maxLength={80} onChange={event => setUnit(event.target.value)} placeholder="예: 2. 물의 여행"/></label>
-      <label>차시 제목<input value={title} maxLength={80} onChange={event => setTitle(event.target.value)} placeholder="예: 물은 어떻게 순환할까요?"/></label></div>
+    <p className="lr-note"><span className="lr-required" aria-hidden="true">*</span> 표시는 꼭 채워야 문제를 만들 수 있어요.</p>
+    <div className="lr-fields"><label><span>과목<span className="lr-required" aria-hidden="true">*</span></span><select required value={subject} onChange={event => setSubject(event.target.value)}>{SUBJECTS.map(value => <option key={value}>{value}</option>)}</select></label>
+      <label><span>단원<span className="lr-required" aria-hidden="true">*</span></span><input required value={unit} maxLength={80} onChange={event => setUnit(event.target.value)} placeholder="예: 2. 물의 여행"/></label>
+      <label><span>차시 제목<span className="lr-required" aria-hidden="true">*</span></span><input required value={title} maxLength={80} onChange={event => setTitle(event.target.value)} placeholder="예: 물은 어떻게 순환할까요?"/></label></div>
     <label className="lr-wide">수업 내용<textarea value={text} rows={8} maxLength={20000} onChange={event => setText(event.target.value)} placeholder="교과서 본문, 판서 내용, 핵심 정리를 붙여 넣어 주세요. 사진이나 PDF만 넣어도 돼요."/></label>
     <div className="lr-files"><label className="button"><ImagePlus size={16}/>사진·PDF 넣기<input type="file" accept="image/*,application/pdf" multiple hidden onChange={event => {void addFiles(event.target.files); event.target.value = '';}}/></label><small>사진 4장, PDF 1개(2.5MB)까지. 사진은 자동으로 줄여서 보내요.</small></div>
     {(images.length > 0 || pdf) && <div className="lr-previews">{images.map((image, index) => <span key={index}><img src={image} alt={`넣은 사진 ${index + 1}`}/><button type="button" aria-label="사진 빼기" onClick={() => setImages(old => old.filter((_, at) => at !== index))}><X size={14}/></button></span>)}{pdf && <span className="is-pdf"><FileText size={22}/>{pdf.name}<button type="button" aria-label="PDF 빼기" onClick={() => setPdf(null)}><X size={14}/></button></span>}</div>}
