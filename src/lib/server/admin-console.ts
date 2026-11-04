@@ -5,7 +5,7 @@ import {pipeline} from 'node:stream/promises';
 import {AggregateField,FieldPath,Timestamp} from 'firebase-admin/firestore';
 import {NextResponse} from 'next/server';
 import {auth,bucket,db} from './admin';
-import {getContext,assertOrigin,type Context} from './auth';
+import {getContext,assertOrigin,forgetContext,type Context} from './auth';
 import {ApiError,id,isAdmin,text,canDisableUser} from './policy';
 import {getAiOperations} from './ai';
 import {adminAiTokens,adminAiUsage} from './admin-ai-usage';
@@ -160,7 +160,7 @@ async function change(ctx:Context,path:string[],input:Data) {
     else if(kind==='distributions'){if(!['open','closed'].includes(input.status))throw new ApiError(400,'학습 상태를 확인해 주세요.');patch={active:input.status==='open'};}
     else throw new ApiError(400,'숙제 내용 수정은 담당 교사가 진행합니다.');action='content.moderate';patch.updatedAt=now;
   }else throw new ApiError(404,'관리 작업을 찾을 수 없어요.');
-  return db().runTransaction(async tx=>{
+  const outcome=await db().runTransaction(async tx=>{
     const [doc,done,user]=await Promise.all([tx.get(target),tx.get(receipt),path[0]==='roles'?tx.get(db().doc('users/'+target.id)):Promise.resolve(null)]);if(done.exists){if(done.data()?.fingerprint!==fingerprint)throw new ApiError(409,'이미 사용한 요청 번호예요.');return done.data()?.result;}
     if(path[0]==='roles'&&(!user?.exists||user.data()?.role==='student'||user.data()?.adminStateLease?.until>Date.now()))throw new ApiError(409,'계정 상태 처리 후 다시 시도해 주세요.');
     if(path[0]!=='roles'&&!doc.exists)throw new ApiError(404,'대상을 찾을 수 없어요.');
@@ -170,6 +170,8 @@ async function change(ctx:Context,path:string[],input:Data) {
     if(path[0]==='roles'&&input.role==='teacher')tx.delete(target);else tx.set(target,patch,{merge:true});
     tx.create(receipt,{scope:JSON.stringify(path),fingerprint,result,createdAt:now});tx.create(db().collection('adminAudit').doc(),{actorUid:ctx.uid,action,target:target.id,kind:'change',outcome:'success',details:{before,after,reason,requestId,type:path[0]==='content'?path[1]:path[0]},createdAt:now});return result;
   });
+  if(path[0]==='roles')forgetContext(id(path[1]));
+  return outcome;
 }
 async function changeAccount(ctx:Context,uid:string,input:Data,receipt:FirebaseFirestore.DocumentReference,reason:string) {
   countCache.clear();
@@ -182,9 +184,11 @@ async function changeAccount(ctx:Context,uid:string,input:Data,receipt:FirebaseF
     const lock=doc.data()?.adminStateLease;if(lock?.until>Date.now())throw new ApiError(409,'계정 상태를 처리 중이에요.');tx.set(receipt,{scope,fingerprint,lease,leaseUntil:Date.now()+60_000,createdAt:stamp()});tx.update(ref,{adminStateLease:{id:lease,until:Date.now()+60_000}});return{before:!!doc.data()?.disabled,student:doc.data()?.role==='student'};});
   if(claim.result)return claim.result;
   let authApplied=false;
+  forgetContext(uid);
   try{try{await auth().updateUser(uid,{disabled:input.disabled});authApplied=true;if(input.disabled)await auth().revokeRefreshTokens(uid);}catch(e){if((e as {code?:string}).code!=='auth/user-not-found'||!claim.student)throw e;}
-    return await db().runTransaction(async tx=>{const[doc,role,done]=await Promise.all([tx.get(ref),tx.get(db().doc('platformRoles/'+uid)),tx.get(receipt)]);if(done.data()?.lease!==lease||doc.data()?.adminStateLease?.id!==lease)throw new ApiError(409,'진행 중인 작업을 다시 확인해 주세요.');if(!canDisableUser(ctx.role,ctx.uid,uid,role.data()?.role))throw new ApiError(409,'처리 중 권한이 변경됐어요. 상태를 다시 확인해 주세요.');
+    const committed=await db().runTransaction(async tx=>{const[doc,role,done]=await Promise.all([tx.get(ref),tx.get(db().doc('platformRoles/'+uid)),tx.get(receipt)]);if(done.data()?.lease!==lease||doc.data()?.adminStateLease?.id!==lease)throw new ApiError(409,'진행 중인 작업을 다시 확인해 주세요.');if(!canDisableUser(ctx.role,ctx.uid,uid,role.data()?.role))throw new ApiError(409,'처리 중 권한이 변경됐어요. 상태를 다시 확인해 주세요.');
       tx.update(ref,{disabled:input.disabled,updatedAt:stamp(),adminStateLease:null});const result={ok:true,disabled:input.disabled};tx.update(receipt,{result,leaseUntil:0});tx.create(db().collection('adminAudit').doc(),{actorUid:ctx.uid,action:input.disabled?'user.disable':'user.enable',target:uid,kind:'change',outcome:'success',details:{before:{disabled:claim.before},after:{disabled:input.disabled},reason,requestId:input.requestId},createdAt:stamp()});return result;});
+    forgetContext(uid);return committed;
   }catch(e){const completed=await receipt.get();if(completed.data()?.result&&completed.data()?.fingerprint===fingerprint)return completed.data()!.result;
     await db().runTransaction(async tx=>{const[current,action]=await Promise.all([tx.get(ref),tx.get(receipt)]);if(current.data()?.adminStateLease?.id===lease)tx.update(ref,{adminStateLease:null});if(action.data()?.lease===lease)tx.update(receipt,{leaseUntil:0,error:authApplied?'AUTH_APPLIED_DATABASE_PENDING':'FAILED'});}).catch(()=>{});
     await audit(ctx,'user.state-failed',uid,{reason,code:authApplied?'AUTH_APPLIED_DATABASE_PENDING':'FAILED'},authApplied?'partial':'failed');throw new ApiError(503,authApplied?'인증 계정 상태는 변경됐지만 관리 기록을 마치지 못했어요. 새로고침 후 상태를 확인해 주세요.':'계정 상태를 변경하지 못했어요. 다시 시도해 주세요.','ACCOUNT_CHANGE_FAILED');}

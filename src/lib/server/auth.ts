@@ -1,9 +1,17 @@
 import 'server-only';
 import { auth, db } from './admin';
 import { ApiError, validSessionAuthentication, validStudentSession, type Role } from './policy';
+import { createContextCache } from './context-cache';
 
 export type Context = { uid: string; email: string | null; displayName: string | null; role: Role; studentId?: string; classId?: string; authVersion?: number };
 export const cookieName = '__session';
+// Verified contexts are memoised per instance for a short window so a burst of
+// classroom traffic does not re-fetch the Auth record and account documents on
+// every call. AUTH_CONTEXT_CACHE_MS=0 restores the fresh lookup per request.
+const cacheWindow = Number(process.env.AUTH_CONTEXT_CACHE_MS ?? 30_000);
+const contexts = createContextCache<Context>({ ttlMs: Number.isFinite(cacheWindow) && cacheWindow > 0 ? cacheWindow : 0 });
+/** Drop memoised contexts after this instance changes an account's state (code reset, suspension, role change). */
+export function forgetContext(uid: string) { contexts.forget(uid); }
 export function assertOrigin(request: Request) {
   const origin = request.headers.get('origin');
   const site = request.headers.get('sec-fetch-site');
@@ -32,11 +40,14 @@ export async function getContext(request: Request): Promise<Context> {
   const raw = request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
   if (!raw) throw new ApiError(401, '로그인이 필요해요.', 'UNAUTHENTICATED');
   try {
-    // Verify the signature/issuer/expiry here, then check revocation and account state
-    // against the same fresh UserRecord used for provider checks. Never skip revocation.
+    // Verify the signature/issuer/expiry here on every request. Revocation and
+    // account state come from the same fresh UserRecord used for provider checks,
+    // memoised for at most the cache window; a code reset or suspension made on
+    // this instance clears it at once via forgetContext.
     const decoded = await auth().verifySessionCookie(decodeURIComponent(raw), false);
     if (!validSessionAuthentication(decoded.auth_time)) throw new ApiError(401, '다시 로그인해 주세요.', 'UNAUTHENTICATED');
-    return await contextForUid(decoded.uid, decoded.authVersion, decoded.auth_time);
+    const key = `${decoded.uid}|${typeof decoded.authVersion === 'number' ? decoded.authVersion : '-'}|${decoded.auth_time}`;
+    return await contexts.remember(key, decoded.uid, () => contextForUid(decoded.uid, decoded.authVersion, decoded.auth_time));
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(401, '로그인이 만료되었어요. 다시 로그인해 주세요.', 'UNAUTHENTICATED');
