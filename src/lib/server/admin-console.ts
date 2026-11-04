@@ -8,7 +8,7 @@ import {auth,bucket,db} from './admin';
 import {getContext,assertOrigin,type Context} from './auth';
 import {ApiError,id,isAdmin,text,canDisableUser} from './policy';
 import {getAiOperations} from './ai';
-import {adminAiUsage} from './admin-ai-usage';
+import {adminAiTokens,adminAiUsage} from './admin-ai-usage';
 import {adminActivity} from './activity';
 import {adminContent,contentKind,csvCell,adminDate,storageKind} from '../admin-console-policy';
 import {directoryQuery} from '../admin-directory-fields';
@@ -211,6 +211,7 @@ export async function handleAdminConsole(request:Request,path:string[]) {
     }
     if(path[0]==='summary')return json(await overview());
     if(path[0]==='ai-usage')return json(await adminAiUsage(p));
+    if(path[0]==='ai-tokens')return json(await adminAiTokens(p));
     if(path[0]==='activity')return json(await adminActivity(p));
     if(path[0]==='accounts'&&path[1])return json(await accountDetail(path[1],ctx));
     if(path[0]==='classes'&&path[1])return json(await classDetail(path[1]));
