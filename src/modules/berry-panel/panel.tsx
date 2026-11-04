@@ -1,7 +1,8 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {usePathname} from 'next/navigation';
-import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, StickyNote, Inbox, LoaderCircle, MessageCircle, PlugZap, Send, X} from 'lucide-react';
+import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, StickyNote, Inbox, LoaderCircle, MessageCircle, PencilLine, PlugZap, Send, Sparkles, TriangleAlert, X} from 'lucide-react';
+import {ABILITY_GROUPS, firstBlank, type Ability} from './abilities';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
@@ -12,8 +13,9 @@ const TOOL_LABELS: Record<string, string> = {
   get_calendar: '일정 확인', get_timetable: '시간표 확인', get_lesson_log: '수업 일지 확인', search_workspace: '업무 폴더 찾기', get_work_item: '업무 항목 열기',
   list_classes: '학급 확인', get_roster: '명단 확인', list_assignments: '숙제 확인', get_missing_submissions: '미제출 확인', get_review_queue: '검사 대기 확인',
   list_deadlines: '마감 확인', search_notebook: '교무수첩 찾기', set_reminder: '알림 예약', list_schedule: '알림 확인', remember: '기억하기', forget: '기억 지우기',
+  manage_homework: '숙제 관리', manage_exhibition: '전시실 관리', manage_board: '참여보드 관리', manage_quiz: '퀴즈 관리', manage_review: '복습 관리', manage_playground: '말놀이터 관리', manage_points: '보말', manage_cards: '카드 배부', manage_class_tools: '수업 도구', manage_class: '학급 관리', manage_workspace: '업무 공간 관리',
 };
-const PREVIEW_LABELS: Record<string, string> = {title: '제목', date: '날짜', start: '시작', end: '끝', kind: '종류', subject: '과목', period: '교시', unit: '단원', note: '메모', body: '내용', type: '종류', due_at: '기한', tags: '태그', students: '학생', checklist: '체크리스트', url: '링크', class: '학급', submission: '제출 방식', sync_exhibition: '전시실 연동', sync_board: '보드 연동', exhibition: '전시실', board: '보드', count: '개수'};
+const PREVIEW_LABELS: Record<string, string> = {title: '제목', date: '날짜', start: '시작', end: '끝', kind: '종류', subject: '과목', period: '교시', unit: '단원', note: '메모', body: '내용', type: '종류', due_at: '기한', tags: '태그', students: '학생', checklist: '체크리스트', url: '링크', class: '학급', submission: '제출 방식', sync_exhibition: '전시실 연동', sync_board: '보드 연동', exhibition: '전시실', board: '보드', count: '개수', target: '대상', action: '할 일', changes: '바꿀 내용', reason: '사유', amount: '점수'};
 const CONVERSATION = 'berry.conversation';
 
 async function api<T>(path: string, body?: object): Promise<T> {
@@ -49,14 +51,32 @@ function Banners({links}: {links: {label: string; href: string}[]}) {
 const clock = (iso: string) => {const d = new Date(Date.parse(iso) + 9 * 3_600_000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;};
 
 function Preview({card, onDecide}: {card: Card; onDecide: (card: Card, decision: 'approve' | 'reject') => void}) {
+  const [armed, setArmed] = useState(false);
   const rows = Object.entries(card.preview ?? {}).filter(([key, value]) => PREVIEW_LABELS[key] && shown(value) !== null);
-  return <div className={`bp-card is-${card.state}`}>
+  // Risky actions (delete, deduct, reset) say so in red and need a second press.
+  const danger = typeof card.preview?.danger === 'string' ? card.preview.danger : '', savedNote = typeof card.preview?.saved_note === 'string' ? card.preview.saved_note : '';
+  const approve = () => {if (danger && !armed) {setArmed(true); return;} onDecide(card, 'approve');};
+  return <div className={`bp-card is-${card.state}${danger ? ' is-danger' : ''}`}>
     <strong>{TOOL_LABELS[card.tool] ?? card.tool}</strong>
-    <dl>{rows.map(([key, value]) => <div key={key}><dt>{PREVIEW_LABELS[key]}</dt><dd>{shown(value)}</dd></div>)}</dl>
+    {danger && <p className="bp-danger"><TriangleAlert size={14}/>{danger}</p>}
+    <dl>{rows.map(([key, value]) => <div key={key}><dt>{PREVIEW_LABELS[key]}</dt><dd>{key === 'changes' && Array.isArray(value) ? value.join('\n') : shown(value)}</dd></div>)}</dl>
     {card.state === 'open' || card.state === 'saving' ? <div className="bp-card-actions">
-      <button type="button" className="button soft" disabled={card.state === 'saving'} onClick={() => onDecide(card, 'reject')}>취소</button>
-      <button type="button" className="button primary" disabled={card.state === 'saving'} onClick={() => onDecide(card, 'approve')}>{card.state === 'saving' ? <LoaderCircle className="spin" size={14}/> : <Check size={14}/>}저장</button>
-    </div> : <p className="bp-card-note">{card.state === 'saved' ? (card.tool.startsWith('create_') ? '열었어요. 학생 화면에 바로 보여요.' : '저장했어요. 업무 공간·교무수첩에서 "베리 제안"을 확정하면 반영돼요.') : card.state === 'rejected' ? '저장하지 않았어요.' : card.note}</p>}
+      <button type="button" className="button soft" disabled={card.state === 'saving'} onClick={() => {setArmed(false); onDecide(card, 'reject');}}>취소</button>
+      <button type="button" className={`button primary${armed ? ' is-armed' : ''}`} disabled={card.state === 'saving'} onClick={approve}>{card.state === 'saving' ? <LoaderCircle className="spin" size={14}/> : danger ? <TriangleAlert size={14}/> : <Check size={14}/>}{armed ? '한 번 더 누르면 실행' : danger ? '실행' : '저장'}</button>
+    </div> : <p className="bp-card-note">{card.state === 'saved' ? (savedNote || (card.tool.startsWith('create_') ? '열었어요. 학생 화면에 바로 보여요.' : '저장했어요. 업무 공간·교무수첩에서 "베리 제안"을 확정하면 반영돼요.')) : card.state === 'rejected' ? '저장하지 않았어요.' : card.note}</p>}
+  </div>;
+}
+
+/** "할 수 있는 일": groups of one-tap requests. Blanks go to the input box; complete requests are sent at once. */
+function Abilities({onPick, compact}: {onPick: (ability: Ability) => void; compact?: boolean}) {
+  const [group, setGroup] = useState(ABILITY_GROUPS[0].key);
+  const current = ABILITY_GROUPS.find(entry => entry.key === group) ?? ABILITY_GROUPS[0];
+  return <div className={`bp-abilities${compact ? ' is-compact' : ''}`}>
+    <div className="bp-ability-groups" role="tablist" aria-label="할 수 있는 일 분류">{ABILITY_GROUPS.map(entry => <button type="button" role="tab" key={entry.key} aria-selected={entry.key === group} onClick={() => setGroup(entry.key)}><span aria-hidden="true">{entry.emoji}</span>{entry.label}</button>)}</div>
+    <div className="bp-ability-list">{current.abilities.map(ability => <button type="button" key={ability.label} className={ability.danger ? 'is-danger' : ''} title={ability.prompt} onClick={() => onPick(ability)}>
+      {ability.write ? <PencilLine size={13} aria-hidden="true"/> : <MessageCircle size={13} aria-hidden="true"/>}<span>{ability.label}</span>
+    </button>)}</div>
+    <p className="bp-ability-hint"><PencilLine size={11} aria-hidden="true"/> 표시는 확인 카드에서 [저장]을 눌러야 반영돼요. <a href="/teacher/berry">전체 안내</a></p>
   </div>;
 }
 
@@ -66,7 +86,8 @@ export default function BerryPanel() {
   const [status, setStatus] = useState<{available: boolean; connected: boolean} | null>(null), [open, setOpen] = useState(false), [tab, setTab] = useState<'chat' | 'inbox'>('chat');
   const [messages, setMessages] = useState<Message[]>([]), [text, setText] = useState(''), [busy, setBusy] = useState(false), [activity, setActivity] = useState(''), [error, setError] = useState('');
   const [inbox, setInbox] = useState<InboxItem[] | null>(null), [notice, setNotice] = useState('');
-  const conversation = useRef<string | null>(null), list = useRef<HTMLDivElement>(null);
+  const [abilities, setAbilities] = useState(false), [asked, setAsked] = useState<Ability | null>(null);
+  const conversation = useRef<string | null>(null), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     try {conversation.current = sessionStorage.getItem(CONVERSATION);} catch {}
     const result = new URLSearchParams(window.location.search).get('berry');
@@ -80,6 +101,13 @@ export default function BerryPanel() {
   const loadInbox = useCallback(() => {api<{items: InboxItem[]}>('inbox').then(data => setInbox(data.items)).catch(e => setError((e as Error).message));}, []);
   useEffect(() => {if (open && tab === 'inbox' && status?.connected) loadInbox();}, [open, tab, status, loadInbox]);
   useEffect(() => {list.current?.scrollTo({top: list.current.scrollHeight});}, [messages, activity]);
+  // Buttons on /teacher/berry (or anywhere) open the panel with a request: window.dispatchEvent(new CustomEvent('berry:ask', {detail}))
+  useEffect(() => {
+    const onAsk = (event: Event) => {const detail = (event as CustomEvent<Ability>).detail; if (detail?.prompt) {setOpen(true); setTab('chat'); setAsked(detail);}};
+    window.addEventListener('berry:ask', onAsk);
+    return () => window.removeEventListener('berry:ask', onAsk);
+  }, []);
+  useEffect(() => {if (asked && status?.connected && !busy) {setAsked(null); pick(asked);}}, [asked, status, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!status?.available) return null;
 
   async function connect() {
@@ -92,8 +120,15 @@ export default function BerryPanel() {
     try {await api(`inbox/${card.inbox_id}/${decision}`, {}); patchCard(card.inbox_id, {state: decision === 'approve' ? 'saved' : 'rejected'});}
     catch (e) {patchCard(card.inbox_id, {state: 'error', note: (e as Error).message});}
   }
-  async function send() {
-    const message = text.trim();
+  function pick(ability: Ability) {
+    setAbilities(false);
+    const blank = firstBlank(ability.prompt);
+    if (!blank) {void send(ability.prompt); return;}
+    setText(ability.prompt);
+    requestAnimationFrame(() => {input.current?.focus(); input.current?.setSelectionRange(blank[0], blank[1]);});
+  }
+  async function send(override?: string) {
+    const message = (override ?? text).trim();
     if (!message || busy) return;
     setText(''); setBusy(true); setError(''); setActivity('생각하는 중…');
     setMessages(old => [...old, {role: 'user', text: message}, {role: 'assistant', text: '', cards: []}]);
@@ -150,7 +185,7 @@ export default function BerryPanel() {
         <button type="button" className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? <LoaderCircle className="spin" size={16}/> : <PlugZap size={16}/>}모두의 교실 연결하기</button>
       </div> : tab === 'chat' ? <>
         <div className="bp-messages" ref={list}>
-          {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요?</p>{['이번 주 마감 숙제 알려 줘', '어제 숙제 안 낸 학생이랑 안내문 초안', '오늘 3교시 국어 수업 일지 써 줘'].map(example => <button type="button" key={example} onClick={() => setText(example)}>{example}</button>)}</div>}
+          {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요? 버튼을 누르거나 편하게 말로 시켜 주세요.</p><Abilities onPick={pick}/></div>}
           {/* The empty answer placeholder stays hidden until text or a card arrives, so Berry never shows an avatar with nothing beside it. */}
           {messages.map((message, index) => !message.text && !message.cards?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
@@ -159,8 +194,10 @@ export default function BerryPanel() {
           </div>)}
           {activity && <div className="bp-msg is-assistant" role="status"><img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/><p className="bp-thinking"><LoaderCircle className="spin" size={14}/>{activity}</p></div>}
         </div>
+        {abilities && messages.length > 0 && <Abilities onPick={pick} compact/>}
         <div className="bp-input">
-          <textarea value={text} rows={2} maxLength={4000} placeholder="베리에게 물어보세요" aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
+          {messages.length > 0 && <button type="button" className="bp-ability-toggle" aria-label="할 수 있는 일" aria-expanded={abilities} title="할 수 있는 일" onClick={() => setAbilities(value => !value)}><Sparkles size={17}/></button>}
+          <textarea ref={input} value={text} rows={2} maxLength={4000} placeholder="베리에게 물어보세요" aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
           <button type="button" className="button primary" aria-label="보내기" disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}</button>
         </div>
         {messages.length > 0 && <button type="button" className="bp-new" onClick={newChat}>새 대화</button>}

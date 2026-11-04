@@ -29,3 +29,30 @@
 .bp-hero{align-self:center;width:84px;height:84px;object-fit:contain;margin-bottom:2px}.bp-empty>p{text-align:center}
 .bp-duo{display:flex;align-items:flex-end;justify-content:center}.bp-duo img{object-fit:contain}.bp-duo img+img{margin-left:-14px}
 .bp-routine{white-space:pre-wrap;line-height:1.65;font-size:13px}
+/* 할 수 있는 일: group tabs + one-tap request buttons */
+.bp-abilities{display:flex;flex-direction:column;gap:8px;width:100%}.bp-abilities.is-compact{padding:8px 10px 0;border-top:1px solid var(--border);max-height:46%;overflow-y:auto}
+.bp-abilities .bp-ability-groups{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.bp-ability-groups::-webkit-scrollbar{display:none}
+.bp-abilities .bp-ability-groups button{display:inline-flex;align-items:center;gap:4px;flex:none;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);font-size:12px;font-weight:650;text-align:center}
+.bp-abilities .bp-ability-groups button[aria-selected=true]{background:#6f4d8c;border-color:#6f4d8c;color:#fff}
+.bp-abilities .bp-ability-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.bp-abilities .bp-ability-list button{display:flex;align-items:center;gap:6px;min-height:40px;padding:8px 10px;border:1px solid #e3d6f0;border-radius:12px;background:linear-gradient(100deg,#fbf7ff,var(--surface));color:var(--text);font-size:12.5px;font-weight:650;text-align:left;cursor:pointer;line-height:1.35}
+.bp-abilities .bp-ability-list button:hover,.bp-abilities .bp-ability-list button:focus-visible{border-color:#9b7bc0;background:#f3ebfa}
+.bp-abilities .bp-ability-list button svg{flex:none;color:#9b7bc0}.bp-abilities .bp-ability-list button.is-danger{border-color:#f1c7c0}.bp-abilities .bp-ability-list button.is-danger svg{color:#c0392b}
+.bp-ability-hint{display:flex;align-items:center;gap:4px;margin:0;color:var(--muted);font-size:11px;text-align:left!important}
+.bp-ability-toggle{display:grid;place-items:center;flex:none;width:40px;height:44px;border:1px solid var(--border);border-radius:12px;background:#fbf7ff;color:#6f4d8c;cursor:pointer}.bp-ability-toggle[aria-expanded=true]{background:#6f4d8c;color:#fff;border-color:#6f4d8c}
+/* Risky approval cards */
+.bp-card.is-danger{border-color:#e8a59a;background:#fff8f6}.bp-danger{display:flex;align-items:flex-start;gap:6px;margin:0;padding:7px 9px;border-radius:9px;background:#fde8e4;color:#a5281b!important;font-size:12px!important;font-weight:700;line-height:1.5}.bp-danger svg{flex:none;margin-top:2px}
+.bp-card-actions .button.is-armed{background:#c0392b;border-color:#c0392b;color:#fff}
+/* /teacher/berry guide */
+.bg-page{max-width:1080px;margin:0 auto;padding:24px 16px 120px;display:flex;flex-direction:column;gap:18px}
+.bg-head{display:flex;align-items:center;gap:16px}.bg-head img{width:72px;height:72px;object-fit:contain}.bg-head h1{margin:0;font-size:26px}.bg-head p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.bg-rules{list-style:none;margin:0;padding:14px 16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;border:1px solid #e3d6f0;border-radius:16px;background:#fbf7ff}
+.bg-rules li{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.55}.bg-rules svg{flex:none;margin-top:2px;color:#6f4d8c}
+.bg-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.bg-group{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--border);border-radius:18px;background:var(--surface)}.bg-group h2{display:flex;align-items:center;gap:6px;margin:0;font-size:16px}
+.bg-buttons{display:flex;flex-direction:column;gap:6px}
+.bg-buttons button{display:flex;align-items:flex-start;gap:8px;width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:12px;background:var(--surface-alt,#f7f7f5);color:var(--text);text-align:left;cursor:pointer;font:inherit}
+.bg-buttons button:hover,.bg-buttons button:focus-visible{border-color:#9b7bc0;background:#f3ebfa}.bg-buttons button>svg{flex:none;margin-top:3px;color:#9b7bc0}
+.bg-buttons button.is-danger{border-color:#f1c7c0}.bg-buttons button.is-danger>svg{color:#c0392b}
+.bg-buttons span{display:flex;flex-direction:column;gap:2px;min-width:0}.bg-buttons b{font-size:13px}.bg-buttons small{font-size:11.5px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
+@media(max-width:640px){.bg-rules{grid-template-columns:1fr}.bg-head h1{font-size:22px}}
