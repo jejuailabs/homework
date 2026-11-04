@@ -200,7 +200,30 @@
     "restoreConfirmTitle": "Restore {count} assignments?",
     "hideConfirmDescription": "These assignments will disappear from student screens. Submissions, feedback, and rewards are preserved. You can restore them from Hidden at any time.",
     "restoreConfirmDescription": "These assignments will appear for students again with their existing submissions and due dates. To change a due date, edit the assignment after restoring it.",
-    "hideMissingWarning": "There are {count} missing submissions. These students will not be able to submit while the assignments are hidden."
+    "hideMissingWarning": "There are {count} missing submissions. These students will not be able to submit while the assignments are hidden.",
+    "listKinds": "Homework type",
+    "listKind": {
+      "all": "All",
+      "image": "Image",
+      "text": "Text",
+      "video": "Video",
+      "legacy": "Other"
+    },
+    "listSearch": "Search homework",
+    "listSearchClear": "Clear search",
+    "listSort": {
+      "new": "Newest",
+      "old": "Oldest",
+      "due": "Due soonest"
+    },
+    "listSortHint": "Click to switch newest → oldest → due soonest",
+    "listMonth": "{month}/{year}",
+    "listDueMonth": "Due {month}/{year}",
+    "listNoDue": "No due date",
+    "listNoDate": "No date",
+    "listNoMatch": "No homework matches.",
+    "listPending": "{count} to check",
+    "listDue": "Due {date}"
   },
   "student": {
     "activeTasksTitle": "Homework to do",
