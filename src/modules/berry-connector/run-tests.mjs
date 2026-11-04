@@ -6,3 +6,7 @@ const types = moduleUrl(compile('./types.ts'));
 const policy = moduleUrl(compile('./policy.ts').replace("'./types'", JSON.stringify(types)));
 await import(moduleUrl(compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policy))));
 await import(moduleUrl(compile('./catalog.test.ts').replace("'./catalog'", JSON.stringify(moduleUrl(compile('./catalog.ts'))))));
+const neighborhoodCore = moduleUrl(compile('../../lib/neighborhood.ts'));
+const spots = moduleUrl(compile('../../lib/neighborhood-spots.ts').replace("'./neighborhood'", JSON.stringify(neighborhoodCore)));
+const packs = moduleUrl(compile('./neighborhood-packs.ts').replace("'@/lib/neighborhood-spots'", JSON.stringify(spots)));
+await import(moduleUrl(compile('./neighborhood-packs.test.ts').replace("'./neighborhood-packs'", JSON.stringify(packs))));

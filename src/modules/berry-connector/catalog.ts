@@ -24,6 +24,7 @@ export const DOMAINS: CatalogDomain[] = [
   {key: 'points', menu: '보말', what: '학급 포인트 적립·사용', holds: ['학급 보말 설정', '학생별 잔액·누적 적립'], metrics: ['total_balance'], tools: ['manage_points', 'get_points'], sensitivity: '가명', cost: 'light', questions: ['보말 제일 많이 모은 사람', '보말 쓰고 있어?']},
   {key: 'cards', menu: '카드놀이', what: '단어·개념 카드 세트 배부와 학습', holds: ['배부한 세트·마감·대상 수'], metrics: ['card_sets'], tools: ['manage_cards', 'list_card_sets'], sensitivity: '가명', cost: 'light', questions: ['배부한 카드 세트 뭐 있어?'], flag: 'cards'},
   {key: 'tools', menu: 'Tools', what: '캔버스·투표·수업 보고서 등 수업 도구', holds: ['열린 캔버스', '투표(마감·참여 수)'], metrics: ['polls_open'], tools: ['manage_class_tools', 'list_class_tools', 'get_speech'], sensitivity: '가명, 개별 투표 선택 제외', cost: 'light', questions: ['열려 있는 투표 있어?']},
+  {key: 'neighborhood', menu: 'Tools > 우리 동네 탐험', what: '학교 둘레 지도에서 고른 수업 장소, 약도·백지도, 수업 브리핑을 묶어 저장한 사회 수업 자료', holds: ['자료 제목·지역·학년·단원·연결 학급·저장한 날', '고른 장소(이름·종류·설명·교사 확인, 최대 12곳)', 'AI 약도 제목·큰길', '지도 출처·기준일·참고 자료'], metrics: ['count', 'selected_places'], tools: ['list_neighborhood_packs', 'get_neighborhood_pack'], sensitivity: '선생님 자료, 학생 정보 없음. 좌표·도로 원본은 내보내지 않음', cost: 'light', questions: ['지난달 만든 동네 탐험 자료 뭐 있어?', '그 자료에 고른 장소 알려 줘', '약도 출처 어디야?']},
   {key: 'kids_daily', menu: 'Kids Daily', what: '학생이 선생님께 공유한 일기', holds: ['받은 공유 건수'], metrics: ['kids_daily_shared'], tools: [], sensitivity: '본문·사진은 절대 보지 않음, 건수만(get_signals)', cost: 'light', questions: ['일기 공유 온 거 있어?'], flag: 'kids_daily'},
   {key: 'storage', menu: '홈 > 저장 공간', what: '선생님 저장 공간', holds: ['전체·사용·남은 용량', '항목별(숙제 영상·사진·전시·자료·보드·업무)', '경고 단계', '이용 기간 종료일'], metrics: ['percent', 'level', 'days_left'], tools: ['get_storage'], sensitivity: '없음', cost: 'light', questions: ['저장 공간 얼마 남았어?', '왜 이렇게 찼어?']},
   {key: 'workspace', menu: '마이페이지 > 업무 공간', what: '일정·시간표·수업 일지·업무 폴더', holds: ['일정(숙제 마감 포함)', '주간 시간표', '날짜별 수업 일지', '폴더 항목(메모·체크리스트·링크)'], metrics: ['today_events'], tools: ['manage_workspace', 'get_calendar', 'get_timetable', 'get_lesson_log', 'search_workspace', 'get_work_item', 'add_calendar_event', 'add_lesson_log', 'add_work_item'], sensitivity: '민감 항목 제외, 이름 가명화', cost: 'medium', questions: ['오늘 일정', '내일 시간표', '수업 일지 써 줘'], flag: 'workspace'},
@@ -39,11 +40,12 @@ export const CATALOG_RULES = [
   '쓰기 도구는 미리보기 카드만 만든다. 선생님이 카드에서 저장해야 반영된다.',
   '선생님이 시키는 메뉴 일(설정 바꾸기·검사·숨기기·보말·배부·투표·일정 고치기 등)은 그 메뉴의 manage_* 도구를 쓴다. 한 문장에 여러 설정이면 한 번의 호출에 함께 넣는다. 대상 id는 먼저 읽기 도구로 확인하고, 비슷한 이름이 여럿이면 되묻는다.',
   '지우기·빼기·코드 재발급처럼 위험한 일은 빨간 카드로 두 번 눌러야 한다고 미리 알린다. 파일 올리기와 실시간 진행은 그 메뉴 화면에서 하도록 안내한다.',
+  '우리 동네 탐험 자료는 읽기만 한다. 지도 불러오기·장소 고르기·약도 만들기·인쇄는 그 도구 화면에서 하도록 안내한다.',
   '숙제·전시실·보드처럼 항목이나 메뉴를 말할 때는 도구 결과의 link를, 없으면 아래 메뉴 바로가기를 [이름](link) 그대로 넣는다. 채팅창에서 누르면 바로 열리는 버튼이 된다. /teacher로 시작하는 주소만 쓰고 주소를 지어내지 않는다. 굵게(**) 같은 꾸밈 기호는 쓰지 않는다.',
 ];
 
 /** Where each menu opens; tools add item links (one homework, one room) on top of these. */
-export const MENU_LINKS: Partial<Record<string, string>> = {overview: '/teacher', classes: '/teacher/homework', homework: '/teacher/homework', exhibitions: '/teacher/exhibitions', boards: '/teacher/boards', quiz: '/teacher/daily-quiz', lesson_review: '/teacher/lesson-review', playground: '/teacher/playground', points: '/teacher/points', cards: '/teacher/cards', tools: '/teacher/tools', kids_daily: '/teacher/diary', storage: '/teacher', workspace: '/teacher/me/workspace', notebook: '/teacher/me/notebook'};
+export const MENU_LINKS: Partial<Record<string, string>> = {overview: '/teacher', classes: '/teacher/homework', homework: '/teacher/homework', exhibitions: '/teacher/exhibitions', boards: '/teacher/boards', quiz: '/teacher/daily-quiz', lesson_review: '/teacher/lesson-review', playground: '/teacher/playground', points: '/teacher/points', cards: '/teacher/cards', tools: '/teacher/tools', neighborhood: '/teacher/tools/neighborhood', kids_daily: '/teacher/diary', storage: '/teacher', workspace: '/teacher/me/workspace', notebook: '/teacher/me/notebook'};
 
 /** Builds the catalog from the domain list and the live tool registry; unknown tools land in "기타" so nothing is ever missing. */
 export function buildCatalog(tools: CatalogTool[], enabled: Record<string, unknown>) {
