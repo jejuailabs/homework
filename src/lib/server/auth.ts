@@ -1,4 +1,5 @@
 import 'server-only';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { auth, db } from './admin';
 import { ApiError, validSessionAuthentication, validStudentSession, type Role } from './policy';
 import { createContextCache } from './context-cache';
@@ -36,8 +37,19 @@ export async function contextForUid(uid: string, authVersion?: unknown, sessionA
   }
   return { uid, email: userRecord.email ?? null, displayName: userRecord.displayName ?? user?.displayName ?? null, role, ...(role === 'student' ? { studentId: user!.studentId, classId: user!.classId, authVersion: authVersion as number } : {}) };
 }
+/**
+ * Berry's confirmed writes run the app's own route handlers in-process. The teacher context is bound to the one
+ * Request object the confirm step built, so nothing a client sends (headers, cookies) can ever select it.
+ */
+const acting = new AsyncLocalStorage<{request: Request; ctx: Context}>();
+export function runAsTeacher<T>(request: Request, ctx: Context, run: () => Promise<T>) {
+  if (ctx.role === 'student') throw new ApiError(403, '선생님만 사용할 수 있어요.', 'FORBIDDEN');
+  return acting.run({request, ctx}, run);
+}
 export async function getContext(request: Request): Promise<Context> {
-  const raw = request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
+  const bound = acting.getStore();
+  if (bound && bound.request === request) return bound.ctx;
+  const raw =request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
   if (!raw) throw new ApiError(401, '로그인이 필요해요.', 'UNAUTHENTICATED');
   try {
     // Verify the signature/issuer/expiry here on every request. Revocation and
