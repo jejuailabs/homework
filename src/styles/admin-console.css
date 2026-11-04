@@ -16,3 +16,6 @@
 .admin-activity-tip{position:absolute;top:0;transform:translateX(-50%);display:flex;flex-direction:column;gap:3px;padding:9px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 8px 24px #0000001f;font-size:12px;white-space:nowrap;pointer-events:none;z-index:2}
 .admin-activity-table td{min-width:90px}.admin-activity-bar{display:block;width:140px;height:6px;border-radius:3px;background:var(--surface-alt);margin-bottom:5px}.admin-activity-bar>i{display:block;height:100%;border-radius:3px;background:var(--accent)}
 @media(max-width:760px){.admin-activity-filters{flex-direction:column;align-items:stretch}.admin-activity-bar{width:90px}}
+.admin-token-sort{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:650}.admin-token-sort select{min-height:40px}
+button.admin-token-stat{font:inherit;text-align:left;cursor:pointer;color:inherit}button.admin-token-stat.is-sorted{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.admin-token-table .admin-usage-link{display:inline-flex;align-items:center;gap:4px;text-decoration:none}.admin-token-table thead .admin-usage-link{color:inherit;font-weight:650}.admin-token-sub th{padding-left:30px;font-weight:500;color:var(--muted)}.admin-token-sub td{color:var(--muted)}

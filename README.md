@@ -266,8 +266,9 @@ ESLint 기반 `lint` 명령은 초기 범위에 포함하지 않습니다. 명�
 `OPENAI_API_KEY`와 `OPENAI_MODEL=gpt-6-luna`를 서버에 설정합니다. 운영 키는 Vercel Production의 민감 환경 변수이며 `NEXT_PUBLIC_` 변수에 넣지 않습니다. 키 값은 저장소에 포함하지 않습니다. Preview에는 별도로 서버 환경 설정이 필요합니다.
 
 - OpenAI Responses API, `store:false`, 짧은 초안에 제한된 출력 토큰을 사용합니다.
-- 기본 한도: 교사당 분당 4회·하루 40회, 앱 전체 하루 400회. 실패한 예약도 포함하고 캐시 재사용은 제외합니다.
-- 서버 변수 `AI_TEACHER_MINUTE_LIMIT`, `AI_TEACHER_DAILY_LIMIT`, `AI_GLOBAL_DAILY_LIMIT`로 조절합니다. 일일 기준은 Asia/Seoul입니다. 이는 요청 수 상한이며 금액 기반 결제 차단 기능이 아닙니다.
+- 요청 수 한도는 꺼져 있습니다(2026-11-04 운영자 결정, 교사·앱 전체 무제한). 사용량은 계속 집계되며 어드민 **API 사용량**의 교사별 토큰 항목에서 확인합니다.
+- 다시 제한하려면 `AI_REQUEST_LIMITS=on`을 설정합니다. 그때 기본 한도는 교사당 분당 4회·하루 40회, 앱 전체 하루 400회이고 `AI_TEACHER_MINUTE_LIMIT`, `AI_TEACHER_DAILY_LIMIT`, `AI_GLOBAL_DAILY_LIMIT`로 조절합니다. 일일 기준은 Asia/Seoul입니다. 요청 수 상한이며 금액 기반 결제 차단 기능이 아닙니다.
+- 기능별 유료 스위치(`HANDWRITING_AI_ENABLED`, `SPEECH_AI_ENABLED`, `VOICE_AI_TRANSCRIPTION_ENABLED`)는 한도와 별개입니다.
 - 어드민에서 적용 모델·오늘 전체 요청 수·한도를 확인합니다. 입력과 출력의 원문은 운영 로그에 저장하지 않습니다.
 - 한도·인증·서버 오류는 실제 실패로 표시합니다. 생성 결과를 학생 평가나 공식 기록으로 자동 확정하지 않습니다.
 

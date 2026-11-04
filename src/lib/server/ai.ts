@@ -18,10 +18,13 @@ type Draft = {text: string; model: string; cached: boolean; sources?: AiCitation
 const draftCache = new Map<string, {expiresAt: number; draft: Draft}>();
 
 function configuration() {
+  // Request caps are off by the owner's decision (2026-11-04); usage is still counted and shown in admin.
+  // AI_REQUEST_LIMITS=on restores the numeric caps below.
+  const capped = process.env.AI_REQUEST_LIMITS === 'on';
   const limits: AiLimits = {
-    teacherMinute: configuredLimit(process.env.AI_TEACHER_MINUTE_LIMIT, 4, 20),
-    teacherDaily: configuredLimit(process.env.AI_TEACHER_DAILY_LIMIT, 40, 500),
-    globalDaily: configuredLimit(process.env.AI_GLOBAL_DAILY_LIMIT, 400, 10000)
+    teacherMinute: capped ? configuredLimit(process.env.AI_TEACHER_MINUTE_LIMIT, 4, 20) : Infinity,
+    teacherDaily: capped ? configuredLimit(process.env.AI_TEACHER_DAILY_LIMIT, 40, 500) : Infinity,
+    globalDaily: capped ? configuredLimit(process.env.AI_GLOBAL_DAILY_LIMIT, 400, 10000) : Infinity
   };
   return {configured: Boolean(process.env.OPENAI_API_KEY?.trim()), model: process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna', limits};
 }
