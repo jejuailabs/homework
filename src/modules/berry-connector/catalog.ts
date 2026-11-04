@@ -49,13 +49,14 @@ export function buildCatalog(tools: CatalogTool[], enabled: Record<string, unkno
   const domains = DOMAINS.map(domain => {
     const present = domain.tools.filter(name => known.has(name));
     present.forEach(name => placed.add(name));
-    return {key: domain.key, menu: domain.menu, link: MENU_LINKS[domain.key] ?? null, what: domain.what, holds: domain.holds, metrics: domain.metrics, tools: present, sensitivity: domain.sensitivity, cost: domain.cost, questions: domain.questions, enabled: domain.flag ? enabled[domain.flag] !== false : true};
+    return {key: domain.key, menu: domain.menu, what: domain.what, holds: domain.holds, metrics: domain.metrics, tools: present, sensitivity: domain.sensitivity, cost: domain.cost, questions: domain.questions, enabled: domain.flag ? enabled[domain.flag] !== false : true};
   }).filter(domain => domain.tools.length || domain.key === 'kids_daily');
   const rest = tools.filter(tool => !placed.has(tool.name));
-  if (rest.length) domains.push({key: 'other', menu: '기타', link: null, what: '분류표에 아직 자리가 없는 새 도구', holds: [], metrics: [], tools: rest.map(tool => tool.name), sensitivity: '도구 설명을 따른다', cost: 'medium', questions: [], enabled: true});
+  if (rest.length) domains.push({key: 'other', menu: '기타', what: '분류표에 아직 자리가 없는 새 도구', holds: [], metrics: [], tools: rest.map(tool => tool.name), sensitivity: '도구 설명을 따른다', cost: 'medium', questions: [], enabled: true});
   const domainOf = new Map(domains.flatMap(domain => domain.tools.map(name => [name, domain.key] as const)));
   const toolRows = tools.map(tool => ({name: tool.name, domain: domainOf.get(tool.name) ?? 'other', scope: tool.scope, summary: tool.description.split(/(?<=[.다요])\s/)[0].slice(0, 160)}));
-  const menuLinks = `메뉴 바로가기: ${domains.filter(domain => domain.link && domain.enabled).map(domain => `${domain.menu} ${domain.link}`).join(', ')}`;
+  // Links travel as one rule line: the brain renders rules, not extra domain fields.
+  const menuLinks = `메뉴 바로가기: ${domains.filter(domain => MENU_LINKS[domain.key] && domain.enabled).map(domain => `${domain.menu} ${MENU_LINKS[domain.key]}`).join(', ')}`;
   const body = {domains, tools: toolRows, rules: [...CATALOG_RULES, menuLinks]};
   return {version: createHash('sha256').update(JSON.stringify(body)).digest('hex').slice(0, 16), ...body};
 }

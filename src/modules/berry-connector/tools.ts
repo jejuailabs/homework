@@ -7,6 +7,7 @@ import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, maskNames
 import {WORKSPACE_TOOLS, callWorkspaceTool} from './workspace-tools';
 import {CLASSROOM_TOOLS, callClassroomTool, menuFlags} from './classroom-tools';
 import {buildCatalog} from './catalog';
+import {ASSIGNMENT_KINDS, ASSIGNMENT_ORDERS, findAssignments} from '@/lib/assignment-finder';
 import type {BearerContext, McpTool} from './types';
 
 type Data = Record<string, any>;
@@ -17,7 +18,7 @@ const assignmentFields = ['classId', 'className', 'title', 'submissionType', 'du
 export const TOOLS: McpTool[] = [
   {name: 'list_classes', scope: 'classes:read', description: '선생님이 운영하는 학급 목록(이름·학년·학년도·학생 수)을 돌려줍니다.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'get_roster', scope: 'classes:read', description: '학급 명단을 번호 순으로 돌려줍니다. 기본은 "학생 07" 같은 가명이며, 실명 권한이 있는 연결에서 reveal_names=true일 때만 이름을 돌려줍니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, reveal_names: {type: 'boolean', description: '실명 반환. names 권한이 있어야 동작합니다.'}}, required: ['class_id'], additionalProperties: false}},
-  {name: 'list_assignments', scope: 'homework:read', description: '숙제 목록과 제출·검사 집계를 돌려줍니다. status=open이면 마감 전 또는 마감 없는 숙제만, all이면 전체입니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, status: {type: 'string', enum: ['open', 'all']}, limit: {type: 'integer', minimum: 1, maximum: 100}}, additionalProperties: false}},
+  {name: 'list_assignments', scope: 'homework:read', description: '숙제 목록과 제출·검사 집계를 돌려줍니다. 숙제 메뉴 목록과 같은 조건으로 찾습니다: status=open이면 마감 전 또는 마감 없는 숙제만, all이면 전체(숨긴 숙제 제외), type은 종류(image·text·video·legacy), query는 제목 낱말(띄어쓰기로 여러 개), order는 new(최신순, 기본)·old(오래된순)·due(마감 가까운 순)입니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, status: {type: 'string', enum: ['open', 'all']}, type: {type: 'string', enum: ['image', 'text', 'video', 'legacy']}, query: {type: 'string', maxLength: 80}, order: {type: 'string', enum: ['new', 'old', 'due']}, limit: {type: 'integer', minimum: 1, maximum: 100}}, additionalProperties: false}},
   {name: 'get_missing_submissions', scope: 'homework:read', description: '특정 숙제(assignment_id) 또는 특정 마감일(due_date, YYYY-MM-DD)의 미제출 학생을 돌려줍니다. 제출물 내용은 읽지 않습니다.', inputSchema: {type: 'object', properties: {assignment_id: {type: 'string'}, due_date: {type: 'string', description: 'YYYY-MM-DD (Asia/Seoul)'}, reveal_names: {type: 'boolean'}}, additionalProperties: false}},
   {name: 'get_review_queue', scope: 'homework:read', description: '검사(확인)를 기다리는 제출이 있는 숙제와 건수를 돌려줍니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}}, additionalProperties: false}},
   {name: 'list_deadlines', scope: 'homework:read', description: '앞으로 days일 안에 마감되는 숙제를 마감 순으로 돌려줍니다.', inputSchema: {type: 'object', properties: {days: {type: 'integer', minimum: 1, maximum: 60}}, additionalProperties: false}},
@@ -47,6 +48,14 @@ async function ownedAssignments(uid: string, classId?: string) {
 }
 const assignmentView = (task: Data) => ({id: task.id, classId: task.classId, className: task.className ?? '', title: task.title, submissionType: task.submissionType ?? 'legacy', dueAt: task.dueAt ?? null, createdAt: task.createdAt, targetCount: task.targetCount ?? 0, submittedCount: task.submittedCount ?? 0, reviewedCount: task.reviewedCount ?? 0, pendingReview: Math.max((task.submittedCount ?? 0) - (task.reviewedCount ?? 0), 0), link: `/teacher/homework?classId=${task.classId}&assignmentId=${task.id}`});
 
+/** Same finder as the 숙제 menu (kind, title words, order); hidden homework is already left out by ownedAssignments. */
+function assignmentsMatching(tasks: Data[], args: Data) {
+  if (args.type !== undefined && !(ASSIGNMENT_KINDS as readonly unknown[]).includes(args.type)) throw new BerryError('type은 image·text·video·legacy 중 하나예요.');
+  if (args.order !== undefined && !(ASSIGNMENT_ORDERS as readonly unknown[]).includes(args.order)) throw new BerryError('order는 new·old·due 중 하나예요.');
+  if (args.query !== undefined && typeof args.query !== 'string') throw new BerryError('query는 글자로 주세요.');
+  return findAssignments(tasks, {kind: args.type, query: args.query, order: args.order});
+}
+
 async function missingFor(task: Data, students: Student[], ctx: BearerContext, reveal: unknown) {
   const snap = await db().collection('submissions').where('assignmentId', '==', task.id).select('studentId', 'status').get();
   const submitted = new Set(snap.docs.map(doc => doc.data().studentId as string));
@@ -75,8 +84,7 @@ export async function callTool(name: string, args: Data, ctx: BearerContext) {
     case 'list_assignments': {
       const classId = args.class_id === undefined ? undefined : (await ownedClass(ctx.uid, args.class_id)).id;
       const limit = boundedInt(args.limit, 30, 1, 100, 'limit'), status = args.status === 'all' ? 'all' : 'open', nowMs = Date.now();
-      const tasks = (await ownedAssignments(ctx.uid, classId)).filter(task => status === 'all' || !task.dueAt || Date.parse(task.dueAt) >= nowMs);
-      tasks.sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+      const tasks = assignmentsMatching(await ownedAssignments(ctx.uid, classId), args).filter(task => status === 'all' || !task.dueAt || Date.parse(task.dueAt) >= nowMs);
       return {assignments: tasks.slice(0, limit).map(assignmentView), total: tasks.length};
     }
     case 'get_missing_submissions': {

@@ -200,7 +200,30 @@
     "restoreConfirmTitle": "과제 {count}개를 다시 표시할까요?",
     "hideConfirmDescription": "학생 화면에서 사라집니다. 제출물·피드백·보말은 그대로 보관하고, 숨긴 과제에서 언제든 복원할 수 있어요.",
     "restoreConfirmDescription": "기존 제출 기록과 마감일 그대로 학생 화면에 다시 표시합니다. 마감일을 바꾸려면 복원 후 과제를 수정해 주세요.",
-    "hideMissingWarning": "아직 제출하지 않은 기록이 {count}건 있어요. 숨기면 이 학생들도 제출할 수 없어요."
+    "hideMissingWarning": "아직 제출하지 않은 기록이 {count}건 있어요. 숨기면 이 학생들도 제출할 수 없어요.",
+    "listKinds": "숙제 종류",
+    "listKind": {
+      "all": "전체",
+      "image": "이미지",
+      "text": "텍스트",
+      "video": "동영상",
+      "legacy": "기타"
+    },
+    "listSearch": "숙제 이름 검색",
+    "listSearchClear": "검색 지우기",
+    "listSort": {
+      "new": "최신순",
+      "old": "오래된순",
+      "due": "마감 가까운 순"
+    },
+    "listSortHint": "누를 때마다 최신순 → 오래된순 → 마감 가까운 순으로 바뀌어요",
+    "listMonth": "{year}년 {month}월",
+    "listDueMonth": "마감 {year}년 {month}월",
+    "listNoDue": "마감 없음",
+    "listNoDate": "날짜 없음",
+    "listNoMatch": "찾는 숙제가 없어요.",
+    "listPending": "확인 전 {count}",
+    "listDue": "마감 {date}"
   },
   "student": {
     "activeTasksTitle": "해야 할 숙제",
