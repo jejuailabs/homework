@@ -24,6 +24,7 @@ assert.notEqual(buildCatalog(tools, {playground: false, cards: false}).version, 
 // A grant without write scopes sees a smaller table: domains with no usable tool disappear.
 const readOnly = buildCatalog(tools.filter(entry => !entry.name.startsWith('create_') && !entry.name.startsWith('approve_') && entry.name !== 'publish_review' && entry.name !== 'confirm_write'), {});
 assert.ok(!readOnly.domains.some(domain => domain.key === 'confirm'));
-// Berry's brain renders the table into at most 9,000 characters; each new tool row adds about 200 bytes here.
-assert.ok(new TextEncoder().encode(JSON.stringify(full)).length < 13_000, 'the whole table stays small');
+// Berry's brain renders the table into at most 14,000 characters; each new tool row adds about 200 bytes here.
+assert.ok(new TextEncoder().encode(JSON.stringify(full)).length < 18_000, 'the whole table stays small');
+assert.ok(full.domains.every(domain => domain.key !== 'other'), 'every tool has a menu (no 기타)');
 console.log('catalog tests ok');

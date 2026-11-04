@@ -7,6 +7,7 @@ import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, maskNames
 import {WORKSPACE_TOOLS, callWorkspaceTool} from './workspace-tools';
 import {CLASSROOM_TOOLS, callClassroomTool, menuFlags} from './classroom-tools';
 import {buildCatalog} from './catalog';
+import {MANAGE_TOOLS} from './manage-tools';
 import {ASSIGNMENT_KINDS, ASSIGNMENT_ORDERS, findAssignments} from '@/lib/assignment-finder';
 import type {BearerContext, McpTool} from './types';
 
@@ -25,6 +26,7 @@ export const TOOLS: McpTool[] = [
   {name: 'search_notebook', scope: 'notebook:read', description: '교무수첩 관찰 기록을 기간·학급·학생 번호·검색어로 찾습니다. 상담·건강·가정 등 민감 기록은 항상 제외되며, 본문은 300자까지만 돌려줍니다.', inputSchema: {type: 'object', properties: {from: {type: 'string', description: 'YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM-DD'}, class_id: {type: 'string'}, student_number: {type: 'integer', minimum: 1, maximum: 999}, query: {type: 'string', maxLength: 100}, reveal_names: {type: 'boolean'}, limit: {type: 'integer', minimum: 1, maximum: 100}}, required: ['from', 'to'], additionalProperties: false}},
   ...CLASSROOM_TOOLS,
   ...WORKSPACE_TOOLS,
+  ...MANAGE_TOOLS,
 ];
 
 const seoulDate = (iso: string) => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(iso));
@@ -74,7 +76,7 @@ export async function callTool(name: string, args: Data, ctx: BearerContext) {
     return typeof args.known_version === 'string' && args.known_version === catalog.version ? {version: catalog.version, unchanged: true} : catalog;
   }
   if (CLASSROOM_TOOLS.includes(tool)) return callClassroomTool(name, args, ctx);
-  if (WORKSPACE_TOOLS.includes(tool)) return callWorkspaceTool(name, args, ctx);
+  if (WORKSPACE_TOOLS.includes(tool) || MANAGE_TOOLS.includes(tool)) return callWorkspaceTool(name, args, ctx);
   switch (name) {
     case 'list_classes': return {classes: await ownedClasses(ctx.uid)};
     case 'get_roster': {

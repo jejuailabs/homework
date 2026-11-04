@@ -18,6 +18,7 @@ import {requiredSubmissionType, text} from '@/lib/server/policy';
 import {approvePendingArtworks} from '@/lib/server/exhibitions';
 import {publishPendingPosts} from '@/lib/server/participation';
 import {assertLessonPublishable, publishLessonReview} from '@/modules/lesson-review/server';
+import {executeManage, planManage, type ManagePlan} from './manage-tools';
 
 type Data = Record<string, any>;
 type Student = {classId: string; id: string; number: number; name: string};
@@ -71,7 +72,9 @@ function mcpRange(from: unknown, to: unknown) {
 type Pending = {tool: 'add_calendar_event'; payload: {event: CalendarInput}} | {tool: 'add_lesson_log'; payload: {date: string; entry: LessonEntryInput}}
   | {tool: 'add_work_item'; payload: {item: ItemInput}} | {tool: 'add_notebook_entry'; payload: {entry: ReturnType<typeof entryInput>}}
   | {tool: 'create_assignment'; payload: {assignment: AssignmentInput}} | {tool: 'create_exhibition' | 'create_board'; payload: {room: RoomInput}}
-  | {tool: 'approve_artworks'; payload: {exhibitionId: string; ids: string[] | null}} | {tool: 'approve_posts'; payload: {boardId: string; ids: string[] | null}} | {tool: 'publish_review'; payload: {classId: string; lessonId: string}};
+  | {tool: 'approve_artworks'; payload: {exhibitionId: string; ids: string[] | null}} | {tool: 'approve_posts'; payload: {boardId: string; ids: string[] | null}} | {tool: 'publish_review'; payload: {classId: string; lessonId: string}}
+  | {tool: `manage_${string}`; payload: {plan: ManagePlan}};
+const isManage = (pending: Pending): pending is Extract<Pending, {payload: {plan: ManagePlan}}> => pending.tool.startsWith('manage_');
 const idList = (value: unknown) => Array.isArray(value) && value.length ? [...new Set(value.slice(0, 50).map(item => safeId(item, '항목')))] : null;
 type AssignmentInput = {classId: string; title: string; description: string; submissionType: string; dueAt: string | null; sync: {exhibition: boolean; board: boolean}};
 type RoomInput = {classId: string; title: string; description: string};
@@ -89,6 +92,7 @@ const roomInput = (args: Data): RoomInput => ({classId: safeId(args.class_id, '�
 
 /** Validates and checks ownership exactly as the save will, so a preview never promises what confirm cannot do. */
 async function prepare(name: string, args: Data, ctx: BearerContext): Promise<Pending> {
+  if (name.startsWith('manage_')) return {tool: name as `manage_${string}`, payload: {plan: await planManage(name, args, ctx)}};
   if (name === 'add_calendar_event') {
     assertWorkspace();
     const event = calendarInput({title: args.title, start: args.start, end: args.end, allDay: args.all_day, kind: args.kind, classId: args.class_id});
@@ -158,6 +162,11 @@ async function prepare(name: string, args: Data, ctx: BearerContext): Promise<Pe
 }
 async function previewView(pending: Pending, ctx: BearerContext) {
   const mask = await masker(ctx, {});
+  if (isManage(pending)) {
+    // Names typed into titles or bodies leave as aliases, like every other preview.
+    const masked = (value: unknown): unknown => typeof value === 'string' ? mask(value) : Array.isArray(value) ? value.map(masked) : value;
+    return {...Object.fromEntries(Object.entries(pending.payload.plan.view).map(([key, value]) => [key, masked(value)])), saved_note: pending.payload.plan.savedNote};
+  }
   switch (pending.tool) {
     case 'add_calendar_event': {const e = pending.payload.event; return {title: mask(e.title), kind: CALENDAR_KIND_LABELS[e.kind], all_day: e.allDay, start: e.start, end: e.end, start_date: seoulDate(e.start), class_id: e.classId};}
     case 'add_lesson_log': {const {date: day, entry} = pending.payload; return {date: day, period: entry.period ?? null, subject: entry.subject, unit: entry.unit ?? null, note: mask(entry.note)};}
@@ -213,12 +222,13 @@ async function confirmWrite(args: Data, ctx: BearerContext) {
     tx.update(ref, {usedAt: new Date().toISOString()});
     return {tool: data!.tool, payload} as Pending;
   });
+  if (isManage(pending)) {const result = await executeManage(pending.payload.plan, ctx); return {saved: {done: result.done, failed: result.failed}, pending: false, note: result.note};}
   const saved = await save(pending, ctx);
   if (['create_assignment', 'create_exhibition', 'create_board', 'approve_artworks', 'approve_posts', 'publish_review'].includes(pending.tool)) return {saved, pending: false, note: '반영했어요. 학생 화면에 바로 보여요.'};
   return {saved, pending: true, note: '저장했어요. 선생님이 모두의 교실 화면에서 확정하면 "베리 제안" 표시가 사라져요.'};
 }
 /** Re-validates the stored payload and re-checks ownership at save time. */
-async function save(pending: Pending, ctx: BearerContext) {
+async function save(pending: Exclude<Pending, {payload: {plan: ManagePlan}}>, ctx: BearerContext) {
   switch (pending.tool) {
     case 'add_calendar_event': {assertWorkspace(); const event = await createCalendarEvent(ctx.uid, calendarInput(pending.payload.event as unknown as Data), 'chat'); return {collection: 'calendar', id: event.id};}
     case 'add_lesson_log': {assertWorkspace(); const result = await appendLessonEntry(ctx.uid, isoDate(pending.payload.date), lessonEntryInput(pending.payload.entry as unknown as Data), 'chat'); return {collection: 'lessons', id: result.date, entry_id: result.entryId};}
