@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, DoorOpen, Images, Move, RotateCcw, Sparkles, X } from "lucide-react";
 import type * as Three from "three";
-import { exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY } from "@/lib/exhibition-world-layout";
+import { CLASSROOM_CAPACITY, CLASSROOM_WINDOW, classroomPosterSlot, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY } from "@/lib/exhibition-world-layout";
 import {createArtScreenPainter, type ArtScreenFrame} from '@/lib/exhibition-screen-painter';
 import ExhibitionScreen from './exhibition-screen';
 import WorldJoystick from './world-joystick';
@@ -69,7 +69,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
     return () => query.removeEventListener('change', update);
   }, []);
   const contextKey = `${stage}:${buildingName || ""}:${roomTitle || ""}`;
-  const capacity = stage === "gallery" ? WORLD_WING_CAPACITY : stage === "campus" ? (compact ? 1 : 3) : 12;
+  const capacity = stage === "gallery" ? WORLD_WING_CAPACITY : stage === "campus" ? (compact ? 1 : 3) : CLASSROOM_CAPACITY;
   const items = stage === "gallery" ? artworks : stage === "campus" ? buildings : rooms;
   const wings = Math.max(1, Math.ceil(items.length / capacity));
   const wing = Math.min(wingChoice.key === contextKey ? wingChoice.value : 0, wings - 1);
@@ -352,11 +352,8 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
       function poster(room: WorldRoom, index: number) {
         const group = new T.Group();
-        if (index < 6) {
-          const rowCount = Math.min(3, data.rooms.length - Math.floor(index / 3) * 3);
-          group.position.set(((index % 3) - (rowCount - 1) / 2) * 3.55, index < 3 ? 3.95 : 1.95, -6.82);
-        }
-        else { const left = index < 9; group.position.set(left ? -7.83 : 7.83, 3.0, ((index - 6) % 3 - 1) * 3.4); group.rotation.y = left ? Math.PI / 2 : -Math.PI / 2; }
+        const slot = classroomPosterSlot(index, data.rooms.length);
+        group.position.set(slot.x, slot.y, slot.z); group.rotation.y = slot.rotationY;
         scene.add(group);
         const color = PALETTES[(room.theme && room.theme in PALETTES ? room.theme : "cozy") as keyof typeof PALETTES];
         rounded(group, 2.7, 1.65, 0.13, wood, 0.13);
@@ -436,13 +433,14 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         if (stage === "classroom") {
           data.rooms.forEach(poster);
           const title = textPlane(scene, english ? `${data.buildingName || "Our class"} · EXHIBITIONS` : `${data.buildingName || "우리 반"}의 작은 전시회`, 9.5, 0.55, palette.dark); title.position.set(0, 5.4, -6.85);
-          // Small window and a low book nook make the lobby feel like a classroom.
-          const windowGroup = new T.Group(); windowGroup.position.set(-7.78, 3.0, 3.55); windowGroup.rotation.y = Math.PI / 2; scene.add(windowGroup);
+          // Small window and a low book nook make the lobby feel like a classroom. The window sits on the entry wall so
+          // the three poster walls stay free.
+          const windowGroup = new T.Group(); windowGroup.position.set(CLASSROOM_WINDOW.x, CLASSROOM_WINDOW.y, CLASSROOM_WINDOW.z); windowGroup.rotation.y = Math.PI; scene.add(windowGroup);
           arch(windowGroup, 2.3, 3.1, 0.1, white); arch(windowGroup, 2.03, 2.8, 0.1, matte(palette.sky)).position.z = 0.08;
           box(windowGroup, 0, 0, 0.15, 0.07, 2.5, 0.025, white); box(windowGroup, 0, -0.15, 0.15, 2, 0.07, 0.025, white);
-          const shelf = rounded(scene, 3.2, 0.8, 0.8, wood, 0.13); shelf.position.set(5.2, 0.44, 4.7);
-          ["#a9c8b5", "#e9b5a5", "#e7d39b", "#b9cae1", "#cbbbd3"].forEach((color, i) => box(scene, 4.2 + i * 0.39, 1.08, 4.7, 0.27, 0.5 + (i % 2) * 0.14, 0.43, matte(color)));
-          obstacles.push({ x: 5.2, z: 4.7, halfX: 1.8, halfZ: 0.6 });
+          const shelf = rounded(scene, 3.2, 0.8, 0.8, wood, 0.13); shelf.position.set(5.2, 0.44, 5.4);
+          ["#a9c8b5", "#e9b5a5", "#e7d39b", "#b9cae1", "#cbbbd3"].forEach((color, i) => box(scene, 4.2 + i * 0.39, 1.08, 5.4, 0.27, 0.5 + (i % 2) * 0.14, 0.43, matte(color)));
+          obstacles.push({ x: 5.2, z: 5.4, halfX: 1.8, halfZ: 0.6 });
           if (!data.rooms.length) {
             const board = rounded(scene, 6.6, 2.55, 0.15, mint, 0.25); board.position.set(0, 3.1, -6.82);
             textPlane(scene, english ? "A new exhibition is coming!" : "새로운 전시회를 기다리고 있어요!", 5.7, 0.9, "#49695d").position.set(0, 3.2, -6.71);

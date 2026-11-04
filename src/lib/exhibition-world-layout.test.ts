@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {artScreenSize, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY} from './exhibition-world-layout';
+import {artScreenSize, CLASSROOM_CAPACITY, CLASSROOM_POSTER, CLASSROOM_WINDOW, classroomOrder, classroomPosterSlot, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY} from './exhibition-world-layout';
 
 // Clearance covers the displayed 2.65 × 1.87 frame, its name plaque,
 // and the 0.04 bevel, rather than just testing the frame's center point.
@@ -74,3 +74,29 @@ test('25 wall artworks surround the central screen without hiding any frame or c
 });
 
 test('the central screen follows portrait and landscape ratios within the wall and keeps a narrow white mat',()=>{for(const [width,height]of [[480,720],[720,480],[720,720],[100,1000],[1000,100]]){const value=artScreenSize(width,height);assert(Math.abs(value.imageWidth/value.imageHeight-width/height)<1e-9);assert(value.imageWidth<=6.40001&&value.imageHeight<=4.20001);assert(value.width<=GALLERY_SCREEN.outerWidth&&value.height<=GALLERY_SCREEN.outerHeight);assert(Math.abs(value.width-value.imageWidth-.35)<1e-9);assert(Math.abs(value.surfaceHeight-value.imageHeight-.42)<1e-9);}assert.deepEqual(artScreenSize(NaN,0),artScreenSize());assert.equal(artScreenSize(1,1,true).imageWidth,6.4);});
+
+test('the class lobby hangs six posters on each of three walls, none overlapping and none behind the window', () => {
+  assert.equal(CLASSROOM_CAPACITY, 18);
+  for (const total of [1, 4, 6, 7, 12, 13, 18]) {
+    const slots = Array.from({length: total}, (_, i) => classroomPosterSlot(i, total));
+    for (const wall of ['back', 'left', 'right'] as const) assert(slots.filter(s => s.wall === wall).length <= 6);
+    for (let a = 0; a < slots.length; a++) for (let b = a + 1; b < slots.length; b++) {
+      const p = slots[a], q = slots[b];
+      if (p.wall !== q.wall) continue;
+      const apart = p.wall === 'back' ? Math.abs(p.x - q.x) : Math.abs(p.z - q.z);
+      assert(apart >= CLASSROOM_POSTER.width || Math.abs(p.y - q.y) >= CLASSROOM_POSTER.height, `${total}: ${a} and ${b} overlap`);
+    }
+    // Posters stay on the 16 × 14 lobby walls, inside the wall edges.
+    for (const s of slots) assert(s.wall === 'back' ? Math.abs(s.x) + CLASSROOM_POSTER.width / 2 < 8 : Math.abs(s.z) + CLASSROOM_POSTER.width / 2 < 7);
+  }
+  assert.equal(classroomPosterSlot(6, 18).wall, 'left');
+  assert.equal(classroomPosterSlot(17, 18).wall, 'right');
+  // The window is on the entry wall (z = +7), which holds no posters.
+  assert(CLASSROOM_WINDOW.z > 6.5);
+});
+
+test('older exhibitions keep their spot when a new one is added', () => {
+  const rooms = [{id: 'c', createdAt: '2026-11-03'}, {id: 'a', createdAt: '2026-10-01'}, {id: 'b', createdAt: '2026-10-15'}];
+  assert.deepEqual(classroomOrder(rooms).map(r => r.id), ['a', 'b', 'c']);
+  assert.deepEqual(classroomOrder([...rooms, {id: 'd', createdAt: '2026-11-04'}]).map(r => r.id), ['a', 'b', 'c', 'd']);
+});

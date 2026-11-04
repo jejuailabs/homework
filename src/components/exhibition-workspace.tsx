@@ -1,5 +1,6 @@
 "use client";
 
+import {classroomOrder} from "@/lib/exhibition-world-layout";
 import {lockBodyScroll, lockBodyScrollWhen} from '@/lib/body-scroll-lock';
 import {useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
 import dynamic from "next/dynamic";
@@ -279,7 +280,8 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   };
   const currentBuilding = home?.classes?.find(item => item.id === buildingId) || home?.classes?.[0];
   const visibleShows = rooms.filter(show => !teacher || !currentBuilding || show.classId === currentBuilding.id);
-  const worldRooms = visibleShows.map(show => ({...show, artworkCount: show.approvedCount}));
+  // Rooms keep the spot they first took: oldest first, so a new exhibition takes the next empty poster.
+  const worldRooms = classroomOrder(visibleShows).map(show => ({...show, artworkCount: show.approvedCount}));
   const artworks = detail?.artworks || [];
   const approved = artworks.filter(artwork => artwork.status === "approved");
   const filtered = artworks.filter(artwork => filter === "all" || artwork.status === filter);
