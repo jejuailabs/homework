@@ -10,7 +10,7 @@ import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { assignmentSubmissionType } from '../assignment-submission';
 import { auth, bucket, db } from './admin';
 import { getAiOperations } from './ai';
-import { assertOrigin, contextForUid, cookieName, getContext, requireStudent, requireTeacher, type Context } from './auth';
+import { assertOrigin, contextForUid, cookieName, forgetContext, getContext, requireStudent, requireTeacher, type Context } from './auth';
 import { ApiError, batchReviewItems, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
 import {awardHomeworkPoints} from './points';
 import {pointBalance, pointSettings, wardrobeOutfit} from './points-policy';
@@ -505,6 +505,7 @@ async function resetStudentCode(request: Request, classId: string, studentId: st
   });
     return {accessCode, authUid};
   });
+  forgetContext(authUid);
   try { await auth().revokeRefreshTokens(authUid); }
   catch (error) { if ((error as { code?: string }).code !== 'auth/user-not-found') throw error; }
   await audit(ctx, 'student.code-reset', authUid, { classId, studentId });

@@ -32,6 +32,7 @@ await import(moduleUrl(compile('../canvas-document.test.ts').replace("'./canvas-
 await import(moduleUrl(compile('../canvas-groups.test.ts').replace("'./canvas-groups'", JSON.stringify(moduleUrl(compile('../canvas-groups.ts'))))));
 const geometryUrl=moduleUrl(compile('../canvas-geometry.ts').replace("'perfect-freehand'",JSON.stringify(import.meta.resolve('perfect-freehand'))));
 await import(moduleUrl(compile('../canvas-geometry.test.ts').replace("'./canvas-geometry'",JSON.stringify(geometryUrl)).replace("'./canvas-document'",JSON.stringify(canvasUrl))));
+await import(moduleUrl(compile('./context-cache.test.ts').replace("'./context-cache'", JSON.stringify(moduleUrl(compile('./context-cache.ts'))))));
 const studentCodesUrl = moduleUrl(compile('./student-codes.ts'));
 const studentEntryUrl = moduleUrl(compile('../student-entry-code.ts'));
 await import(moduleUrl(compile('./student-codes.test.ts').replace("'./student-codes'", JSON.stringify(studentCodesUrl)).replace("'../student-entry-code'", JSON.stringify(studentEntryUrl))));
