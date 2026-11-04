@@ -10,7 +10,7 @@ assert.equal(full.domains.find(domain => domain.key === 'cards')?.enabled, false
 assert.equal(full.domains.find(domain => domain.key === 'kids_daily')?.tools.length, 0, 'Kids Daily has no reading tool, only a count in signals');
 assert.ok(full.rules.some(rule => rule.includes('가명')), 'privacy rules travel with the table');
 assert.ok(full.rules.some(rule => rule.includes('숙제 /teacher/homework')), 'menu links travel with the table');
-assert.equal(full.domains.find(domain => domain.key === 'exhibitions')?.link, '/teacher/exhibitions');
+assert.ok(full.rules.some(rule => rule.includes('작품전시 /teacher/exhibitions')));
 assert.equal(full.tools.find(row => row.name === 'get_signals')?.summary, 'get_signals 설명입니다.', 'summaries keep the first sentence');
 
 // A tool nobody filed still shows up, so the table never falls behind the code.
