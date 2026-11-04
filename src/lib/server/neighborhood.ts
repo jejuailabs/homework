@@ -5,7 +5,7 @@ import {db} from './admin';
 import {assertOrigin, requireTeacher} from './auth';
 import {ApiError, id} from './policy';
 import {readBoundedJson} from './ai-policy';
-import {overpassQuery, parseNeighborhoodMap, parseOverpassMap, validateMapCenter, validateNeighborhoodPack, type NeighborhoodPack} from '../neighborhood';
+import {VWORLD_LAYERS, parseNeighborhoodMap, parseVworldMap, validateMapCenter, vworldRequestUrl, validateNeighborhoodPack, type NeighborhoodPack} from '../neighborhood';
 
 const json=(value:unknown,status=200)=>NextResponse.json(value,{status,headers:{'Cache-Control':'private, no-store'}});
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -20,9 +20,12 @@ export async function neighborhoodMapRoute(request:Request){
     assertOrigin(request);const ctx=await requireTeacher(request);
     globalRef=db().doc('neighborhoodLimits/global');
     const raw=await readBoundedJson(request,2000),center=parse(()=>validateMapCenter(raw));
-    const cacheKey=hash(`${center.lat}:${center.lon}:${center.radius}`),cacheRef=db().doc(`neighborhoodMapCache/${cacheKey}`);
+    const cacheKey=hash(`vworld:${center.lat}:${center.lon}:${center.radius}`),cacheRef=db().doc(`neighborhoodMapCache/${cacheKey}`);
     const cached=await cacheRef.get(),cachedData=cached.data(),now=Date.now();
     if(cachedData&&typeof cachedData.mapJson==='string'&&cachedData.expiresAt>now){try{return json({map:parseNeighborhoodMap(JSON.parse(cachedData.mapJson)),cached:true});}catch{/* Replace an invalid older cache entry. */}}
+    // VWorld (국토교통부 공간정보 오픈플랫폼) data API. The key stays server-side; domain must match the URL registered with the key.
+    const vworldKey=process.env.VWORLD_API_KEY?.trim(),vworldDomain=process.env.VWORLD_DOMAIN?.trim()??'';
+    if(!vworldKey)throw new ApiError(503,'지도 서비스 연결 설정을 확인해 주세요.','MAP_NOT_CONFIGURED');
     const day=new Date(now+9*3600000).toISOString().slice(0,10),teacherRef=db().doc(`neighborhoodLimits/${hash(ctx.uid)}`);
     const leaseId=randomUUID();
     await db().runTransaction(async tx=>{
@@ -32,16 +35,14 @@ export async function neighborhoodMapRoute(request:Request){
       if(globalCount>=100||teacherCount>=10)throw new ApiError(429,'오늘 새 지도를 불러오는 횟수를 모두 사용했어요. 저장한 자료는 계속 사용할 수 있어요.','MAP_QUOTA');
       tx.set(globalRef!,{day,count:globalCount+1,lastStarted:now,busyUntil:now+35000,leaseId});tx.set(teacherRef,{day,count:teacherCount+1});
     });lease=leaseId;
-    // This independent operator explicitly permits commercial applications (terms dated
-    // 2026-04-10, https://overpass.private.coffee/). Do not switch to overpass-api.de
-    // or a public geocoder without reviewing that operator's current application policy.
-    const endpoint=process.env.NEIGHBORHOOD_OVERPASS_URL||'https://overpass.private.coffee/api/interpreter';
-    let endpointUrl:URL;try{endpointUrl=new URL(endpoint);}catch{throw new ApiError(503,'지도 서비스 연결 설정을 확인해 주세요.','MAP_NOT_CONFIGURED');}
-    if(endpointUrl.protocol!=='https:'||endpointUrl.username||endpointUrl.password)throw new ApiError(503,'지도 서비스 연결 설정을 확인해 주세요.','MAP_NOT_CONFIGURED');
-    let upstream:Response;
-    try{upstream=await fetch(endpointUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'HomeworkFriends-ClassroomMaps/1.0 (+https://homework-indol-gamma.vercel.app)'},body:new URLSearchParams({data:overpassQuery(center)}),cache:'no-store',signal:AbortSignal.timeout(28000),redirect:'error'});}catch{throw new ApiError(503,'외부 지도 서버가 응답하지 않아요. 잠시 뒤 다시 시도하거나 저장한 자료·GeoJSON 지도를 가져와 주세요.','MAP_UNAVAILABLE');}
-    if(!upstream.ok)throw new ApiError(503,'지도 서비스가 잠시 바빠요. 저장한 자료를 사용하거나 잠시 뒤 다시 시도해 주세요.','MAP_UNAVAILABLE');
-    let map;try{map=parseOverpassMap(await readBoundedJson(upstream,3_000_000),center,stamp());}catch{throw new ApiError(502,'이 범위의 지도 자료를 가져오지 못했어요. 범위를 줄이거나 GeoJSON 파일을 가져와 주세요.','MAP_INCOMPLETE');}
+    const responses:Record<string,unknown>={};
+    try{await Promise.all(VWORLD_LAYERS.map(async layer=>{const upstream=await fetch(vworldRequestUrl(layer,center,vworldKey,vworldDomain),{headers:{Accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(20000),redirect:'error'});if(!upstream.ok)throw new Error('VWORLD_HTTP');responses[layer.key]=await readBoundedJson(upstream,5_000_000);}));}
+    catch{throw new ApiError(503,'브이월드 지도 서버가 응답하지 않아요. 잠시 뒤 다시 시도하거나 저장한 자료·GeoJSON 지도를 가져와 주세요.','MAP_UNAVAILABLE');}
+    let map;try{map=parseVworldMap(responses,center,stamp());}catch(error){
+      const code=error instanceof Error?error.message:'';
+      if(code==='VWORLD_INVALID_KEY'||code==='VWORLD_INCORRECT_KEY'||code==='VWORLD_UNAVAILABLE_KEY')throw new ApiError(503,'지도 서비스 인증키 설정을 확인해 주세요.','MAP_NOT_CONFIGURED');
+      if(code==='VWORLD_OVER_REQUEST_LIMIT')throw new ApiError(429,'오늘 지도 서비스 사용량을 모두 썼어요. 저장한 자료는 계속 사용할 수 있어요.','MAP_QUOTA');
+      throw new ApiError(502,'이 범위의 지도 자료를 가져오지 못했어요. 범위를 바꾸거나 GeoJSON 파일을 가져와 주세요.','MAP_INCOMPLETE');}
     const mapJson=JSON.stringify(map);if(Buffer.byteLength(mapJson)>700000)throw new ApiError(413,'지도 범위를 줄여서 다시 불러와 주세요.','MAP_SIZE');
     await cacheRef.set({mapJson,expiresAt:now+86400000,createdAt:stamp()});
     return json({map,cached:false});
