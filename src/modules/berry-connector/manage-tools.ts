@@ -167,7 +167,8 @@ async function homework(args: Data, ctx: BearerContext): Promise<ManagePlan> {
     if (!waiting.length) throw new BerryError('검사를 기다리는 제출이 없어요.');
     const feedback = typeof args.feedback === 'string' ? args.feedback : undefined, calls: ManageCall[] = [];
     for (let index = 0; index < waiting.length; index += 50) calls.push({route: 'api', segments: ['review-batch', id], method: 'POST', body: {items: waiting.slice(index, index + 50).map(row => ({studentId: row.studentId, attemptId: row.attemptId, ...(feedback ? {feedback} : {})}))}});
-    return {view: {target, action: '제출한 학생 모두 검사 완료', count: waiting.length, students: waiting.map(row => alias(numberOf.get(row.studentId) ?? 0)).sort(), body: feedback ?? null, note: `${STUDENT} 검사 완료 1명마다 보말이 지급돼요(처음 1회).`}, calls, savedNote: `${waiting.length}명을 검사 완료로 바꿨어요.`};
+    const edited = waiting.filter(row => row.editedAt).length;
+    return {view: {target, action: '제출한 학생 모두 검사 완료', count: waiting.length, students: waiting.map(row => alias(numberOf.get(row.studentId) ?? 0)).sort(), body: feedback ?? null, note: `${STUDENT} 검사 완료 1명마다 보말이 지급돼요(처음 1회).${edited ? ` 제출 뒤 학생이 고친 숙제 ${edited}건이 포함돼요. 검사하면 학생은 더 고칠 수 없어요.` : ''}`}, calls, savedNote: `${waiting.length}명을 검사 완료로 바꿨어요.`};
   }
   throw new BerryError('action을 확인해 주세요.');
 }

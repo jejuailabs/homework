@@ -1,5 +1,7 @@
 import 'server-only';
-import {prepareHomeworkUpload} from './homework-uploads';
+import {markHomeworkUploadsSubmitted, prepareHomeworkUpload, verifiedHomeworkUploads} from './homework-uploads';
+import {deleteSubmission, editSubmission, restoreSubmission, submissionFingerprint, submissionTrashRef} from './submission-edits';
+import {restorableSubmission} from '../submission-edit';
 import {stableReadUrl} from './signed-urls';
 import {downloadDisposition, extensionOf, friendlyFileName} from '../file-naming';
 import {assertTeacherStorage} from './teacher-storage';
@@ -8,10 +10,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse, after } from 'next/server';
 import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { assignmentSubmissionType } from '../assignment-submission';
-import { auth, bucket, db } from './admin';
+import { auth, db } from './admin';
 import { getAiOperations } from './ai';
 import { assertOrigin, contextForUid, cookieName, forgetContext, getContext, requireStudent, requireTeacher, type Context } from './auth';
-import { ApiError, batchReviewItems, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
+import { ApiError, batchReviewItems, canDisableUser, canManageClass, homeworkThumbnailSize, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
 import {awardHomeworkPoints} from './points';
 import {pointBalance, pointSettings, wardrobeOutfit} from './points-policy';
 import {normalizeStudentCode, validStudentCode} from '../student-entry-code';
@@ -25,7 +27,7 @@ import {companionProfile} from '@/modules/my-space/profile';
 import {ownedItems, roomCompanionAppearance} from '@/modules/my-space/policy';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
 import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
-import {createLinkedRooms, syncSubmission} from './homework-sync';
+import {createLinkedRooms, setSyncedWithdrawn, syncSubmission} from './homework-sync';
 import {homeworkSyncTargets} from './homework-sync-policy';
 
 type Data = Record<string, any>;
@@ -332,10 +334,13 @@ async function home(request: Request) {
   for (let offset = 0; offset < visible.length; offset += 100) submitted.push(...await db().getAll(...visible.slice(offset, offset + 100).map(task => db().doc(`submissions/${task.id}_${ctx.studentId}`))));
   const byAssignment = new Map(submitted.filter(doc => doc.exists && doc.data()?.classId === ctx.classId && doc.data()?.studentId === ctx.studentId).map(doc => [doc.data()!.assignmentId, mapped(doc)]));
   const jobs=new Map((await studentVideoJobs(ctx, new Set(visible.map(task => task.id)))).map(job=>[job.assignmentId,job]));
+  // Only unsubmitted tasks can hold a deleted submission.
+  const unsent = visible.filter(task => !byAssignment.has(task.id)), deleted = new Map<string, ReturnType<typeof restorableSubmission>>();
+  for (let offset = 0; offset < unsent.length; offset += 100) (await db().getAll(...unsent.slice(offset, offset + 100).map(task => submissionTrashRef(task.id, ctx.studentId!)))).forEach(doc => {const view = doc.exists ? restorableSubmission(doc.data()) : null; if (view) deleted.set(doc.data()!.assignmentId, view);});
   const assignments = await Promise.all(visible.map(async task => {
     const submission = byAssignment.get(task.id);
     const { targetStudentIds: _targets, ownerUid: _owner, ...visibleTask } = task;
-    return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission, task.title) : null,videoJob:jobs.get(task.id)||null };
+    return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission, task.title) : null,videoJob:jobs.get(task.id)||null,deletedSubmission:deleted.get(task.id)||null };
   }));
   return json({ profile, assignments,videoProcessingEnabled:!!await videoConfig() });
 }
@@ -381,39 +386,30 @@ async function finalize(request: Request) {
   const uploadIds = input.uploadIds.map((value: unknown) => id(value));
   submissionContentPolicy(assignment.submissionType, answer, uploadIds.length);
   if(assignment.submissionType==='video')return json({processing:true,videoJob:await createVideoSubmission(ctx,assignment,answer,uploadIds)},202);
-  const fingerprint = hash(JSON.stringify({ answer, uploadIds }));
-  const ref = db().doc(`submissions/${assignmentId}_${ctx.studentId}`);
+  const fingerprint = submissionFingerprint(answer, uploadIds);
+  const ref = db().doc(`submissions/${assignmentId}_${ctx.studentId}`), trashRef = submissionTrashRef(assignmentId, ctx.studentId!);
   const previous = await ref.get();
   // A revision is a new attempt even when a student sends the same text.
   // Submitted/done content still returns the existing attempt on retries.
   if (previous.data()?.fingerprint === fingerprint && previous.data()?.status !== 'revision') return json({ submission: await withFileUrls(mapped(previous), assignment.title) });
-  const uploadDocs = await Promise.all(uploadIds.map((uploadId: string) => db().doc(`uploads/${uploadId}`).get()));
-  const uploads = await Promise.all(uploadDocs.map(async doc => {
-    const value = doc.data();
-    if (!canUseUpload(ctx.uid, assignmentId, value) || !value || value.expiresAt.toMillis() < Date.now()) throw new ApiError(400, '첨부파일을 다시 올려 주세요.', 'UPLOAD_INVALID');
-    // Recheck the manifest here as well as at init: clients cannot bypass the
-    // teacher's answer format by submitting an existing pending upload ID.
-    uploadPolicy(value.contentType, value.size, assignment.submissionType);
-    const [metadata] = await bucket().file(value.path).getMetadata().catch(() => { throw new ApiError(409, '아직 파일 전송 중이에요. 잠시 뒤 다시 제출해 주세요.', 'UPLOAD_INCOMPLETE'); });
-    if (Number(metadata.size) !== value.size || metadata.contentType !== value.contentType) throw new ApiError(400, '파일 정보가 달라요. 다시 올려 주세요.', 'UPLOAD_MISMATCH');
-    // The preview is optional: a missing or mismatched one just falls back to the full photo.
-    const thumbnail = value.thumbnailPath ? (await bucket().file(value.thumbnailPath).getMetadata().catch(() => [null]))[0] : null;
-    const thumbnailPath = thumbnail && Number(thumbnail.size) === value.thumbnailSize && thumbnail.contentType === 'image/jpeg' ? value.thumbnailPath : undefined;
-    return { id: doc.id, path: value.path, fileName: value.fileName, contentType: value.contentType, size: value.size, ...(thumbnailPath ? {thumbnailPath, thumbnailSize: value.thumbnailSize} : {}) };
-  }));
+  const {uploadDocs, uploads} = await verifiedHomeworkUploads(ctx.uid, assignmentId, assignment.submissionType, uploadIds);
   const profile = await studentProfile(ctx);
   const attemptId = randomUUID();
   const result = await db().runTransaction(async tx => {
-    const [freshTask, oldDoc, ...freshUploads] = await Promise.all([tx.get(db().doc(`assignments/${assignmentId}`)), tx.get(ref), ...uploadDocs.map(doc => tx.get(doc.ref))]);
+    const [freshTask, oldDoc, trashed, ...freshUploads] = await Promise.all([tx.get(db().doc(`assignments/${assignmentId}`)), tx.get(ref), tx.get(trashRef), ...uploadDocs.map(doc => tx.get(doc.ref))]);
     if (!freshTask.exists || freshTask.data()?.classId !== ctx.classId || !freshTask.data()?.targetStudentIds?.includes(ctx.studentId)) throw new ApiError(404, '배부된 과제를 찾을 수 없어요.', 'NOT_FOUND');
     assertAssignmentVisible(freshTask.data());
     const old = oldDoc.data();
     if (old?.fingerprint === fingerprint && old?.status !== 'revision') return mapped(oldDoc);
+    // Sent work changes through the edit route, which keeps the teacher's check locked.
+    if (old && old.status !== 'revision') throw new ApiError(409, '이미 제출한 숙제예요.', 'ALREADY_SUBMITTED');
     if (freshUploads.some(doc => doc.data()?.status !== 'pending')) throw new ApiError(409, '이미 사용된 첨부파일이에요.', 'UPLOAD_USED');
-    const submission = { id: ref.id, assignmentId, classId: ctx.classId, studentId: ctx.studentId, studentName: profile.name, text: answer, uploads, attemptId, attemptNumber: (old?.attemptNumber ?? 0) + 1, status: 'submitted', feedback: '', submittedAt: now(), reviewedAt: null, fingerprint, rewardGranted: !!old?.rewardGranted };
+    const submission = { id: ref.id, assignmentId, classId: ctx.classId, studentId: ctx.studentId, studentName: profile.name, text: answer, uploads, attemptId, attemptNumber: (old?.attemptNumber ?? trashed.data()?.attemptNumber ?? 0) + 1, status: 'submitted', feedback: '', submittedAt: now(), reviewedAt: null, fingerprint, rewardGranted: !!old?.rewardGranted };
     tx.set(ref, submission);
     tx.create(ref.collection('attempts').doc(attemptId), submission);
-    uploadDocs.forEach((doc, index) => {tx.update(doc.ref, {status:'submitted',submissionId:ref.id,storedBytes:uploads[index].size+(uploads[index].thumbnailSize??0)});if(assignment.ownerUid)tx.set(db().doc(`uploadTransferStats/homework_${doc.id}`),{ownerUid:assignment.ownerUid,bytes:doc.data()!.size,month:new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).format(new Date()),createdAt:now(),source:'homework'});});
+    markHomeworkUploadsSubmitted(tx, uploadDocs, uploads, ref.id, assignment.ownerUid);
+    // A fresh submission replaces whatever was deleted; those files follow the normal trash clean-up.
+    if (trashed.exists) tx.delete(trashRef);
     tx.update(db().doc(`assignments/${assignmentId}`), { submittedCount: FieldValue.increment(old ? 0 : 1), reviewedCount: FieldValue.increment(old && old.status !== 'submitted' ? -1 : 0) });
     return submission;
   });
@@ -421,6 +417,25 @@ async function finalize(request: Request) {
   if (assignment.sync?.exhibitionId || assignment.sync?.boardId) after(() => syncSubmission(assignmentId, ctx.studentId!));
   // The student can reopen the result immediately, before the home refresh.
   return json({ submission: await withFileUrls(result, assignment.title) });
+}
+async function editOwnSubmission(request: Request, assignmentId: string) {
+  const ctx = await requireStudent(request), input = await body(request), assignment = await assignmentForStudent(ctx, assignmentId);
+  const submission = await editSubmission(ctx, assignment as Parameters<typeof editSubmission>[1], input);
+  if (assignment.sync?.exhibitionId || assignment.sync?.boardId) after(() => syncSubmission(assignmentId, ctx.studentId!));
+  return json({ submission: await withFileUrls(submission, assignment.title) });
+}
+async function deleteOwnSubmission(request: Request, assignmentId: string) {
+  const ctx = await requireStudent(request), input = await body(request), assignment = await assignmentForStudent(ctx, assignmentId);
+  const result = await deleteSubmission(ctx, assignment as Parameters<typeof deleteSubmission>[1], input);
+  // Taken out of the rooms right after the response; a teacher's own hide stays untouched.
+  if (assignment.sync?.exhibitionId || assignment.sync?.boardId) after(() => setSyncedWithdrawn(assignmentId, ctx.studentId!, true));
+  return json(result);
+}
+async function restoreOwnSubmission(request: Request, assignmentId: string) {
+  const ctx = await requireStudent(request), assignment = await assignmentForStudent(ctx, assignmentId);
+  const submission = await restoreSubmission(ctx, assignment as Parameters<typeof restoreSubmission>[1]);
+  if (assignment.sync?.exhibitionId || assignment.sync?.boardId) after(() => setSyncedWithdrawn(assignmentId, ctx.studentId!, false));
+  return json({ submission: await withFileUrls(submission, assignment.title) });
 }
 async function reviewTask(request: Request, assignmentId: string) {
   const ctx = await requireTeacher(request);
@@ -547,6 +562,9 @@ export async function handle(request: Request, operation: string, parameter?: st
       case 'student-character': return await character(request);
       case 'upload-init': return await initUpload(request);
       case 'submission-finalize': return await finalize(request);
+      case 'submission-edit': return await editOwnSubmission(request, id(parameter));
+      case 'submission-delete': return await deleteOwnSubmission(request, id(parameter));
+      case 'submission-restore': return await restoreOwnSubmission(request, id(parameter));
       case 'review': return await review(request, id(parameter));
       case 'review-batch': return await reviewBatch(request, id(parameter));
       case 'admin-overview': return await adminOverview(request);
