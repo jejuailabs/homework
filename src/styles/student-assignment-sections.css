@@ -31,3 +31,33 @@
   .sd-history-label small { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .sd-history-chevron { transition: none; } }
+
+/* Chosen files: big enough to see the photo and to hit "remove" with a thumb. */
+.ws-student-dialog .ws-file-preview > img { width: 64px; height: 64px; }
+.ws-student-dialog .ws-file-preview > span { font-size: 13px; line-height: 1.35; }
+.ws-student-dialog .ws-file-preview > span small { display: block; color: var(--muted); font-size: 12px; }
+.sd-chosen-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.sd-clear-files { min-height: 40px; padding: 0 10px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
+.ws-file-remove { display: inline-flex; align-items: center; justify-content: center; gap: 3px; flex: none; min-width: 64px; min-height: 44px; padding: 0 10px; border: 1px solid #e7b4ac; border-radius: 12px; background: #fff4f2; color: #b23a2c; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.ws-file-remove:disabled, .sd-clear-files:disabled { opacity: .5; cursor: default; }
+
+/* What a student can still do with sent homework. */
+.sd-sent-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.sd-sent-actions > .ws-button { flex: 1 1 160px; justify-content: center; min-height: 48px; }
+.sd-sent-hint { display: block; margin-top: 12px; color: var(--muted); }
+.sd-sent-actions > .sd-sent-hint { flex-basis: 100%; }
+.sd-danger-outline { color: #b23a2c; border-color: #e7b4ac; }
+.sd-danger-button { background: #c8402f; border-color: #c8402f; color: #fff; }
+.sd-delete-confirm { flex: 1; padding: 14px; border: 1px solid #e7b4ac; border-radius: 14px; background: #fff4f2; color: #6e2318; }
+.sd-delete-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.sd-delete-confirm .ws-button { flex: 1 1 130px; justify-content: center; min-height: 46px; }
+.sd-restore-note { margin: 12px 0; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-alt); }
+.sd-restore-note .ws-button { width: 100%; justify-content: center; min-height: 46px; margin-top: 10px; }
+.sd-deleted-note { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; color: var(--accent-strong); }
+.sd-cancel-edit { width: 100%; justify-content: center; min-height: 46px; margin-top: 8px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ws-file-remove, :root:not([data-theme="light"]) .sd-delete-confirm { background: #3a1f1b; border-color: #7a3a30; color: #ffc9c0; }
+  :root:not([data-theme="light"]) .sd-danger-outline { color: #ffb1a5; border-color: #7a3a30; }
+}
+:root[data-theme="dark"] .ws-file-remove, :root[data-theme="dark"] .sd-delete-confirm { background: #3a1f1b; border-color: #7a3a30; color: #ffc9c0; }
+:root[data-theme="dark"] .sd-danger-outline { color: #ffb1a5; border-color: #7a3a30; }

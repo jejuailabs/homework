@@ -21,6 +21,7 @@ const homeworkArchiveUrl = moduleUrl(compile('../homework-archive.ts').replace("
 await import(moduleUrl(compile('../homework-archive.test.ts').replace("'./homework-archive'", JSON.stringify(homeworkArchiveUrl)).replace("'./zip-store'", JSON.stringify(zipStoreUrl))));
 const studentAssignmentViewUrl = moduleUrl(compile('../student-assignment-view.ts'));
 await import(moduleUrl(compile('../student-assignment-view.test.ts').replace("'./student-assignment-view'", JSON.stringify(studentAssignmentViewUrl))));
+await import(moduleUrl(compile('../submission-edit.test.ts').replace("'./submission-edit'", JSON.stringify(moduleUrl(compile('../submission-edit.ts'))))));
 const canvasTextUrl=moduleUrl(compile('../canvas-text.ts'));
 const cameraUrl=moduleUrl(compile('../canvas-camera.ts'));
 const canvasUrl = moduleUrl(compile('../canvas-document.ts').replace("'./canvas-camera'",JSON.stringify(cameraUrl)).replace("'./canvas-text'",JSON.stringify(canvasTextUrl)).replace("'yjs'", JSON.stringify(new URL('../../../node_modules/yjs/dist/yjs.mjs', import.meta.url).href)));

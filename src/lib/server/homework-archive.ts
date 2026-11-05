@@ -88,7 +88,8 @@ async function restore(ctx: Context, task: Owned) {
   const state = cleanupState(archive?.purgeAt);
   if (state === 'none') throw new ApiError(409, `"${task.title}"에는 복원할 파일이 없어요.`, 'NOTHING_TO_RESTORE');
   if (state === 'purged') throw new ApiError(410, `"${task.title}" 파일은 보관 기간이 지나 완전히 지워졌어요.`, 'PURGED');
-  const trashed = await uploadsOf(task, 'trashed');
+  // Files a student removed themselves are not part of the teacher's clean-up.
+  const trashed = (await uploadsOf(task, 'trashed')).filter(doc => !doc.data().studentRemoved);
   await chunked(trashed, (batch, doc) => batch.update(doc.ref, {status: 'submitted', trashedAt: FieldValue.delete(), purgeAt: FieldValue.delete(), trashedBy: FieldValue.delete()}));
   const submissions = await db().collection('submissions').where('assignmentId', '==', task.id).get();
   await chunked(submissions.docs.filter(doc => doc.data().filesRemoved), (batch, doc) => batch.update(doc.ref, {filesRemoved: FieldValue.delete()}));
@@ -114,7 +115,10 @@ export async function purgeTrashedHomeworkFiles() {
       purged++;
     } catch {console.error('Homework file purge deferred');}
   }
-  return {purged, hasMore: due.length === 200};
+  // Deleted submissions hold the child's text; they go when they can no longer be restored.
+  const expired = await db().collection('submissionTrash').where('restoreUntil', '<=', now()).limit(200).get();
+  await chunked(expired.docs, (batch, doc) => batch.delete(doc.ref));
+  return {purged, hasMore: due.length === 200 || expired.size === 200};
 }
 
 export async function handleHomeworkArchive(request: Request) {

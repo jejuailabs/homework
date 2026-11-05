@@ -15,6 +15,7 @@ const policy = load('./policy.ts', {'../assignment-submission': submission});
 const visibility = load('./assignment-visibility-policy.ts', {'./policy': policy});
 const teacher = {uid: 'teacher-1', role: 'teacher', email: null, displayName: null};
 const student = {uid: 'student-1', role: 'student', classId: 'class-a', studentId: 'pupil-1'};
+const submissionEdit = load('../submission-edit.ts');
 
 function fixture(initial) {
   const data = new Map(Object.entries(initial).map(([key, value]) => [key, structuredClone(value)]));
@@ -45,26 +46,30 @@ function fixture(initial) {
         update: (item, patch) => pending.push({kind: 'update', path: item.path, patch}),
         set: (item, patch) => pending.push({kind: 'set', path: item.path, patch}),
         create: (item, patch) => pending.push({kind: 'create', path: item.path, patch}),
+        delete: item => pending.push({kind: 'delete', path: item.path}),
       };
       const result = await fn(tx);
-      pending.forEach(write => {data.set(write.path, {...(write.kind === 'update' ? data.get(write.path) : {}), ...write.patch}); writes.push(write);});
+      pending.forEach(write => {if (write.kind === 'delete') {data.delete(write.path); writes.push(write); return;} data.set(write.path, {...(write.kind === 'update' ? data.get(write.path) : {}), ...write.patch}); writes.push(write);});
       return result;
     },
   };
   const auth = {requireTeacher: async () => teacher, requireStudent: async () => student, getContext: async () => teacher, assertOrigin: () => {}};
   const imports = {'./admin': {db: () => db}, './auth': auth, './policy': policy, './assignment-visibility-policy': visibility};
   const archive = load('./assignment-visibility.ts', imports);
+  const homeworkUploads = load('./homework-uploads.ts', {...imports, 'node:crypto': crypto});
+  const fieldValue = {FieldValue: {increment: value => ({increment: value}), delete: () => undefined}};
+  const submissionEdits = load('./submission-edits.ts', {...imports, 'node:crypto': crypto, 'firebase-admin/firestore': fieldValue, '../submission-edit': submissionEdit, './homework-uploads': homeworkUploads, '../homework-archive': {purgeTime: from => from + 14 * 86_400_000}});
   const api = load('./api.ts', {
     ...imports, 'node:crypto': crypto, 'next/server': {NextResponse: {json: Response.json.bind(Response)}},
-    'firebase-admin/firestore': {FieldValue: {increment: value => ({increment: value})}},
-    '../assignment-submission': submission,
+    'firebase-admin/firestore': fieldValue,
+    '../assignment-submission': submission, '../submission-edit': submissionEdit, './homework-uploads': homeworkUploads, './submission-edits': submissionEdits,
     './points-policy': {pointBalance: value => value ?? 0, pointSettings: () => ({}), wardrobeOutfit: () => ({})},
     '@/modules/my-space/profile': {companionProfile: () => null},
     './assignment-materials': {signedAssignmentMaterials: async value => {assert.notEqual(value?.[0]?.id, 'secret'); return value ?? [];}, bindAssignmentMaterials: async () => []},
     './video-submissions': {studentVideoJobs: async () => [], videoConfig: async () => null},
     './signed-urls': {stableReadUrl: async path => `signed:${path}`},
+    '../file-naming': {downloadDisposition: () => '', extensionOf: () => 'jpg', friendlyFileName: () => 'homework.jpg'},
   });
-  const homeworkUploads = load('./homework-uploads.ts', {...imports, 'node:crypto': crypto});
   const video = load('./video-submissions.ts', {
     ...imports, './admin': {db: () => db, bucket: () => ({file: () => ({getMetadata: async () => [{size: 1000, contentType: 'video/mp4', generation: '1'}]})})},
     'node:crypto': crypto, '../video-submission': {videoSelectionError: () => null},
@@ -79,6 +84,64 @@ const base = () => ({'classes/class-a': {ownerUid: teacher.uid, name: 'Our class
 const input = (action = 'hide', version = 0, ids = ['task-a']) => visibility.visibilityRequest({classId: 'class-a', action, items: ids.map(id => ({id, visibilityVersion: version}))});
 const request = (method, body) => new Request('https://example.com/api/assignments', {method, headers: {'content-type': 'application/json'}, ...(body ? {body: JSON.stringify(body)} : {})});
 
+const sent = extra => ({assignmentId: 'task-a', classId: 'class-a', studentId: 'pupil-1', text: 'first', uploads: [], attemptId: 'a1', attemptNumber: 1, status: 'submitted', fingerprint: 'old', submittedAt: '2026-11-01T00:00:00.000Z', ...extra});
+const change = (f, operation, method, body) => f.api.handle(request(method, body), operation, 'task-a');
+test('a student edits sent work until the teacher checks it, and only with the attempt on screen', async () => {
+  const setup = base(); setup['submissions/task-a_pupil-1'] = sent();
+  const f = fixture(setup), path = 'submissions/task-a_pupil-1';
+  const edited = await change(f, 'submission-edit', 'PATCH', {attemptId: 'a1', text: 'fixed', keepUploadIds: [], uploadIds: []});
+  assert.equal(edited.status, 200);
+  const value = f.data.get(path);
+  assert.equal(value.text, 'fixed'); assert.equal(value.attemptNumber, 2); assert.notEqual(value.attemptId, 'a1');
+  assert.equal(value.submittedAt, '2026-11-01T00:00:00.000Z', 'the first hand-in time stays'); assert.ok(value.editedAt);
+  assert.equal(f.data.get(`${path}/attempts/${value.attemptId}`).text, 'fixed');
+  const stale = await change(f, 'submission-edit', 'PATCH', {attemptId: 'a1', text: 'old tab', keepUploadIds: [], uploadIds: []});
+  assert.equal(stale.status, 409); assert.equal((await stale.json()).code, 'STALE_SUBMISSION');
+  for (const status of ['done', 'revision']) {
+    f.data.set(path, {...f.data.get(path), status});
+    const locked = await change(f, 'submission-edit', 'PATCH', {attemptId: f.data.get(path).attemptId, text: 'late', keepUploadIds: [], uploadIds: []});
+    assert.equal(locked.status, 409, status); assert.equal((await locked.json()).code, 'SUBMISSION_LOCKED');
+  }
+  const emptied = await change(f, 'submission-edit', 'PATCH', {attemptId: 'x', text: ' ', keepUploadIds: [], uploadIds: []});
+  assert.equal(emptied.status, 400, 'text homework keeps its answer');
+});
+test('finalize cannot overwrite sent or checked work, so the check stays locked', async () => {
+  for (const status of ['submitted', 'done']) {
+    const setup = base(); setup['submissions/task-a_pupil-1'] = sent({status, rewardGranted: status === 'done'});
+    const f = fixture(setup), response = await f.api.handle(request('POST', {assignmentId: 'task-a', text: 'around the lock', uploadIds: []}), 'submission-finalize');
+    assert.equal(response.status, 409); assert.equal((await response.json()).code, 'ALREADY_SUBMITTED');
+    assert.equal(f.data.get('submissions/task-a_pupil-1').text, 'first');
+  }
+});
+test('delete moves the submission to the trash and restore brings it back whole', async () => {
+  const setup = base(), files = [{id: 'file-1', path: 'uploads/one', size: 10}];
+  setup['submissions/task-a_pupil-1'] = sent({uploads: files}); setup['uploads/file-1'] = {status: 'submitted', storedBytes: 10};
+  const f = fixture(setup), trash = 'submissionTrash/task-a_pupil-1';
+  assert.equal((await change(f, 'submission-delete', 'DELETE', {attemptId: 'stale'})).status, 409);
+  assert.equal((await change(f, 'submission-delete', 'DELETE', {attemptId: 'a1'})).status, 200);
+  assert.equal(f.data.has('submissions/task-a_pupil-1'), false);
+  assert.equal(f.data.get(trash).text, 'first'); assert.ok(f.data.get(trash).restoreUntil);
+  assert.equal(f.data.get('uploads/file-1').status, 'trashed'); assert.equal(f.data.get('uploads/file-1').studentRemoved, true);
+  assert.equal((await change(f, 'submission-delete', 'DELETE', {attemptId: 'a1'})).status, 404);
+  assert.equal((await change(f, 'submission-restore', 'POST', {})).status, 200);
+  assert.equal(f.data.has(trash), false);
+  assert.equal(f.data.get('uploads/file-1').status, 'submitted');
+  assert.deepEqual(f.data.get('submissions/task-a_pupil-1').uploads, files);
+  assert.equal((await change(f, 'submission-restore', 'POST', {})).status, 410);
+});
+test('a rewarded submission cannot be deleted, so resending can never earn the reward twice', async () => {
+  const setup = base(); setup['submissions/task-a_pupil-1'] = sent({rewardGranted: true});
+  const f = fixture(setup), response = await change(f, 'submission-delete', 'DELETE', {attemptId: 'a1'});
+  assert.equal(response.status, 409); assert.equal((await response.json()).code, 'SUBMISSION_REWARDED');
+  assert.equal(f.data.get('submissions/task-a_pupil-1').rewardGranted, true);
+});
+test('restore is refused after the keeping period or once a new submission exists', async () => {
+  const late = base(); late['submissionTrash/task-a_pupil-1'] = sent({restoreUntil: '2020-01-01T00:00:00.000Z'});
+  assert.equal((await change(fixture(late), 'submission-restore', 'POST', {})).status, 410);
+  const newer = base(); newer['submissionTrash/task-a_pupil-1'] = sent({restoreUntil: '2999-01-01T00:00:00.000Z'}); newer['submissions/task-a_pupil-1'] = sent({attemptId: 'a2'});
+  const response = await change(fixture(newer), 'submission-restore', 'POST', {});
+  assert.equal(response.status, 409); assert.equal((await response.json()).code, 'ALREADY_SUBMITTED');
+});
 test('old assignments are visible without migration and malformed selections are rejected', () => {
   assert.deepEqual(visibility.assignmentVisibility(), {visibility: 'visible', visibilityVersion: 0, hiddenAt: null, hiddenBy: null});
   for (const value of [null, {}, {classId: 'class-a', action: 'delete', items: []}, {classId: 'class-a', action: 'hide', items: [{id: 'task-a', visibilityVersion: -1}]}, {classId: 'class-a', action: 'hide', items: Array.from({length: 101}, (_, index) => ({id: `task-${index}`, visibilityVersion: 0}))}, {classId: 'class-a', action: 'hide', items: [{id: 'task-a', visibilityVersion: 0}, {id: 'task-a', visibilityVersion: 0}]}]) assert.throws(() => visibility.visibilityRequest(value), policy.ApiError);

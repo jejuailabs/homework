@@ -1,5 +1,6 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
+import {FieldValue} from 'firebase-admin/firestore';
 import sharp, {type Metadata} from 'sharp';
 import {bucket, db} from './admin';
 import {ApiError} from './policy';
@@ -69,7 +70,7 @@ async function boardPost(assignment: Data, submission: Data, boardId: string) {
     if (previous.exists) {
       // The teacher removed this student's card on purpose; a resubmission does not bring it back.
       if (previous.data()?.deleted) return;
-      tx.update(postRef, {body: submission.text || '', attachments, authorName: person.authorName, source, version: (previous.data()?.version || 1) + 1, updatedAt: stamp});
+      tx.update(postRef, {body: submission.text || '', attachments, authorName: person.authorName, source, version: (previous.data()?.version || 1) + 1, updatedAt: stamp, ...(previous.data()?.withdrawnByStudent ? {status: 'published', withdrawnByStudent: FieldValue.delete()} : {})});
       tx.update(boardRef, {updatedAt: stamp});
       return;
     }
@@ -102,7 +103,8 @@ async function exhibitionImages(exhibitionId: string, fileId: string, sourcePath
 
 async function exhibitionArtwork(assignment: Data, submission: Data, exhibitionId: string) {
   const media = syncableUploads(submission.uploads || [])[0];
-  if (!media) return; // Text answers are not shown in exhibitions.
+  // Text answers are not shown in exhibitions; an edit that took the last picture away takes the artwork down too.
+  if (!media) return setArtworkWithdrawn(assignment, submission.studentId, exhibitionId, true);
   const roomRef = db().doc(`exhibitions/${exhibitionId}`), room = (await roomRef.get()).data();
   if (!room || room.classId !== assignment.classId) return;
   const fileId = `hs_${hash(`${assignment.id}:${submission.studentId}:${submission.attemptId}`).slice(0, 24)}`;
@@ -148,6 +150,44 @@ async function exhibitionArtwork(assignment: Data, submission: Data, exhibitionI
   }
   // Imported here: exhibitions.ts also imports this module.
   if (cleanupJobs.length) await import('./exhibitions').then(module => module.cleanupReplacedArtworks(room.ownerUid, cleanupJobs)).catch(() => console.error('Synced artwork cleanup deferred'));
+}
+
+/**
+ * A deleted submission leaves the rooms through their own "hidden" state, so comments and reactions survive an undo.
+ * `withdrawnByStudent` tells this apart from a teacher hiding it, which a student's undo must never reverse.
+ */
+async function setPostWithdrawn(assignment: Data, studentId: string, boardId: string, withdrawn: boolean) {
+  const boardRef = db().doc(`participationBoards/${boardId}`), postRef = boardRef.collection('posts').doc(hash(`homework-sync:${assignment.id}:${studentId}`));
+  await db().runTransaction(async tx => {
+    const post = (await tx.get(postRef)).data();
+    if (!post || post.deleted || (withdrawn ? post.status !== 'published' : !post.withdrawnByStudent)) return;
+    tx.update(postRef, withdrawn ? {status: 'hidden', withdrawnByStudent: true, updatedAt: now()} : {status: 'published', withdrawnByStudent: FieldValue.delete(), updatedAt: now()});
+    tx.update(boardRef, {updatedAt: now()});
+  });
+}
+async function setArtworkWithdrawn(assignment: Data, studentId: string, exhibitionId: string, withdrawn: boolean) {
+  const roomRef = db().doc(`exhibitions/${exhibitionId}`), slot = roomRef.collection('studentWorks').doc(studentId);
+  await db().runTransaction(async tx => {
+    const artworkId = (await tx.get(slot)).data()?.artworkId;
+    if (!artworkId) return;
+    const ref = roomRef.collection('artworks').doc(artworkId), [artwork, room] = await Promise.all([tx.get(ref), tx.get(roomRef)]), value = artwork.data();
+    if (!value || !room.exists || value.source?.assignmentId !== assignment.id || (withdrawn ? value.status !== 'approved' : !value.withdrawnByStudent)) return;
+    tx.update(ref, withdrawn ? {status: 'hidden', withdrawnByStudent: true} : {status: 'approved', withdrawnByStudent: FieldValue.delete()});
+    tx.update(roomRef, {approvedCount: Math.max(0, (room.data()?.approvedCount ?? 0) + (withdrawn ? -1 : 1)), updatedAt: now()});
+  });
+}
+/** Takes one student's copies out of the linked rooms, or puts them back on restore. Safe to repeat; never throws. */
+export async function setSyncedWithdrawn(assignmentId: string, studentId: string, withdrawn: boolean) {
+  try {
+    const doc = await db().doc(`assignments/${assignmentId}`).get(), assignment = doc.exists ? {...doc.data(), id: doc.id} as Data : null, sync = assignment?.sync as HomeworkSync | undefined;
+    if (!assignment || !sync) return;
+    const attempt = async (work: () => Promise<void>) => {try {await work();} catch {await new Promise(resolve => setTimeout(resolve, 1000)); await work();}};
+    const results = await Promise.allSettled([
+      ...(sync.boardId ? [attempt(() => setPostWithdrawn(assignment, studentId, sync.boardId!, withdrawn))] : []),
+      ...(sync.exhibitionId ? [attempt(() => setArtworkWithdrawn(assignment, studentId, sync.exhibitionId!, withdrawn))] : []),
+    ]);
+    if (results.some(result => result.status === 'rejected')) console.error('Homework room withdrawal deferred');
+  } catch {console.error('Homework room withdrawal failed');}
 }
 
 /** Brings one student's latest submission into the linked rooms. Safe to call repeatedly; never throws. */

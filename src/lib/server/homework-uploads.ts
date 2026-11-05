@@ -2,7 +2,8 @@ import 'server-only';
 import {createHash, randomUUID} from 'node:crypto';
 import {Timestamp} from 'firebase-admin/firestore';
 import {bucket, db} from './admin';
-import {ApiError, id} from './policy';
+import {ApiError, canUseUpload, id, uploadPolicy} from './policy';
+import type {AssignmentSubmissionType} from '../assignment-submission';
 import {awaitUploadTransfer, createUploadTransfer, cancelUploadTransfer} from './upload-transfer';
 import {assertAssignmentVisible} from './assignment-visibility-policy';
 
@@ -57,4 +58,30 @@ export async function cleanupHomeworkUploads() {
   let cleaned = 0;
   for (const doc of expired) {try {await discardHomeworkUpload(doc.id, undefined, true); cleaned++;} catch {console.error('Homework upload cleanup deferred');}}
   return {cleaned, hasMore: expired.length === 100};
+}
+/** Checks that each staged upload really arrived, before the submission transaction uses it. */
+export async function verifiedHomeworkUploads(uid: string, assignmentId: string, submissionType: AssignmentSubmissionType, uploadIds: string[]) {
+  const uploadDocs = await Promise.all(uploadIds.map(uploadId => db().doc(`uploads/${uploadId}`).get()));
+  const uploads = await Promise.all(uploadDocs.map(async doc => {
+    const value = doc.data();
+    if (!canUseUpload(uid, assignmentId, value) || !value || value.expiresAt.toMillis() < Date.now()) throw new ApiError(400, '첨부파일을 다시 올려 주세요.', 'UPLOAD_INVALID');
+    // Recheck the manifest here as well as at init: clients cannot bypass the
+    // teacher's answer format by submitting an existing pending upload ID.
+    uploadPolicy(value.contentType, value.size, submissionType);
+    const [metadata] = await bucket().file(value.path).getMetadata().catch(() => { throw new ApiError(409, '아직 파일 전송 중이에요. 잠시 뒤 다시 제출해 주세요.', 'UPLOAD_INCOMPLETE'); });
+    if (Number(metadata.size) !== value.size || metadata.contentType !== value.contentType) throw new ApiError(400, '파일 정보가 달라요. 다시 올려 주세요.', 'UPLOAD_MISMATCH');
+    // The preview is optional: a missing or mismatched one just falls back to the full photo.
+    const thumbnail = value.thumbnailPath ? (await bucket().file(value.thumbnailPath).getMetadata().catch(() => [null]))[0] : null;
+    const thumbnailPath = thumbnail && Number(thumbnail.size) === value.thumbnailSize && thumbnail.contentType === 'image/jpeg' ? value.thumbnailPath : undefined;
+    return {id: doc.id, path: value.path, fileName: value.fileName, contentType: value.contentType, size: value.size, ...(thumbnailPath ? {thumbnailPath, thumbnailSize: value.thumbnailSize} : {})};
+  }));
+  return {uploadDocs, uploads};
+}
+/** Inside the submission transaction: stored files start counting toward the teacher's storage. */
+export function markHomeworkUploadsSubmitted(tx: FirebaseFirestore.Transaction, uploadDocs: FirebaseFirestore.DocumentSnapshot[], uploads: {size: number; thumbnailSize?: number}[], submissionId: string, ownerUid: unknown) {
+  const month = new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit'}).format(new Date());
+  uploadDocs.forEach((doc, index) => {
+    tx.update(doc.ref, {status: 'submitted', submissionId, storedBytes: uploads[index].size + (uploads[index].thumbnailSize ?? 0)});
+    if (ownerUid) tx.set(db().doc(`uploadTransferStats/homework_${doc.id}`), {ownerUid, bytes: doc.data()!.size, month, createdAt: new Date().toISOString(), source: 'homework'});
+  });
 }
