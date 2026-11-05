@@ -77,3 +77,13 @@ export function classroomPosterSlot(index: number, total: number): WorldWallSlot
 export function classroomOrder<T extends {id: string; createdAt?: string}>(rooms: T[]): T[] {
   return [...rooms].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '') || a.id.localeCompare(b.id));
 }
+
+/**
+ * Whether the walking keys belong to the world, without anyone having to click it first. Opening a room moves focus
+ * to the dialog's first button and leaving a stage drops it on the page, so focus alone cannot decide. Typing always
+ * wins, and on the plain page at least a third of the screen must show the world, so arrow keys still scroll past it.
+ */
+export function worldTakesKeys(state: {typing: boolean; inWorld: boolean; inOwnDialog: boolean; inOtherDialog: boolean; inSight: boolean}) {
+  if (state.typing || state.inOtherDialog) return false;
+  return state.inWorld || state.inOwnDialog || state.inSight;
+}

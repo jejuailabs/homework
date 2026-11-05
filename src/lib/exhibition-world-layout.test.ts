@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {artScreenSize, CLASSROOM_CAPACITY, CLASSROOM_POSTER, CLASSROOM_WINDOW, classroomOrder, classroomPosterSlot, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY} from './exhibition-world-layout';
+import {artScreenSize, CLASSROOM_CAPACITY, CLASSROOM_POSTER, CLASSROOM_WINDOW, classroomOrder, classroomPosterSlot, worldTakesKeys, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY} from './exhibition-world-layout';
 
 // Clearance covers the displayed 2.65 × 1.87 frame, its name plaque,
 // and the 0.04 bevel, rather than just testing the frame's center point.
@@ -99,4 +99,16 @@ test('older exhibitions keep their spot when a new one is added', () => {
   const rooms = [{id: 'c', createdAt: '2026-11-03'}, {id: 'a', createdAt: '2026-10-01'}, {id: 'b', createdAt: '2026-10-15'}];
   assert.deepEqual(classroomOrder(rooms).map(r => r.id), ['a', 'b', 'c']);
   assert.deepEqual(classroomOrder([...rooms, {id: 'd', createdAt: '2026-11-04'}]).map(r => r.id), ['a', 'b', 'c', 'd']);
+});
+
+test('walking keys work as soon as a room opens, but never take over typing or another dialog', () => {
+  const base = {typing: false, inWorld: false, inOwnDialog: false, inOtherDialog: false, inSight: false};
+  // Opening a room focuses the dialog's back button; the world must still walk.
+  assert.equal(worldTakesKeys({...base, inOwnDialog: true}), true);
+  assert.equal(worldTakesKeys({...base, inWorld: true}), true);
+  // Back on the page with nothing focused: only when enough of the world is on screen.
+  assert.equal(worldTakesKeys({...base, inSight: true}), true);
+  assert.equal(worldTakesKeys(base), false);
+  assert.equal(worldTakesKeys({...base, inWorld: true, typing: true}), false);
+  assert.equal(worldTakesKeys({...base, inSight: true, inOtherDialog: true}), false);
 });
