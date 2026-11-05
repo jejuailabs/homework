@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, DoorOpen, Images, Move, RotateCcw, Sparkles, X } from "lucide-react";
 import type * as Three from "three";
-import { CLASSROOM_CAPACITY, CLASSROOM_WINDOW, classroomPosterSlot, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY } from "@/lib/exhibition-world-layout";
+import { CLASSROOM_CAPACITY, CLASSROOM_WINDOW, classroomPosterSlot, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY, worldTakesKeys } from "@/lib/exhibition-world-layout";
 import {createArtScreenPainter, type ArtScreenFrame} from '@/lib/exhibition-screen-painter';
 import ExhibitionScreen from './exhibition-screen';
 import WorldJoystick from './world-joystick';
@@ -750,7 +750,12 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       };
       const cancel = () => { drag = null; keys.clear();stick.x=stick.y=0;invalidate(); };
       const keydown = (event: KeyboardEvent) => {
-        if (!root.contains(document.activeElement) || (event.target instanceof HTMLElement && event.target.matches("input, textarea, select, [contenteditable=true]"))) return;
+        const focused = document.activeElement, ownDialog = root.closest("dialog"), openDialog = focused?.closest("dialog[open]") ?? null, box = root.getBoundingClientRect();
+        if (!worldTakesKeys({
+          typing: event.target instanceof HTMLElement && event.target.matches("input, textarea, select, [contenteditable=true]"),
+          inWorld: root.contains(focused), inOwnDialog: !!ownDialog && openDialog === ownDialog, inOtherDialog: !!openDialog && openDialog !== ownDialog,
+          inSight: !ownDialog && Math.min(box.bottom, innerHeight) - Math.max(box.top, 0) >= innerHeight / 3,
+        })) return;
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD"].includes(event.code)) {
           event.preventDefault(); if (!pausedRef.current) keys.add(event.code); invalidate();
         } else if (event.code === "KeyR") reset();
@@ -784,6 +789,9 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         textures.forEach(texture => texture.dispose()); materials.forEach(material => material.dispose()); geometries.forEach(geometry => geometry.dispose());
         renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
       };
+      // A room opens with focus on the dialog's back button; hand it to the world so Enter can't leave mid-walk.
+      const roomDialog = root.closest("dialog");
+      if (roomDialog && roomDialog.contains(document.activeElement) && !root.contains(document.activeElement) && !pausedRef.current) canvas.focus({ preventScroll: true });
       setStatus("ready"); invalidate();
     }
     createWorld().catch(() => { cleanup?.(); if (!disposed) setStatus("fallback"); });
