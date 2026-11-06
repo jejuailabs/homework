@@ -1,7 +1,8 @@
 'use client';
+import {useEffect, useState} from 'react';
 import {MessageCircle, PencilLine, ShieldCheck, TriangleAlert} from 'lucide-react';
 import AccessGate from '@/components/access-gate';
-import {ABILITY_GROUPS, type Ability} from './abilities';
+import {abilityGroups, type Ability} from './abilities';
 import './styles.css';
 
 /** Opens the Berry panel with this request (the panel listens for the event). */
@@ -9,6 +10,8 @@ const ask = (ability: Ability) => window.dispatchEvent(new CustomEvent<Ability>(
 
 /** /teacher/berry: everything Berry can do, as buttons that start the request in the Berry panel. */
 export default function BerryGuide() {
+  const [off, setOff] = useState<string[]>(['cards', 'notebook']);
+  useEffect(() => {fetch('/api/berry/status', {cache: 'no-store'}).then(r => r.json()).then(data => {if (Array.isArray(data.off)) setOff(data.off);}).catch(() => {});}, []);
   return <AccessGate role="teacher"><main className="bg-page">
     <header className="bg-head">
       <img src="/berry/raspberry-160.webp" alt="" width="72" height="72"/>
@@ -20,7 +23,7 @@ export default function BerryGuide() {
       <li><TriangleAlert size={16}/><span><b>위험한 일</b>(지우기·차감·코드 재발급)은 빨간 카드에서 두 번 눌러야 해요.</span></li>
       <li><ShieldCheck size={16}/><span>학생은 가명으로만 보고, 비밀 일기 본문·사진 원본·상담 기록은 보지 않아요.</span></li>
     </ul>
-    <div className="bg-groups">{ABILITY_GROUPS.map(group => <section key={group.key} className="bg-group">
+    <div className="bg-groups">{abilityGroups(off).map(group => <section key={group.key} className="bg-group">
       <h2><span aria-hidden="true">{group.emoji}</span>{group.label}</h2>
       <div className="bg-buttons">{group.abilities.map(ability => <button type="button" key={ability.label} className={ability.danger ? 'is-danger' : ability.write ? 'is-write' : ''} onClick={() => ask(ability)}>
         {ability.danger ? <TriangleAlert size={14}/> : ability.write ? <PencilLine size={14}/> : <MessageCircle size={14}/>}

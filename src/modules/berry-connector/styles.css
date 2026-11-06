@@ -41,3 +41,5 @@
 [data-mode=dark] .bcx-alert{background:#4c302a;color:#f4c4b8}[data-mode=dark] .bcx-group.is-warning .bcx-scope.is-on{background:#4a3a28}[data-mode=dark] .bcx-warn{color:#f1cfa6}
 @media(max-width:520px){.bcx-sheet{padding:16px;border-radius:18px}.bcx-actions .button{flex:1;justify-content:center}.bcx-actions .button.soft{flex:0 0 30%}}
 .bcx-title{margin:0;font-size:20px}.bcx-fine{display:flex;align-items:center;justify-content:center;gap:5px;font-size:12px!important;color:var(--muted,#6b746f)}.bcx-center .bcx-alert{text-align:left;width:100%;box-sizing:border-box}
+
+.bcx-all{margin-left:auto;padding:3px 9px;border:1px solid var(--border,#e6e0d6);border-radius:999px;background:none;color:var(--accent,#b64c86);font-size:11.5px;font-weight:700;cursor:pointer}

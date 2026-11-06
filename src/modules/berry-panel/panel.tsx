@@ -1,8 +1,8 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {usePathname} from 'next/navigation';
-import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, StickyNote, Inbox, LoaderCircle, MessageCircle, PencilLine, PlugZap, Send, Sparkles, TriangleAlert, X} from 'lucide-react';
-import {ABILITY_GROUPS, firstBlank, type Ability} from './abilities';
+import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, PencilLine, PlugZap, Send, Sparkles, StickyNote, TriangleAlert, X} from 'lucide-react';
+import {abilityGroups, firstBlank, lackingFor, missingPermissions, type Ability} from './abilities';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
@@ -68,14 +68,18 @@ function Preview({card, onDecide}: {card: Card; onDecide: (card: Card, decision:
 }
 
 /** "할 수 있는 일": groups of one-tap requests. Blanks go to the input box; complete requests are sent at once. */
-function Abilities({onPick, compact}: {onPick: (ability: Ability) => void; compact?: boolean}) {
-  const [group, setGroup] = useState(ABILITY_GROUPS[0].key);
-  const current = ABILITY_GROUPS.find(entry => entry.key === group) ?? ABILITY_GROUPS[0];
-  return <div className={`bp-abilities${compact ? ' is-compact' : ''}`}>
-    <div className="bp-ability-groups" role="tablist" aria-label="할 수 있는 일 분류">{ABILITY_GROUPS.map(entry => <button type="button" role="tab" key={entry.key} aria-selected={entry.key === group} onClick={() => setGroup(entry.key)}><span aria-hidden="true">{entry.emoji}</span>{entry.label}</button>)}</div>
-    <div className="bp-ability-list">{current.abilities.map(ability => <button type="button" key={ability.label} className={ability.danger ? 'is-danger' : ''} title={ability.prompt} onClick={() => onPick(ability)}>
-      {ability.write ? <PencilLine size={13} aria-hidden="true"/> : <MessageCircle size={13} aria-hidden="true"/>}<span>{ability.label}</span>
-    </button>)}</div>
+function Abilities({onPick, granted, off}: {onPick: (ability: Ability) => void; granted?: readonly string[]; off?: readonly string[]}) {
+  const groups = abilityGroups(off);
+  const [group, setGroup] = useState(groups[0].key);
+  const current = groups.find(entry => entry.key === group) ?? groups[0];
+  return <div className="bp-abilities">
+    <div className="bp-ability-groups" role="tablist" aria-label="할 수 있는 일 분류">{groups.map(entry => <button type="button" role="tab" key={entry.key} aria-selected={entry.key === group} onClick={() => setGroup(entry.key)}><span aria-hidden="true">{entry.emoji}</span>{entry.label}</button>)}</div>
+    <div className="bp-ability-list">{current.abilities.map(ability => {
+      const locked = !!granted && lackingFor(ability, granted).length > 0;
+      return <button type="button" key={ability.label} className={[ability.danger ? 'is-danger' : '', locked ? 'is-locked' : ''].filter(Boolean).join(' ')} title={locked ? '다시 연결하면 쓸 수 있어요' : ability.prompt} onClick={() => onPick(ability)}>
+        {locked ? <Lock size={13} aria-hidden="true"/> : ability.write ? <PencilLine size={13} aria-hidden="true"/> : <MessageCircle size={13} aria-hidden="true"/>}<span>{ability.label}</span>
+      </button>;
+    })}</div>
     <p className="bp-ability-hint"><PencilLine size={11} aria-hidden="true"/> 표시는 확인 카드에서 [저장]을 눌러야 반영돼요. <a href="/teacher/berry">전체 안내</a></p>
   </div>;
 }
@@ -83,10 +87,10 @@ function Abilities({onPick, compact}: {onPick: (ability: Ability) => void; compa
 /** Floating Berry chat for teachers. Talks only to /api/berry (same origin); the brain never sees the session cookie. */
 export default function BerryPanel() {
   const pathname = usePathname();
-  const [status, setStatus] = useState<{available: boolean; connected: boolean} | null>(null), [open, setOpen] = useState(false), [tab, setTab] = useState<'chat' | 'inbox'>('chat');
+  const [status, setStatus] = useState<{available: boolean; connected: boolean; scopes?: string[]; off?: string[]} | null>(null), [open, setOpen] = useState(false), [tab, setTab] = useState<'chat' | 'menu' | 'inbox'>('chat');
   const [messages, setMessages] = useState<Message[]>([]), [text, setText] = useState(''), [busy, setBusy] = useState(false), [activity, setActivity] = useState(''), [error, setError] = useState('');
   const [inbox, setInbox] = useState<InboxItem[] | null>(null), [notice, setNotice] = useState('');
-  const [abilities, setAbilities] = useState(false), [asked, setAsked] = useState<Ability | null>(null);
+  const [asked, setAsked] = useState<Ability | null>(null);
   const conversation = useRef<string | null>(null), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     try {conversation.current = sessionStorage.getItem(CONVERSATION);} catch {}
@@ -96,11 +100,12 @@ export default function BerryPanel() {
       setNotice(result === 'connected' ? '모두의 교실과 연결됐어요. 이제 물어보세요.' : result === 'denied' ? '연결을 취소했어요.' : '연결하지 못했어요. 다시 시도해 주세요.');
       const url = new URL(window.location.href); url.searchParams.delete('berry'); history.replaceState(null, '', url);
     }
-    api<{available: boolean; connected: boolean}>('status').then(setStatus).catch(() => setStatus({available: false, connected: false}));
+    api<{available: boolean; connected: boolean; scopes?: string[]; off?: string[]}>('status').then(setStatus).catch(() => setStatus({available: false, connected: false}));
   }, []);
   const loadInbox = useCallback(() => {api<{items: InboxItem[]}>('inbox').then(data => setInbox(data.items)).catch(e => setError((e as Error).message));}, []);
   useEffect(() => {if (open && tab === 'inbox' && status?.connected) loadInbox();}, [open, tab, status, loadInbox]);
-  useEffect(() => {list.current?.scrollTo({top: list.current.scrollHeight});}, [messages, activity]);
+  // The list unmounts on the menu and inbox tabs, so coming back lands on the latest message too.
+  useEffect(() => {list.current?.scrollTo({top: list.current.scrollHeight});}, [messages, activity, tab]);
   // Buttons on /teacher/berry (or anywhere) open the panel with a request: window.dispatchEvent(new CustomEvent('berry:ask', {detail}))
   useEffect(() => {
     const onAsk = (event: Event) => {const detail = (event as CustomEvent<Ability>).detail; if (detail?.prompt) {setOpen(true); setTab('chat'); setAsked(detail);}};
@@ -121,9 +126,10 @@ export default function BerryPanel() {
     catch (e) {patchCard(card.inbox_id, {state: 'error', note: (e as Error).message});}
   }
   function pick(ability: Ability) {
-    setAbilities(false);
+    if (status?.scopes && lackingFor(ability, status.scopes).length) {setTab('menu'); setNotice(`'${ability.label}'은(는) 베리를 다시 연결하면 쓸 수 있어요.`); return;}
+    setTab('chat'); setNotice('');
     const blank = firstBlank(ability.prompt);
-    if (!blank) {void send(ability.prompt); return;}
+    if (!blank) {if (busy) setAsked(ability); else void send(ability.prompt); return;}
     setText(ability.prompt);
     requestAnimationFrame(() => {input.current?.focus(); input.current?.setSelectionRange(blank[0], blank[1]);});
   }
@@ -164,6 +170,11 @@ export default function BerryPanel() {
     try {await api(`inbox/${item.id}/done`, {}); setInbox(old => old?.filter(entry => entry.id !== item.id) ?? null);} catch (e) {setError((e as Error).message);}
   }
   const newChat = () => {conversation.current = null; try {sessionStorage.removeItem(CONVERSATION);} catch {} setMessages([]);};
+  const missing = status.scopes ? missingPermissions(status.scopes) : null;
+  const reconnect = status.connected && missing && missing.scopes.length > 0 && tab !== 'inbox' && <div className="bp-reconnect" role="status">
+    <p><strong>베리를 다시 연결해 주세요.</strong> 지금 연결에는 {missing.titles.join(', ')} 권한이 없어서 자물쇠 버튼을 쓸 수 없어요. 연결 화면에서 <strong>쓰기 항목까지 모두 선택</strong>해 주세요.</p>
+    <button type="button" className="button primary" disabled={busy} onClick={() => void connect()}><PlugZap size={14}/>다시 연결</button>
+  </div>;
 
   return <>
     <button type="button" className="bp-fab" aria-label="베리 열기" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X size={22}/> : <img src="/berry/raspberry-160.webp" alt="" width="46" height="46"/>}</button>
@@ -172,12 +183,14 @@ export default function BerryPanel() {
         <strong className="bp-title"><img src="/berry/raspberry-64.webp" alt="" width="28" height="28"/>베리</strong>
         {status.connected && <div className="bp-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === 'chat'} className={tab === 'chat' ? 'is-active' : ''} onClick={() => setTab('chat')}><MessageCircle size={14}/>대화</button>
+          <button type="button" role="tab" aria-selected={tab === 'menu'} className={tab === 'menu' ? 'is-active' : ''} onClick={() => setTab('menu')}><LayoutGrid size={14}/>메뉴</button>
           <button type="button" role="tab" aria-selected={tab === 'inbox'} className={tab === 'inbox' ? 'is-active' : ''} onClick={() => setTab('inbox')}><Inbox size={14}/>알림함</button>
         </div>}
         <button type="button" className="icon-button" aria-label="닫기" onClick={() => setOpen(false)}><X size={18}/></button>
       </header>
       {notice && <p className="bp-notice">{notice}</p>}
       {error && <p className="bp-error" role="alert">{error}</p>}
+      {reconnect}
       {!status.connected ? <div className="bp-connect">
         <div className="bp-duo" aria-hidden="true"><img src="/berry/blueberry-160.webp" alt="" width="72" height="72"/><img src="/berry/raspberry-160.webp" alt="" width="64" height="64"/></div>
         <p>베리가 우리 반 숙제·일정·업무 공간을 보고 도와드리려면 모두의 교실과 한 번 연결해야 해요.</p>
@@ -185,7 +198,7 @@ export default function BerryPanel() {
         <button type="button" className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? <LoaderCircle className="spin" size={16}/> : <PlugZap size={16}/>}모두의 교실 연결하기</button>
       </div> : tab === 'chat' ? <>
         <div className="bp-messages" ref={list}>
-          {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요? 버튼을 누르거나 편하게 말로 시켜 주세요.</p><Abilities onPick={pick}/></div>}
+          {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요? 버튼을 누르거나 편하게 말로 시켜 주세요.</p><Abilities onPick={pick} granted={status.scopes} off={status.off}/></div>}
           {/* The empty answer placeholder stays hidden until text or a card arrives, so Berry never shows an avatar with nothing beside it. */}
           {messages.map((message, index) => !message.text && !message.cards?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
@@ -194,14 +207,17 @@ export default function BerryPanel() {
           </div>)}
           {activity && <div className="bp-msg is-assistant" role="status"><img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/><p className="bp-thinking"><LoaderCircle className="spin" size={14}/>{activity}</p></div>}
         </div>
-        {abilities && messages.length > 0 && <Abilities onPick={pick} compact/>}
         <div className="bp-input">
-          {messages.length > 0 && <button type="button" className="bp-ability-toggle" aria-label="할 수 있는 일" aria-expanded={abilities} title="할 수 있는 일" onClick={() => setAbilities(value => !value)}><Sparkles size={17}/></button>}
+          {messages.length > 0 && <button type="button" className="bp-ability-toggle" aria-label="메뉴 열기" title="메뉴 열기" onClick={() => setTab('menu')}><Sparkles size={17}/></button>}
           <textarea ref={input} value={text} rows={2} maxLength={4000} placeholder="베리에게 물어보세요" aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
           <button type="button" className="button primary" aria-label="보내기" disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}</button>
         </div>
         {messages.length > 0 && <button type="button" className="bp-new" onClick={newChat}>새 대화</button>}
-      </> : <div className="bp-messages">
+      </> : tab === 'menu' ? <div className="bp-messages">
+        {/* The conversation stays in state here: picking a button or the tab returns to it and continues the same thread. */}
+        <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>{messages.length ? '버튼을 누르면 지금 대화에 이어서 부탁해요.' : '무엇을 도와드릴까요? 버튼을 누르거나 편하게 말로 시켜 주세요.'}</p><Abilities onPick={pick} granted={status.scopes} off={status.off}/></div>
+        {messages.length > 0 && <button type="button" className="bp-back" onClick={() => setTab('chat')}><MessageCircle size={14}/>{busy ? '답하는 중이에요. 대화 보기' : '대화로 돌아가기'}</button>}
+      </div> : <div className="bp-messages">
         {!inbox ? <p className="bp-activity"><LoaderCircle className="spin" size={14}/>불러오는 중…</p> : !inbox.length ? <p className="bp-muted">새 알림이 없어요.</p> : inbox.map(item => <div key={item.id} className="bp-card">
           <strong>{item.title_generic}</strong><small>{clock(item.created_at)}</small>
           {item.kind === 'briefing' && <Briefing payload={item.payload}/>}

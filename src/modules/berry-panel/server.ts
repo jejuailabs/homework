@@ -5,6 +5,8 @@ import {ApiError} from '@/lib/server/policy';
 import {access} from '@/modules/berry-connector/oauth';
 import {connectorAllowed} from '@/modules/berry-connector/policy';
 import {appContext, endAppSession, issueAppCode, redeemAppCode} from './app-session';
+import {menuFlags} from '@/modules/berry-connector/classroom-tools';
+import {notebookAvailableFor} from '@/modules/teacher-notebook/server';
 
 /**
  * Same-origin proxy from the teacher's browser to the Berry brain. The session cookie stays on ourclass; the brain sees
@@ -57,7 +59,11 @@ export async function handleBerry(request: Request, segments: string[]) {
       if (!available) return json({available: false, connected: false, name});
       try {
         const res = await call(ctx.uid, '/connections/ourclass');
-        return json({available: true, connected: res.ok ? !!(await res.json()).connected : false, name});
+        // Scopes let the panel lock what this connection cannot do and offer a reconnect; older grants never widen on refresh.
+        const data = res.ok ? await res.json() as {connected?: unknown; scopes?: unknown} : null;
+        const flags = menuFlags(), notebook = await notebookAvailableFor(ctx.uid, ctx.role).catch(() => false);
+        const off = [!flags.cards && 'cards', !notebook && 'notebook', !flags.playground && 'playground'].filter(Boolean);
+        return json({available: true, connected: !!data?.connected, scopes: Array.isArray(data?.scopes) ? data.scopes : undefined, off, name});
       } catch {return json({available: true, connected: false, unreachable: true, name});}
     }
     if (head === 'app' && id === 'logout' && method === 'POST' && bearer) {await endAppSession(request); return json({ok: true});}
