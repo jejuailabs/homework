@@ -143,6 +143,7 @@
     "syncBoard": "Create a board and add submissions",
     "syncBoardHint": "Each submission becomes a card on a board with the same name.",
     "syncHint": "When students submit, their work appears in the places you choose. A resubmission replaces the earlier one.",
+    "syncEditHint": "Turning this off stops new submissions only; work already there stays. Turning it back on continues in the same place.",
     "syncLinked": "Linked spaces",
     "syncOpenExhibition": "Open exhibition",
     "syncOpenBoard": "Open board",

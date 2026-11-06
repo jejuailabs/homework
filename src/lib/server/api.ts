@@ -28,8 +28,8 @@ import {companionProfile} from '@/modules/my-space/profile';
 import {ownedItems, roomCompanionAppearance} from '@/modules/my-space/policy';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
 import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
-import {createLinkedRooms, setSyncedWithdrawn, syncSubmission} from './homework-sync';
-import {homeworkSyncTargets} from './homework-sync-policy';
+import {createLinkedRooms, resyncHomeworkRooms, setSyncedWithdrawn, syncSubmission} from './homework-sync';
+import {editedHomeworkSync, homeworkSyncTargets} from './homework-sync-policy';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -303,18 +303,27 @@ async function assignmentDetail(request: Request, assignmentId: string) {
   const snap = await db().doc(`assignments/${id(assignmentId)}`).get();
   if (!snap.exists) throw new ApiError(404, '과제를 찾을 수 없어요.', 'NOT_FOUND');
   const assignment = mappedAssignment(snap);
-  await managedClass(ctx, assignment.classId);
+  const cls = await managedClass(ctx, assignment.classId);
   if (request.method === 'PATCH') {
     assertAssignmentVisible(assignment);
     const input = await body(request);
     const changes = {title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), dueAt: input.dueAt ? new Date(input.dueAt).toISOString() : null};
+    const targets = input.sync === undefined ? null : homeworkSyncTargets(input.sync, assignment.submissionType);
+    let roomAdded = false, sync = assignment.sync;
     const materials = await db().runTransaction(async tx => {
       const fresh = await tx.get(snap.ref); if (!fresh.exists) throw new ApiError(404, '과제를 찾을 수 없어요.');
       assertAssignmentVisible(fresh.data());
       const materials = await bindAssignmentMaterials(tx, ctx, assignment.classId, assignmentId, input.materialIds ?? (fresh.data()?.materials ?? []).map((material: Data) => material.id), fresh.data()?.materials ?? []);
-      tx.update(snap.ref, {...changes, materials, updatedAt: now()}); return materials;
+      const rooms = targets ? editedHomeworkSync(fresh.data()?.sync, fresh.data()?.syncPaused, targets) : null;
+      if (rooms) {
+        const made = createLinkedRooms(tx, {assignmentId, title: changes.title, description: changes.description, submissionType: assignment.submissionType, classId: assignment.classId, cls, ownerUid: cls.ownerUid, sync: rooms.create});
+        sync = {exhibitionId: rooms.sync.exhibitionId ?? made.exhibitionId, boardId: rooms.sync.boardId ?? made.boardId};
+        roomAdded = rooms.added;
+      }
+      tx.update(snap.ref, {...changes, materials, ...(rooms ? {sync, syncPaused: rooms.paused} : {}), updatedAt: now()}); return materials;
     });
-    return json({assignment: {...assignment, ...changes, materials: await signedAssignmentMaterials(materials)}});
+    if (roomAdded) after(() => resyncHomeworkRooms(assignmentId));
+    return json({assignment: {...assignment, ...changes, sync, materials: await signedAssignmentMaterials(materials)}});
   }
   const [roster, submissions] = await Promise.all([db().collection(`classes/${assignment.classId}/students`).get(), db().collection('submissions').where('assignmentId', '==', assignmentId).get()]);
   const targets = roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id));
@@ -429,13 +438,13 @@ async function deleteOwnSubmission(request: Request, assignmentId: string) {
   const ctx = await requireStudent(request), input = await body(request), assignment = await assignmentForStudent(ctx, assignmentId);
   const result = await deleteSubmission(ctx, assignment as Parameters<typeof deleteSubmission>[1], input);
   // Taken out of the rooms right after the response; a teacher's own hide stays untouched.
-  if (assignment.sync?.exhibitionId || assignment.sync?.boardId) after(() => setSyncedWithdrawn(assignmentId, ctx.studentId!, true));
+  if (assignment.sync?.exhibitionId || assignment.sync?.boardId || assignment.syncPaused?.exhibitionId || assignment.syncPaused?.boardId) after(() => setSyncedWithdrawn(assignmentId, ctx.studentId!, true));
   return json(result);
 }
 async function restoreOwnSubmission(request: Request, assignmentId: string) {
   const ctx = await requireStudent(request), assignment = await assignmentForStudent(ctx, assignmentId);
   const submission = await restoreSubmission(ctx, assignment as Parameters<typeof restoreSubmission>[1]);
-  if (assignment.sync?.exhibitionId || assignment.sync?.boardId) after(() => setSyncedWithdrawn(assignmentId, ctx.studentId!, false));
+  if (assignment.sync?.exhibitionId || assignment.sync?.boardId || assignment.syncPaused?.exhibitionId || assignment.syncPaused?.boardId) after(() => setSyncedWithdrawn(assignmentId, ctx.studentId!, false));
   return json({ submission: await withFileUrls(submission, assignment.title) });
 }
 async function reviewTask(request: Request, assignmentId: string) {
