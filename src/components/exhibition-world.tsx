@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, DoorOpen, Images, Move, RotateCcw, Sparkles, X } from "lucide-react";
+import { ArrowLeft, BookOpen, CalendarDays, ChevronLeft, ChevronRight, DoorOpen, Images, Move, RotateCcw, Sparkles, X } from "lucide-react";
+import { exhibitionDateLabel } from "@/lib/exhibition-date";
 import type * as Three from "three";
 import { CLASSROOM_CAPACITY, CLASSROOM_WINDOW, classroomPosterSlot, exhibitionFrameSize, exhibitionRoomDimensions, exhibitionWallSlots, GALLERY_SCREEN, WORLD_WING_CAPACITY, worldTakesKeys } from "@/lib/exhibition-world-layout";
 import {createArtScreenPainter, type ArtScreenFrame} from '@/lib/exhibition-screen-painter';
@@ -13,7 +14,7 @@ import {createWhitekneeWorldModel, type WorldCompanion} from '@/lib/whiteknee-wo
 import "@/styles/exhibition-world.css";
 
 export type WorldBuilding = { id: string; name: string };
-export type WorldRoom = { id: string; title: string; description?: string; theme?: string; status?: string; artworkCount?: number };
+export type WorldRoom = { id: string; title: string; description?: string; theme?: string; status?: string; artworkCount?: number; createdAt?: string };
 export type WorldArtwork = { id: string; title: string; url?: string; thumbnailUrl?: string; artistName?: string; studentName?: string; width?: number; height?: number };
 export type ExhibitionWorldProps = {
   stage: "campus" | "classroom" | "gallery";
@@ -22,6 +23,8 @@ export type ExhibitionWorldProps = {
   rooms: WorldRoom[];
   artworks: WorldArtwork[];
   roomTitle?: string;
+  /** When the entered exhibition opened; shown with the time beside its title. */
+  roomDate?: string;
   theme?: "cozy" | "forest" | "sky" | "ocean";
   locale?: string;
   paused?: boolean;
@@ -462,8 +465,10 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         else if (room.theme === "ocean") { ball(mini, 0, 0, 0, 0.8, 0.46, 0.2, white); const fin = mesh(geo(new T.ConeGeometry(0.45, 0.5, 3)), white, mini); fin.rotation.z = Math.PI / 2; fin.position.x = -0.7; ball(mini, 0.36, 0.12, 0.2, 0.065, 0.065, 0.04, deepMint); }
         else if (room.theme === "sky") { ball(mini, 0, 0, 0, 0.95, 0.4, 0.18, white); ball(mini, 0, 0.35, 0, 0.48, 0.48, 0.18, white); }
         else { const miniCat = character("cat", 0.7); miniCat.group.position.y = -0.55; mini.add(miniCat.group); }
-        textPlane(group, room.title, 1.5, 0.66, "#49695d", undefined, 32, 2).position.set(0.39, 0.2, 0.205);
-        textPlane(group, english ? `${room.artworkCount ?? 0} artworks · ENTER` : `${room.artworkCount ?? 0}개의 작품 · 입장`, 1.66, 0.3, "#49695d", undefined, 21).position.set(0.35, -0.34, 0.21);
+        const opened = exhibitionDateLabel(room.createdAt, english ? "en" : "ko");
+        textPlane(group, room.title, 1.5, opened ? 0.56 : 0.66, "#49695d", undefined, 32, 2).position.set(0.39, opened ? 0.28 : 0.2, 0.205);
+        if (opened) textPlane(group, opened, 1.66, 0.24, "#6f8a7d", undefined, 19).position.set(0.35, -0.12, 0.21);
+        textPlane(group, english ? `${room.artworkCount ?? 0} artworks · ENTER` : `${room.artworkCount ?? 0}개의 작품 · 입장`, 1.66, 0.3, "#49695d", undefined, 21).position.set(0.35, opened ? -0.39 : -0.34, 0.21);
         ball(group, 0, 0.75, 0.19, 0.075, 0.075, 0.07, coral);
         addAction(group, { kind: "room", id: room.id });
       }
@@ -802,11 +807,12 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
   const indexTitle = stage === "campus" ? (english ? "Choose a classroom" : "우리 반 찾기") : stage === "classroom" ? (english ? "All exhibitions" : "전시실 모두 보기") : (english ? "All artworks" : "작품 모두 보기");
   const indexVisible = indexOpen || status === "fallback";
 
+  const roomDateLabel = exhibitionDateLabel(props.roomDate, english ? "en" : "ko", true);
   return <section ref={rootRef} className={`ex-world ex-world--${stage}${paused || screenExpanded ? " ex-world--paused" : ""}`} data-world-stage={stage} data-world-status={status} data-visible-artwork-count={data.artworks.length} data-loaded-artwork-count={loadedArtworkIds.length} data-loaded-artwork-ids={loadedArtworkIds.join(",")} data-total-artwork-count={artworks.length} data-world-wing={wing + 1} aria-label={title}>
     <div ref={hostRef} className="ex-world-viewport" data-player-pet={props.companion?.pet === 'animal-whiteknee' ? 'animal-whiteknee' : 'friend-cat'} />
     <div className="ex-world-topbar">
       {stage === "campus" ? <span className="ex-world-back" /> : <button type="button" className="ex-world-pill ex-world-back" onClick={props.onExit} aria-label={english ? "Back" : "뒤로"}><ArrowLeft size={17} /><span>{stage === "gallery" ? (english ? "Classroom" : "교실로") : (english ? "Schoolyard" : "학교 앞으로")}</span></button>}
-      <div className="ex-world-title"><span><Sparkles size={13} />{stage === "campus" ? "OUR LITTLE SCHOOL" : stage === "classroom" ? "OUR CLASSROOM" : "LITTLE ART GALLERY"}</span><strong>{title}</strong></div>
+      <div className="ex-world-title"><span><Sparkles size={13} />{stage === "campus" ? "OUR LITTLE SCHOOL" : stage === "classroom" ? "OUR CLASSROOM" : "LITTLE ART GALLERY"}</span><strong>{title}</strong>{stage === "gallery" && roomDateLabel && <time dateTime={props.roomDate}><CalendarDays size={11} aria-hidden="true" />{roomDateLabel}</time>}</div>
       <button type="button" className={`ex-world-pill ex-world-index-toggle${indexVisible ? " is-active" : ""}`} aria-label={indexTitle} onClick={() => setIndexOpen(value => !value)} aria-expanded={indexVisible}><Images size={17} /><span>{indexTitle}</span></button>
     </div>
 
