@@ -59,3 +59,5 @@
   .is-visit-mode > .ex-world .ex-world-reset { bottom: calc(104px + env(safe-area-inset-bottom)); }
   .is-visit-mode > .ex-world .ex-world-wings { bottom: calc(110px + env(safe-area-inset-bottom)); }
 }
+
+.ex-visit-title .ex-visit-date{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}

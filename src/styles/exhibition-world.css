@@ -70,6 +70,7 @@
   margin-top: -20px;
 }
 .ex-world-title > span { display: flex; gap: 5px; align-items: center; font-size: 8px; font-weight: 800; letter-spacing: 1.7px; color: #97a280; }
+.ex-world-title > time { display: inline-flex; gap: 4px; align-items: center; color: #7c8a70; font-size: 11px; font-weight: 650; line-height: 1.3; white-space: nowrap; }
 .ex-world-title > strong { max-width: 100%; color: #59644e; font-size: clamp(16px, 1.5vw, 22px); line-height: 1.35; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 .ex-world > .ex-world-loading {
   position: absolute;
