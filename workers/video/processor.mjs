@@ -1,22 +1,24 @@
 import {mkdtemp,rm,stat} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';import {randomUUID} from 'node:crypto';
 import {FieldValue} from 'firebase-admin/firestore';
 import {encode,hashFile,MediaError} from './media.mjs';
+import {r2VideoPath} from './r2.mjs';
 const now=()=>new Date().toISOString();
-export async function processVideoJob({db,bucket},jobId,retryVersion=0){
+export async function processVideoJob({db,bucket,r2},jobId,retryVersion=0){
  if(!/^[a-f0-9]{64}$|^[a-zA-Z0-9_-]{1,128}$/.test(jobId))throw new MediaError('VIDEO_JOB_INVALID');
  const ref=db.doc(`videoJobs/${jobId}`),token=randomUUID();
  const job=await db.runTransaction(async tx=>{const d=await tx.get(ref),v=d.data();if(!v||v.retryVersion!==retryVersion)return null;if(v.status==='complete'||(v.status==='failed'&&!v.retryable&&v.originalCleanupPending))return {...v,completed:true};if(v.status==='failed'&&!v.retryable)return null;if(v.status==='processing'&&Date.parse(v.leaseExpiresAt)>Date.now())return null;const patch={status:'processing',stage:'download',leaseToken:token,leaseExpiresAt:new Date(Date.now()+300000).toISOString(),startedAt:v.startedAt||now(),updatedAt:now(),attempts:(v.attempts||0)+1,retryable:false,errorCode:null};tx.update(ref,patch);return {...v,...patch};});
  if(!job)return;
- const safeInput=`uploads/${job.userUid}/${job.id}/file`;
+ const safeInput=`uploads/${job.userUid}/${job.id}/file`,toR2=job.outputStorage==='r2';
  if(job.input?.path!==safeInput)throw new MediaError('VIDEO_JOB_INVALID');
  async function cleanOriginal(){try{await bucket.file(job.input.path).delete({ignoreNotFound:true,ifGenerationMatch:job.input.generation});const manifest=db.doc(`uploads/${job.id}`);if((await manifest.get()).exists)await manifest.update({originalRetainedBytes:0});await ref.update({originalCleanupPending:false,sourceRetained:false,originalDeletedAt:now()});}catch{await ref.update({originalCleanupPending:true});throw new MediaError('VIDEO_CLEANUP_FAILED',true);}}
- async function cleanFailedArtifacts(){await ref.update({originalCleanupPending:true});try{await bucket.file(job.input.path).delete({ignoreNotFound:true,ifGenerationMatch:job.input.generation});await Promise.all(['video.mp4','thumbnail.jpg'].map(name=>bucket.file(`processed-videos/${job.userUid}/${job.id}/${name}`).delete({ignoreNotFound:true})));await db.doc(`uploads/${job.id}`).delete();await ref.update({originalCleanupPending:false,sourceRetained:false,stagedOutputBytes:0,originalDeletedAt:now()});}catch{throw new MediaError('VIDEO_CLEANUP_FAILED',true);}}
+ async function cleanFailedArtifacts(){await ref.update({originalCleanupPending:true});try{await bucket.file(job.input.path).delete({ignoreNotFound:true,ifGenerationMatch:job.input.generation});await Promise.all(['video.mp4','thumbnail.jpg'].map(name=>bucket.file(`processed-videos/${job.userUid}/${job.id}/${name}`).delete({ignoreNotFound:true})));if(toR2&&r2)await r2.delete(r2VideoPath(job.userUid,job.id));await db.doc(`uploads/${job.id}`).delete();await ref.update({originalCleanupPending:false,sourceRetained:false,stagedOutputBytes:0,originalDeletedAt:now()});}catch{throw new MediaError('VIDEO_CLEANUP_FAILED',true);}}
  if(job.completed){if(job.status==='failed')await cleanFailedArtifacts();else if(job.originalCleanupPending)await cleanOriginal();return;}
  let temp,heartbeat,stage='download',stageStarted=Date.now();const processingStarted=stageStarted,stageTimings={};
  // Pilot cost evidence: milliseconds spent per stage of this attempt (encode dominates CPU billing).
  const markStage=next=>{if(next===stage)return;const at=Date.now();stageTimings[stage]=(stageTimings[stage]||0)+at-stageStarted;stage=next;stageStarted=at;};
  async function update(next=stage){markStage(next);await db.runTransaction(async tx=>{const d=await tx.get(ref);if(d.data()?.leaseToken!==token||d.data()?.retryVersion!==retryVersion||d.data()?.status!=='processing')throw new MediaError('VIDEO_SUPERSEDED');tx.update(ref,{stage,stageTimings,updatedAt:now(),leaseExpiresAt:new Date(Date.now()+300000).toISOString()});});}
  try{
+ if(toR2&&!r2)throw new MediaError('VIDEO_STORAGE_UNAVAILABLE',true);
  heartbeat=setInterval(()=>{void update().catch(()=>{});},15000);
  temp=await mkdtemp(join(tmpdir(),'homework-video-'));const input=join(temp,'source'),output=join(temp,'video.mp4'),thumb=join(temp,'thumbnail.jpg'),readback=join(temp,'stored.mp4');
  const original=bucket.file(safeInput),[metadata]=await original.getMetadata().catch(error=>{if(error.code===404)throw new MediaError('VIDEO_SOURCE_MISSING');throw error;});
@@ -25,13 +27,14 @@ export async function processVideoJob({db,bucket},jobId,retryVersion=0){
  const plan=await encode(input,output,thumb,update),size=(await stat(output)).size,thumbnailBytes=(await stat(thumb)).size;
  if(!size||size>50*1024**2)throw new MediaError('VIDEO_OUTPUT_SIZE',true);
  await update('save');
- const outputPath=`processed-videos/${job.userUid}/${job.id}/video.mp4`,thumbnailPath=`processed-videos/${job.userUid}/${job.id}/thumbnail.jpg`;
- await bucket.upload(output,{destination:outputPath,resumable:false,metadata:{contentType:'video/mp4',cacheControl:'private,max-age=86400',metadata:{videoJobId:job.id}}});
+ const outputPath=toR2?r2VideoPath(job.userUid,job.id):`processed-videos/${job.userUid}/${job.id}/video.mp4`,thumbnailPath=`processed-videos/${job.userUid}/${job.id}/thumbnail.jpg`;
+ if(toR2)await r2.put(outputPath,output,{contentType:'video/mp4',cacheControl:'private,max-age=86400'});
+ else await bucket.upload(output,{destination:outputPath,resumable:false,metadata:{contentType:'video/mp4',cacheControl:'private,max-age=86400',metadata:{videoJobId:job.id}}});
  await bucket.upload(thumb,{destination:thumbnailPath,resumable:false,metadata:{contentType:'image/jpeg',cacheControl:'private,max-age=86400'}});
  await db.runTransaction(async tx=>{const current=await tx.get(ref);if(current.data()?.leaseToken!==token||current.data()?.retryVersion!==retryVersion)throw new MediaError('VIDEO_SUPERSEDED');tx.update(ref,{stagedOutputBytes:size+thumbnailBytes});tx.update(db.doc(`uploads/${job.id}`),{stagedOutputBytes:size+thumbnailBytes});});
- await bucket.file(outputPath).download({destination:readback,validation:'crc32c'});
+ if(toR2)await r2.download(outputPath,readback);else await bucket.file(outputPath).download({destination:readback,validation:'crc32c'});
  if(await hashFile(output)!==await hashFile(readback))throw new MediaError('VIDEO_VERIFY_FAILED',true);
- const [saved]=await bucket.file(outputPath).getMetadata();if(Number(saved.size)!==size||saved.contentType!=='video/mp4')throw new MediaError('VIDEO_VERIFY_FAILED',true);
+ const saved=toR2?await r2.head(outputPath):(await bucket.file(outputPath).getMetadata())[0];if(Number(saved?.size)!==size||saved?.contentType!=='video/mp4')throw new MediaError('VIDEO_VERIFY_FAILED',true);
  await update('submit');
  const submissionRef=db.doc(`submissions/${job.assignmentId}_${job.studentId}`),uploadRef=db.doc(`uploads/${job.id}`),slot=db.doc(`videoSubmissionSlots/${job.assignmentId}_${job.studentId}`);
  await db.runTransaction(async tx=>{

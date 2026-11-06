@@ -1,5 +1,6 @@
 import {crc32} from 'node:zlib';
 import {once} from 'node:events';
+import {R2_VIDEO_PREFIX} from './r2.mjs';
 
 /**
  * Minimal streaming ZIP (STORE, no compression): photos and videos are already
@@ -50,7 +51,7 @@ const extensions = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp
 const now = () => new Date().toISOString();
 
 /** Builds one ZIP part of a teacher's final download. Missing files are skipped and counted, never fatal. */
-export async function processExportPart({db, bucket}, exportId, part) {
+export async function processExportPart({db, bucket, r2}, exportId, part) {
   if (!/^[0-9a-f-]{36}$/.test(exportId) || !Number.isInteger(part) || part < 0 || part > 10000) throw Object.assign(new Error('EXPORT_INVALID'), {retryable: false});
   const parentRef = db.doc(`storageExports/${exportId}`), ref = parentRef.collection('parts').doc(String(part));
   const claimed = await db.runTransaction(async tx => {
@@ -72,12 +73,17 @@ export async function processExportPart({db, bucket}, exportId, part) {
     for (const file of claimed.files) {
       let source = null, metadata = null;
       for (const path of file.paths) {
+        if (path.startsWith(R2_VIDEO_PREFIX)) {
+          const found = r2 ? await r2.head(path) : null;
+          if (found) {metadata = found; source = {open: () => r2.stream(path)}; break;}
+          continue;
+        }
         const candidate = bucket.file(path), [found] = await candidate.exists();
-        if (found) {[metadata] = await candidate.getMetadata(); source = candidate; break;}
+        if (found) {[metadata] = await candidate.getMetadata(); source = {open: () => candidate.createReadStream()}; break;}
       }
       if (!source) {skipped++; continue;}
       const name = file.appendExtension ? `${file.name}.${extensions[metadata.contentType] || 'bin'}` : file.name;
-      await zip.add(name, source.createReadStream(), new Date(metadata.updated || Date.now()));
+      await zip.add(name, await source.open(), new Date(metadata.updated || Date.now()));
     }
     await zip.finish();
     output.end(); await once(output, 'finish');
