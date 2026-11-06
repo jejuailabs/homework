@@ -13,6 +13,20 @@ export function homeworkSyncTargets(raw: unknown, submissionType: string) {
   return {exhibition: value.exhibition === true, board: value.board === true};
 }
 
+/**
+ * Applies edited options. A room switched off stays in place and is remembered, so switching it on again reuses it;
+ * `create` names the rooms that do not exist yet and `added` says some room just came on.
+ */
+export function editedHomeworkSync(current: Partial<HomeworkSync> | null | undefined, paused: Partial<HomeworkSync> | null | undefined, targets: {exhibition: boolean; board: boolean}) {
+  const exhibitionId = current?.exhibitionId ?? null, boardId = current?.boardId ?? null, oldExhibition = paused?.exhibitionId ?? null, oldBoard = paused?.boardId ?? null;
+  return {
+    sync: {exhibitionId: targets.exhibition ? exhibitionId ?? oldExhibition : null, boardId: targets.board ? boardId ?? oldBoard : null},
+    paused: {exhibitionId: targets.exhibition ? null : exhibitionId ?? oldExhibition, boardId: targets.board ? null : boardId ?? oldBoard},
+    create: {exhibition: targets.exhibition && !exhibitionId && !oldExhibition, board: targets.board && !boardId && !oldBoard},
+    added: (targets.exhibition && !exhibitionId) || (targets.board && !boardId),
+  };
+}
+
 /** The submission files an exhibition can show: photos first, then a processed video. */
 type SyncUpload = {path?: string; contentType?: string; thumbnailPath?: string};
 export type SyncMedia = {kind: 'image' | 'video'; upload: SyncUpload & {path: string}};

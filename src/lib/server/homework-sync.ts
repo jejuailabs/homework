@@ -179,12 +179,14 @@ async function setArtworkWithdrawn(assignment: Data, studentId: string, exhibiti
 /** Takes one student's copies out of the linked rooms, or puts them back on restore. Safe to repeat; never throws. */
 export async function setSyncedWithdrawn(assignmentId: string, studentId: string, withdrawn: boolean) {
   try {
-    const doc = await db().doc(`assignments/${assignmentId}`).get(), assignment = doc.exists ? {...doc.data(), id: doc.id} as Data : null, sync = assignment?.sync as HomeworkSync | undefined;
-    if (!assignment || !sync) return;
+    const doc = await db().doc(`assignments/${assignmentId}`).get(), assignment = doc.exists ? {...doc.data(), id: doc.id} as Data : null;
+    // A room switched off still shows earlier work, so a deleted submission must leave it too.
+    const boardId = assignment?.sync?.boardId ?? assignment?.syncPaused?.boardId, exhibitionId = assignment?.sync?.exhibitionId ?? assignment?.syncPaused?.exhibitionId;
+    if (!assignment || (!boardId && !exhibitionId)) return;
     const attempt = async (work: () => Promise<void>) => {try {await work();} catch {await new Promise(resolve => setTimeout(resolve, 1000)); await work();}};
     const results = await Promise.allSettled([
-      ...(sync.boardId ? [attempt(() => setPostWithdrawn(assignment, studentId, sync.boardId!, withdrawn))] : []),
-      ...(sync.exhibitionId ? [attempt(() => setArtworkWithdrawn(assignment, studentId, sync.exhibitionId!, withdrawn))] : []),
+      ...(boardId ? [attempt(() => setPostWithdrawn(assignment, studentId, boardId, withdrawn))] : []),
+      ...(exhibitionId ? [attempt(() => setArtworkWithdrawn(assignment, studentId, exhibitionId, withdrawn))] : []),
     ]);
     if (results.some(result => result.status === 'rejected')) console.error('Homework room withdrawal deferred');
   } catch {console.error('Homework room withdrawal failed');}
@@ -205,6 +207,15 @@ export async function syncSubmission(assignmentId: string, studentId: string) {
     if (sync.exhibitionId) await attempt('exhibition', () => exhibitionArtwork(assignment, submission, sync.exhibitionId!));
     await stateRef(assignmentId, studentId).set({assignmentId, studentId, attemptId: submission.attemptId, status: errors.length ? 'failed' : 'synced', errors, tries: state.data()?.attemptId === submission.attemptId ? (state.data()?.tries ?? 0) + 1 : 1, updatedAt: now()});
   } catch {console.error('Homework sync failed');}
+}
+
+/** After a room is switched on: forgets what was already sent so every submission reaches it. */
+export async function resyncHomeworkRooms(assignmentId: string) {
+  try {
+    const [submissions, states] = await Promise.all([db().collection('submissions').where('assignmentId', '==', assignmentId).limit(200).get(), db().collection('homeworkSync').where('assignmentId', '==', assignmentId).limit(200).get()]);
+    await Promise.all(states.docs.map(doc => doc.ref.delete()));
+    for (const doc of submissions.docs) await syncSubmission(assignmentId, doc.data().studentId);
+  } catch {console.error('Homework room resync failed');}
 }
 
 /** Catches up every student of a linked homework room (videos finished while no one was watching, earlier failures). */

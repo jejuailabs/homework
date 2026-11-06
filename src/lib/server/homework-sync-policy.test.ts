@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {homeworkSyncTargets, syncDue, syncableUploads} from './homework-sync-policy';
+import {editedHomeworkSync, homeworkSyncTargets, syncDue, syncableUploads} from './homework-sync-policy';
+
+test('turning a room on creates it only when there is none to reuse', () => {
+  const on = editedHomeworkSync(null, null, {exhibition: true, board: false});
+  assert.deepEqual(on.create, {exhibition: true, board: false});
+  assert.equal(on.added, true);
+  const back = editedHomeworkSync({exhibitionId: null, boardId: null}, {exhibitionId: 'e1'}, {exhibition: true, board: false});
+  assert.deepEqual(back.sync, {exhibitionId: 'e1', boardId: null});
+  assert.deepEqual(back.paused, {exhibitionId: null, boardId: null});
+  assert.deepEqual(back.create, {exhibition: false, board: false});
+  assert.equal(back.added, true);
+});
+
+test('turning a room off keeps it remembered and adds nothing', () => {
+  const off = editedHomeworkSync({exhibitionId: 'e1', boardId: 'b1'}, null, {exhibition: false, board: true});
+  assert.deepEqual(off.sync, {exhibitionId: null, boardId: 'b1'});
+  assert.deepEqual(off.paused, {exhibitionId: 'e1', boardId: null});
+  assert.equal(off.added, false);
+  assert.deepEqual(editedHomeworkSync({exhibitionId: 'e1', boardId: null}, null, {exhibition: true, board: false}).create, {exhibition: false, board: false});
+});
 
 test('homework auto-sync is off unless the teacher ticks it', () => {
   assert.deepEqual(homeworkSyncTargets(undefined, 'image'), {exhibition: false, board: false});
