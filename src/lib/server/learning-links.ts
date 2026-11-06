@@ -7,6 +7,8 @@ import {assertOrigin,getContext,type Context} from './auth';
 import {ApiError,canManageClass,id,text} from './policy';
 import {BOARD_POST_LIMIT,changedReaction} from './participation-policy';
 import {assertAssignmentVisible} from './assignment-visibility-policy';
+import {stableReadUrl} from './signed-urls';
+import {isR2Path} from '../video-storage';
 type Data=Record<string,any>;
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const now=()=>new Date().toISOString();
@@ -15,7 +17,7 @@ const mapped=(doc:FirebaseFirestore.DocumentSnapshot):Data=>({...doc.data(),id:d
 async function input(request:Request):Promise<Data>{const raw=await request.text();if(raw.length>50000)throw new ApiError(413,'입력 내용이 너무 길어요.');let value;try{value=JSON.parse(raw);}catch{throw new ApiError(400,'입력 내용을 확인해 주세요.');}if(!value||typeof value!=='object'||Array.isArray(value))throw new ApiError(400,'입력 내용을 확인해 주세요.');return value;}
 async function managed(ctx:Context,classId:string){const cls=await db().doc(`classes/${id(classId)}`).get();if(!cls.exists||!canManageClass(ctx.role,ctx.uid,cls.data()?.ownerUid))throw new ApiError(403,'이 학급을 관리할 권한이 없어요.','FORBIDDEN');return cls;}
 async function classAccess(ctx:Context,classId:string){if(ctx.role==='student'){if(ctx.classId!==classId)throw new ApiError(404,'우리 반 자료를 찾을 수 없어요.');}else await managed(ctx,classId);}
-async function attachmentViews(items:Data[]=[],prefix?:string) {return Promise.all(items.map(async (item,index)=>{const [url]=await bucket().file(item.path).getSignedUrl({action:'read',expires:Date.now()+15*60_000});return{id:item.id,name:prefix?`${prefix} ${index+1}`:item.name,contentType:item.contentType,url};}));}
+async function attachmentViews(items:Data[]=[],prefix?:string) {return Promise.all(items.map(async (item,index)=>{const url=isR2Path(item.path)?await stableReadUrl(item.path):(await bucket().file(item.path).getSignedUrl({action:'read',expires:Date.now()+15*60_000}))[0];return{id:item.id,name:prefix?`${prefix} ${index+1}`:item.name,contentType:item.contentType,url};}));}
 async function sourceCandidates(ctx:Context,kind:string,sourceId:string,classId:string) {
   await managed(ctx,classId);
   if(kind==='assignment'){
