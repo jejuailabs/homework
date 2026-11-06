@@ -56,3 +56,9 @@
 .bg-buttons button.is-danger{border-color:#f1c7c0}.bg-buttons button.is-danger>svg{color:#c0392b}
 .bg-buttons span{display:flex;flex-direction:column;gap:2px;min-width:0}.bg-buttons b{font-size:13px}.bg-buttons small{font-size:11.5px;color:var(--muted);line-height:1.45;overflow-wrap:anywhere}
 @media(max-width:640px){.bg-rules{grid-template-columns:1fr}.bg-head h1{font-size:22px}}
+
+.bp-reconnect{display:flex;align-items:center;gap:8px;margin:8px 12px 0;padding:8px 10px;border:1px solid #e8cfa6;border-radius:12px;background:#fdf5e6}.bp-reconnect p{flex:1;margin:0;color:#6e4f1d;font-size:11.5px;line-height:1.5}.bp-reconnect .button{flex:none;min-height:34px;padding:6px 10px;font-size:12px;white-space:nowrap}
+[data-mode=dark] .bp-reconnect{border-color:#6b5430;background:#3d3120}[data-mode=dark] .bp-reconnect p{color:#f1dcb4}
+.bp-abilities .bp-ability-list button.is-locked{border-color:var(--border);background:var(--surface-alt);color:var(--muted)}.bp-abilities .bp-ability-list button.is-locked svg{color:var(--muted)}
+.bp-back{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:none;width:100%;min-height:38px;border:1px solid #d8c7ea;border-radius:12px;background:#f3ebfa;color:#6f4d8c;font-size:12.5px;font-weight:700;cursor:pointer}
+[data-mode=dark] .bp-back{border-color:#5a4770;background:#3a2d47;color:#dcc8ef}
