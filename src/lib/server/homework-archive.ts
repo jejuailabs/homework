@@ -4,6 +4,8 @@ import {bucket, db} from './admin';
 import {assertOrigin, requireTeacher, type Context} from './auth';
 import {ApiError, canManageClass, id} from './policy';
 import {stableReadUrl} from './signed-urls';
+import {isR2Path} from '../video-storage';
+import {r2Delete} from './r2';
 import {archiveEntryNames, archiveZipName, cleanupState, purgeTime, trashCheck, HOMEWORK_ARCHIVE_MAX_ASSIGNMENTS} from '../homework-archive';
 
 type Data = FirebaseFirestore.DocumentData;
@@ -108,9 +110,9 @@ export async function purgeTrashedHomeworkFiles() {
   let purged = 0;
   for (const doc of due) {
     const value = doc.data();
-    const paths = [value.path, value.thumbnailPath, value.originalPath].filter((path): path is string => typeof path === 'string' && /^(uploads|processed-videos)\//.test(path));
+    const paths = [value.path, value.thumbnailPath, value.originalPath].filter((path): path is string => typeof path === 'string' && /^(uploads|processed-videos|r2-videos)\//.test(path));
     try {
-      await Promise.all(paths.map(path => bucket().file(path).delete({ignoreNotFound: true})));
+      await Promise.all(paths.map(path => isR2Path(path) ? r2Delete(path) : bucket().file(path).delete({ignoreNotFound: true})));
       await doc.ref.update({status: 'purged', purgedAt: now(), originalRetainedBytes: 0});
       purged++;
     } catch {console.error('Homework file purge deferred');}

@@ -5,6 +5,8 @@ import {cloudAccessToken,bucket,db} from './admin';
 import {assertOrigin,requireStudent,type Context} from './auth';
 import {ApiError,id,text,canUseUpload} from './policy';
 import {videoSelectionError,type VideoJobView} from '../video-submission';
+import {r2VideoPath,type VideoStorage} from '../video-storage';
+import {r2Configured,r2Delete} from './r2';
 import {assertAssignmentVisible, assignmentVisibility} from './assignment-visibility-policy';
 
 type Data=FirebaseFirestore.DocumentData;
@@ -43,7 +45,7 @@ export async function cleanupVideoJobs() {
       const claimed=await db().runTransaction(async tx=>{const [job,upload]=await Promise.all([tx.get(record.ref),tx.get(uploadRef)]),v=job.data();if(!v||v.status==='complete'||upload.data()?.status==='submitted'||(v.status==='processing'&&Date.parse(v.leaseExpiresAt)>Date.now()))return null;tx.update(record.ref,{status:'failed',errorCode:'VIDEO_SOURCE_MISSING',retryable:false,retryVersion:(v.retryVersion||0)+1,originalCleanupPending:true,updatedAt:now()});if(upload.exists)tx.update(uploadRef,{status:'cleanup'});return v;});
       if(!claimed)continue;
       const path=`uploads/${claimed.userUid}/${record.id}/file`;if(claimed.input?.path!==path)continue;
-      try{await bucket().file(path).delete({ignoreNotFound:true,ifGenerationMatch:claimed.input.generation});await Promise.all(['video.mp4','thumbnail.jpg'].map(name=>bucket().file(`processed-videos/${claimed.userUid}/${record.id}/${name}`).delete({ignoreNotFound:true})));await uploadRef.delete();await record.ref.update({originalCleanupPending:false,sourceRetained:false,stagedOutputBytes:0,originalDeletedAt:now()});expired++;}catch{console.error('Retained video cleanup deferred');}
+      try{await bucket().file(path).delete({ignoreNotFound:true,ifGenerationMatch:claimed.input.generation});await Promise.all(['video.mp4','thumbnail.jpg'].map(name=>bucket().file(`processed-videos/${claimed.userUid}/${record.id}/${name}`).delete({ignoreNotFound:true})));if(claimed.outputStorage==='r2')await r2Delete(r2VideoPath(claimed.userUid,record.id));await uploadRef.delete();await record.ref.update({originalCleanupPending:false,sourceRetained:false,stagedOutputBytes:0,originalDeletedAt:now()});expired++;}catch{console.error('Retained video cleanup deferred');}
       continue;
     }
     if(!await videoConfig())continue;
@@ -53,9 +55,9 @@ export async function cleanupVideoJobs() {
   }
   return {expired,requeued,hasMore:candidates.length===100};
 }
-export async function createVideoSubmission(ctx:Context,assignment:Data,answer:string,uploadIds:string[]) {
+export async function createVideoSubmission(ctx:Context,assignment:Data,answer:string,uploadIds:string[],storage:VideoStorage='google') {
   assertAssignmentVisible(assignment);
-  if(!await videoConfig())throw new ApiError(503,'영상 처리 서버를 준비하고 있어요. 잠시 뒤 제출해 주세요.','VIDEO_NOT_CONFIGURED');
+  if(!await videoConfig()||(storage==='r2'&&!r2Configured()))throw new ApiError(503,'영상 처리 서버를 준비하고 있어요. 잠시 뒤 제출해 주세요.','VIDEO_NOT_CONFIGURED');
   if(uploadIds.length!==1)throw new ApiError(400,'영상은 한 개만 제출해 주세요.','VIDEO_COUNT');
   const uploadId=id(uploadIds[0]),jobRef=db().doc(`videoJobs/${uploadId}`),uploadRef=db().doc(`uploads/${uploadId}`),slot=db().doc(`videoSubmissionSlots/${assignment.id}_${ctx.studentId}`);
   const existing=await jobRef.get();
@@ -73,7 +75,7 @@ export async function createVideoSubmission(ctx:Context,assignment:Data,answer:s
     if(previous.exists&&previous.data()?.status!=='revision')throw new ApiError(409,'이미 제출한 숙제예요.','ALREADY_SUBMITTED');
     if(upload.data()?.status!=='pending'||student.data()?.disabled||student.data()?.authUid!==ctx.uid||task.data()?.classId!==ctx.classId||!task.data()?.targetStudentIds?.includes(ctx.studentId))throw new ApiError(409,'숙제와 학생 정보를 다시 확인해 주세요.','UPLOAD_INVALID');
     assertAssignmentVisible(task.data());
-    const data={id:uploadId,assignmentId:assignment.id,classId:ctx.classId,studentId:ctx.studentId,userUid:ctx.uid,ownerUid:task.data()!.ownerUid,studentName:student.data()!.name,answer,attemptId:randomUUID(),fingerprint:createHash('sha256').update(JSON.stringify({answer,uploadIds})).digest('hex'),input:{path:value.path,size:value.size,contentType:value.contentType,fileName:value.fileName,generation:String(metadata.generation)},status:'queued',stage:'queued',createdAt:now(),updatedAt:now(),retryVersion:0,attempts:0,retryable:false,originalCleanupPending:false,sourceRetained:true};
+    const data={id:uploadId,assignmentId:assignment.id,classId:ctx.classId,studentId:ctx.studentId,userUid:ctx.uid,ownerUid:task.data()!.ownerUid,studentName:student.data()!.name,answer,attemptId:randomUUID(),fingerprint:createHash('sha256').update(JSON.stringify({answer,uploadIds})).digest('hex'),input:{path:value.path,size:value.size,contentType:value.contentType,fileName:value.fileName,generation:String(metadata.generation)},status:'queued',stage:'queued',createdAt:now(),updatedAt:now(),retryVersion:0,attempts:0,retryable:false,originalCleanupPending:false,sourceRetained:true,...(storage==='r2'?{outputStorage:'r2'}:{})};
     tx.create(jobRef,data);tx.set(slot,{jobId:uploadId,userUid:ctx.uid,assignmentId:assignment.id,classId:ctx.classId,studentId:ctx.studentId});tx.update(uploadRef,{status:'video-processing',videoJobId:uploadId,expiresAt:Timestamp.fromMillis(Date.now()+7*86400000)});return data;
   });
   await dispatchVideoJob(job);return publicVideoJob(job);

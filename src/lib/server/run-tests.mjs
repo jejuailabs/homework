@@ -7,6 +7,8 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(seahorseTestImports(code)).toString('base64');
 await import('../../modules/region-quest/tests/run-tests.mjs');
 await import('./run-developer-mailbox-tests.mjs');
+const videoStorageUrl = moduleUrl(compile('../video-storage.ts'));
+await import(moduleUrl(compile('../video-storage.test.ts').replace("'./video-storage'", JSON.stringify(videoStorageUrl))));
 const bodyScrollLockUrl = moduleUrl(compile('../body-scroll-lock.ts'));
 await import(moduleUrl(compile('../body-scroll-lock.test.ts').replace("'./body-scroll-lock'", JSON.stringify(bodyScrollLockUrl))));
 const windowLayoutUrl=moduleUrl(compile('../tool-window-layout.ts'));
