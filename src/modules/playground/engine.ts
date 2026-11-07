@@ -63,6 +63,9 @@ export function choicesFor(item: PlayItem, seed: string): PlayChoice[] {
   return choices;
 }
 
+/** Card questions are graded on the exact label: symbols and spacing that normalizeAnswer erases can be all that tells two choices apart. */
+export function isItemAnswer(item: PlayItem, label: string) {return item.source === 'cards' ? item.answers[0] === label : item.answers.some(answer => normalizeAnswer(answer, item.kind) === normalizeAnswer(label, item.kind));}
+
 export const DAILY_SIZE = 10;
 /** Today's set for one kind: teacher-assigned unseen items, then unseen, then already-tried ones; each tier in a per-seed shuffle. */
 export function dailyPick(items: PlayItem[], seen: Set<string>, assigned: Set<string>, seed: string, size = DAILY_SIZE): string[] {

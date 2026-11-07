@@ -1,4 +1,4 @@
-import type {PlayRoom, RoomAnswer, RoomPlayer, RoomRoundResult, RoomTeam} from './room-types';
+import type {PlayRoom, PublicRoomRound, RoomAnswer, RoomPlayer, RoomReviewItem, RoomRoundResult, RoomTeam} from './room-types';
 import {roomTeamColors, roomTeamNames} from './room-types';
 
 export const ANSWER_GRACE_MS = 500;
@@ -59,4 +59,15 @@ export function teamScores(players: RoomPlayer[], teamCount: number): RoomTeam[]
 }
 export function snakeTeams(players: {key: string; previousScore: number}[], count: number): Record<string, number> {
   return Object.fromEntries([...players].sort((a, b) => b.previousScore - a.previousScore || a.key.localeCompare(b.key)).map((player, i) => [player.key, Math.floor(i / count) % 2 ? count - 1 - i % count : i % count]));
+}
+/** The most-missed questions, from what each revealed round already counted. Skipped and unrevealed rounds have nothing to review. */
+export function missedRounds(rounds: PublicRoomRound[], limit = 5): RoomReviewItem[] {
+  return rounds.flatMap(round => {
+    const counts = round.distribution, correctId = round.correctChoiceId;
+    if (round.skipped || !counts || !correctId) return [];
+    const total = round.choices.reduce((sum, choice) => sum + (counts[choice.id] || 0), 0), wrong = total - (counts[correctId] || 0);
+    if (!wrong) return [];
+    const common = round.choices.filter(choice => choice.id !== correctId).reduce((best, choice) => (counts[choice.id] || 0) > (counts[best.id] || 0) ? choice : best);
+    return [{round: round.round, prompt: round.prompt, answer: round.choices.find(choice => choice.id === correctId)?.label || '', reveal: round.reveal || '', total, wrong, commonWrong: common.label, commonWrongCount: counts[common.id] || 0}];
+  }).sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total || a.round - b.round).slice(0, limit);
 }

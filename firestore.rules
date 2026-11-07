@@ -45,7 +45,8 @@ service cloud.firestore {
               && user.classId == value.classId && permission.classId == value.classId
               && permission.playerKey == user.studentId && user.studentId in value.playerKeys
               && permission.authVersion == user.authVersion && request.auth.token.authVersion == user.authVersion
-              && get(/databases/$(database)/documents/classes/$(user.classId)/settings/playground).data.enabled == true
+              && (value.get('cards', null) != null
+                || get(/databases/$(database)/documents/classes/$(user.classId)/settings/playground).data.enabled == true)
               && get(/databases/$(database)/documents/classes/$(user.classId)/students/$(user.studentId)).data.authUid == request.auth.uid
               && get(/databases/$(database)/documents/classes/$(user.classId)/students/$(user.studentId)).data.get('disabled',false) != true));
       }

@@ -111,7 +111,7 @@ async function quizRanges(classValue: Data) {
 }
 async function liveRooms(classId: string) {
   const rooms = await db().collection('playRooms').where('classId', '==', classId).limit(20).get();
-  return rooms.docs.map(doc => doc.data()).filter(room => (room.expiresAtMs ?? 0) > Date.now() && room.status !== 'finished').map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0}));
+  return rooms.docs.map(doc => doc.data()).filter(room => (room.expiresAtMs ?? 0) > Date.now() && room.status !== 'finished').map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0, ...(room.cards ? {card_set: room.cards.title} : {})}));
 }
 
 async function signals(ctx: BearerContext) {

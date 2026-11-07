@@ -2,12 +2,13 @@
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import Link from 'next/link';
+import {useRouter} from 'next/navigation';
 import {ArrowLeft, ArrowRight, BookOpen, CheckCircle2, ClipboardCheck, Clock3, Layers, ListChecks, LoaderCircle, RefreshCw, Search, Star, Type} from 'lucide-react';
 import {buildCardSections, CARD_SECTION_SIZE, CARD_SECTION_SIZES, cardDueState, formatCountdown, testDeadline, testFormat, testTimeLimit} from '@/lib/cards-logic';
 import type {CardCoverage, CardDistribution, CardProgress, CardStudentDistribution, CardStudyMode, CardTestAttempt} from '@/lib/cards-types';
 import type {Character} from '@/lib/characters';
 import {CardBuddy, CardError, CardLoading, CardsPractice, cardModes, cardRequest, useCardCopy} from './cards-study';
-import {CardSectionProgress} from './cards-visuals';
+import {CardModeIcon, CardSectionProgress} from './cards-visuals';
 
 type StudentCardsData = {distributions: CardStudentDistribution[]; profile?: {id: string; name: string; character: Character; className: string}; nextCursor?: string | null};
 type StudentDetail = {distribution: CardDistribution; progress: CardProgress; coverage?: Partial<CardCoverage>};
@@ -23,6 +24,11 @@ function useStudentCards() {
   useEffect(() => {void load();}, [load]);
   return {data, setData, loading, error, load};
 }
+/** A class team game is joined by the room's code; there is no per-student banner yet. */
+function CardRoomJoin() {
+  const {copy: c} = useCardCopy(), router = useRouter(), [code, setCode] = useState(''), valid = /^\d{4}$/.test(code);
+  return <form className="cs-room-join" onSubmit={event => {event.preventDefault(); if (valid) router.push(`/student/playground/room/${code}?from=cards`);}}><CardModeIcon mode="team" size={30}/><label htmlFor="cs-room-code">{c.roomJoinLabel}</label><input id="cs-room-code" inputMode="numeric" autoComplete="off" maxLength={4} placeholder={c.roomJoinPlaceholder} value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))}/><button className="button" disabled={!valid}>{c.roomJoin}</button></form>;
+}
 export default function StudentCardsList() {
   const {copy: c, locale, points} = useCardCopy(), {data, setData, loading, error, load} = useStudentCards();
   const [search, setSearch] = useState(''), [moreBusy, setMoreBusy] = useState(false), [moreError, setMoreError] = useState(false);
@@ -31,6 +37,7 @@ export default function StudentCardsList() {
   if (loading) return <CardLoading/>;
   if (error || !data) return <CardError retry={() => void load()}/>;
   return <section className="cs-workspace"><header className="cs-heading"><div><p className="cs-eyebrow"><Layers size={17}/>{c.title}{data.profile?.className && <span> / {data.profile.className}</span>}</p><h1>{c.ourSets}</h1><p>{c.listIntro}</p></div><CardBuddy character={data.profile?.character}/></header>
+    <CardRoomJoin/>
     <div className="cs-list-toolbar"><label className="cs-search"><Search size={18}/><span className="cs-sr-only">{c.search}</span><input type="search" placeholder={c.search} value={search} onChange={event => setSearch(event.target.value)}/></label><button className="icon-button" aria-label={c.refresh} onClick={() => void load()}><RefreshCw size={18}/></button></div>
     {!data.distributions.length ? <div className="cs-state"><Layers size={36}/><h2>{c.empty}</h2><p>{c.emptyBody}</p></div> : !filtered.length ? <div className="cs-state"><Search size={30}/><p>{c.noResults}</p></div> : <div className="cs-distributions">{filtered.map(item => <article className="cs-distribution" key={item.id}><div className="cs-set-icon"><Layers size={26}/></div><div className="cs-set-copy"><div className="cs-meta"><span>{c[item.type]}</span><span>{item.cardCount} {c.cards}</span>{item.progress.studyComplete && <span className="cs-tag"><CheckCircle2 size={13}/>{c.requiredComplete}</span>}{cardDueState(item, Date.now()) === 'lock' && <span className="cs-tag">{c.dueClosedTag}</span>}</div><h2><Link href={`/student/cards/${item.id}`}>{item.title}</Link></h2><div className="cs-mode-summary">{cardModes.map(mode => {const goal = item.requiredModes[mode].requiredCount; return <span key={mode}><b>{c[mode]}</b>{goal > 0 ? <>{studied(item.progress, mode)}/{goal}<small>{c.required}</small></> : <small>{c.optional}</small>}</span>;})}</div><div className="cs-meta"><span><Clock3 size={13}/>{item.dueAt ? `${c.due} ${new Intl.DateTimeFormat(locale, {month: 'short', day: 'numeric'}).format(new Date(item.dueAt))}` : c.noDue}</span><span>{c.testGoal} {points(item.test.goalScore)}</span></div></div><Link href={`/student/cards/${item.id}`} className="button soft" aria-label={`${item.title} · ${c.open}`}>{c.open}<ArrowRight size={17}/></Link></article>)}</div>}
     {moreError && <p className="cs-alert" role="alert">{c.error}</p>}{data.nextCursor && <button className="button cs-load-more" disabled={moreBusy} onClick={() => void loadMore()}>{moreBusy ? <LoaderCircle size={17} className="spin"/> : null}{moreError ? c.retry : c.more}</button>}
