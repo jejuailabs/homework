@@ -221,7 +221,7 @@ const cardRow = (id: string, value: Data, className: unknown) => ({
 async function cardProgressOf(id: string, value: Data) {
   const [students, states] = await Promise.all([roster(value.classId), db().collection('cardProgress').where('distributionId', '==', id).select('classId', 'studentId', 'counts', 'coverage', 'attempts', 'bestScore', 'mistakes').get()]);
   const targets = new Set<string>(value.targetStudentIds ?? []), records = new Map(states.docs.filter(doc => doc.data().classId === value.classId).map(doc => [doc.data().studentId as string, doc.data()]));
-  const learners = students.filter(student => targets.has(student.id)).map(student => {
+  const learners = students.filter(student => value.allStudents || targets.has(student.id)).map(student => {
     const record = records.get(student.id), progress = publicProgress(record, value.snapshot, value.requiredModes, value.test);
     return {number: student.number, unfinished: cardSetUnfinished(value.requiredModes, progress), goalReached: progress.goalReached, bestScore: progress.bestScore, mistakes: record?.mistakes};
   });

@@ -100,8 +100,32 @@ export function lateMark(current: unknown, deadline: Deadline, stamp: string): s
 export function ownsCardResource(ctx: { uid: string; role: Role }, resource: { ownerUid: string }) {
   return ctx.role !== 'student' && ctx.uid === resource.ownerUid;
 }
-export function canStudyDistribution(ctx: { role: Role; classId?: string; studentId?: string }, distribution: { classId: string; targetStudentIds: string[]; active: boolean }) {
-  return ctx.role === 'student' && distribution.active && ctx.classId === distribution.classId && !!ctx.studentId && distribution.targetStudentIds.includes(ctx.studentId);
+export function canStudyDistribution(ctx: { role: Role; classId?: string; studentId?: string }, distribution: { classId: string; targetStudentIds: string[]; active: boolean; allStudents?: boolean }) {
+  return ctx.role === 'student' && distribution.active && ctx.classId === distribution.classId && !!ctx.studentId && (!!distribution.allStudents || distribution.targetStudentIds.includes(ctx.studentId));
+}
+/** An all-students distribution also reaches students who joined after it; everyone originally targeted stays on the report. */
+export function reportStudentIds(distribution: { targetStudentIds: string[]; allStudents?: boolean }, activeIds: string[]) {
+  return distribution.allStudents ? [...new Set([...distribution.targetStudentIds, ...activeIds])] : distribution.targetStudentIds;
+}
+type EditableDistribution = { cardCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null };
+/** The fields a PATCH may change, each through the validator used at creation. Nested settings merge over the saved ones, so a partial edit never resets the rest. */
+export function distributionPatch(input: Value, current: EditableDistribution) {
+  const update: { active?: boolean; allStudents?: boolean; requiredModes?: CardRequiredModes; test?: CardTestSettings; dueAt?: string | null; afterDue?: CardAfterDue } = {};
+  for (const key of ['active', 'allStudents'] as const) {
+    if (input[key] === undefined) continue;
+    if (typeof input[key] !== 'boolean') throw new ApiError(400, '배부 상태를 확인해 주세요.');
+    update[key] = input[key];
+  }
+  if (input.requiredModes !== undefined) {
+    const raw = object(input.requiredModes);
+    update.requiredModes = parseRequirements(Object.fromEntries(CARD_MODES.map(mode => [mode, { ...current.requiredModes[mode], ...(raw[mode] === undefined ? {} : object(raw[mode])) }])), current.cardCount);
+  }
+  if (input.test !== undefined) update.test = parseTestSettings({ ...current.test, ...object(input.test) }, current.cardCount);
+  if (input.dueAt !== undefined) update.dueAt = parseDueAt(input.dueAt);
+  if (input.afterDue !== undefined) update.afterDue = parseAfterDue(input.afterDue);
+  if (!Object.keys(update).length) throw new ApiError(400, '바꿀 배부 설정을 확인해 주세요.');
+  if ((update.test ?? current.test).answerRelease === 'after-due' && !(update.dueAt === undefined ? current.dueAt : update.dueAt)) throw new ApiError(400, '마감 후 정답 공개에는 마감 날짜가 필요해요.');
+  return update;
 }
 export const emptyModeCounts = () => ({ memorize: 0, recall: 0, spell: 0 });
 export function completedCounts(snapshot: CardSnapshot, requirements: CardRequiredModes, coverage: CardCoverage) {

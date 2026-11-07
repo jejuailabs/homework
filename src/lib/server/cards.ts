@@ -7,12 +7,12 @@ import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
 import { buildTestQuestions, cardAfterDue, isTestOvertime, testTimeLimit } from '../cards-logic';
-import { answersReleased, assertDueOpen, canStudyDistribution, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
-import type { CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
+import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
+import type { CardDirection, CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
 
 type Data = Record<string, any>;
 type Distribution = CardDistribution & { ownerUid: string; cardIds: string[]; targetStudents: { id: string; name: string; number: number }[] };
-type Attempt = { id: string; distributionId: string; studentId: string; classId: string; versionId: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; results: CardTestResult[]; startedAt: string; submittedAt: string | null; fingerprint: string | null; timeLimitSeconds?: number | null; overtime?: boolean };
+type Attempt = { id: string; distributionId: string; studentId: string; classId: string; versionId: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; results: CardTestResult[]; startedAt: string; submittedAt: string | null; fingerprint: string | null; timeLimitSeconds?: number | null; overtime?: boolean; direction?: CardDirection };
 const now = () => new Date().toISOString();
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -55,7 +55,7 @@ function setSummary(snap: FirebaseFirestore.DocumentSnapshot): CardSetSummary {
   return { id: snap.id, title: value.title, description: value.description, type: value.type, cardCount: value.cardCount, folderId: value.folderId, version: value.version, versionId: value.versionId, archived: !!value.archived, createdAt: value.createdAt, updatedAt: value.updatedAt };
 }
 function distributionSummary(value: Distribution): CardDistributionSummary {
-  return { id: value.id, classId: value.classId, className: value.className, setId: value.setId, setVersion: value.setVersion, versionId: value.versionId, title: value.title, type: value.type, cardCount: value.cardCount, targetCount: value.targetCount, requiredModes: value.requiredModes, test: value.test, dueAt: value.dueAt, afterDue: cardAfterDue(value), active: value.active, createdAt: value.createdAt, updatedAt: value.updatedAt };
+  return { id: value.id, classId: value.classId, className: value.className, setId: value.setId, setVersion: value.setVersion, versionId: value.versionId, title: value.title, type: value.type, cardCount: value.cardCount, targetCount: value.targetCount, requiredModes: value.requiredModes, test: value.test, dueAt: value.dueAt, afterDue: cardAfterDue(value), allStudents: !!value.allStudents, active: value.active, createdAt: value.createdAt, updatedAt: value.updatedAt };
 }
 function visibleDistribution(value: Distribution, ctx: Context): CardDistribution {
   return { ...distributionSummary(value), snapshot: value.snapshot, targetStudentIds: ctx.role === 'student' ? [ctx.studentId!] : value.targetStudentIds };
@@ -204,7 +204,7 @@ async function distributions(ctx: Context, request: Request) {
   if (request.method === 'GET') {
     const params = new URL(request.url).searchParams, classId = id(params.get('classId'), '우리 반');
     await managedClass(ctx, classId);
-    const result = await pageQuery('cardClassSets', 'classId', classId, params.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'targetCount', 'requiredModes', 'test', 'dueAt', 'afterDue', 'active', 'createdAt', 'updatedAt').get();
+    const result = await pageQuery('cardClassSets', 'classId', classId, params.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'targetCount', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt').get();
     const rows = result.docs.slice(0, CARD_LIST_LIMIT).map(asDistribution).filter(value => value.ownerUid === ctx.uid);
     return json({ distributions: rows.map(distributionSummary), nextCursor: result.size > CARD_LIST_LIMIT ? rows.at(-1)?.id ?? null : null });
   }
@@ -226,14 +226,17 @@ async function distributions(ctx: Context, request: Request) {
     const activeIds = roster.docs.filter(pupil => !pupil.data().disabled).map(pupil => pupil.id);
     const requested = input.targetStudentIds ?? [];
     if (!Array.isArray(requested) || requested.length > 300) throw new ApiError(400, '배부할 학생을 확인해 주세요.');
-    const targetStudentIds: string[] = requested.length ? requested.map(value => id(value)) : activeIds;
+    // Saying nothing about the targets has always meant the whole class.
+    if (input.allStudents !== undefined && typeof input.allStudents !== 'boolean') throw new ApiError(400, '배부할 학생을 확인해 주세요.');
+    const allStudents: boolean = input.allStudents ?? !requested.length;
+    const targetStudentIds: string[] = allStudents || !requested.length ? activeIds : requested.map(value => id(value));
     if (!targetStudentIds.length || new Set(targetStudentIds).size !== targetStudentIds.length || targetStudentIds.some(value => !activeIds.includes(value))) throw new ApiError(400, '우리 반의 이용 가능한 학생을 선택해 주세요.', 'DISTRIBUTION_TARGETS');
     const data = version.data()!, snapshot: CardSnapshot = { title: data.title, description: data.description, type: data.type, cards: data.cards };
     const requiredModes = parseRequirements(input.requiredModes, snapshot.cards.length), test = parseTestSettings(input.test, snapshot.cards.length), dueAt = parseDueAt(input.dueAt), afterDue = parseAfterDue(input.afterDue);
     if (test.answerRelease === 'after-due' && !dueAt) throw new ApiError(400, '마감 후 정답 공개에는 마감 날짜가 필요해요.');
     const stamp = now();
     const targetStudents = roster.docs.filter(pupil => targetStudentIds.includes(pupil.id)).map(pupil => ({ id: pupil.id, name: String(pupil.data().name ?? ''), number: Number(pupil.data().number ?? 0) }));
-    const value: Distribution = { id: ref.id, ownerUid: ctx.uid, classId, className: cls.name, setId: set.id, setVersion: set.data()!.version, versionId: version.id, title: snapshot.title, type: snapshot.type, cardCount: snapshot.cards.length, cardIds: snapshot.cards.map(card => card.id), targetStudentIds, targetStudents, targetCount: targetStudentIds.length, requiredModes, test, dueAt, afterDue, active: true, snapshot, createdAt: stamp, updatedAt: stamp };
+    const value: Distribution = { id: ref.id, ownerUid: ctx.uid, classId, className: cls.name, setId: set.id, setVersion: set.data()!.version, versionId: version.id, title: snapshot.title, type: snapshot.type, cardCount: snapshot.cards.length, cardIds: snapshot.cards.map(card => card.id), targetStudentIds, targetStudents, targetCount: targetStudentIds.length, allStudents, requiredModes, test, dueAt, afterDue, active: true, snapshot, createdAt: stamp, updatedAt: stamp };
     tx.create(ref, value);
     if (requestState) tx.create(requestState.ref, { ownerUid: ctx.uid, fingerprint: requestState.fingerprint, distributionId: ref.id, createdAt: stamp });
     return value;
@@ -244,12 +247,11 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
   if (request.method === 'PATCH') {
     teacher(ctx);
     const input = await body(request);
-    if (typeof input.active !== 'boolean') throw new ApiError(400, '배부 상태를 확인해 주세요.');
     const distribution = await db().runTransaction(async tx => {
       const value = await loadDistribution(ctx, distributionId, tx);
-      const updatedAt = now();
-      tx.update(distributionRef(distributionId), { active: input.active, updatedAt });
-      return { ...value, active: input.active as boolean, updatedAt };
+      const update = distributionPatch(input, value), updatedAt = now();
+      tx.update(distributionRef(distributionId), { ...update, updatedAt });
+      return { ...value, ...update, updatedAt };
     });
     return json({ distribution: visibleDistribution(distribution, ctx) });
   }
@@ -263,7 +265,7 @@ async function studentList(ctx: Context, request: Request) {
   const selected = new URL(request.url).searchParams.get('classId');
   if (selected && selected !== ctx.classId) throw new ApiError(403, '우리 반 세트만 볼 수 있어요.', 'FORBIDDEN');
   const [result, cls, pupil] = await Promise.all([
-    pageQuery('cardClassSets', 'classId', ctx.classId, new URL(request.url).searchParams.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'cardIds', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'active', 'createdAt', 'updatedAt').get(),
+    pageQuery('cardClassSets', 'classId', ctx.classId, new URL(request.url).searchParams.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'cardIds', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt').get(),
     db().doc(`classes/${ctx.classId}`).get(), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(),
   ]);
   if (!cls.exists || !pupil.exists || pupil.data()?.disabled || pupil.data()?.authUid !== ctx.uid) throw new ApiError(403, '우리 반 정보를 확인해 주세요.', 'STUDENT_UNAVAILABLE');
@@ -389,7 +391,7 @@ async function tests(ctx: Context, request: Request, distributionId: string) {
     const attemptRef = ref.collection('tests').doc(), stamp = now();
     // Distractors come from the whole snapshot, so a short retest of wrong answers still gets full choices.
     const questions = buildTestQuestions(shuffled(cards).slice(0, distribution.test.questionCount), distribution.snapshot.cards, distribution.test, randomUUID, secureRandom);
-    const attempt: Attempt = { id: attemptRef.id, distributionId, studentId: ctx.studentId, classId: ctx.classId, versionId: distribution.versionId, status: 'started', number: state.attempts + 1, retryWrong, questions, score: null, results: [], startedAt: stamp, submittedAt: null, fingerprint: null, timeLimitSeconds: testTimeLimit(distribution.test) };
+    const attempt: Attempt = { id: attemptRef.id, distributionId, studentId: ctx.studentId, classId: ctx.classId, versionId: distribution.versionId, status: 'started', number: state.attempts + 1, retryWrong, questions, score: null, results: [], startedAt: stamp, submittedAt: null, fingerprint: null, timeLimitSeconds: testTimeLimit(distribution.test), direction: distribution.test.direction };
     state.attempts++;
     state.activeAttemptId = attempt.id;
     state.updatedAt = stamp;
@@ -416,10 +418,11 @@ async function submitTest(ctx: Context, request: Request, distributionId: string
       return json({ attempt: visibleAttempt(attempt, distribution), progress: progress(state, distribution), duplicate: true });
     }
     if (state.activeAttemptId !== attempt.id) throw new ApiError(409, '현재 진행 중인 테스트를 확인해 주세요.', 'STALE_ATTEMPT');
-    const cards = new Map(distribution.snapshot.cards.map(card => [card.id, card]));
+    // Graded the way it was asked: a teacher may change the test direction while this attempt is open.
+    const cards = new Map(distribution.snapshot.cards.map(card => [card.id, card])), direction = attempt.direction ?? distribution.test.direction;
     const results = attempt.questions.map(question => {
       const card = cards.get(question.cardId)!, answer = answers.get(question.id)!;
-      return { questionId: question.id, answer, correct: isCorrectCardAnswer(card, distribution.test.direction, answer), expectedAnswer: cardAnswer(card, distribution.test.direction) };
+      return { questionId: question.id, answer, correct: isCorrectCardAnswer(card, direction, answer), expectedAnswer: cardAnswer(card, direction) };
     });
     const score = Math.round(results.filter(result => result.correct).length / results.length * 100), stamp = now();
     for (const [index, result] of results.entries()) if (!result.correct) { const cardId = attempt.questions[index].cardId; state.mistakes[cardId] = (state.mistakes[cardId] ?? 0) + 1; }
@@ -435,7 +438,8 @@ async function report(ctx: Context, distributionId: string) {
   const distribution = await loadDistribution(ctx, distributionId);
   const [roster, states] = await Promise.all([db().collection(`classes/${distribution.classId}/students`).get(), db().collection('cardProgress').where('distributionId', '==', distributionId).get()]);
   const pupils = new Map(roster.docs.map(pupil => [pupil.id, pupil.data()])), records = new Map(states.docs.filter(state => state.data().classId === distribution.classId).map(state => [state.data().studentId, state]));
-  const students: CardReportStudent[] = await Promise.all(distribution.targetStudentIds.map(async studentId => {
+  const activeIds = roster.docs.filter(pupil => !pupil.data().disabled).map(pupil => pupil.id);
+  const students: CardReportStudent[] = await Promise.all(reportStudentIds(distribution, activeIds).map(async studentId => {
     const pupil = pupils.get(studentId), original = distribution.targetStudents?.find(value => value.id === studentId), record = records.get(studentId);
     const attempts = record ? await record.ref.collection('tests').get() : null;
     return { id: studentId, name: pupil?.name ?? original?.name ?? '삭제된 학생', number: pupil?.number ?? original?.number ?? 0, disabled: !pupil || !!pupil.disabled, progress: progress(record?.data(), distribution), attempts: (attempts?.docs ?? []).map(asAttempt).sort((a, b) => b.number - a.number).map(value => visibleAttempt(value, distribution, true)), mistakes: Object.entries(record?.data()?.mistakes ?? {}).map(([cardId, count]) => ({ cardId, count: count as number })).sort((a, b) => b.count - a.count) };

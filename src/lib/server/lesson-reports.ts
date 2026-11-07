@@ -26,7 +26,7 @@ async function capture(ctx:Context,input:Data){const classId=id(input.classId),p
     const queries=[db().collection(`classes/${classId}/students`).select('name','number','disabled','points'),
       db().collection('assignments').where('classId','==',classId).select('ownerUid','classId','title','createdAt','targetStudentIds'),
       db().collection('submissions').where('classId','==',classId).select('classId','assignmentId','studentId','status'),
-      db().collection('cardClassSets').where('classId','==',classId).select('ownerUid','classId','title','createdAt','targetStudentIds'),
+      db().collection('cardClassSets').where('classId','==',classId).select('ownerUid','classId','title','createdAt','targetStudentIds','allStudents'),
       db().collection('cardProgress').where('classId','==',classId).select('ownerUid','classId','distributionId','studentId','attempts','submittedAttempts','activeAttemptId','lastSubmittedAttemptId','latestScore'),
       db().collection('participationBoards').where('classId','==',classId).select('ownerUid','classId','title','createdAt','postCount'),
       db().collection('exhibitions').where('classId','==',classId).select('ownerUid','classId','title','createdAt','artworkCount'),
@@ -35,7 +35,7 @@ async function capture(ctx:Context,input:Data){const classId=id(input.classId),p
     if(snapshots.some(s=>s.size>5000))throw new ApiError(413,'학급 자료가 많아 보고서 집계 범위를 확장해야 해요. 관리자에게 알려 주세요.','REPORT_TOO_LARGE');
     const [roster,assignments,submissions,cards,progress,boards,exhibitions,lessons]=snapshots.map(rows);
     const selectedCards=new Map(cards.filter((c:Data)=>c.ownerUid===ctx.uid&&seoulDay(c.createdAt)>=period.from&&seoulDay(c.createdAt)<=period.to).map((c:Data)=>[c.id,c]));
-    const selectedStates=progress.filter((p:Data)=>p.ownerUid===ctx.uid&&p.id===`${p.distributionId}_${p.studentId}`&&selectedCards.get(p.distributionId)?.targetStudentIds?.includes(p.studentId));
+    const selectedStates=progress.filter((p:Data)=>p.ownerUid===ctx.uid&&p.id===`${p.distributionId}_${p.studentId}`&&(selectedCards.get(p.distributionId)?.allStudents||selectedCards.get(p.distributionId)?.targetStudentIds?.includes(p.studentId)));
     // Count submitted test records, never infer completed tests from attempts started.
     for(let offset=0;offset<selectedStates.length;offset+=30){await Promise.all(selectedStates.slice(offset,offset+30).map(async(p:Data)=>{const tests=await tx.get(db().collection(`cardProgress/${p.id}/tests`).where('status','==','submitted').select('status').limit(501));if(tests.size>500)throw new ApiError(413,'테스트 기록이 많아 집계 범위를 확장해야 해요.','REPORT_TOO_LARGE');p.submittedAttempts=tests.size;}));}
     return summarizeClassReport({classId,className:cls.data()!.name,ownerUid:ctx.uid,...period,capturedAt:cls.readTime.toDate().toISOString(),roster,assignments,submissions,cards,progress,boards,exhibitions,lessons:lessons.filter((l:Data)=>l.ownerUid===ctx.uid).map(({ownerUid,...l}:Data)=>l as LessonRecord)});

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, lateMark, parseAfterDue, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
+import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
 import { addStudyResponse, cardAfterDue, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
@@ -311,4 +311,37 @@ test('late stamp is set once, only in late mode, and survives only while the dea
   assert.equal(publicProgress({ lateAt: at(6) }, snapshot, requirements, settings, { ...lateDeadline, afterDue: 'open' }).lateAt, null, 'switching to keep-open hides the tag');
   assert.equal(publicProgress({ lateAt: at(6) }, snapshot, requirements, settings, { ...lateDeadline, dueAt: at(60) }).lateAt, null);
   assert.equal(publicProgress(undefined, snapshot, requirements, settings).lateAt, null);
+});
+
+test('an all-students distribution reaches any student of the class, and old documents keep their target list', () => {
+  const room = { classId: 'class', targetStudentIds: ['first'], active: true };
+  const joined = { role: 'student' as const, classId: 'class', studentId: 'joined-later' };
+  assert.equal(canStudyDistribution(joined, room), false, 'a document without the field stays limited to its targets');
+  assert.equal(canStudyDistribution(joined, { ...room, allStudents: false }), false);
+  assert.equal(canStudyDistribution(joined, { ...room, allStudents: true }), true);
+  assert.equal(canStudyDistribution({ ...joined, classId: 'other' }, { ...room, allStudents: true }), false, 'another class never gets in');
+  assert.equal(canStudyDistribution(joined, { ...room, allStudents: true, active: false }), false, 'a closed distribution stays closed');
+  assert.equal(canStudyDistribution({ role: 'teacher', classId: 'class', studentId: 'joined-later' }, { ...room, allStudents: true }), false);
+});
+test('the report lists original targets plus the active roster only for all-students distributions', () => {
+  assert.deepEqual(reportStudentIds({ targetStudentIds: ['a', 'left'], allStudents: true }, ['a', 'new']), ['a', 'left', 'new']);
+  assert.deepEqual(reportStudentIds({ targetStudentIds: ['a', 'left'] }, ['a', 'new']), ['a', 'left']);
+});
+test('distribution edits use the creation validators and leave everything unnamed alone', () => {
+  const current = { cardCount: 50, requiredModes: requirements, test: settings, dueAt: null };
+  assert.deepEqual(distributionPatch({ active: false }, current), { active: false });
+  assert.deepEqual(distributionPatch({ allStudents: true }, current), { allStudents: true });
+  assert.deepEqual(distributionPatch({ afterDue: 'lock' }, current), { afterDue: 'lock' });
+  assert.equal(distributionPatch({ dueAt: '2026-12-01T00:00:00.000Z' }, current).dueAt, '2026-12-01T00:00:00.000Z');
+  assert.equal(distributionPatch({ dueAt: null }, { ...current, dueAt: '2026-12-01T00:00:00.000Z' }).dueAt, null, 'a deadline can be removed');
+  const test = distributionPatch({ test: { format: 'choice', timeLimitSeconds: 300 } }, current).test!;
+  assert.deepEqual([test.format, test.timeLimitSeconds, test.questionCount, test.requireStudy, test.maxAttempts], ['choice', 300, 10, true, 2], 'a partial test edit keeps the saved values');
+  const modes = distributionPatch({ requiredModes: { recall: { requiredCount: 20 } } }, current).requiredModes!;
+  assert.equal(modes.recall.requiredCount, 20);
+  assert.deepEqual(modes.memorize, requirements.memorize, 'modes that were not named keep their rule');
+  for (const [input, pattern] of [[{}, /바꿀 배부 설정/], [{ active: 'yes' }, /배부 상태/], [{ allStudents: 1 }, /배부 상태/], [{ afterDue: 'soon' }, /마감 후 처리/], [{ dueAt: 'tomorrow' }, /마감 날짜/], [{ test: { questionCount: 51 } }, /문항 수/], [{ test: { format: 'oral' } }, /문제 형식/], [{ requiredModes: { memorize: { requiredCount: 501 } } }, /필수 학습량/], [{ requiredModes: { spell: { rangeEnd: 51 } } }, /마지막 카드/]] as [Record<string, unknown>, RegExp][]) assert.throws(() => distributionPatch(input, current), pattern, JSON.stringify(input));
+  const afterDue = parseTestSettings({ answerRelease: 'after-due' }, 50);
+  assert.throws(() => distributionPatch({ test: { answerRelease: 'after-due' } }, current), /마감 날짜/, 'answers released after a deadline need a deadline');
+  assert.throws(() => distributionPatch({ dueAt: null }, { ...current, test: afterDue, dueAt: '2026-12-01T00:00:00.000Z' }), /마감 날짜/, 'and that deadline cannot be removed afterwards');
+  assert.doesNotThrow(() => distributionPatch({ dueAt: '2026-12-01T00:00:00.000Z', test: { answerRelease: 'after-due' } }, current));
 });
