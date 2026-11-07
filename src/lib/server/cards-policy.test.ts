@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
-import { addStudyResponse, cardAfterDue, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
+import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -348,4 +348,12 @@ test('distribution edits use the creation validators and leave everything unname
   assert.throws(() => distributionPatch({ test: { answerRelease: 'after-due' } }, current), /마감 날짜/, 'answers released after a deadline need a deadline');
   assert.throws(() => distributionPatch({ dueAt: null }, { ...current, test: afterDue, dueAt: '2026-12-01T00:00:00.000Z' }), /마감 날짜/, 'and that deadline cannot be removed afterwards');
   assert.doesNotThrow(() => distributionPatch({ dueAt: '2026-12-01T00:00:00.000Z', test: { answerRelease: 'after-due' } }, current));
+});
+
+test('a card sharing the prompt is never a wrong choice, in any direction', () => {
+  const cards = [{ id: 'a', front: 'big', back: '크다', example: '', alternatives: [] }, { id: 'b', front: 'large', back: '크다', example: '', alternatives: [] }, { id: 'c', front: 'small', back: '작다', example: '', alternatives: [] }, { id: 'd', front: 'bank', back: '은행', example: '', alternatives: [] }, { id: 'e', front: 'bank', back: '둑', example: '', alternatives: [] }];
+  assert.deepEqual(cardDistractors(cards[0], cards, 'back-front'), ['small', 'bank']);
+  assert.ok(!buildCardChoices(cards[0], cards, 'back-front', () => 0)!.includes('large'));
+  assert.deepEqual(cardDistractors(cards[3], cards, 'front-back'), ['크다', '작다']);
+  assert.equal(buildTestQuestions([cards[1]], cards, { direction: 'back-front', format: 'choice' }, () => 'q', () => 0)[0].choices?.includes('big'), false);
 });

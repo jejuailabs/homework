@@ -6,7 +6,7 @@ import {useRouter} from 'next/navigation';
 import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyboard, Lightbulb, LoaderCircle, RefreshCw, RotateCcw, Shuffle, Star, Volume2, X} from 'lucide-react';
 import {usePreferences} from './providers';
 import {characterFiles, type Character} from '@/lib/characters';
-import {addStudyResponse, cardAnswer, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
+import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
 import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardSetType, CardStudyMode} from '@/lib/cards-types';
 import ko from '@/messages/cards-study-ko.json';
 import en from '@/messages/cards-study-en.json';
@@ -128,7 +128,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const choices = useMemo(() => {
     if (!card || !session) return [];
     const expected = textFor(card, session.direction).expected;
-    const others = [...new Set(cards.filter(item => item.id !== card.id).map(item => textFor(item, session.direction).expected))].filter(value => normalize(value) !== normalize(expected));
+    const others = cardDistractors(card, cards, session.direction);
     return stableMixed([expected, ...stableMixed(others, session.index + 12).slice(0, 3)], session.index + 41);
   }, [card, cards, session?.direction, session?.index]);
   const tokens = useMemo(() => content ? stableMixed(content.expected.split(/\s+/).filter(Boolean).map((text, id) => ({text, id})), (session?.index || 0) + 18) : [], [content?.expected, session?.index]);

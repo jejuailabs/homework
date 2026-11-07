@@ -249,6 +249,13 @@ async function testsSection() {
   accepted(await study(pupil(3), gated.id, 'memorize', 'g-study', right(0, 1)), 'student studies');
   accepted(await start(pupil(3), gated.id, 'g-2'), 'then the test opens');
 
+  // Two cards with one meaning: the other word is a right answer in disguise, so it can never be a wrong choice.
+  const synonyms = [{id: 'big', front: 'big', back: '크다', example: '', alternatives: []}, {id: 'large', front: 'large', back: '크다', example: '', alternatives: []}, ...cards.slice(0, 5)];
+  const pair = await call(teacher, 'POST', ['sets'], {title: '같은 뜻', description: '', type: 'word', folderId: null, cards: synonyms, requestId: 'set-synonyms'});
+  const pairTest = await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: pair.data.set.id, expectedVersion: 1, requestId: 'dist-synonyms', test: {questionCount: 7, format: 'choice', direction: 'back-front'}});
+  const pairAttempt = await start(pupil(1), pairTest.data.distribution.id, 'pair-1');
+  check(pairAttempt.status === 201 && pairAttempt.data.attempt.questions.filter(question => question.prompt === '크다').every(question => question.choices.filter(choice => choice === 'big' || choice === 'large').length === 1), 'a synonym is never offered as a wrong choice', pairAttempt.data.attempt?.questions);
+
   // Timed: overtime is flagged for the teacher only, and blank answers at expiry are accepted.
   const timed = await distribute({test: {questionCount: 3, format: 'written', timeLimitSeconds: 60, maxAttempts: 3, direction: 'front-back'}});
   const clock = await start(pupil(4), timed.id, 't-1'), late = clock.data.attempt, attemptRef = db().doc(`cardProgress/${timed.id}_s4/tests/${late.id}`);

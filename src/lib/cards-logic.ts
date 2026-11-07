@@ -121,15 +121,19 @@ export function shuffleWith<T>(values: T[], random: (max: number) => number) {
   for (let index = result.length - 1; index > 0; index--) { const other = random(index + 1); [result[index], result[other]] = [result[other], result[index]]; }
   return result;
 }
-/** The expected answer plus distractors that are different answers and would not themselves be graded correct. */
-export function buildCardChoices(card: CardEntry, pool: CardEntry[], direction: CardDirection, random: (max: number) => number, count = CARD_CHOICE_COUNT) {
-  const expected = cardAnswer(card, direction), seen = new Set([normalizeCardAnswer(expected)]), distractors: string[] = [];
+const cardPrompt = (card: CardEntry, direction: CardDirection) => direction === 'front-back' ? card.front : card.back;
+/** Wrong answers for this card. Different answers only, nothing that would be graded correct, and nothing from a card sharing this prompt: big and large both meaning 크다 are each a right answer to 크다. */
+export function cardDistractors(card: CardEntry, pool: CardEntry[], direction: CardDirection) {
+  const prompt = normalizeCardAnswer(cardPrompt(card, direction)), seen = new Set([normalizeCardAnswer(cardAnswer(card, direction))]), distractors: string[] = [];
   for (const other of pool) {
     const value = cardAnswer(other, direction), key = normalizeCardAnswer(value);
-    if (other.id === card.id || seen.has(key) || isCorrectCardAnswer(card, direction, value)) continue;
+    if (other.id === card.id || seen.has(key) || normalizeCardAnswer(cardPrompt(other, direction)) === prompt || isCorrectCardAnswer(card, direction, value)) continue;
     seen.add(key); distractors.push(value);
   }
-  const choices = shuffleWith([expected, ...shuffleWith(distractors, random).slice(0, count - 1)], random);
+  return distractors;
+}
+export function buildCardChoices(card: CardEntry, pool: CardEntry[], direction: CardDirection, random: (max: number) => number, count = CARD_CHOICE_COUNT) {
+  const expected = cardAnswer(card, direction), choices = shuffleWith([expected, ...shuffleWith(cardDistractors(card, pool, direction), random).slice(0, count - 1)], random);
   return choices.length >= 2 ? choices : null;
 }
 /** A question without `choices` is answered in writing; the key is left out because Firestore rejects undefined. */
@@ -137,7 +141,7 @@ export function buildTestQuestions(cards: CardEntry[], pool: CardEntry[], settin
   const encoder = new TextEncoder();
   let bytes = 0;
   return cards.map(card => {
-    const question: CardTestQuestion = { id: newId(), cardId: card.id, prompt: settings.direction === 'front-back' ? card.front : card.back };
+    const question: CardTestQuestion = { id: newId(), cardId: card.id, prompt: cardPrompt(card, settings.direction) };
     const choices = testFormat(settings) === 'choice' ? buildCardChoices(card, pool, settings.direction, random) : null;
     bytes += choices ? encoder.encode(choices.join('')).length : 0;
     return choices && bytes <= CARD_CHOICE_BYTES ? { ...question, choices } : question;

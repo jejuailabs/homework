@@ -9,6 +9,13 @@ const options = (patch: Partial<CardPrintOptions> = {}): CardPrintOptions => ({.
 const input = (patch: Partial<CardPrintOptions> = {}, overrides: Partial<CardPrintInput> = {}): CardPrintInput => ({title: '1단원 단어', type: 'word', cards, options: options(patch), copy: key => key, ...overrides});
 const words = (ops: CardPrintOp[]) => ops.flatMap(op => op.t === 'text' ? [op.text] : []);
 
+// A card sharing the prompt is a right answer, so a printed choice never offers it as a wrong one.
+{
+  const same: CardEntry[] = [{id: 'a', front: 'big', back: '크다', example: '', alternatives: []}, {id: 'b', front: 'large', back: '크다', example: '', alternatives: []}, {id: 'c', front: 'small', back: '작다', example: '', alternatives: []}, {id: 'd', front: 'tall', back: '높다', example: '', alternatives: []}];
+  const printed = generateCardPrintTest(same, {...defaultCardPrintOptions('word', 4, 3), kind: 'test', counts: counts(0, 4, 0, 0)});
+  for (const question of printed.sections.flatMap(section => section.questions)) if (question.prompt === '크다') assert.equal(question.choices!.filter(choice => choice === 'big' || choice === 'large').length, 1, 'only the one right answer');
+}
+
 // Generation: the seed fixes the form, and the sheet and key read the same test.
 const first = generateCardPrintTest(cards, options()), again = generateCardPrintTest(cards, options());
 assert.deepEqual(first, again, 'the same seed gives the same test');
