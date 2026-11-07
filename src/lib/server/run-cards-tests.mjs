@@ -8,4 +8,5 @@ const characters = dataUrl(compile('../characters.ts'));
 const submission = dataUrl(compile('../assignment-submission.ts'));
 const policy = dataUrl(compile('./policy.ts').replace("'../characters'", JSON.stringify(characters)).replace("'../assignment-submission'", JSON.stringify(submission)));
 const cards = dataUrl(compile('./cards-policy.ts').replace("'./policy'", JSON.stringify(policy)));
+await import(dataUrl(compile('../cards-summary.test.ts').replace("'./cards-summary'", JSON.stringify(dataUrl(compile('../cards-summary.ts'))))));
 await import(dataUrl(compile('./cards-policy.test.ts').replace("'./cards-policy'", JSON.stringify(cards))));
