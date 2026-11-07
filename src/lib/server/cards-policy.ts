@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
-import { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
-import type { CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
+import { CARD_DUE_GRACE_MS, cardAnswer, cardDueState, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
+import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
 
 export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
 export type { CardCoverage };
@@ -81,6 +81,22 @@ export function parseDueAt(value: unknown): string | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value) || !Number.isFinite(Date.parse(value))) throw new ApiError(400, '마감 날짜를 확인해 주세요.');
   return new Date(value).toISOString();
 }
+export function parseAfterDue(value: unknown): CardAfterDue {
+  if (value === undefined || value === null) return 'open';
+  if (value !== 'open' && value !== 'late' && value !== 'lock') throw new ApiError(400, '마감 후 처리 방법을 확인해 주세요.');
+  return value;
+}
+type Deadline = { dueAt: string | null; afterDue?: CardAfterDue };
+/** Starting study or a new test is refused once a locked deadline and its grace have passed. Finishing a started test is not. */
+export function assertDueOpen(deadline: Deadline, time = Date.now()) {
+  if (cardDueState(deadline, time, CARD_DUE_GRACE_MS) === 'lock') throw new ApiError(403, '마감이 지나 더 이상 학습할 수 없어요.', 'DUE_CLOSED');
+}
+const afterDeadline = (value: unknown, dueAt: string | null): value is string => typeof value === 'string' && !!dueAt && Date.parse(value) > Date.parse(dueAt);
+/** The first activity after the deadline. A stamp from before a moved deadline no longer counts, so the next late activity sets it again. */
+export function lateMark(current: unknown, deadline: Deadline, stamp: string): string | null {
+  if (afterDeadline(current, deadline.dueAt)) return current;
+  return cardDueState(deadline, Date.parse(stamp), CARD_DUE_GRACE_MS) === 'late' ? stamp : null;
+}
 export function ownsCardResource(ctx: { uid: string; role: Role }, resource: { ownerUid: string }) {
   return ctx.role !== 'student' && ctx.uid === resource.ownerUid;
 }
@@ -97,9 +113,9 @@ export function completedCounts(snapshot: CardSnapshot, requirements: CardRequir
     return [mode, wholeRounds + partialRound];
   })) as Record<CardStudyMode, number>;
 }
-export function publicProgress(raw: Record<string, any> | undefined, snapshot: CardSnapshot, requirements: CardRequiredModes, test: CardTestSettings): CardProgress {
+export function publicProgress(raw: Record<string, any> | undefined, snapshot: CardSnapshot, requirements: CardRequiredModes, test: CardTestSettings, deadline?: Deadline): CardProgress {
   const credited = completedCounts(snapshot, requirements, raw?.coverage ?? { memorize: {}, recall: {}, spell: {} });
-  return { counts: raw?.counts ?? emptyModeCounts(), correctCounts: raw?.correctCounts ?? emptyModeCounts(), completedCounts: credited, attempts: raw?.attempts ?? 0, bestScore: raw?.bestScore ?? null, latestScore: raw?.latestScore ?? null, starredCardIds: raw?.starredCardIds ?? [], lastPosition: raw?.lastPosition ?? null, updatedAt: raw?.updatedAt ?? null, studyComplete: CARD_MODES.every(mode => credited[mode] >= requirements[mode].requiredCount), goalReached: typeof raw?.bestScore === 'number' && raw.bestScore >= test.goalScore };
+  return { counts: raw?.counts ?? emptyModeCounts(), correctCounts: raw?.correctCounts ?? emptyModeCounts(), completedCounts: credited, attempts: raw?.attempts ?? 0, bestScore: raw?.bestScore ?? null, latestScore: raw?.latestScore ?? null, starredCardIds: raw?.starredCardIds ?? [], lastPosition: raw?.lastPosition ?? null, updatedAt: raw?.updatedAt ?? null, lateAt: deadline?.afterDue === 'late' && afterDeadline(raw?.lateAt, deadline.dueAt) ? raw!.lateAt : null, studyComplete: CARD_MODES.every(mode => credited[mode] >= requirements[mode].requiredCount), goalReached: typeof raw?.bestScore === 'number' && raw.bestScore >= test.goalScore };
 }
 export function answersReleased(settings: CardTestSettings, dueAt: string | null, time = Date.now()) {
   return settings.answerRelease === 'immediate' || (settings.answerRelease === 'after-due' && dueAt !== null && Date.parse(dueAt) <= time);

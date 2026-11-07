@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { answersReleased, canStudyDistribution, cardMutationFingerprint, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
-import { addStudyResponse, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
+import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, lateMark, parseAfterDue, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
+import { addStudyResponse, cardAfterDue, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -279,4 +279,36 @@ test('the countdown rounds up and never shows a negative time', () => {
   assert.equal(formatCountdown(61_000), '1:01');
   assert.equal(formatCountdown(500), '0:01');
   assert.equal(formatCountdown(-5000), '0:00');
+});
+
+const lateDeadline = { dueAt: '2026-11-10T00:00:00.000Z', afterDue: 'late' as const };
+const at = (minutes: number) => new Date(Date.parse(lateDeadline.dueAt) + minutes * 60_000).toISOString();
+test('after-due rule defaults to open for old distributions and rejects anything else', () => {
+  assert.equal(parseAfterDue(undefined), 'open');
+  assert.equal(parseAfterDue('lock'), 'lock');
+  assert.throws(() => parseAfterDue('closed'), /마감 후 처리/);
+  assert.equal(cardAfterDue({}), 'open');
+  assert.equal(cardDueState({ dueAt: at(0) }, Date.parse(at(60))), 'open', 'an old document stays open after its deadline');
+  assert.equal(cardDueState({ dueAt: null, afterDue: 'lock' }, Date.parse(at(60))), 'before', 'no deadline never locks');
+});
+test('a locked deadline closes only after the five minute grace', () => {
+  const locked = { dueAt: lateDeadline.dueAt, afterDue: 'lock' as const };
+  assert.doesNotThrow(() => assertDueOpen(locked, Date.parse(at(-1))));
+  assert.doesNotThrow(() => assertDueOpen(locked, Date.parse(at(5))), 'an offline batch landing inside the grace is kept');
+  assert.throws(() => assertDueOpen(locked, Date.parse(at(5)) + 1), (error: Error & { status?: number; code?: string }) => error.status === 403 && error.code === 'DUE_CLOSED');
+  assert.doesNotThrow(() => assertDueOpen({ ...locked, afterDue: 'late' }, Date.parse(at(60))));
+  assert.doesNotThrow(() => assertDueOpen({ dueAt: locked.dueAt }, Date.parse(at(60))), 'old documents are never locked');
+  assert.equal(cardDueState(locked, Date.parse(at(1))), 'lock', 'screens close at the deadline, before the server does');
+});
+test('late stamp is set once, only in late mode, and survives only while the deadline it passed still stands', () => {
+  assert.equal(lateMark(undefined, lateDeadline, at(4)), null, 'a batch inside the grace is not late');
+  assert.equal(lateMark(undefined, lateDeadline, at(6)), at(6));
+  assert.equal(lateMark(at(6), lateDeadline, at(30)), at(6), 'the first late activity is kept');
+  assert.equal(lateMark(undefined, { ...lateDeadline, afterDue: 'open' }, at(30)), null);
+  assert.equal(lateMark(undefined, { ...lateDeadline, afterDue: 'lock' }, at(30)), null);
+  assert.equal(lateMark(at(6), { ...lateDeadline, dueAt: at(60) }, at(30)), null, 'extending the deadline clears an older stamp');
+  assert.equal(publicProgress({ lateAt: at(6) }, snapshot, requirements, settings, lateDeadline).lateAt, at(6));
+  assert.equal(publicProgress({ lateAt: at(6) }, snapshot, requirements, settings, { ...lateDeadline, afterDue: 'open' }).lateAt, null, 'switching to keep-open hides the tag');
+  assert.equal(publicProgress({ lateAt: at(6) }, snapshot, requirements, settings, { ...lateDeadline, dueAt: at(60) }).lateAt, null);
+  assert.equal(publicProgress(undefined, snapshot, requirements, settings).lateAt, null);
 });

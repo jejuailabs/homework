@@ -1,5 +1,5 @@
 // Pure card rules shared by the browser and the server, so instant practice feedback can never drift from server grading.
-import type { CardCoverage, CardDirection, CardEntry, CardRequiredModes, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
+import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardRequiredModes, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
 
 export function normalizeCardAnswer(value: string) {
   return value.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
@@ -94,26 +94,35 @@ export function cardRangePreset(from: string | undefined, to: string | undefined
   return { start: Math.max(start, min), end: Math.min(end, max) };
 }
 
+// Deadlines. Distributions published before afterDue existed have no field and stay open, so always read it through these helpers.
+export const CARD_DUE_GRACE_MS = 5 * 60_000; // Answer batches queued offline before the deadline still need time to land.
+export const cardAfterDue = (value: { afterDue?: CardAfterDue }): CardAfterDue => value.afterDue === 'late' || value.afterDue === 'lock' ? value.afterDue : 'open';
+/** 'before' until the deadline has passed, then the rule the teacher chose. The server passes the grace; screens close right at the deadline. */
+export function cardDueState(value: { dueAt: string | null; afterDue?: CardAfterDue }, time: number, grace = 0): CardAfterDue | 'before' {
+  const due = value.dueAt ? Date.parse(value.dueAt) : Number.NaN;
+  return Number.isFinite(due) && time > due + grace ? cardAfterDue(value) : 'before';
+}
+
 // Tests. Distributions published before these settings existed have neither field, so always read them through these helpers.
 export const CARD_CHOICE_COUNT = 4;
 export const CARD_TEST_GRACE_SECONDS = 60;
 export const CARD_CHOICE_BYTES = 400_000; // Attempt documents share Firestore's 1 MiB limit with prompts and later results.
 export const testFormat = (settings: Pick<CardTestSettings, 'format'>) => settings.format === 'choice' ? 'choice' as const : 'written' as const;
 export const testTimeLimit = (settings: Pick<CardTestSettings, 'timeLimitSeconds'>) => settings.timeLimitSeconds ?? null;
-function shuffleWith<T>(values: T[], random: (max: number) => number) {
+export function shuffleWith<T>(values: T[], random: (max: number) => number) {
   const result = [...values];
   for (let index = result.length - 1; index > 0; index--) { const other = random(index + 1); [result[index], result[other]] = [result[other], result[index]]; }
   return result;
 }
-/** The expected answer plus up to three distractors that are different answers and would not themselves be graded correct. */
-export function buildCardChoices(card: CardEntry, pool: CardEntry[], direction: CardDirection, random: (max: number) => number) {
+/** The expected answer plus distractors that are different answers and would not themselves be graded correct. */
+export function buildCardChoices(card: CardEntry, pool: CardEntry[], direction: CardDirection, random: (max: number) => number, count = CARD_CHOICE_COUNT) {
   const expected = cardAnswer(card, direction), seen = new Set([normalizeCardAnswer(expected)]), distractors: string[] = [];
   for (const other of pool) {
     const value = cardAnswer(other, direction), key = normalizeCardAnswer(value);
     if (other.id === card.id || seen.has(key) || isCorrectCardAnswer(card, direction, value)) continue;
     seen.add(key); distractors.push(value);
   }
-  const choices = shuffleWith([expected, ...shuffleWith(distractors, random).slice(0, CARD_CHOICE_COUNT - 1)], random);
+  const choices = shuffleWith([expected, ...shuffleWith(distractors, random).slice(0, count - 1)], random);
   return choices.length >= 2 ? choices : null;
 }
 /** A question without `choices` is answered in writing; the key is left out because Firestore rejects undefined. */

@@ -49,6 +49,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [stars, setStars] = useState(progress?.starredCardIds || []), [starBusy, setStarBusy] = useState(false);
   const [session, setSession] = useState<PracticeSession | null>(null), [resume, setResume] = useState<PracticeSession | null>(null);
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
+  const [dueClosed, setDueClosed] = useState(false);
   const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(1);
   const [hintIndex, setHintIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
@@ -82,11 +83,15 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
       try {
         while (outboxRef.current.sealed[0]) await sendBatch(outboxRef.current.sealed[0]);
         failures.current = 0; setSaveFailed(false);
-      } catch {failures.current++; setSaveFailed(true); schedule(Math.min(STUDY_IDLE_MS * 2 ** (failures.current - 1), 160_000));}
+      } catch (cause) {
+        // The server will never take these answers, so stop retrying and say why instead of showing a save error forever.
+        if (cause instanceof Error && cause.message === 'DUE_CLOSED') {failures.current = 0; writeOutbox(emptyStudyOutbox()); setDueClosed(true);}
+        else {failures.current++; setSaveFailed(true); schedule(Math.min(STUDY_IDLE_MS * 2 ** (failures.current - 1), 160_000));}
+      }
       finally {flushing.current = null; setSaving(false);}
     })();
     return flushing.current;
-  }, [schedule, sendBatch]);
+  }, [schedule, sendBatch, writeOutbox]);
   const seal = useCallback(() => writeOutbox(sealStudyBuffer(outboxRef.current, mode, newRequestId)), [mode, writeOutbox]);
   const drain = useCallback(() => {clearTimeout(timer.current); seal(); return pump();}, [pump, seal]);
   useEffect(() => {drainRef.current = drain;}, [drain]);
@@ -195,7 +200,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   });
   const exit = isPreview ? <button className="button" onClick={onClose || closeSession}><X size={16}/>{c.closePreview}</button> : <Link className="cs-back" href={`/student/cards/${distributionId}`} onClick={event => leave(event, `/student/cards/${distributionId}`)}><ArrowLeft size={16}/>{c.exit}</Link>;
-  const saveNotice = saveFailed && <div className="cs-alert" role="alert"><p>{c.saveError} {c.saveKeepGoing}</p><button className="button" disabled={saving} onClick={() => void drain()}><RefreshCw size={16}/>{c.retrySave}</button></div>;
+  const saveNotice = dueClosed ? <div className="cs-alert" role="alert"><p>{c.dueLockedSave}</p></div> : saveFailed && <div className="cs-alert" role="alert"><p>{c.saveError} {c.saveKeepGoing}</p><button className="button" disabled={saving} onClick={() => void drain()}><RefreshCw size={16}/>{c.retrySave}</button></div>;
   if (!session) return <section className="cs-study"><div className="cs-study-top">{exit}<span className="cs-tag">{c[mode]}</span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<header className="cs-heading"><div><h1>{title}</h1><p>{c.settings}</p></div><CardBuddy character={character}/></header>
     <div className="cs-options"><h2>{c[mode]}</h2>{resume && <div className="cs-resume"><p>{c.savedResume} <strong>{resume.index + 1} / {resume.queue.length}</strong></p><button className="button primary" onClick={() => {resumeRef.current = null; setResume(null); updateSession(resume); setDirection(resume.direction); setAnswer(resume.feedback?.answer || ''); setRevealed(!!resume.feedback);}}><ArrowRight size={16}/>{c.continue}</button></div>}
       <div className="cs-option-grid"><label>{c.direction}<select value={direction} disabled={fixed} onChange={event => setDirection(event.target.value as CardDirection)}><option value="front-back">{c.frontBack}</option><option value="back-front">{c.backFront}</option></select></label><label>{c.repeat}<select value={repeat} onChange={event => setRepeat(Number(event.target.value))}>{[1, 2, 3, 5, 10].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>{c.rangeStart}<input type="number" min={min} max={max} value={rangeStart} onChange={event => setRangeStart(Number(event.target.value))}/></label><label>{c.rangeEnd}<input type="number" min={min} max={max} value={rangeEnd} onChange={event => setRangeEnd(Number(event.target.value))}/></label></div>
