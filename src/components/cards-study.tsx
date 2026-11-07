@@ -7,13 +7,18 @@ import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyb
 import {usePreferences} from './providers';
 import {characterFiles, type Character} from '@/lib/characters';
 import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
-import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardSetType, CardStudyMode} from '@/lib/cards-types';
+import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardReviewItem, CardSetType, CardStudyMode} from '@/lib/cards-types';
 import ko from '@/messages/cards-study-ko.json';
 import en from '@/messages/cards-study-en.json';
+import reviewKo from '@/messages/cards-review-ko.json';
+import reviewEn from '@/messages/cards-review-en.json';
 import '@/styles/cards-study.css';
+import '@/styles/cards-review.css';
+import {CardSoundSettings, useCardSound} from './cards-care';
 
 export const cardModes = ['memorize', 'recall', 'spell'] as const;
 export function useCardCopy() {const {locale} = usePreferences(); return {copy: locale === 'ko' ? ko : en, locale, points: (value: number) => locale === 'ko' ? `${value}${ko.score}` : `${value} ${en.score}`};}
+export function useReviewCopy() {const {locale} = usePreferences(); return locale === 'ko' ? reviewKo : reviewEn;}
 export async function cardRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {cache: 'no-store', ...init, headers: {'Content-Type': 'application/json', ...init?.headers}});
   const body = await response.json().catch(() => ({}));
@@ -57,14 +62,14 @@ function stableMixed<T>(items: T[], seed: number): T[] {const result = [...items
 
 type PracticeSession = {queue: string[]; index: number; direction: CardDirection; outcomes: {cardId: string; correct: boolean}[]; feedback?: {correct: boolean; expected: string; answer?: string}; finished?: boolean};
 const newRequestId = () => crypto.randomUUID();
-type PracticeProps = {title: string; cards: CardEntry[]; mode: CardStudyMode; type?: CardSetType; character?: Character; distributionId?: string; studentId?: string; requirement?: CardModeRequirement; progress?: CardProgress; from?: string; to?: string; onProgress?: (progress: CardProgress) => void; onClose?: () => void};
+type PracticeProps = {title: string; cards: CardEntry[]; mode: CardStudyMode; type?: CardSetType; character?: Character; distributionId?: string; studentId?: string; requirement?: CardModeRequirement; progress?: CardProgress; from?: string; to?: string; onProgress?: (progress: CardProgress) => void; onClose?: () => void; speechRate?: number | null};
 
 export function CardsPracticePreview(props: {title: string; cards: CardEntry[]; mode: CardStudyMode | 'test'; type?: CardSetType; onClose?: () => void}) {
   if (props.mode === 'test') return <CardsLocalTestPreview {...props}/>;
   return <CardsPractice key={props.mode} {...props} mode={props.mode}/>;
 }
 
-export function CardsPractice({title, cards, mode, type = 'word', character = 'cat', distributionId, studentId, requirement, progress, from, to, onProgress, onClose}: PracticeProps) {
+export function CardsPractice({title, cards, mode, type = 'word', character = 'cat', distributionId, studentId, requirement, progress, from, to, onProgress, onClose, speechRate}: PracticeProps) {
   const {copy: c} = useCardCopy();
   const isPreview = !distributionId;
   const fixed = !!requirement?.requiredCount;
@@ -75,8 +80,8 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [session, setSession] = useState<PracticeSession | null>(null), [resume, setResume] = useState<PracticeSession | null>(null);
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
   const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
-  const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(1);
-  const [hintIndex, setHintIndex] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(speechRate || 1);
+  const [hintIndex, setHintIndex] = useState<number | null>(null), sound = useCardSound();
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
   const sessionRef = useRef<PracticeSession | null>(null), resumeRef = useRef<PracticeSession | null>(null), outboxRef = useRef<StudyOutbox>(emptyStudyOutbox()), flushing = useRef<Promise<void> | null>(null), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), failures = useRef(0), progressCallback = useRef(onProgress);
@@ -178,6 +183,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     if (!current || !card || current.feedback) return;
     if (mode !== 'memorize' && !value.trim()) return;
     const {correct, expected} = gradeCardAnswer(card, mode, current.direction, value);
+    if (mode !== 'memorize') sound.play(correct ? 'good' : 'bad');
     if (isPreview) {updateSession({...current, feedback: {correct, expected}, outcomes: [...current.outcomes, {cardId: card.id, correct}]}); return;}
     const outbox = addStudyResponse(outboxRef.current, {cardId: card.id, answer: value, direction: current.direction}, mode, newRequestId);
     outboxRef.current = outbox; setUnsaved(studyOutboxSize(outbox));
@@ -190,6 +196,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     if (!current?.feedback) return;
     const finished = current.index >= current.queue.length - 1;
     updateSession({...current, index: finished ? current.index : current.index + 1, finished, feedback: undefined});
+    if (finished) sound.play('end');
     if (finished && !isPreview) void drain();
     setAnswer(''); setRevealed(false); setSelectedTokens([]); setError('');
   }
@@ -208,13 +215,15 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     try {const result = await cardRequest<{progress: CardProgress}>(`/api/cards/distributions/${distributionId}/progress`, {method: 'PATCH', body: JSON.stringify({starredCardIds: nextStars})}); onProgress?.(result.progress);}
     catch {setStars(previous); setStarError(true);} finally {setStarBusy(false);}
   }
-  function speak() {
-    if (!content || !canSpeak) return;
+  function speak(text = content ? (revealed || feedback ? content.expected : content.prompt) : '') {
+    if (!text || !canSpeak) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(revealed || feedback ? content.expected : content.prompt);
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = /[가-힣]/.test(utterance.text) ? 'ko-KR' : 'en-US'; utterance.rate = speed;
     utterance.onerror = () => setSpeechFailed(true); setSpeechFailed(false); window.speechSynthesis.speak(utterance);
   }
+  // 카드 자동 읽기 (소리 설정, 기본 꺼짐): each new card's prompt once. The speaker button works either way.
+  useEffect(() => {if (sound.autoSpeech && content && !session?.finished) speak(content.prompt);}, [session?.index, session?.direction, session?.finished, sound.autoSpeech, canSpeak]);
   useEffect(() => {
     function key(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || !session || session.finished) return;
@@ -239,7 +248,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   if (session.finished) {const correctCount = session.outcomes.filter(item => item.correct).length, wrongCount = session.outcomes.length - correctCount; const nextMode = mode === 'memorize' ? 'recall' : mode === 'recall' ? 'spell' : 'test', nextHref = `/student/cards/${distributionId}/${nextMode}${from && nextMode !== 'test' ? `?from=${encodeURIComponent(from)}${to ? `&to=${encodeURIComponent(to)}` : ''}` : ''}`; return <section className="cs-study"><div className="cs-study-top">{exit}</div><div className="cs-finish"><CardBuddy character={character} happy/><CheckCircle2 size={34}/><h1>{c.doneTitle}</h1><p>{c.doneBody}</p>{isPreview ? <p className="cs-preview-note">{c.preview}</p> : answersLost || saveFailed ? saveNotice : <p className="cs-save-status" role="status">{unsaved ? <><LoaderCircle className="spin" size={16}/>{c.saving}</> : <><Check size={16}/>{c.saved}</>}</p>}<dl className="cs-result-grid"><div><dt>{c.answered}</dt><dd>{session.outcomes.length}</dd></div><div><dt>{c.correctCount}</dt><dd>{correctCount}</dd></div><div><dt>{c.wrongCount}</dt><dd>{wrongCount}</dd></div></dl><div className="cs-actions"><button className="button" onClick={closeSession}><RotateCcw size={16}/>{c.restart}</button>{wrongCount > 0 && <button className="button" onClick={() => start(false, true)}>{c.retryWrong}</button>}{!isPreview && <Link className="button primary" href={nextHref} onClick={event => leave(event, nextHref)}>{c[nextMode]}<ArrowRight size={17}/></Link>}</div></div></section>;}
   if (!card || !content) return <CardError retry={() => setSession(null)}/>;
   return <section className="cs-study"><div className="cs-study-top">{exit}<span>{c[mode]} <strong>{session.index + 1} / {session.queue.length}</strong></span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<progress className="cs-progress" value={session.index} max={session.queue.length} aria-label={c.progress}/><header className="cs-session-title"><h1>{title}</h1><CardBuddy character={character} happy={feedback?.correct}/></header>
-    <div className="cs-flashcard"><div className="cs-card-toolbar"><span className="cs-tag">{c[mode]}</span><div><button className="icon-button" aria-label={stars.includes(card.id) ? c.unstar : c.star} aria-pressed={stars.includes(card.id)} onClick={() => void toggleStar()} disabled={starBusy}><Star size={21} fill={stars.includes(card.id) ? 'currentColor' : 'none'}/></button>{canSpeak && <button className="icon-button" aria-label={c.listen} onClick={speak}><Volume2 size={22}/></button>}</div></div>
+    <div className="cs-flashcard"><div className="cs-card-toolbar"><span className="cs-tag">{c[mode]}</span><div><button className="icon-button" aria-label={stars.includes(card.id) ? c.unstar : c.star} aria-pressed={stars.includes(card.id)} onClick={() => void toggleStar()} disabled={starBusy}><Star size={21} fill={stars.includes(card.id) ? 'currentColor' : 'none'}/></button>{canSpeak && <button className="icon-button" aria-label={c.listen} onClick={() => speak()}><Volume2 size={22}/></button>}</div></div>
       <p className="cs-prompt" lang={/[가-힣]/.test(content.prompt) ? 'ko' : 'en'}>{content.prompt}</p>
       {mode === 'memorize' && <div className={`cs-card-back ${revealed || feedback ? 'is-revealed' : ''}`}>{revealed || feedback ? <><p className="cs-expected">{content.expected}</p>{card.example && <p className="cs-example">{card.example}</p>}</> : <button className="cs-reveal" onClick={() => setRevealed(true)}><BookOpen size={23}/>{c.reveal}<small>Space</small></button>}</div>}
       {mode === 'recall' && !sentenceRecall && <><p className="cs-instruction">{c.choose}</p><div className="cs-choices">{choices.map((choice, index) => <button key={choice} className={`cs-choice ${feedback && normalize(choice) === normalize(feedback.expected) ? 'is-correct' : ''}`} disabled={!!feedback} onClick={() => {setAnswer(choice); check(choice);}}><kbd>{index + 1}</kbd><span>{choice}</span></button>)}</div></>}
@@ -249,7 +258,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     </div>
     {(error || starError) && <div className="cs-alert" role="alert"><p>{error || c.saveError}</p></div>}{saveNotice}
     <div className="cs-study-controls">{feedback ? <><span className="cs-muted">{!answersLost && <><Check size={16}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</>}</span><button className="button primary" autoFocus onKeyDown={event => {if (event.repeat) event.preventDefault();}} onClick={next}>{c.next}<ChevronRight size={18}/></button></> : mode === 'memorize' ? revealed ? <><button className="button" onClick={again}><RotateCcw size={17}/>{c.again}</button><button className="button primary" onClick={() => check('')}><Check size={17}/>{c.remember}</button></> : <button className="button primary" onClick={() => setRevealed(true)}>{c.reveal}</button> : (mode === 'spell' || sentenceRecall) ? <button className="button primary" disabled={sentenceRecall ? selectedTokens.length !== tokens.length : !answer.trim()} onClick={() => check(sentenceRecall ? selectedTokens.map(id => tokens.find(item => item.id === id)?.text).join(' ') : answer)}>{c.check}<Check size={17}/></button> : null}</div>
-    <div className="cs-study-foot"><p><Keyboard size={16}/>{c.keyboard}</p>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}><option value={0.7}>0.7×</option><option value={1}>1×</option><option value={1.2}>1.2×</option></select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
+    <div className="cs-study-foot"><p><Keyboard size={16}/>{c.keyboard}</p><CardSoundSettings/>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}>{[...new Set([0.5, 0.7, 1, 1.2, 1.5, speed])].sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
   </section>;
 }
 
@@ -257,4 +266,83 @@ function CardsLocalTestPreview({title, cards, onClose}: {title: string; cards: C
   const {copy: c} = useCardCopy(); const [answers, setAnswers] = useState<Record<string, string>>({}), [submitted, setSubmitted] = useState(false);
   const correct = cards.filter(card => [card.back, ...card.alternatives].some(value => normalize(value) === normalize(answers[card.id] || ''))).length;
   return <section className="cs-study"><div className="cs-study-top"><h2>{title} · {c.test}</h2>{onClose && <button className="button" onClick={onClose}><X size={16}/>{c.closePreview}</button>}</div><p className="cs-preview-note">{c.preview}</p><form onSubmit={event => {event.preventDefault(); setSubmitted(true);}}>{cards.map((card, index) => <div className="cs-test-question" key={card.id}><label htmlFor={`preview-${card.id}`}>{index + 1}. {card.front}</label><input id={`preview-${card.id}`} required disabled={submitted} value={answers[card.id] || ''} onChange={event => setAnswers(value => ({...value, [card.id]: event.target.value}))} autoComplete="off"/>{submitted && <p>{c.correctAnswer}: {card.back}</p>}</div>)}{submitted ? <div className="cs-finish"><h3>{Math.round(correct / Math.max(1, cards.length) * 100)} {c.score}</h3><p>{c.testPreview}</p><button type="button" className="button" onClick={() => {setSubmitted(false); setAnswers({});}}>{c.restart}</button></div> : <button className="button primary" type="submit" disabled={!cards.length}>{c.testSubmit}</button>}</form></section>;
+}
+
+/**
+ * One review session: today's due cards in one set, or missed cards gathered from several sets. Answers grade here at once and go to each set's
+ * study endpoint with review:true in batches, so the server re-grades them, moves the review dates and clears reviewed misses. Nothing counts toward required study.
+ */
+export function CardsReviewSession({items, title, intro, backHref, onReload}: {items: CardReviewItem[]; title: string; intro: string; backHref: string; onReload?: () => void}) {
+  const {copy: c} = useCardCopy(), r = useReviewCopy();
+  const [index, setIndex] = useState(0), [answer, setAnswer] = useState(''), [feedback, setFeedback] = useState<{correct: boolean; expected: string} | null>(null), [outcomes, setOutcomes] = useState<boolean[]>([]);
+  const [unsaved, setUnsaved] = useState(0), [saving, setSaving] = useState(false), [failed, setFailed] = useState(false), [dropped, setDropped] = useState(false);
+  const outboxes = useRef(new Map<string, StudyOutbox>()), flushing = useRef<Promise<void> | null>(null), inputRef = useRef<HTMLInputElement>(null), sound = useCardSound();
+  const item = items[index] as CardReviewItem | undefined, finished = index >= items.length;
+  const content = item ? textFor(item.card, item.direction) : null;
+  const size = () => [...outboxes.current.values()].reduce((total, outbox) => total + studyOutboxSize(outbox), 0);
+  const post = (distributionId: string, batch: StudyBatch, keepalive = false) => cardRequest(`/api/cards/distributions/${distributionId}/study`, {method: 'POST', keepalive, body: JSON.stringify({...batch, review: true})});
+  const pump = useCallback(() => {
+    if (flushing.current) return flushing.current;
+    flushing.current = (async () => {
+      setSaving(true); setFailed(false);
+      try {
+        // Batches sealed while this loop runs (the last answer, say) are picked up before it ends.
+        for (let next = [...outboxes.current].find(([, outbox]) => outbox.sealed.length); next; next = [...outboxes.current].find(([, outbox]) => outbox.sealed.length)) {
+          const [distributionId, {sealed: [batch]}] = next;
+          // A closed set, a passed deadline or changed cards will never take these answers; drop them and say so instead of retrying forever.
+          await post(distributionId, batch).catch(cause => {if (!(cause instanceof Error && (cause.message === 'DUE_CLOSED' || cause.message === 'NOT_FOUND' || staleStudyBatch(cause.message)))) throw cause; setDropped(true);});
+          outboxes.current.set(distributionId, settleStudyBatch(outboxes.current.get(distributionId)!, batch.requestId));
+        }
+      } catch {setFailed(true);} finally {flushing.current = null; setSaving(false); setUnsaved(size());}
+    })();
+    return flushing.current;
+  }, []);
+  const sealAll = useCallback(() => {for (const [distributionId, outbox] of outboxes.current) outboxes.current.set(distributionId, sealStudyBuffer(outbox, 'recall', newRequestId));}, []);
+  useEffect(() => {
+    const sendNow = () => {if (!size()) return; sealAll(); for (const [distributionId, outbox] of outboxes.current) for (const batch of keepaliveStudyBatches(outbox)) void post(distributionId, batch, true).catch(() => {});};
+    const hidden = () => {if (document.visibilityState === 'hidden') sendNow();};
+    window.addEventListener('pagehide', sendNow); document.addEventListener('visibilitychange', hidden);
+    return () => {window.removeEventListener('pagehide', sendNow); document.removeEventListener('visibilitychange', hidden); sendNow();};
+  }, [sealAll]);
+  useEffect(() => {inputRef.current?.focus();}, [index]);
+  function check(value: string) {
+    if (!item || feedback || !value.trim()) return;
+    const {correct, expected} = gradeCardAnswer(item.card, 'recall', item.direction, value);
+    const outbox = addStudyResponse(outboxes.current.get(item.distributionId) ?? emptyStudyOutbox(), {cardId: item.card.id, answer: value, direction: item.direction}, 'recall', newRequestId);
+    outboxes.current.set(item.distributionId, outbox); setUnsaved(size());
+    setFeedback({correct, expected}); setOutcomes(previous => [...previous, correct]); sound.play(correct ? 'good' : 'bad');
+    if (outbox.sealed.length) void pump();
+  }
+  function next() {
+    if (!feedback) return;
+    setFeedback(null); setAnswer(''); setIndex(value => value + 1);
+    if (index + 1 >= items.length) {sealAll(); void pump();}
+  }
+  useEffect(() => {
+    function key(event: KeyboardEvent) {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || finished || !item) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('button,a,select,textarea') || target.tagName === 'INPUT' && event.key !== 'Enter') return;
+      if (event.key === 'Enter' && feedback) {event.preventDefault(); next();}
+      if (/^[1-9]$/.test(event.key) && !feedback && item.choices?.[Number(event.key) - 1]) check(item.choices[Number(event.key) - 1]);
+    }
+    window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
+  });
+  const exit = <Link className="cs-back" href={backHref}><ArrowLeft size={16}/>{c.exit}</Link>;
+  const status = dropped ? <p className="cs-alert" role="alert">{r.reviewDropped}</p> : failed ? <div className="cs-alert" role="alert"><p>{c.saveError}</p><button className="button" disabled={saving} onClick={() => {sealAll(); void pump();}}><RefreshCw size={16}/>{c.retrySave}</button></div> : null;
+  if (finished) {
+    const right = outcomes.filter(Boolean).length;
+    return <section className="cs-study"><div className="cs-study-top">{exit}</div><div className="cs-finish"><CardBuddy happy/><CheckCircle2 size={34}/><h1>{r.reviewDone}</h1><p>{r.reviewDoneBody}</p>{status ?? <p className="cs-save-status" role="status">{unsaved || saving ? <><LoaderCircle className="spin" size={16}/>{c.saving}</> : <><Check size={16}/>{c.saved}</>}</p>}<dl className="cs-result-grid"><div><dt>{c.answered}</dt><dd>{outcomes.length}</dd></div><div><dt>{c.correctCount}</dt><dd>{right}</dd></div><div><dt>{c.wrongCount}</dt><dd>{outcomes.length - right}</dd></div></dl><div className="cs-actions"><Link className="button" href={backHref}><ArrowLeft size={16}/>{c.back}</Link>{onReload && <button className="button primary" disabled={!!unsaved || saving} onClick={onReload}><RotateCcw size={16}/>{r.reviewAgain}</button>}</div></div></section>;
+  }
+  if (!item || !content) return null;
+  return <section className="cs-study"><div className="cs-study-top">{exit}<span>{title} <strong>{index + 1} / {items.length}</strong></span></div><progress className="cs-progress" value={index} max={items.length} aria-label={c.progress}/><header className="cs-session-title"><div><h1>{title}</h1>{index === 0 && <p className="cs-muted">{intro}</p>}</div><CardBuddy happy={feedback?.correct}/></header>
+    <div className="cs-flashcard"><div className="cs-card-toolbar"><span className="cs-tag">{c.recall}</span><span className="cs-review-from">{r.reviewSet} · {item.title}</span></div>
+      <p className="cs-prompt" lang={/[가-힣]/.test(content.prompt) ? 'ko' : 'en'}>{content.prompt}</p>
+      {item.choices ? <><p className="cs-instruction">{c.choose}</p><div className="cs-choices">{item.choices.map((choice, position) => <button key={choice} className={`cs-choice ${feedback && normalize(choice) === normalize(feedback.expected) ? 'is-correct' : ''}`} disabled={!!feedback} onClick={() => {setAnswer(choice); check(choice);}}><kbd>{position + 1}</kbd><span>{choice}</span></button>)}</div></>
+        : <form onSubmit={event => {event.preventDefault(); check(answer);}}><label htmlFor="card-review-answer">{c.answer}</label><input id="card-review-answer" ref={inputRef} className="cs-answer" value={answer} maxLength={STUDY_ANSWER_LIMIT} onChange={event => setAnswer(event.target.value)} disabled={!!feedback} placeholder={r.typeAnswer} autoComplete="off" autoCapitalize="none" spellCheck={false}/></form>}
+      {feedback && <div className={`cs-feedback ${feedback.correct ? 'is-correct' : 'is-incorrect'}`} role="status"><strong>{feedback.correct ? <CheckCircle2 size={20}/> : <RotateCcw size={20}/>} {feedback.correct ? c.correct : c.incorrect}</strong><p>{c.correctAnswer}: <b>{feedback.expected}</b></p></div>}
+    </div>
+    {status}
+    <div className="cs-study-controls">{feedback ? <><span className="cs-muted"><Check size={16}/>{unsaved ? c.saveQueued : c.saved}</span><button className="button primary" autoFocus onClick={next}>{c.next}<ChevronRight size={18}/></button></> : !item.choices && <button className="button primary" disabled={!answer.trim()} onClick={() => check(answer)}>{c.check}<Check size={17}/></button>}</div>
+  </section>;
 }

@@ -1,0 +1,18 @@
+{
+  "testWait": "You can study again once you finish the test.",
+  "testWaitBody": "While a test is running, card backs, study, review and games take a short break. They open again as soon as you hand the test in.",
+  "testGo": "Go to the test",
+  "minutesLeft": "About {minutes} min left",
+  "minutesNone": "No required study left",
+  "dayTotal": "About {minutes} min left today",
+  "dayHeavy": "That's a lot for today. Shall we start with the nearest deadline?",
+  "dayOrder": "Nearest deadline first",
+  "minutesShort": "about {minutes} min",
+  "estimateNote": "A rough guess: 4 s per card to memorize, 6 s to recall, 10 s to spell, and 15 s per test question.",
+  "publishEstimate": "Each student needs about {minutes} min to finish.",
+  "publishHeavy": "That's over 30 minutes. You could spread it over a few days or ask for a little less.",
+  "sound": "Sound",
+  "soundEffects": "Sound effects",
+  "autoSpeech": "Read cards aloud automatically",
+  "soundHint": "Remembered on this device only. The card's speaker button always plays when tapped."
+}

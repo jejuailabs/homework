@@ -195,10 +195,24 @@ export function confirmationProblem(record: ConfirmationRecord | null, ctx: {uid
   return null;
 }
 
-/** Real names typed into free text (titles, notes, bodies) are swapped for aliases before they leave, longest name first. */
+const COMPOUND_SURNAMES = new Set(['남궁', '황보', '제갈', '사공', '선우', '서문', '독고', '동방', '어금', '망절', '소봉']);
+/**
+ * The given name a teacher would type alone: a Hangul name of 3-4 syllables without its surname (김민준 → 민준, 남궁민수 → 민수,
+ * 이하은별 → 하은별). A 2-syllable name's given name is one syllable, too common a piece of text to mask, so it has none.
+ */
+export function givenName(name: string): string | null {
+  const value = name.trim();
+  if (!/^[가-힣]{3,4}$/.test(value)) return null;
+  return value.length === 4 && COMPOUND_SURNAMES.has(value.slice(0, 2)) ? value.slice(2) : value.slice(1);
+}
+/**
+ * Real names typed into free text (titles, notes, bodies) are swapped for aliases before they leave, longest first.
+ * Both the full name and the given name alone (민준이 숙제) are masked. A name or given name two students share loses the number.
+ */
 export function maskNames(text: string, students: readonly {name: string; number: number}[]): string {
   const byName = new Map<string, Set<number>>();
-  for (const student of students) {const name = student.name.trim(); if (name.length >= 2) byName.set(name, (byName.get(name) ?? new Set()).add(student.number));}
+  const add = (token: string | null, number: number) => {if (token && token.length >= 2) byName.set(token, (byName.get(token) ?? new Set()).add(number));};
+  for (const student of students) {add(student.name.trim(), student.number); add(givenName(student.name), student.number);}
   let result = text;
   for (const name of [...byName.keys()].sort((a, b) => b.length - a.length)) {
     const numbers = [...byName.get(name)!];

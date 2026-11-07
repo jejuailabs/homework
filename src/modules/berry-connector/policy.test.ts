@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, canonicalJson, checkedByDefault, clientRegistration, confirmationProblem, connectorAllowed, deriveEvents, maskNames, mergeEvents, parseScopes, payloadHash, toolAllowed, CONFIRM_SECONDS, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
+import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, canonicalJson, checkedByDefault, clientRegistration, confirmationProblem, connectorAllowed, deriveEvents, givenName, maskNames, mergeEvents, parseScopes, payloadHash, toolAllowed, CONFIRM_SECONDS, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
 
 assert.deepEqual(accessConfig(undefined), {mode: 'off', teacherUids: []});
 assert.deepEqual(accessConfig({mode: 'allowlist', teacherUids: ['t1', 'bad/uid', 7]}), {mode: 'allowlist', teacherUids: ['t1']});
@@ -124,4 +124,9 @@ assert.match(confirmationProblem(record, {...ctx, scopes: [...ctx.scopes]}, t0, 
 // Names typed into free text leave as aliases
 const people = [{name: '김민준', number: 1}, {name: '김민준호', number: 2}, {name: '이서연', number: 3}, {name: '이서연', number: 9}, {name: '김', number: 4}];
 assert.equal(maskNames('김민준호와 김민준, 이서연 상담 김밥', people), '학생 02와 학생 01, 학생 상담 김밥', 'longest first; shared names lose the number; one-letter names are left alone');
+// Given names alone are masked too; a one-syllable given name is not.
+const named = [{name: '김민준', number: 1}, {name: '김민준호', number: 2}, {name: '이서연', number: 3}, {name: '박서연', number: 9}, {name: '남궁민수', number: 5}, {name: '김결', number: 6}, {name: 'Alex Kim', number: 7}];
+assert.equal(maskNames('민준이가 서연이랑 민준호에게 줬어요', named), '학생 01이가 학생이랑 학생 02에게 줬어요', 'given names are masked, longest first; a shared given name loses the number');
+assert.equal(maskNames('민수 결과 결석 Alex Kim', named), '학생 05 결과 결석 학생 07', 'a compound surname leaves its given name; a one-syllable given name stays');
+assert.deepEqual(['김민준', '남궁민수', '이하은별', '김결', 'Alex', '김a준'].map(givenName), ['민준', '민수', '하은별', null, null, null], 'given names of Hangul names of three or four syllables');
 console.log('berry-connector policy tests passed');

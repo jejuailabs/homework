@@ -1,0 +1,17 @@
+{
+  "defaults": "Class study defaults", "defaultsHint": "New distributions start from these values. You can still change them each time, and sets you already gave out stay as they are.",
+  "required": "Required", "amount": "Amount", "percentHint": "100% is one round of the chosen cards, 200% is two. Off means optional study.",
+  "speechRate": "Default read-aloud speed", "speechDefault": "Default (1×)", "speechHint": "Students can change it on the study screen.", "afterDueHint": "Used only when a distribution has a due date.",
+  "allClasses": "Use for all my classes", "allClassesHint": "Other classes keep their own lesson notes and order.",
+  "savedDefaults": "Defaults saved.", "savedAll": "Saved for {n} classes.",
+  "applyExisting": "Also apply to current sets", "applyExistingHint": "This changes the settings of {n} active {type} in this class. Each one keeps its card range and study records. Tests in progress are graded with the settings they started with.",
+  "applyConfirm": "Change {n}", "applyDone": "Changed {n} distributions.", "applyFailed": "{n} could not be changed. Please try again.", "noExisting": "No active {type} in this class.", "applying": "Changing…",
+  "saveFirst": "Save the defaults first.",
+  "filled": "Filled in from your class study defaults. You can change them for this distribution only.",
+  "plan": "Lesson notes & order", "planHint": "Put notes between rows and set the order. Students see the same order and notes. Hidden rows are not shown to students, but their records stay.",
+  "addMemo": "Add note", "memoLabel": "Lesson note", "memoPlaceholder": "e.g. 3/12 lesson: Unit 1-2", "removeMemo": "Remove note",
+  "moveUp": "Move up", "moveDown": "Move down", "drag": "Drag to move", "highlight": "Highlight", "unhighlight": "Remove highlight", "hide": "Hide from students", "show": "Show to students",
+  "hiddenTag": "Hidden from students", "newTag": "New", "inactiveTag": "Closed", "savePlan": "Save order", "memoLimit": "Up to {n} notes.", "emptyMemo": "A note is empty. Write something or remove it.",
+  "unsaved": "You have unsaved changes. Close anyway?", "noRows": "No sets given to this class yet. You can add notes first.",
+  "teacherPick": "Teacher's pick", "memoRole": "Note from your teacher"
+}

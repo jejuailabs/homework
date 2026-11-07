@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
+import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, parseSpeechRate, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
 import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, staleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
@@ -361,4 +361,12 @@ test('a card sharing the prompt is never a wrong choice, in any direction', () =
 test('only refusals that can never succeed drop a study batch', () => {
   for (const code of ['STUDY_DIRECTION', 'STUDY_CARD', 'REQUEST_CONFLICT']) assert.equal(staleStudyBatch(code), true);
   for (const code of ['INTERNAL_ERROR', 'REQUEST_FAILED', 'DUE_CLOSED', 'UNAUTHENTICATED', 'Failed to fetch']) assert.equal(staleStudyBatch(code), false);
+});
+
+test('speech rate default is 0.5-1.5 in tenths, null for the student choice, and PATCH can change it', () => {
+  assert.equal(parseSpeechRate(undefined), null); assert.equal(parseSpeechRate(null), null); assert.equal(parseSpeechRate(0.7), 0.7); assert.equal(parseSpeechRate(1.2), 1.2);
+  for (const bad of [0.4, 1.6, 0.75, '1', Number.NaN]) assert.throws(() => parseSpeechRate(bad));
+  const current = { cardCount: 4, requiredModes: parseRequirements(undefined, 4), test: parseTestSettings(undefined, 4), dueAt: null };
+  assert.deepEqual(distributionPatch({ speechRate: 0.5 }, current), { speechRate: 0.5 });
+  assert.deepEqual(distributionPatch({ speechRate: null }, current), { speechRate: null });
 });

@@ -1,9 +1,15 @@
 {
-  "open": "가져오기·AI 초안", "title": "카드 가져오기", "words": "단어만 입력", "text": "단어장 텍스트", "table": "표 붙여넣기",
-  "wordsHint": "단어를 한 줄에 하나씩 넣거나 쉼표로 나눠 주세요. 뜻과 예문 초안을 만들어 드려요. 학생 이름 같은 개인정보는 넣지 말아 주세요.", "wordsPlaceholder": "apple\nlook after\nbeautiful",
-  "textHint": "단어장 내용을 그대로 붙여넣어 주세요. 번호, 단어, 뜻, 예문이 섞여 있어도 카드로 나눠 드려요. 학생 이름 같은 개인정보는 넣지 말아 주세요.", "textPlaceholder": "1. apple 사과\nI ate an apple.\n2. run (v) 달리다",
-  "level": "수준", "elementary": "초등", "middle": "중등", "high": "고등", "generate": "초안 만들기", "stop": "멈추기", "retry": "다시 시도", "resume": "이어서 만들기", "progress": "초안을 만들고 있어요. 묶음",
+  "open": "가져오기·AI 초안", "title": "카드 가져오기", "words": "단어만 입력", "text": "단어장 텍스트", "table": "표·엑셀", "wordsHint": "단어를 한 줄에 하나씩 넣거나 쉼표로 나눠 주세요. 뜻과 예문 초안을 만들어 드려요. 학생 이름 같은 개인정보는 넣지 말아 주세요.",
+  "wordsPlaceholder": "apple\nlook after\nbeautiful", "textHint": "단어장 내용을 그대로 붙여넣어 주세요. 번호, 단어, 뜻, 예문이 섞여 있어도 카드로 나눠 드려요. 학생 이름 같은 개인정보는 넣지 말아 주세요.", "textPlaceholder": "1. apple 사과\nI ate an apple.\n2. run (v) 달리다", "level": "수준", "elementary": "초등", "middle": "중등",
+  "high": "고등", "generate": "초안 만들기", "stop": "멈추기", "retry": "다시 시도", "resume": "이어서 만들기", "progress": "초안을 만들고 있어요. 묶음",
   "notice": "AI 초안이에요. 교재와 맞는지 확인해 주세요.", "draftCards": "초안 카드", "add": "추가", "remove": "이 줄 지우기", "duplicates": "이미 있거나 겹치는 단어라 뺐어요:", "addHint": "추가를 눌러야 편집 화면에 들어가요. 세트 저장은 편집 화면에서 따로 해요.",
-  "noInput": "단어나 단어장 내용을 넣어 주세요.", "wordTooLong": "단어는 80자까지 넣을 수 있어요. 긴 줄을 확인해 주세요.", "textTooLong": "단어장 내용은 8,000자까지 넣을 수 있어요. 나눠서 만들어 주세요.", "nothingFound": "카드로 만들 내용을 찾지 못했어요. 내용을 확인해 주세요.", "fillMissing": "앞면이나 뒷면이 빈 줄을 채우거나 지워 주세요.",
-  "aiOff": "지금은 AI 초안을 쓸 수 없어요. 직접 입력하거나 나중에 다시 시도해 주세요. 입력한 내용은 그대로 있어요.", "aiBudget": "AI 사용 한도에 도달했어요. 잠시 뒤 다시 시도해 주세요. 입력한 내용은 그대로 있어요.", "aiTimeout": "AI 응답이 늦어지고 있어요. 다시 시도해 주세요. 입력한 내용은 그대로 있어요.", "aiBusy": "같은 내용의 초안을 만들고 있어요. 잠시 기다렸다가 다시 시도해 주세요.", "aiFailed": "초안을 만들지 못했어요. 다시 시도해 주세요. 입력한 내용은 그대로 있어요."
+  "noInput": "단어나 단어장 내용을 넣어 주세요.", "wordTooLong": "단어는 80자까지 넣을 수 있어요. 긴 줄을 확인해 주세요.", "textTooLong": "단어장 내용은 8,000자까지 넣을 수 있어요. 나눠서 만들어 주세요.", "nothingFound": "카드로 만들 내용을 찾지 못했어요. 내용을 확인해 주세요.", "fillMissing": "앞면이나 뒷면이 빈 줄을 채우거나 지워 주세요.", "aiOff": "지금은 AI 초안을 쓸 수 없어요. 직접 입력하거나 나중에 다시 시도해 주세요. 입력한 내용은 그대로 있어요.",
+  "aiBudget": "AI 사용 한도에 도달했어요. 잠시 뒤 다시 시도해 주세요. 입력한 내용은 그대로 있어요.", "aiTimeout": "AI 응답이 늦어지고 있어요. 다시 시도해 주세요. 입력한 내용은 그대로 있어요.", "aiBusy": "같은 내용의 초안을 만들고 있어요. 잠시 기다렸다가 다시 시도해 주세요.", "aiFailed": "초안을 만들지 못했어요. 다시 시도해 주세요. 입력한 내용은 그대로 있어요.", "photo": "사진", "passage": "본문에서 뽑기",
+  "topic": "주제로 만들기", "merge": "내 세트 합치기", "photoHint": "단어장이나 교과서 단어 목록 사진을 고르거나 찍어 주세요. 사진 속 단어·뜻·예문을 읽어 초안으로 만들어 드려요. 한 번에 5장까지 돼요.", "photoPick": "사진 고르기·찍기", "photoPrivacy": "사진은 글자를 읽는 데만 쓰고 저장하지 않아요. 학생 얼굴이나 이름이 찍히지 않게 해 주세요.", "photoRemove": "사진 빼기",
+  "photoLimit": "사진은 한 번에 5장까지 고를 수 있어요.", "photoType": "사진 파일(JPG, PNG, HEIC)만 고를 수 있어요.", "photoSize": "20MB 이하 사진을 골라 주세요.", "photoDecode": "이 사진을 열지 못했어요. JPG나 PNG로 바꿔서 다시 골라 주세요. HEIC는 일부 브라우저에서만 열려요.", "photoReading": "사진을 줄이고 있어요…", "noPhoto": "사진을 먼저 골라 주세요.",
+  "passageHint": "영어 본문을 붙여넣으면 수준에 맞는 핵심 단어와 뜻을 골라 드려요. 예문은 본문 문장을 그대로 써요. 남길 단어만 체크해 주세요.", "passagePlaceholder": "Last summer, Mina visited a small village by the sea. She helped the farmers harvest potatoes…", "noPassage": "영어 본문을 넣어 주세요.", "passageTooLong": "본문은 8,000자까지 넣을 수 있어요. 나눠서 뽑아 주세요.", "topicHint": "주제와 수준, 카드 수를 정하면 단어 세트 초안을 만들어 드려요.", "topicLabel": "주제",
+  "topicPlaceholder": "날씨, 학교생활, 동물…", "noTopic": "주제를 100자 안으로 적어 주세요.", "count": "카드 수", "countRange": "카드 수는 1~30장으로 골라 주세요.", "tableHint": "엑셀에서 칸을 복사해 붙여넣거나 CSV·TSV·엑셀(.xlsx) 파일을 가져오세요. 열 순서: 앞면, 뒷면, 예문(선택), 대체 정답(선택, | 로 구분). 엑셀은 첫 시트를 읽고, 첫 줄에 단어·뜻·예문·대체 정답 제목이 있으면 제목으로 열을 찾아요. 최대 200장.", "importFile": "CSV·TSV·엑셀 가져오기",
+  "fileError": "250KB 이하 CSV·TSV 파일이나 5MB 이하 엑셀(.xlsx) 파일을 골라 주세요.", "xlsxError": "엑셀 파일을 읽지 못했어요. .xlsx로 저장했는지 확인해 주세요. 예전 .xls 파일은 읽지 못해요.", "mergeHint": "내 다른 세트의 카드를 이 세트 뒤에 붙여요. 원래 세트는 그대로예요. 앞면이 이미 있는 카드는 빼요.", "mergePick": "합칠 세트", "mergeChoose": "세트를 골라 주세요", "mergeEmpty": "합칠 다른 세트가 없어요.",
+  "mergeLoading": "세트를 불러오고 있어요", "mergeReady": "붙일 카드", "mergeAdd": "카드 붙이기", "mergeNothing": "새로 붙일 카드가 없어요. 모두 이미 있는 단어예요.", "mergeFailed": "세트를 불러오지 못했어요. 다시 시도해 주세요.", "archived": "보관",
+  "keep": "남기기", "keepAll": "모두 체크", "keepNone": "모두 해제", "noneKept": "남길 카드를 하나 이상 체크해 주세요.", "keptCount": "체크한 카드"
 }

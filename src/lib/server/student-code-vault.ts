@@ -23,6 +23,13 @@ function vaultKey(): Buffer {
     return key = createHash('sha256').update('homework-student-code-vault-v1\0').update(credential.private_key).digest();
   } catch {throw new ApiError(503, '학생 코드 보관 설정을 확인해 주세요.', 'CODE_VAULT_UNAVAILABLE');}
 }
+/**
+ * A key for another server purpose, derived from the vault key (STUDENT_CODE_ENCRYPTION_KEY, or the service account) and never
+ * the vault key itself. Used to HMAC values that must not be reversible from a stored document ID, such as a visitor address.
+ */
+export function derivedServerKey(label: string): Buffer {
+  return createHash('sha256').update(`homework-derived-key-v1\0${label}\0`).update(vaultKey()).digest();
+}
 export function studentCodeHash(code: string): string {return createHash('sha256').update(code).digest('hex');}
 export function studentCodeBinding(classId: string, studentId: string, hash: string): string {return JSON.stringify([classId, studentId, hash]);}
 export function sealStudentCode(code: string, binding: string, encryptionKey = vaultKey()): Envelope {

@@ -6,8 +6,9 @@ const label = (number: number) => `학생 ${String(number).padStart(2, '0')}`;
 const summary = classCardProgress([
   {number: 7, unfinished: true, goalReached: false, bestScore: null, mistakes: {a: 3, b: 1, gone: 9}},
   {number: 2, unfinished: true, goalReached: false, bestScore: 60, mistakes: {a: 1, b: 2, c: 1}},
-  {number: 11, unfinished: false, goalReached: true, bestScore: 90, late: true},
+  {number: 11, unfinished: false, goalReached: true, bestScore: 90, late: true, mastery: 50, reviewDue: 2},
 ], cards, label);
+assert.deepEqual([summary.average_mastery, summary.review_due_students, summary.review_due_cards], [17, 1, 2], 'mastery is a class average; old records without it count as 0; due reviews are counts');
 assert.equal(summary.students, 3);
 assert.equal(summary.finished, 1);
 assert.equal(summary.unfinished, 2);
@@ -20,6 +21,7 @@ assert.deepEqual(summary.most_missed, [{word: 'apple', meaning: '사과', misses
 
 const empty = classCardProgress([], cards, label);
 assert.equal(empty.average_best_score, null);
+assert.equal(empty.average_mastery, null);
 assert.deepEqual(empty.most_missed, []);
 const many = classCardProgress([{number: 1, unfinished: false, goalReached: false, bestScore: null, mistakes: Object.fromEntries('abcdefg'.split('').map(id => [id, 1]))}], 'abcdefg'.split('').map(id => ({id, front: id, back: id})), label);
 assert.equal(many.most_missed.length, 5, 'the list stays short');
