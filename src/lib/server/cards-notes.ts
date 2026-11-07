@@ -17,7 +17,8 @@ const json = (value: unknown, status = 200) => NextResponse.json(value, { status
 const now = () => new Date().toISOString();
 const digest = (...parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 const settingsRef = (classId: string) => db().doc(`classes/${id(classId, '우리 반')}/settings/cards`);
-export const noteThreadRef = (classId: string, studentId: string) => db().doc(`cardNotes/${id(classId)}_${id(studentId)}`);
+/** One thread per class, student and class owner: a new owner of the class starts a new thread and never reads or changes the old one. */
+export const noteThreadRef = (classId: string, studentId: string, ownerUid: string) => db().doc(`cardNotes/${id(classId)}_${id(studentId)}_${digest('note-owner', ownerUid).slice(0, 16)}`);
 const noteOf = (snap: FirebaseFirestore.DocumentSnapshot): CardNote => ({ id: snap.id, from: snap.data()!.from, text: snap.data()!.text, createdAt: snap.data()!.createdAt, read: snap.data()!.read === true });
 
 async function ownedClass(ctx: Context, classId: string) {
@@ -51,9 +52,10 @@ async function markRead(thread: FirebaseFirestore.DocumentReference, from: 'teac
 async function send(ctx: Context, classId: string, studentId: string, ownerUid: string, from: 'teacher' | 'student', input: Data) {
   const text = noteText(input.text), requestId = id(input.requestId, '요청 ID');
   if (!text) throw new ApiError(400, '쪽지는 1~500자로 써 주세요.', 'NOTE_TEXT');
-  const thread = noteThreadRef(classId, studentId), messageRef = thread.collection('messages').doc(digest(ctx.uid, requestId).slice(0, 24)), stamp = now(), time = Date.parse(stamp);
+  const thread = noteThreadRef(classId, studentId, ownerUid), messageRef = thread.collection('messages').doc(digest(ctx.uid, requestId).slice(0, 24)), stamp = now(), time = Date.parse(stamp);
   return db().runTransaction(async tx => {
     const [saved, existing] = await Promise.all([tx.get(thread), tx.get(messageRef)]);
+    if (saved.exists && saved.data()?.ownerUid !== ownerUid) throw new ApiError(409, '쪽지를 다시 열어 주세요.', 'NOTE_OWNER');
     if (existing.exists) {
       if (existing.data()!.text !== text || existing.data()!.from !== from) throw new ApiError(409, '같은 요청 ID에 다른 쪽지를 보낼 수 없어요.', 'REQUEST_CONFLICT');
       return noteOf(existing);
@@ -88,7 +90,7 @@ export async function teacherNotes(ctx: Context, request: Request, classId: stri
   }
   const pupil = await db().doc(`classes/${cls.id}/students/${id(studentId, '학생')}`).get();
   if (!pupil.exists) throw new ApiError(404, '학생을 찾을 수 없어요.', 'NOT_FOUND');
-  const thread = noteThreadRef(cls.id, pupil.id);
+  const thread = noteThreadRef(cls.id, pupil.id, ctx.uid);
   if (messageId) {
     if (method !== 'DELETE') throw new ApiError(404, '카드놀이 기능을 찾을 수 없어요.', 'NOT_FOUND');
     const message = thread.collection('messages').doc(id(messageId, '쪽지'));
@@ -111,7 +113,7 @@ async function verifiedStudent(ctx: Context) {
 }
 /** GET/POST notes for the student: their own thread only. Reading marks the teacher's notes as read. */
 export async function studentNotes(ctx: Context, request: Request, input: Data) {
-  const me = await verifiedStudent(ctx), thread = noteThreadRef(me.classId, me.studentId);
+  const me = await verifiedStudent(ctx), thread = noteThreadRef(me.classId, me.studentId, me.ownerUid);
   const enabled = (await settingsRef(me.classId).get()).data()?.notesEnabled === true;
   if (request.method === 'POST') {
     if (!enabled) throw new ApiError(403, '선생님이 쪽지를 켜면 보낼 수 있어요.', 'NOTES_OFF');
@@ -126,7 +128,7 @@ export async function studentNotes(ctx: Context, request: Request, input: Data) 
 }
 /** For the student list: whether notes are on and how many teacher notes wait unread. Two small reads. */
 export async function studentNoteSummary(classId: string, studentId: string, ownerUid: string) {
-  const [settings, thread] = await db().getAll(settingsRef(classId), noteThreadRef(classId, studentId));
+  const [settings, thread] = await db().getAll(settingsRef(classId), noteThreadRef(classId, studentId, ownerUid));
   const mine = thread.exists && thread.data()?.ownerUid === ownerUid;
   return { enabled: settings.data()?.notesEnabled === true, unread: mine ? Number(thread.data()?.unreadStudent ?? 0) : 0, any: mine };
 }

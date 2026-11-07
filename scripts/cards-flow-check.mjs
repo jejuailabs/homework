@@ -1354,8 +1354,20 @@ async function notesSection() {
   same((await call(pupil(1), 'GET', ['notes'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'the deleted note is gone for the student too');
   const s2 = (await call(teacher, 'GET', [...base, 's2'])).data.notes;
   accepted(await call(teacher, 'DELETE', [...base, 's2', s2[0].id]), 'deleting one of several');
-  same((await db().doc('cardNotes/class-a_s2').get()).data().unreadTeacher, 0, 'counts are recounted after a delete');
+  same((await db().collection('cardNotes').where('classId', '==', 'class-a').where('studentId', '==', 's2').get()).docs[0].data().unreadTeacher, 0, 'counts are recounted after a delete');
   refused(await call(teacher, 'DELETE', [...base, 's2', 'missing']), 404, 'NOT_FOUND', 'an unknown note cannot be deleted');
+  // The class moves to another teacher (§34): the old conversation stays with the old owner and the student no longer sees it.
+  await db().doc('classes/class-a').update({ownerUid: stranger});
+  try {
+    same((await call(stranger, 'GET', base, undefined, {query: '?summary=1'})).data.unread, 0, 'the new owner sees no unread notes of the old owner');
+    same((await call(stranger, 'GET', [...base, 's1'])).data.notes, [], 'the new owner cannot open the old conversation');
+    same((await call(pupil(1), 'GET', ['notes'])).data.notes, [], 'the student no longer sees the old conversation');
+    accepted(await call(stranger, 'POST', [...base, 's1'], {text: '새 담임이에요', requestId: 'n-owner'}), 'the new owner starts a new conversation');
+    const threads = (await db().collection('cardNotes').where('classId', '==', 'class-a').where('studentId', '==', 's1').get()).docs.map(doc => doc.data().ownerUid).sort();
+    same(threads, [stranger, teacher].sort(), 'the old thread keeps its owner; the new owner has a thread of their own');
+    same((await call(pupil(1), 'GET', ['notes'])).data.notes.map(note => note.text), ['새 담임이에요'], 'the student sees only the new conversation');
+  } finally {await db().doc('classes/class-a').update({ownerUid: teacher});}
+  same((await call(teacher, 'GET', [...base, 's1'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'back with the old owner, the old conversation is intact');
 }
 sections.notes = notesSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
