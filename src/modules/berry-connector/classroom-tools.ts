@@ -21,6 +21,7 @@ import {cardEstimateMinutes} from '@/lib/cards-load';
 import {cardSetUnfinished} from '@/lib/cards-summary';
 import {orderWithPlan} from '@/lib/cards-class-plan';
 import {classSettingsRef, readClassSettings} from '@/lib/server/cards-class-settings';
+import {cardShareCounts} from '@/lib/server/cards-shares';
 import {cardsMenuVisible} from '@/lib/menu-visibility';
 import {BerryError, alias, maskNames, safeId} from './policy';
 import {classCardProgress} from './card-progress';
@@ -49,7 +50,7 @@ export const CLASSROOM_TOOLS: McpTool[] = [
   {name: 'get_review_status', scope: 'classroom:read', description: '복습하기: 최근 복습 목록(초안·발행·숨김)과 발행된 복습마다 참여한 학생 수.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'get_playground_status', scope: 'classroom:read', description: '말놀이터: 켜짐 여부와 설정, 이번 주 혼자하기·대결·꾸준함 순위(가명, 모두의 교실 기록 그대로), 진행 중인 실시간 방.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'get_points', scope: 'classroom:read', description: '보말(포인트): 학급 설정과 학생별 잔액·누적 적립(가명).', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
-  {name: 'list_card_sets', scope: 'classroom:read', description: '카드놀이: 학급에 배부한 카드 세트(제목·마감·마감 후 처리·진행 중 여부·대상 학생 수·전체 학생 배부 여부·필수 학습량·목표 점수·학생 한 명 예상 분 minutes)와 최근 진행 중인 세트의 학습 진도(마친 학생 수, 안 끝낸 학생은 학생 07처럼 가명, 지각 학생 수, 목표 달성 수, 평균 최고 점수, 많이 틀린 단어, 평균 숙련도 %, 오늘 날짜 복습이 남은 학생 수·카드 수). 선생님이 정한 순서(order), 학생에게 숨긴 줄(hidden_from_students), 강조(highlight), 줄 사이 차시 메모(memos)도 준다. 오래되었거나 멈춘 배부는 progress가 null이니 distribution_id로 하나만 다시 부른다.', inputSchema: {type: 'object', properties: {class_id: cls, distribution_id: {type: 'string', description: 'list_card_sets의 id. 이 배부 하나만 진도까지 본다'}}, additionalProperties: false}},
+  {name: 'list_card_sets', scope: 'classroom:read', description: '카드놀이: 학급에 배부한 카드 세트(제목·마감·마감 후 처리·진행 중 여부·대상 학생 수·전체 학생 배부 여부·필수 학습량·목표 점수·학생 한 명 예상 분 minutes)와 최근 진행 중인 세트의 학습 진도(마친 학생 수, 안 끝낸 학생은 학생 07처럼 가명, 지각 학생 수, 목표 달성 수, 평균 최고 점수, 많이 틀린 단어, 평균 숙련도 %, 오늘 날짜 복습이 남은 학생 수·카드 수). 선생님이 정한 순서(order), 학생에게 숨긴 줄(hidden_from_students), 강조(highlight), 줄 사이 차시 메모(memos)도 준다. 진도를 읽는 세트에는 parent_links(열린 학부모 링크 수 active·열린 적 있는 수 opened)와 progress.bomal_given(카드놀이 보말을 받은 학생 수 study·goal)도 수로만 준다. 오래되었거나 멈춘 배부는 progress가 null이니 distribution_id로 하나만 다시 부른다.', inputSchema: {type: 'object', properties: {class_id: cls, distribution_id: {type: 'string', description: 'list_card_sets의 id. 이 배부 하나만 진도까지 본다'}}, additionalProperties: false}},
   {name: 'get_speech', scope: 'classroom:read', description: '말하기·읽기 스튜디오: 학생별(가명) 읽기 정확도·추세·실수·다음 책 수준. 말한 글·녹음은 제외.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'list_class_tools', scope: 'classroom:read', description: 'Tools에서 쓰는 우리 반 캔버스와 투표(상태·마감·참여 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
   {name: 'list_neighborhood_packs', scope: 'classroom:read', description: 'Tools > 우리 동네 탐험에 저장한 수업 자료 목록: 제목·지역·학년·단원·연결 학급·저장한 날·AI 약도 여부, 최신순. 학급·기간(from·to)·낱말(제목·지역·단원)로 찾습니다. "지난달쯤"처럼 흐린 기간은 앞뒤 한 달을 넓혀 줍니다. 장소·출처는 get_neighborhood_pack으로 읽습니다.', inputSchema: {type: 'object', properties: {query: {type: 'string', description: '제목·지역·단원 낱말(띄어쓰기로 여러 개)'}, from: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, class_id: cls}, additionalProperties: false}},
@@ -226,14 +227,16 @@ const cardRow = (id: string, value: Data, className: unknown, students: Student[
 
 /** Who finished and which words tripped the class. Only current, active target students count; names never leave this function. */
 async function cardProgressOf(id: string, value: Data) {
-  const [students, states] = await Promise.all([roster(value.classId), db().collection('cardProgress').where('distributionId', '==', id).select('classId', 'studentId', 'counts', 'coverage', 'cardStates', 'attempts', 'bestScore', 'mistakes', 'lateAt').get()]);
+  const [students, states] = await Promise.all([roster(value.classId), db().collection('cardProgress').where('distributionId', '==', id).select('classId', 'studentId', 'counts', 'coverage', 'cardStates', 'attempts', 'bestScore', 'mistakes', 'lateAt', 'pointRewards').get()]);
   const targets = new Set<string>(value.targetStudentIds ?? []), records = new Map(states.docs.filter(doc => doc.data().classId === value.classId).map(doc => [doc.data().studentId as string, doc.data()]));
   const learners = students.filter(student => value.allStudents || targets.has(student.id)).map(student => {
     const record = records.get(student.id), progress = publicProgress(record, value.snapshot, value.requiredModes, value.test, {dueAt: value.dueAt ?? null, afterDue: cardAfterDue(value)});
     return {number: student.number, unfinished: cardSetUnfinished(value.requiredModes, progress), goalReached: progress.goalReached, bestScore: progress.bestScore, late: !!progress.lateAt, mistakes: record?.mistakes, mastery: progress.mastery, reviewDue: progress.reviewDue};
   });
   const summary = classCardProgress(learners, value.snapshot.cards, alias);
-  return {...summary, most_missed: summary.most_missed.map(row => ({...row, word: maskNames(String(row.word), students), meaning: maskNames(String(row.meaning), students)}))};
+  // 카드놀이 보말을 받은 학생 수(배부마다 필수 학습·목표 달성 한 번씩). 이름·금액 합계는 내보내지 않는다.
+  const paid = (kind: string) => [...records.values()].filter(record => record.pointRewards?.[kind]).length;
+  return {...summary, most_missed: summary.most_missed.map(row => ({...row, word: maskNames(String(row.word), students), meaning: maskNames(String(row.meaning), students)})), bomal_given: {study: paid('study'), goal: paid('goal')}};
 }
 
 /** How many students have a 복습 게임 record on this set, per game. Counts only: no names, scores or rankings leave here. */
@@ -247,7 +250,7 @@ async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: 
     const id = safeId(distributionId, '배부'), snap = await db().doc(`cardClassSets/${id}`).get();
     if (!snap.exists || snap.data()?.ownerUid !== ctx.uid) throw new BerryError('그 카드 배부를 찾지 못했어요.', 404, 'not_found');
     const value = snap.data()!, room = await ownedClass(ctx.uid, value.classId);
-    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value), game_players: await cardGamePlayers(id, value.classId)}]};
+    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value), game_players: await cardGamePlayers(id, value.classId), parent_links: await cardShareCounts(id, ctx.uid)}]};
   }
   const classes = classId === undefined ? await ownedClasses(ctx.uid) : [await ownedClass(ctx.uid, classId)];
   // The list stays light (no card text); only the few sets a teacher is likely asking about load their cards and progress.
@@ -263,7 +266,7 @@ async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: 
     const base = {...cardRow(row.id, row.value, row.className, row.students), order: row.position + 1, ...(row.hidden ? {hidden_from_students: true} : {}), ...(row.highlight ? {highlight: true} : {})};
     if (!detailed.has(row.id)) return {...base, progress: null};
     const full = await db().doc(`cardClassSets/${row.id}`).get();
-    return {...base, progress: await cardProgressOf(row.id, full.data()!), game_players: await cardGamePlayers(row.id, row.value.classId)};
+    return {...base, progress: await cardProgressOf(row.id, full.data()!), game_players: await cardGamePlayers(row.id, row.value.classId), parent_links: await cardShareCounts(row.id, ctx.uid)};
   }));
   return {card_sets, ...(memos.length ? {memos} : {})};
 }

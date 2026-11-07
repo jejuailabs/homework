@@ -1,0 +1,35 @@
+/* 학부모 링크 화면(cpr), 링크 대화상자(cpl), 카드놀이 보말 스위치·보상 순간. 팔레트 6종·다크 모드 토큰만 쓴다. */
+.cpr-page{max-width:680px;margin:0 auto;padding:8px 0 48px;display:grid;gap:18px;color:var(--text)}
+.cpr-state{display:grid;justify-items:center;gap:14px;text-align:center;padding:64px 16px;color:var(--muted);background:var(--surface);border:1px dashed var(--border);border-radius:22px}.cpr-state p{margin:0;max-width:34ch;line-height:1.7}
+.cpr-hero{background:var(--surface);border:1px solid var(--border);border-radius:24px;padding:0 24px 22px;overflow:hidden;box-shadow:var(--shadow)}
+.cpr-cover{margin:0 -24px 18px;min-height:132px;display:flex;align-items:flex-end;justify-content:center;gap:18px;padding:18px 18px 10px;background:linear-gradient(160deg,var(--accent-soft),color-mix(in srgb,var(--coral) 28%,var(--surface)))}
+.cpr-cover img{filter:drop-shadow(0 6px 8px #0001)}.cpr-cover img:nth-child(2){transform:translateY(-10px) rotate(-4deg)}
+.cpr-kicker{margin:0;color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.4px}.cpr-hero h1{margin:6px 0 12px;font-size:26px;line-height:1.35;letter-spacing:-.6px;overflow-wrap:anywhere}
+.cpr-set{display:grid;gap:3px;margin:0;padding:14px 16px;background:var(--surface-alt);border-radius:16px}.cpr-set span{font-size:11px;color:var(--muted)}.cpr-set strong{font-size:17px;overflow-wrap:anywhere}.cpr-set small{color:var(--muted);font-size:12px}
+.cpr-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.cpr-metrics article{display:grid;gap:10px;align-content:start;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:18px;min-width:0}
+.cpr-metrics h2{margin:0;font-size:14px}.cpr-metrics p{margin:4px 0 0;font-size:12px;color:var(--muted);line-height:1.6}.cpr-metrics strong{display:block;font-size:22px;color:var(--accent);margin-top:4px}
+.cpr-icon{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.cpr-good{color:var(--success)!important;font-weight:700}
+.cpr-bar{height:9px;border-radius:9px;background:var(--surface-alt);border:1px solid var(--border);overflow:hidden;margin-top:6px}.cpr-bar span{display:block;height:100%;background:var(--accent);border-radius:9px}.cpr-bar span.is-goal{background:var(--success)}
+.cpr-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px}.cpr-card h2{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-size:17px}.cpr-card h2 svg{color:var(--accent)}
+.cpr-muted{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.7}
+.cpr-scores{list-style:none;margin:0;padding:0;display:grid;gap:10px}.cpr-scores li{display:grid;grid-template-columns:minmax(80px,auto) minmax(0,1fr) auto;gap:4px 12px;align-items:center;font-size:13px}.cpr-scores .cpr-bar{margin:0}.cpr-scores small{grid-column:1/-1;color:var(--muted);font-size:11px}
+.cpr-words{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.cpr-words li{display:grid;gap:3px;padding:14px;border-radius:16px;background:var(--surface-alt);border:1px solid var(--border);overflow-wrap:anywhere}.cpr-words strong{font-size:17px}.cpr-words span{font-size:13px}.cpr-words small{font-size:11px;color:var(--muted)}
+.cpr-note{background:color-mix(in srgb,var(--accent-soft) 60%,var(--surface))}.cpr-note p{margin:0;white-space:pre-wrap;line-height:1.8;overflow-wrap:anywhere}
+.cpr-foot{display:grid;gap:4px;text-align:center;color:var(--muted);font-size:12px}.cpr-foot p{margin:0}
+@media(max-width:620px){.cpr-page{padding-bottom:32px}.cpr-hero{padding:0 16px 16px}.cpr-cover{margin:0 -16px 14px;min-height:108px}.cpr-cover img{width:64px;height:64px}.cpr-hero h1{font-size:22px}.cpr-metrics{grid-template-columns:1fr}.cpr-metrics article{grid-template-columns:auto minmax(0,1fr);align-items:center}.cpr-words{grid-template-columns:1fr}}
+.cpl .cards-form-grid{margin-top:8px}.cpl-note{display:grid;gap:7px;font-size:12px;margin:0 0 14px}.cpl-note textarea{font-size:14px}
+.cpl-made{margin:14px 0;padding:16px;border-radius:16px;background:var(--surface-alt);border:1px solid var(--border)}.cpl-made h3{margin:0 0 4px;font-size:15px}
+.cpl-made ol{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}.cpl-made li{display:grid;grid-template-columns:minmax(90px,auto) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}.cpl-made input{font-size:12px;padding:8px}.cpl-made .button{font-size:12px;min-height:34px;padding:6px 10px}
+.cpl-rows{list-style:none;margin:14px 0 0;padding:0}.cpl-rows li{display:grid;grid-template-columns:minmax(90px,1fr) minmax(0,1.3fr) auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--border);font-size:13px}.cpl-rows small{color:var(--muted)}.cpl-rows small.is-open{color:var(--success);font-weight:600}.cpl-rows .button{font-size:12px;min-height:32px;padding:5px 11px}
+@media(max-width:620px){.cpl-made li,.cpl-rows li{grid-template-columns:1fr}.cpl-rows .cards-actions{justify-content:flex-start}}
+.cards-reward-settings{margin:18px 0;padding:16px 18px;border:1px solid var(--border);border-radius:14px;background:var(--surface-alt)}.cards-reward-settings h3{display:flex;align-items:center;gap:7px;margin:0 0 4px;font-size:15px}.cards-reward-settings h3 svg{color:var(--accent)}.cards-reward-settings p{margin:4px 0 0}
+.cards-reward-moment{position:fixed;right:16px;bottom:16px;z-index:60;width:min(250px,calc(100vw - 32px));display:grid;gap:10px}
+.cards-reward-inner{position:relative;display:block;width:100%;height:190px;border:0;padding:0;background:transparent;perspective:900px;cursor:pointer;font:inherit;color:inherit}
+.cards-reward-face{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:8px;padding:16px;border-radius:22px;backface-visibility:hidden;transition:transform .5s ease;text-align:center;line-height:1.5;box-shadow:0 14px 34px #0002}
+.cards-reward-front{background:linear-gradient(150deg,var(--accent-soft),color-mix(in srgb,var(--coral) 35%,var(--surface)))}.cards-reward-front strong{font-size:16px}.cards-reward-front em{display:flex;align-items:center;gap:4px;font-style:normal;font-size:12px;color:var(--muted)}
+.cards-reward-back{background:var(--surface);border:2px solid var(--accent);transform:rotateY(180deg)}.cards-reward-back b{font-size:22px;color:var(--accent)}.cards-reward-back span{font-size:14px}.cards-reward-back small{font-size:11px;color:var(--muted)}
+.cards-reward-flip.is-flipped .cards-reward-front{transform:rotateY(180deg)}.cards-reward-flip.is-flipped .cards-reward-back{transform:rotateY(360deg)}
+@media(prefers-reduced-motion:reduce){.cards-reward-face{transition:none}}

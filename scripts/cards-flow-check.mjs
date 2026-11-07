@@ -826,6 +826,125 @@ async function guardSection() {
 }
 
 const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, games: gamesSection, mastery: masterySection, class: classSection, guard: guardSection};
+// 구역 family: 학부모 링크(학생 1명·읽기 전용·만료·회수)와 카드놀이 보말(필수 학습·목표 첫 달성, 한 번씩). `node scripts/cards-flow-check.mjs family`
+async function familySection() {
+  section('parent links and card rewards');
+  const {publicCardShare} = await import('@/lib/server/cards-shares');
+  const view = async (token, ip = '10.1.0.1') => {const response = await publicCardShare(new Request(`http://cards.test/api/cards-parent/${token}`, {headers: {'x-forwarded-for': ip}}), token); return {status: response.status, data: await response.json(), robots: response.headers.get('x-robots-tag')};};
+  const tokenOf = link => link.path.split('/').pop();
+  const ledger = studentId => db().collection(`classes/class-a/students/${studentId}/pointLedger`).where('source', '==', 'cards').get();
+  const balance = async studentId => (await db().doc(`classes/class-a/students/${studentId}`).get()).data().points ?? 0;
+  const given = await distribute({requiredModes: {memorize: {requiredCount: 0, direction: 'front-back', rangeStart: 1, rangeEnd: 12}, recall: {requiredCount: 4, direction: 'front-back', rangeStart: 1, rangeEnd: 4}, spell: {requiredCount: 0, direction: 'front-back', rangeStart: 1, rangeEnd: 12}}, test: {questionCount: 4, goalScore: 50, maxAttempts: 9, direction: 'front-back', answerRelease: 'immediate', format: 'written'}}), base = given.id;
+  const rewards = ['classes', 'class-a', 'rewards'];
+
+  // The switch: class owner only, off by default.
+  same((await call(teacher, 'GET', rewards)).data.rewardsEnabled, false, 'card rewards are off by default');
+  refused(await call(stranger, 'PATCH', rewards, {rewardsEnabled: true}), 404, 'NOT_FOUND', 'another teacher cannot switch card rewards');
+  refused(await call(pupil(1), 'PATCH', rewards, {rewardsEnabled: true}), 403, 'FORBIDDEN', 'a student cannot switch card rewards');
+  refused(await call(teacher, 'PATCH', rewards, {rewardsEnabled: 'yes'}), 400, 'REWARD_SETTINGS', 'the switch takes a boolean only');
+  await db().doc('classes/class-a').set({pointSettings: {enabled: true, label: '보말', rules: {homework: 10}}}, {merge: true});
+  // Off: finishing pays nothing, and switching on later does not pay for it afterwards.
+  accepted(await study(pupil(3), base, 'recall', 'fam-3a', right(0, 1, 2, 3)), 's3 finishes the required study while rewards are off');
+  accepted(await call(teacher, 'PATCH', rewards, {rewardsEnabled: true}), 'teacher turns card rewards on');
+  accepted(await study(pupil(3), base, 'recall', 'fam-3b', right(0, 1)), 's3 keeps studying after finishing');
+  same((await ledger('s3')).size, 0, 'no reward for a finish that came before the switch, nor for more study');
+  // On: the first finish pays once; replays and more study do not.
+  const before = await balance('s4');
+  accepted(await study(pupil(4), base, 'recall', 'fam-4a', right(0, 1)), 's4 studies half');
+  same((await ledger('s4')).size, 0, 'half the required study pays nothing');
+  accepted(await study(pupil(4), base, 'recall', 'fam-4b', right(2, 3)), 's4 finishes the required study');
+  const paid = await db().doc(`classes/class-a/students/s4/pointLedger/cards_study_${base}`).get();
+  same([paid.exists, paid.data()?.amount, paid.data()?.kind, paid.data()?.sourceId, await balance('s4')], [true, 5, 'earn', base, before + 5], 'finishing pays 5 under a fixed ledger ID');
+  check((await study(pupil(4), base, 'recall', 'fam-4b', right(2, 3))).data.duplicate === true, 'the finishing batch replays as a duplicate');
+  accepted(await study(pupil(4), base, 'recall', 'fam-4c', right(0, 1, 2, 3)), 's4 studies another round');
+  accepted(await study(pupil(4), base, 'recall', 'fam-4d', right(0, 1), {review: true}), 's4 reviews');
+  same([(await ledger('s4')).size, await balance('s4')], [1, before + 5], 'replays, more rounds and reviews pay nothing more');
+  same((await db().doc(`cardProgress/${base}_s4`).get()).data().pointRewards, {study: 5}, 'the progress record notes the reward for Berry counts');
+  // The test goal: a failed attempt pays nothing, the first pass pays 10, a second pass nothing.
+  const sit = async (requestId, wrong) => {const started = await start(pupil(4), base, requestId); return submit(pupil(4), base, started.data.attempt.id, started.data.attempt.questions.map(question => answerFor(question, 'front-back', wrong)));};
+  accepted(await sit('fam-t1', true), 's4 fails a test');
+  same((await ledger('s4')).size, 1, 'a failed test pays nothing');
+  accepted(await sit('fam-t2', false), 's4 passes the test');
+  same([(await db().doc(`classes/class-a/students/s4/pointLedger/cards_goal_${base}`).get()).data()?.amount, await balance('s4')], [10, before + 15], 'the first pass pays 10');
+  accepted(await sit('fam-t3', false), 's4 passes again');
+  same([(await ledger('s4')).size, await balance('s4')], [2, before + 15], 'one distribution pays at most 15: no second goal reward');
+  const mine = await call(pupil(4), 'GET', ['distributions', base, 'rewards']);
+  same(mine.data.rewards.map(row => [row.kind, row.amount]), [['study', 5], ['goal', 10]], 'the student reads their own two rewards');
+  same((await call(pupil(3), 'GET', ['distributions', base, 'rewards'])).data.rewards, [], 'another student sees only their own (none)');
+  refused(await call(teacher, 'GET', ['distributions', base, 'rewards']), 403, 'FORBIDDEN', 'the reward moment route is for students');
+  // Game scores never pay.
+  accepted(await call(pupil(4), 'POST', ['distributions', base, 'games'], {requestId: 'fam-g1', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}), 's4 plays a review game');
+  same((await ledger('s4')).size, 2, 'a game record pays nothing');
+  // Class 보말 off: nothing is paid even with the card switch on.
+  await db().doc('classes/class-a').set({pointSettings: {enabled: false}}, {merge: true});
+  accepted(await study(pupil(2), base, 'recall', 'fam-2a', right(0, 1, 2, 3)), 's2 finishes while the class 보말 is off');
+  same((await ledger('s2')).size, 0, 'no reward when the class 보말 is off');
+  await db().doc('classes/class-a').set({pointSettings: {enabled: true}}, {merge: true});
+
+  // Parent links: teacher only, the class's own students, 1-60 days.
+  const shares = ['distributions', base, 'shares'];
+  refused(await call(stranger, 'POST', shares, {studentIds: ['s4']}), 404, 'NOT_FOUND', 'another teacher cannot make a link');
+  refused(await call(pupil(4), 'POST', shares, {studentIds: ['s4']}), 403, 'FORBIDDEN', 'a student cannot make a link');
+  refused(await call(teacher, 'POST', shares, {studentIds: ['s4'], days: 61}), 400, 'SHARE_DAYS', 'more than 60 days is refused');
+  refused(await call(teacher, 'POST', shares, {studentIds: ['s9']}), 400, 'SHARE_STUDENTS', 'a student of another class is refused');
+  const made = await call(teacher, 'POST', shares, {studentIds: ['s4'], note: '꾸준히 하고 있어요'});
+  check(made.status === 201 && made.data.links.length === 1 && /^\/family\/cards\/[A-Za-z0-9_-]{43}$/.test(made.data.links[0].path), 'teacher makes one link', made.data);
+  const token = tokenOf(made.data.links[0]), expiry = Date.parse(made.data.expiresAt) - Date.now();
+  check(expiry > 13.9 * 86_400_000 && expiry <= 14 * 86_400_000, '14 days by default', made.data.expiresAt);
+  const stored = (await db().collection('cardReportShares').get()).docs;
+  check(stored.length === 1 && !JSON.stringify(stored[0].data()).includes(token) && stored[0].id !== token, 'only a hash of the token is stored', stored.map(doc => doc.id));
+  const listed = await call(teacher, 'GET', shares);
+  check(listed.data.shares.length === 1 && listed.data.shares[0].state === 'active' && !JSON.stringify(listed.data).includes(token), 'the teacher list shows state but no token', listed.data);
+  const seen = await view(token);
+  check(seen.status === 200 && seen.robots?.includes('noindex'), 'the link opens without login, marked noindex', seen);
+  same([seen.data.student.name, seen.data.note, seen.data.progress.studyPercent, seen.data.progress.studyComplete, seen.data.test.bestScore, seen.data.test.goalReached, seen.data.test.scores.map(row => row.score)], ['학생4', '꾸준히 하고 있어요', 100, true, 100, true, [0, 100, 100]], 'the page shows this student: study, scores and the note');
+  check(seen.data.practice.words.length > 0 && seen.data.practice.words[0].count >= 1 && !seen.data.practice.hidden, 'most-missed words to practise', seen.data.practice);
+  const text = JSON.stringify(seen.data);
+  check(!['학생1', '학생2', '학생3', '"s1"', '"s2"', '"s3"', 's4', 'rank', 'points', 'pointRewards', 'expectedAnswer', 'questions', 'classId', 'studentId'].some(word => text.includes(word)), 'nothing about other students, rankings, 보말, answers or IDs', text.slice(0, 400));
+  same((await db().doc(`cardReportShares/${stored[0].id}`).get()).data().views, 1, 'opening counts one view and nothing else');
+  // While a test is open the practice words wait.
+  const open = await start(pupil(4), base, 'fam-t4');
+  same((await view(token)).data.practice, {words: [], hidden: true}, 'practice words wait while a test is open');
+  await submit(pupil(4), base, open.data.attempt.id, open.data.attempt.questions.map(question => answerFor(question, 'front-back')));
+  // All at once: every student gets one, s4's earlier link is replaced.
+  const all = await call(teacher, 'POST', shares, {studentIds: 'all', days: 3, nameMode: 'none'});
+  const link = studentId => all.data.links.find(row => row.studentId === studentId);
+  same([all.status, ['s1', 's2', 's3', 's4'].every(link), all.data.links.every((row, index) => !index || all.data.links[index - 1].number <= row.number), all.data.replaced], [201, true, true, 1], 'all students at once, in number order, replacing the open one');
+  same((await view(token)).status, 404, 'the replaced link no longer opens');
+  const s1 = await view(tokenOf(link('s1')));
+  same([s1.status, s1.data.student.name], [200, ''], 'the no-name choice shows no name');
+  check(!JSON.stringify(s1.data).includes('학생4') && !JSON.stringify(s1.data).includes('꾸준히'), 'a link shows only its own student', s1.data);
+  // Revoked and expired links close at once.
+  const s2 = link('s2'), s2id = (await call(teacher, 'GET', shares)).data.shares.find(row => row.studentId === 's2' && row.state === 'active').id;
+  same((await view(tokenOf(s2))).status, 200, 's2 link opens');
+  accepted(await call(teacher, 'DELETE', [...shares, s2id]), 'teacher closes the s2 link');
+  same((await view(tokenOf(s2))).status, 404, 'a closed link is gone at once');
+  const s3 = link('s3');
+  await db().doc(`cardReportShares/${(await call(teacher, 'GET', shares)).data.shares.find(row => row.studentId === 's3' && row.state === 'active').id}`).update({expiresAt: iso(-MIN)});
+  same((await view(tokenOf(s3))).status, 404, 'an expired link is gone');
+  same((await view('x'.repeat(43))).status, 404, 'an unknown token is 404');
+  same((await view('short')).status, 404, 'a malformed token is 404');
+  // Berry: counts only.
+  const bearer = {uid: teacher, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read']};
+  const berry = (await callClassroomTool('list_card_sets', {distribution_id: base}, bearer)).card_sets[0];
+  same([berry.parent_links, berry.progress?.bomal_given], [{active: all.data.links.length - 2, opened: 1}, {study: 1, goal: 1}], 'list_card_sets carries link and reward counts');
+  check(!JSON.stringify(berry).includes(tokenOf(link('s4'))) && !JSON.stringify(berry).includes('/family/'), 'Berry never sees a token', berry);
+  // Close all, then rate limits.
+  same((await call(teacher, 'DELETE', shares)).data.revoked, all.data.links.length - 2, 'close all closes the open ones');
+  same((await view(tokenOf(link('s4')))).status, 404, 'closed by close-all');
+  const ip = '10.9.9.9';
+  for (let index = 0; index < 12; index++) await view('y'.repeat(43), ip);
+  same((await view(tokenOf(link('s1')), ip)).status, 429, 'many wrong tokens from one address are slowed down');
+  await db().doc('classes/class-a/students/s1').set({disabled: true}, {merge: true});
+  const again = await call(teacher, 'POST', shares, {studentIds: ['s4']});
+  accepted(again, 'a fresh link for s4');
+  refused(await call(teacher, 'POST', shares, {studentIds: ['s1']}), 400, 'SHARE_STUDENTS', 'a disabled student gets no link');
+  await db().doc('classes/class-a/students/s4').set({disabled: true}, {merge: true});
+  same((await view(tokenOf(again.data.links[0]), '10.1.0.2')).status, 404, 'a link stops when the student is disabled');
+  await db().doc('classes/class-a/students/s1').set({disabled: false}, {merge: true});
+  await db().doc('classes/class-a/students/s4').set({disabled: false}, {merge: true});
+}
+sections.family = familySection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

@@ -5,6 +5,7 @@ import {CARD_CLASS_MODES, CARD_CLASS_TYPES, CARD_PERCENTS, CARD_SPEECH_RATES, cl
 import {useCardsCopy} from '@/lib/cards-copy';
 import {fillCopy, useCardsClassCopy} from '@/lib/cards-class-copy';
 import {cardsRequest, CardsDialog, CardsLoading} from './cards-shared';
+import {CardsRewardToggle} from './cards-rewards';
 import '@/styles/cards-class.css';
 
 /** 우리 반 학습 기본값: per set type, what a new distribution starts from. Saving never touches distributions already given out. */
@@ -43,6 +44,7 @@ export default function CardsClassDefaults({classId, className, distributions, o
         <label className="cards-check"><input type="checkbox" checked={value.test.requireStudy} onChange={e => setTest('requireStudy', e.target.checked)}/>{t('prerequisite')}</label>
         <label className="cards-check"><input type="checkbox" checked={allClasses} onChange={e => setAllClasses(e.target.checked)}/>{c.allClasses}<span className="cards-muted">{c.allClassesHint}</span></label>
       </fieldset>
+      <CardsRewardToggle classId={classId}/>
       <section className="cards-class-apply" aria-live="polite"><h3>{c.applyExisting}</h3>{!active.length ? <p className="cards-muted">{fillCopy(c.noExisting, {type: typeLabel})}</p> : dirty ? <p className="cards-muted">{c.saveFirst}</p> : !confirming ? <button type="button" className="button" disabled={busy} onClick={() => setConfirming(true)}>{c.applyExisting} ({active.length})</button> : <div className="cards-class-confirm" role="alertdialog" aria-label={c.applyExisting}><p>{fillCopy(c.applyExistingHint, {type: typeLabel, n: active.length})}</p><div className="cards-actions"><button type="button" className="button" disabled={busy} onClick={() => setConfirming(false)}>{t('cancel')}</button><button type="button" className="button primary" disabled={busy} onClick={() => void applyExisting()}>{busy ? c.applying : fillCopy(c.applyConfirm, {n: active.length})}</button></div></div>}</section>
       {notice && <p role="status" className="cards-notice">{notice}</p>}{error && <p role="alert" className="cards-error">{error}</p>}
       <div className="cards-dialog-footer cards-actions"><button type="button" className="button" disabled={busy} onClick={() => {if (!dirty || window.confirm(c.unsaved)) onClose();}}>{t('close')}</button><button className="button primary" disabled={busy || !dirty && !allClasses}>{t(busy ? 'saving' : 'save')}</button></div>

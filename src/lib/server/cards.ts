@@ -3,6 +3,7 @@ import { createHash, randomInt, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { FieldPath } from 'firebase-admin/firestore';
 import { db } from './admin';
+import { cardRewardSettings, prepareCardRewards, studentCardRewards } from './cards-rewards';
 import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
@@ -380,10 +381,12 @@ async function study(ctx: Context, request: Request, distributionId: string) {
     }
     const missed = responses.filter(response => !response.correct).map(response => response.cardId), cleared = review ? responses.filter(response => response.correct).map(response => response.cardId) : [];
     const misses = missed.length || cleared.length ? await tx.get(missRef(ctx.classId, ctx.studentId)) : null;
+    const pay = await prepareCardRewards(tx, ctx, distribution, saved.data(), state); // 보말: 필수 학습 첫 완료
     const updatedAt = now();
     Object.assign(state, preferences, { cardStates, updatedAt, lateAt: review ? state.lateAt ?? null : lateMark(state.lateAt, distribution, updatedAt) });
     const results = responses.map(({ cardId, correct, expectedAnswer }) => ({ cardId, correct, expectedAnswer }));
     tx.set(ref, state);
+    pay();
     if (misses) saveMisses(tx, ctx, misses, distributionId, missed, cleared, today, updatedAt);
     // Keep a small receipt for the lifetime of the record: expiring it could count an old retry twice.
     // Raw practice answers are graded in memory and are not retained in these receipts.
@@ -486,8 +489,10 @@ async function submitTest(ctx: Context, request: Request, distributionId: string
     const misses = missed.length ? await tx.get(missRef(ctx.classId, ctx.studentId)) : null;
     const updated: Attempt = { ...attempt, status: 'submitted', score, results, fingerprint, submittedAt: stamp, ...(isTestOvertime(attempt.startedAt, attempt.timeLimitSeconds, Date.parse(stamp)) ? { overtime: true } : {}) };
     Object.assign(state, { cardStates, activeAttemptId: null, lastSubmittedAttemptId: attempt.id, bestScore: Math.max(state.bestScore ?? 0, score), latestScore: score, updatedAt: stamp, lateAt: lateMark(state.lateAt, distribution, stamp) });
+    const pay = await prepareCardRewards(tx, ctx, distribution, saved.data(), state); // 보말: 테스트 목표 첫 달성
     tx.update(attemptRef, updated);
     tx.set(ref, state);
+    pay();
     if (misses) saveMisses(tx, ctx, misses, distributionId, missed, [], today, stamp);
     return json({ attempt: visibleAttempt(updated, distribution), progress: progress(state, distribution) });
   });
@@ -563,6 +568,9 @@ export async function handleCards(request: Request, segments: string[] = []) {
       if (resourceId && operation === 'duplicate' && segments.length === 3 && method === 'POST') return await saveSet(ctx, request, resourceId, true);
     }
     if (resource === 'distributions' && resourceId && operation === 'games' && segments.length === 3) return await (await import('./cards-games')).cardGames(ctx, request, resourceId);
+    if (resource === 'distributions' && resourceId && operation === 'shares' && segments.length <= 4) return await (await import('./cards-shares')).cardShares(ctx, request, resourceId, operationId);
+    if (resource === 'distributions' && resourceId && operation === 'rewards' && segments.length === 3 && method === 'GET') return await studentCardRewards(ctx, resourceId);
+    if (resource === 'classes' && resourceId && operation === 'rewards' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await cardRewardSettings(ctx, request, resourceId);
     if (resource === 'distributions') {
       if (!resourceId && ['GET', 'POST'].includes(method)) return await distributions(ctx, request);
       if (resourceId && segments.length === 2 && ['GET', 'PATCH'].includes(method)) return await distributionDetail(ctx, request, resourceId);
