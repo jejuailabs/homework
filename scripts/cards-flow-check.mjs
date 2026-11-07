@@ -68,7 +68,13 @@ const cards = Array.from({length: 12}, (_, index) => ({id: `card${index}`, front
 const byFront = new Map(cards.map(card => [card.front, card])), byBack = new Map(cards.map(card => [card.back, card]));
 
 async function seed() {
-  await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, {method: 'DELETE'});
+  // A transaction a previous run left open holds its locks for a while, and the clear answers 409 until they expire.
+  for (let tries = 0; ; tries++) {
+    const cleared = await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, {method: 'DELETE'});
+    if (cleared.ok) break;
+    if (tries >= 30) throw new Error(`the emulator did not clear: ${cleared.status}`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
   const store = db();
   await store.doc('classes/class-a').set({ownerUid: teacher, name: '3-2', grade: 3});
   await store.doc('classes/class-b').set({ownerUid: stranger, name: '다른 반', grade: 3});
