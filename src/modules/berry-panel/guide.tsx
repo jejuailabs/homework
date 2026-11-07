@@ -10,7 +10,7 @@ const ask = (ability: Ability) => window.dispatchEvent(new CustomEvent<Ability>(
 
 /** /teacher/berry: everything Berry can do, as buttons that start the request in the Berry panel. */
 export default function BerryGuide() {
-  const [off, setOff] = useState<string[]>(['cards', 'notebook']);
+  const [off, setOff] = useState<string[]>(['notebook']);
   useEffect(() => {fetch('/api/berry/status', {cache: 'no-store'}).then(r => r.json()).then(data => {if (Array.isArray(data.off)) setOff(data.off);}).catch(() => {});}, []);
   return <AccessGate role="teacher"><main className="bg-page">
     <header className="bg-head">

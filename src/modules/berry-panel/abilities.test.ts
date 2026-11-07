@@ -18,6 +18,6 @@ assert.deepEqual(lackingFor(byLabel('알림 예약'), []), [], 'reminders run on
 assert.deepEqual(missingPermissions(old).scopes.sort(), ['classroom:read', 'classroom:write']);
 // A switched-off menu drops its button and nothing else.
 const shown = abilityGroups(['cards', 'notebook']).flatMap(group => group.abilities.map(ability => ability.label));
-assert.ok(!shown.includes('카드 배부') && !shown.includes('교무수첩 기록'));
-assert.equal(shown.length, all.length - 2);
+assert.ok(!shown.includes('카드 배부') && !shown.includes('카드 진도') && !shown.includes('교무수첩 기록'));
+assert.equal(shown.length, all.length - 3);
 assert.equal(abilityGroups().flatMap(group => group.abilities).length, all.length);

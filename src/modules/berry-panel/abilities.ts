@@ -65,6 +65,7 @@ const GROUPS: GroupSource[] = [
     {label: '투표 만들기', prompt: '[학급]에 "[질문]" 투표 만들어 줘. 보기: [보기1], [보기2]', write: true},
     {label: '투표 마감', prompt: '[투표 이름] 투표 마감해 줘', write: true},
     {label: '캔버스 만들기', prompt: '[학급]에 [제목] 캔버스 만들어 줘. 미션: [내용]', write: true},
+    {label: '카드 진도', prompt: '[카드 세트 이름] 안 끝낸 학생이랑 많이 틀린 단어 알려 줘', feature: 'cards'},
     {label: '카드 배부', prompt: '[카드 세트 이름]을 [학급]에 배부해 줘. 마감 [날짜]', write: true, feature: 'cards'},
   ]},
   {key: 'work', label: '업무·일정', emoji: '🗂️', read: [], change: ['workspace:read', 'workspace:write'], abilities: [

@@ -14,10 +14,11 @@ import TestZone from './test-zone';
 import {useVerifiedViewer} from './viewer-context';
 import MyPageLink from '@/modules/teacher-notebook/my-page-link';
 import ActivityTracker from './activity-tracker';
+import {cardsMenuVisible} from '@/lib/menu-visibility';
 import '@/styles/brand.css';
-// Card Play, Quiz, Word playground and Kids Daily are hidden from the top menu for now;
+// Quiz, Word playground and Kids Daily are hidden from the top menu for now;
 // their pages still work by direct link. Flip a flag to show the menu again.
-const cardsMenuVisible = false;
+// Card Play's flag is shared with Berry's catalog, so the two can't disagree.
 const quizMenuVisible = false;
 const playgroundMenuVisible = false;
 const kidsDailyMenuVisible = false;

@@ -17,6 +17,7 @@ import {artworkToday} from '@/lib/exhibition-metadata';
 import {readingProfile} from '@/modules/speech-studio/scoring';
 import {publicProgress} from '@/lib/server/cards-policy';
 import {cardSetUnfinished} from '@/lib/cards-summary';
+import {cardsMenuVisible} from '@/lib/menu-visibility';
 import {BerryError, alias, maskNames, safeId} from './policy';
 import {classCardProgress} from './card-progress';
 import {PACK_LINK, filterPacks, packDetail, packSummary} from './neighborhood-packs';
@@ -142,7 +143,7 @@ export function menuFlags() {
     homework: true, exhibitions: true, boards: true, quiz: true, lesson_review: true,
     playground: process.env.PLAYGROUND_DISABLED !== 'true', playground_live: process.env.PLAYGROUND_DISABLED !== 'true' && process.env.PLAYGROUND_LIVE_DISABLED !== 'true',
     kids_daily: process.env.MY_SPACE_DISABLED !== 'true', tools: true, tools_disabled: tools, points: true,
-    cards: false, notebook: process.env.TEACHER_NOTEBOOK_DISABLED !== 'true', workspace: process.env.TEACHER_WORKSPACE_DISABLED !== 'true',
+    cards: cardsMenuVisible, notebook: process.env.TEACHER_NOTEBOOK_DISABLED !== 'true', workspace: process.env.TEACHER_WORKSPACE_DISABLED !== 'true',
   };
 }
 
