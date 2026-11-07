@@ -1045,7 +1045,50 @@ async function pagesSection() {
   same((await call(who, 'GET', ['distributions', 'p202'])).status, 200, 'a hidden set still opens by its address');
 }
 sections.pages = pagesSection;
-const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
+const bearerOf = uid => ({uid, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read']});
+// 구역 transfer: 다른 반으로 옮기기·학기말 이월. 세트와 학습 기본값이 새 반에 배부되고, 이은 학생의 숙련도·별표·오답만 따라가며 원래 반은 그대로다. `node scripts/cards-flow-check.mjs transfer`
+async function transferSection() {
+  section('transfer sets and carry student records to another class');
+  await db().doc('classes/class-n').set({ownerUid: teacher, name: '4-1', grade: 4, year: 2027});
+  await db().doc('classes/class-n/students/s31').set({name: '학생1', number: 1, authUid: 'u31'});
+  await db().doc('classes/class-n/students/s32').set({name: '새친구', number: 2, authUid: 'u32'});
+  await db().doc('classes/class-n/students/s33').set({name: '전학', number: 3, authUid: 'u33', disabled: true});
+  await db().doc('users/u31').set({role: 'student', classId: 'class-n', studentId: 's31', authVersion: 0});
+  const given = await distribute({dueAt: iso(3 * 24 * HOUR), afterDue: 'lock', requiredModes: {recall: {requiredCount: 6, direction: 'front-back', rangeStart: 1, rangeEnd: 6}}, test: {questionCount: 5, goalScore: 80, maxAttempts: 3, direction: 'front-back', answerRelease: 'after-due', format: 'written'}}), base = given.id;
+  accepted(await study(pupil(1), base, 'recall', 'tr-1', [...right(0, 1), {cardId: cards[2].id, answer: '틀림'}], {starredCardIds: [cards[1].id]}), 'a student builds mastery, a star and a miss in the old class');
+  await call(teacher, 'PATCH', ['classes', 'class-a', 'settings'], {plan: [{kind: 'memo', id: 'memo-tr', text: '1단원 복습'}, {kind: 'set', id: base, highlight: true}]});
+  const preview = await call(teacher, 'GET', ['classes', 'class-a', 'transfer'], undefined, {query: '?toClassId=class-n'});
+  same(preview.data.links, [{from: 's1', to: 's31'}], 'the preview suggests the one student with the same name');
+  check(preview.data.distributions.some(row => row.id === base) && preview.data.to.length === 3, 'the preview lists the class sets and the target roster', preview.data);
+  refused(await call(stranger, 'GET', ['classes', 'class-a', 'transfer']), 404, 'NOT_FOUND', 'another teacher cannot see the transfer');
+  refused(await call(pupil(1), 'GET', ['classes', 'class-a', 'transfer']), 403, 'FORBIDDEN', 'a student cannot transfer');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-b', distributionIds: [base], requestId: 'tr-x'}), 404, 'NOT_FOUND', 'a class of another teacher cannot receive sets');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-n', distributionIds: [base], links: [{from: 's1', to: 's33'}], requestId: 'tr-y'}), 400, 'TRANSFER_LINKS', 'a disabled target student cannot take a record');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-n', distributionIds: [base], links: [{from: 's1', to: 's31'}, {from: 's1', to: 's32'}], requestId: 'tr-z'}), 400, 'TRANSFER_LINKS', 'one record goes to one student only');
+  const input = {toClassId: 'class-n', distributionIds: [base], settings: true, keepDue: false, links: [{from: 's1', to: 's31'}, {from: 's2', to: 's32'}], requestId: 'tr-run'};
+  const moved = await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], input);
+  same([moved.status, moved.data.result?.distributions, moved.data.result?.created, moved.data.result?.seeded, moved.data.result?.students], [201, 1, 1, 1, 2], 'one set moved; only the student with something to carry gets a record');
+  const placed = (await db().collection('cardClassSets').where('classId', '==', 'class-n').get()).docs.map(doc => ({...doc.data(), id: doc.id}));
+  const copy = placed.find(row => row.carriedFrom?.distributionId === base);
+  same([placed.length, copy?.allStudents, copy?.targetStudentIds, copy?.dueAt, copy?.test.answerRelease, copy?.carriedFrom?.className, copy?.requiredModes.recall.requiredCount], [1, true, ['s31', 's32'], null, 'immediate', '3-2', 6], 'the new class gets the set for all its students, without the old deadline');
+  const oldState = (await db().doc(`cardProgress/${base}_s1`).get()).data(), carried = (await db().doc(`cardProgress/${copy.id}_s31`).get()).data();
+  same([carried.cardStates, carried.starredCardIds, carried.counts.recall, carried.attempts, carried.bestScore, carried.classId], [oldState.cardStates, [cards[1].id], 0, 0, null, 'class-n'], 'mastery and stars carry; study counts and scores start fresh');
+  same((await db().doc('cardMisses/class-n_s31').get()).data()?.misses, {[copy.id]: {[cards[2].id]: logic.cardReviewDate()}}, 'the recent miss follows under the new set');
+  same((await db().doc('cardStudentLinks/class-n_s31').get()).data()?.fromStudentId, 's1', 'the link is kept for the next transfer');
+  const settings = (await call(teacher, 'GET', ['classes', 'class-n', 'settings'])).data.settings;
+  same(settings.plan, [{kind: 'memo', id: 'memo-tr-c', text: '1단원 복습'}, {kind: 'set', id: copy.id, highlight: true}], 'the lesson order and memos move with the set');
+  const learner = await call('u31:0', 'GET', ['distributions', copy.id]);
+  check(learner.status === 200 && learner.data.progress.mastery > 0 && learner.data.progress.counts.recall === 0, 'the student sees the carried mastery in the new class', learner.data.progress);
+  accepted(await call('u31:0', 'POST', ['distributions', copy.id, 'study'], {requestId: 'tr-new', mode: 'recall', direction: 'front-back', responses: right(3)}), 'the student keeps studying in the new class');
+  const again = await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], input);
+  same([again.status, again.data.result?.created, again.data.result?.seeded], [201, 0, 0], 'a retry with the same request writes nothing new');
+  same((await db().doc(`cardProgress/${copy.id}_s31`).get()).data().counts.recall, 1, 'the retry never overwrites what the student did in the new class');
+  const oldReport = reported(await report(base), 's1');
+  same([oldReport.progress.counts.recall, oldReport.progress.starredCardIds], [3, [cards[1].id]], 'the old class report is unchanged');
+  same((await callClassroomTool('list_card_sets', {distribution_id: copy.id}, bearerOf(teacher))).card_sets[0].carried_from, '3-2', 'Berry sees where the set came from');
+}
+sections.transfer = transferSection;
+const chosen =process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
 for (const name of chosen) {
