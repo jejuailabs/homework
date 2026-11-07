@@ -26,9 +26,9 @@ const noop = () => {};
  * `before` is the stored progress, `after` the progress about to be saved; a reward is due only when a flag turns on now.
  * Writes nothing itself: it marks `after.pointRewards` (so the progress write carries it) and returns the ledger writes to run with the rest.
  */
-export async function prepareCardRewards(tx: FirebaseFirestore.Transaction, ctx: { uid: string; classId: string; studentId: string }, distribution: Distribution, before: Data | undefined, after: Data) {
+export async function prepareCardRewards(tx: FirebaseFirestore.Transaction, ctx: { uid: string; classId: string; studentId: string }, distribution: Distribution, before: Data | undefined, after: Data, allow: { goal?: boolean } = {}) {
   const flags = (raw: Data | undefined) => publicProgress(raw, distribution.snapshot, distribution.requiredModes, distribution.test);
-  const kinds = cardRewardKinds(flags(before), flags(after), distribution.requiredModes, distribution.test.goalScore);
+  const kinds = cardRewardKinds(flags(before), flags(after), distribution.requiredModes, distribution.test.goalScore).filter(kind => kind !== 'goal' || allow.goal !== false);
   if (!kinds.length) return noop;
   const pupil = pupilRef(ctx.classId, ctx.studentId), receipts = kinds.map(kind => pupil.collection('pointLedger').doc(cardRewardLedgerId(kind, distribution.id)));
   const [cls, settings, me, ...paid] = await Promise.all([tx.get(db().doc(`classes/${ctx.classId}`)), tx.get(settingsRef(ctx.classId)), tx.get(pupil), ...receipts.map(ref => tx.get(ref))]);

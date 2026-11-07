@@ -487,14 +487,19 @@ async function submitTest(ctx: Context, request: Request, distributionId: string
       if (!result.correct) { state.mistakes[cardId] = (state.mistakes[cardId] ?? 0) + 1; missed.push(cardId); }
     }
     const misses = missed.length ? await tx.get(missRef(ctx.classId, ctx.studentId)) : null;
-    const updated: Attempt = { ...attempt, status: 'submitted', score, results, fingerprint, submittedAt: stamp, ...(isTestOvertime(attempt.startedAt, attempt.timeLimitSeconds, Date.parse(stamp)) ? { overtime: true } : {}) };
-    Object.assign(state, { cardStates, activeAttemptId: null, lastSubmittedAttemptId: attempt.id, bestScore: Math.max(state.bestScore ?? 0, score), latestScore: score, updatedAt: stamp, lateAt: lateMark(state.lateAt, distribution, stamp) });
-    const pay = await prepareCardRewards(tx, ctx, distribution, saved.data(), state); // 보말: 테스트 목표 첫 달성
+    const overtime = isTestOvertime(attempt.startedAt, attempt.timeLimitSeconds, Date.parse(stamp));
+    const updated: Attempt = { ...attempt, status: 'submitted', score, results, fingerprint, submittedAt: stamp, ...(overtime ? { overtime: true } : {}) };
+    // An overtime attempt is graded and kept for the teacher, but it does not count: past limit + grace the study guard has lifted, so its answers may have been looked up.
+    // It leaves bestScore, latestScore and the goal alone, and so pays nothing.
+    Object.assign(state, { cardStates, activeAttemptId: null, lastSubmittedAttemptId: attempt.id, ...(overtime ? {} : { bestScore: Math.max(state.bestScore ?? 0, score), latestScore: score }), updatedAt: stamp, lateAt: lateMark(state.lateAt, distribution, stamp) });
+    // 보말: 테스트 목표 첫 달성. A retry of the missed cards is an easier test, so it may raise the best score but never pays the goal.
+    const pay = await prepareCardRewards(tx, ctx, distribution, saved.data(), state, { goal: !attempt.retryWrong });
     tx.update(attemptRef, updated);
     tx.set(ref, state);
     pay();
     if (misses) saveMisses(tx, ctx, misses, distributionId, missed, [], today, stamp);
-    return json({ attempt: visibleAttempt(updated, distribution), progress: progress(state, distribution) });
+    // The student sees only that this score did not count; the overtime flag itself stays on the teacher's report.
+    return json({ attempt: visibleAttempt(updated, distribution), progress: progress(state, distribution), ...(overtime ? { notCounted: true } : {}) });
   });
 }
 async function report(ctx: Context, distributionId: string) {

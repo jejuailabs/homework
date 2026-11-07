@@ -119,7 +119,7 @@ export async function publicCardShare(request: Request, token: string) {
     if (!distribution || distribution.ownerUid !== value.ownerUid || distribution.classId !== value.classId || cls.data()?.ownerUid !== value.ownerUid || !pupil.exists || pupil.data()?.disabled || !reportStudentIds(distribution, [value.studentId]).includes(value.studentId)) return await notFound(request);
     const raw = progressSnap.data()?.classId === value.classId ? progressSnap.data() : undefined;
     const progress = publicProgress(raw, distribution.snapshot, distribution.requiredModes, distribution.test, { dueAt: distribution.dueAt ?? null, afterDue: cardAfterDue(distribution) });
-    const tests = raw ? (await progressSnap.ref.collection('tests').where('status', '==', 'submitted').select('number', 'score', 'submittedAt', 'retryWrong').get()).docs.map(doc => ({ number: Number(doc.data().number) || 0, score: Number(doc.data().score) || 0, submittedAt: String(doc.data().submittedAt ?? ''), retry: !!doc.data().retryWrong })).sort((a, b) => a.number - b.number) : [];
+    const tests = raw ? (await progressSnap.ref.collection('tests').where('status', '==', 'submitted').select('number', 'score', 'submittedAt', 'retryWrong', 'overtime').get()).docs.filter(doc => doc.data().overtime !== true).map(doc => ({ number: Number(doc.data().number) || 0, score: Number(doc.data().score) || 0, submittedAt: String(doc.data().submittedAt ?? ''), retry: !!doc.data().retryWrong })).sort((a, b) => a.number - b.number) : [];
     // While a test is open on the child's device, the words to practise wait: they would be the answers.
     const testOpen = !!raw?.activeAttemptId;
     await ref.update({ views: FieldValue.increment(1) });

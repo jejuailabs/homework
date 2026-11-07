@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class guard. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -946,6 +946,40 @@ async function familySection() {
   await db().doc('classes/class-a/students/s4').set({disabled: false}, {merge: true});
 }
 sections.family = familySection;
+// 구역 counted: 제한 시간이 지난 응시와 오답 재시험은 목표·보말을 움직이지 않는다. `node scripts/cards-flow-check.mjs counted`
+async function countedSection() {
+  section('overtime and retry attempts do not reach the goal');
+  const {publicCardShare} = await import('@/lib/server/cards-shares');
+  await db().doc('classes/class-a').set({pointSettings: {enabled: true, label: '보말'}}, {merge: true});
+  accepted(await call(teacher, 'PATCH', ['classes', 'class-a', 'rewards'], {rewardsEnabled: true}), 'card rewards on');
+  const given = await distribute({test: {questionCount: 4, goalScore: 50, maxAttempts: 9, direction: 'front-back', answerRelease: 'immediate', format: 'written', timeLimitSeconds: 60}}), base = given.id;
+  const goalPaid = async () => (await db().doc(`classes/class-a/students/s2/pointLedger/cards_goal_${base}`).get()).exists;
+  const progressOf = async () => (await db().doc(`cardProgress/${base}_s2`).get()).data();
+  // Overtime: a full-marks hand-in after limit + grace is graded and kept, but counts for nothing.
+  const late = (await start(pupil(2), base, 'cnt-1')).data.attempt;
+  await db().doc(`cardProgress/${base}_s2/tests/${late.id}`).update({startedAt: iso(-(60 + 61 + 5) * 1000)});
+  const lateSubmit = await submit(pupil(2), base, late.id, late.questions.map(question => answerFor(question, 'front-back')));
+  same([lateSubmit.status, lateSubmit.data.attempt.score, lateSubmit.data.notCounted, 'overtime' in lateSubmit.data.attempt], [200, 100, true, false], 'an overtime hand-in is graded; the student is told it did not count, without the flag');
+  same([lateSubmit.data.progress.bestScore, lateSubmit.data.progress.latestScore, lateSubmit.data.progress.goalReached], [null, null, false], 'it moves neither best nor latest score, nor the goal');
+  same([await goalPaid(), (await db().doc(`cardProgress/${base}_s2/tests/${late.id}`).get()).data().overtime], [false, true], 'no goal 보말; the overtime attempt is kept for the teacher');
+  const report = (await call(teacher, 'GET', ['distributions', base, 'report'])).data.students.find(row => row.id === 's2');
+  check(report.attempts.some(row => row.id === late.id && row.overtime === true && row.score === 100), 'the teacher report shows the overtime attempt and its score', report.attempts);
+  const link = await call(teacher, 'POST', ['distributions', base, 'shares'], {studentIds: ['s2']});
+  const token = link.data.links[0].path.split('/').pop(), page = async () => (await (await publicCardShare(new Request(`http://cards.test/api/cards-parent/${token}`, {headers: {'x-forwarded-for': '10.3.0.1'}}), token)).json()).test;
+  same(await page(), {goalScore: 50, maxAttempts: 9, bestScore: null, latestScore: null, goalReached: false, scores: []}, 'the parent page shows no goal and no overtime score');
+  // A retry of the missed cards may raise the best score, but never pays the goal.
+  const failed = (await start(pupil(2), base, 'cnt-2')).data.attempt;
+  const failedSubmit = await submit(pupil(2), base, failed.id, failed.questions.map((question, index) => answerFor(question, 'front-back', index > 0)));
+  same([failedSubmit.data.attempt.score, failedSubmit.data.notCounted, failedSubmit.data.progress.goalReached], [25, undefined, false], 'an in-time attempt below the goal counts as usual');
+  const retry = await start(pupil(2), base, 'cnt-3', {retryWrong: true});
+  check(retry.status === 201 && retry.data.attempt.retryWrong === true && retry.data.attempt.questions.length === 3, 'a retry holds the three missed cards', retry.data);
+  const retried = await submit(pupil(2), base, retry.data.attempt.id, retry.data.attempt.questions.map(question => answerFor(question, 'front-back')));
+  same([retried.data.attempt.score, retried.data.progress.bestScore, retried.data.progress.goalReached, await goalPaid()], [100, 100, true, false], 'the retry raises the best score to the goal but pays no goal 보말');
+  const full = (await start(pupil(2), base, 'cnt-4')).data.attempt;
+  await submit(pupil(2), base, full.id, full.questions.map(question => answerFor(question, 'front-back')));
+  same(await goalPaid(), false, 'the goal was already reached, so a later full pass pays nothing either');
+}
+sections.counted = countedSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
