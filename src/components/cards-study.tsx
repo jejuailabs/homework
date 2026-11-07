@@ -281,7 +281,9 @@ export function CardsReviewSession({items, title, intro, backHref, onReload}: {i
     flushing.current = (async () => {
       setSaving(true); setFailed(false);
       try {
-        for (const [distributionId, outbox] of outboxes.current) for (const batch of outbox.sealed) {
+        // Batches sealed while this loop runs (the last answer, say) are picked up before it ends.
+        for (let next = [...outboxes.current].find(([, outbox]) => outbox.sealed.length); next; next = [...outboxes.current].find(([, outbox]) => outbox.sealed.length)) {
+          const [distributionId, {sealed: [batch]}] = next;
           // A closed set, a passed deadline or changed cards will never take these answers; drop them and say so instead of retrying forever.
           await post(distributionId, batch).catch(cause => {if (!(cause instanceof Error && (cause.message === 'DUE_CLOSED' || cause.message === 'NOT_FOUND' || staleStudyBatch(cause.message)))) throw cause; setDropped(true);});
           outboxes.current.set(distributionId, settleStudyBatch(outboxes.current.get(distributionId)!, batch.requestId));
