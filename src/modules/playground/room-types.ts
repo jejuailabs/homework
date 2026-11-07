@@ -20,5 +20,5 @@ export type RoomRoundResult = {key: string; points: number; rank: number; correc
 export type PublicRoomRound = {round: number; kind: PlayKind; prompt: string; choices: PlayChoice[]; correctChoiceId?: string; reveal?: string; results?: RoomRoundResult[]; distribution?: Record<string, number>; skipped?: boolean};
 /** One question of the after-game review on the host screen. Built only from revealed round documents. */
 export type RoomReviewItem = {round: number; prompt: string; answer: string; reveal: string; total: number; wrong: number; commonWrong: string; commonWrongCount: number};
-export type RoomBootstrap = {room: PlayRoom; question: PublicRoomRound | null; player: RoomPlayer | null; players?: RoomPlayer[]; viewer: {uid: string; key: string; teacher: boolean; canHost: boolean}; serverTime: number};
+export type RoomBootstrap = {room: PlayRoom; question: PublicRoomRound | null; player: RoomPlayer | null; players?: RoomPlayer[]; viewer: {uid: string; key: string; teacher: boolean; canHost: boolean; rewardsEnabled?: boolean}; serverTime: number};
 export type RoomState = {room: PlayRoom; key: string; question?: PublicRoomRound | null; players?: RoomPlayer[]; serverTime: number};

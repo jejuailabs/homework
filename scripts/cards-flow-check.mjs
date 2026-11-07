@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old berry ai. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -476,6 +476,34 @@ async function oldSection() {
   check(!!union && (await db().collection('cardClassSets').where('classId', '==', 'class-a').get()).docs.some(doc => doc.data().title === union.title), 'lesson report counts allStudents distributions over the class', allBody.report?.cards);
 }
 
+async function roomSection() {
+  section('card team room');
+  const {handleRoomRequest} = await import('@/modules/playground/rooms-server');
+  const host = {uid: teacher, email: null, displayName: null, role: 'teacher'}, player = n => ({uid: `u${n}`, email: null, displayName: null, role: 'student', classId: 'class-a', studentId: `s${n}`, authVersion: 0});
+  const room = (ctx, method, segments, data = {}) => handleRoomRequest(new Request(`http://cards.test/api/playground/${segments.join('/')}`, {method}), ctx, segments, data);
+  for (const n of [1, 2]) await db().doc(`classes/class-a/students/s${n}`).update({character: 'cat', wardrobeOwned: [], spaceOwned: []});
+  const opened = await room(host, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: setId, requestId: 'room-1'}), roomId = opened.roomId;
+  for (const n of [1, 2]) await room(player(n), 'POST', ['rooms', 'join'], {code: opened.code});
+  same((await room(host, 'GET', ['rooms', roomId])).viewer.rewardsEnabled, false, 'the host screen knows rewards are off in this class');
+  await room(host, 'POST', ['rooms', roomId, 'start'], {status: 'lobby', round: -1});
+  await new Promise(resolve => setTimeout(resolve, 3100));
+  await room(host, 'POST', ['rooms', roomId, 'tick']);
+  const asked = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data();
+  for (const n of [1, 2]) await room(player(n), 'POST', ['rooms', roomId, 'answer'], {round: 0, choiceId: asked.choices[0].id});
+  await room(host, 'POST', ['rooms', roomId, 'tick']);
+  await room(host, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 0});
+  const finished = (await db().doc(`playRooms/${roomId}`).get()).data();
+  check(finished.status === 'finished' && finished.settled === true, 'the room finishes and settles', finished.status);
+  same((await db().collection('classes/class-a/students/s1/playgroundScores').get()).size, 0, 'no playground weekly score is written');
+  same((await db().collection('classes/class-a/students/s1/playgroundYears').get()).size + (await db().collectionGroup('days').get()).size, 0, 'no playground day record is written');
+  same((await room(host, 'GET', ['rooms', roomId, 'review'])).review.length, 1, 'the review opens');
+  const refusedWith = async (run, status) => {try {await run(); return null;} catch (error) {return error.status === status ? true : error;}};
+  same(await refusedWith(() => room(host, 'POST', ['rooms', roomId, 'reward'], {amount: 1}), 403), true, 'a reward in a class without rewards is refused');
+  process.env.CARDS_TEAM_DISABLED = 'true';
+  same(await refusedWith(() => room(host, 'GET', ['rooms', roomId, 'review']), 404), true, 'the review is closed with the switch off');
+  delete process.env.CARDS_TEAM_DISABLED;
+}
+
 async function berrySection() {
   section('berry masks names in card titles');
   const named = await call(teacher, 'POST', ['sets'], {title: '학생1 보충 단어', description: '', type: 'word', folderId: null, cards, requestId: 'set-named'});
@@ -526,7 +554,7 @@ async function aiSection() {
   } finally {globalThis.fetch = original; process.env.OPENAI_API_KEY = 'stub-not-a-key';}
 }
 
-const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, berry: berrySection, ai: aiSection};
+const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection};
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

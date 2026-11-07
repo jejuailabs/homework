@@ -135,12 +135,12 @@ export async function joinRoom(ctx: Context, code: unknown, expectedRoomId?: str
 }
 async function bootstrap(ctx: Context, roomId: string): Promise<RoomBootstrap> {
   return db().runTransaction(async tx=>{
-    const {ref,room,player}=await roomAccess(ctx,roomId,tx), now=Date.now();
+    const {ref,room,player,settings}=await roomAccess(ctx,roomId,tx), now=Date.now();
     const question=room.round<0?null:(await tx.get(ref.collection('rounds').doc(String(room.round)))).data() as PublicRoomRound|undefined;
     const roster=ctx.role!=='student'?(await tx.get(ref.collection('players'))).docs.map(doc=>doc.data() as RoomPlayer):undefined;
     if(player&&!player.forfeited&&!terminal(room)){if(now-player.lastSeen>30000&&room.status!=='lobby')player.eligibleFrom=room.round+1;player.lastSeen=now;tx.set(ref.collection('players').doc(player.key),player);}
     writeGrant(tx,ref,ctx,room.classId,now);
-    return {room,question:question||null,player:player||null,...(roster?{players:roster}:{}),viewer:{uid:ctx.uid,key:keyFor(ctx),teacher:ctx.role!=='student',canHost:ctx.role!=='student'||room.hostKey===keyFor(ctx)},serverTime:now};
+    return {room,question:question||null,player:player||null,...(roster?{players:roster}:{}),viewer:{uid:ctx.uid,key:keyFor(ctx),teacher:ctx.role!=='student',canHost:ctx.role!=='student'||room.hostKey===keyFor(ctx),rewardsEnabled:settings.rewardsEnabled},serverTime:now};
   });
 }
 async function heartbeat(ctx: Context, roomId: string) {
@@ -277,7 +277,8 @@ async function settleRoom(roomId: string) {
       if(completed){record.games++;record.days=[...new Set([...record.days,date])];}
       const complete=room.completion==='complete'&&!player.forfeited&&player.answered>=room.roundsTotal-room.skippedRounds.length&&room.round+1>=room.roundsTotal;
       const paid=Number(day.data()?.duelRewardPaid||0),amount=room.mode!=='team'&&complete&&settings.rewardsEnabled&&!receipt.exists?Math.min(settings.duelReward,Math.max(0,3-paid)):0;
-      tx.set(score.ref,record,{merge:true});tx.set(day.ref,{duelGames:Number(day.data()?.duelGames||0)+(completed?1:0),duelRewardPaid:paid+amount},{merge:true});
+      // A card room is not a playground game: it must not fill the playground's weekly scores or daily counts.
+      if(!room.cards){tx.set(score.ref,record,{merge:true});tx.set(day.ref,{duelGames:Number(day.data()?.duelGames||0)+(completed?1:0),duelRewardPaid:paid+amount},{merge:true});}
       if(amount){const balance=addPointBalance(pointBalance(pupil.data()?.points),amount);tx.update(pupil.ref,{points:balance,pointsEarnedTotal:addPointBalance(pointBalance(pupil.data()?.pointsEarnedTotal),amount)});tx.create(receipt.ref,{amount,kind:'earn',source:'playground',sourceId:roomId,reason:'말놀이터 대결 참여',balanceAfter:balance,createdAt:new Date(now).toISOString(),classId:room.classId,studentId:player.key,actorUid:player.uid});}
     }
     if(room.completion==='complete'||room.completion==='forfeit')pairs.forEach((pair,index)=>tx.set(pairDocs[index].ref,{count:Number(pairDocs[index].data()?.count||0)+1,date,keys:pair.keys}));
