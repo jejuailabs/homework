@@ -4,6 +4,15 @@
 export const NOTE_TEXT_LIMIT = 500;
 export const NOTE_STUDENT_PER_HOUR = 10;
 export const NOTE_THREAD_PAGE = 100;
+/** 쪽지 1년 보관 (§34): a note is shown for 365 days from when it was sent, then Firestore TTL deletes it through its `expireAt`. */
+export const NOTE_KEEP_DAYS = 365;
+const DAY_MS = 86_400_000;
+/** When a note sent at `createdAt` (or a thread whose last note is then) stops being kept, in milliseconds. */
+export const noteExpireMs = (createdAt: string) => Date.parse(createdAt) + NOTE_KEEP_DAYS * DAY_MS;
+/** The oldest `createdAt` still shown at `now`. Notes are stored with ISO times, so string order is time order. */
+export const noteKeepFrom = (now: number) => new Date(now - NOTE_KEEP_DAYS * DAY_MS).toISOString();
+/** Whether something stamped `at` is still inside the year. Missing or broken stamps count as expired. */
+export const noteKept = (at: unknown, now: number) => typeof at === 'string' && !Number.isNaN(Date.parse(at)) && at >= noteKeepFrom(now);
 export type CardNote = {id: string; from: 'teacher' | 'student'; text: string; createdAt: string; read: boolean};
 export type CardNoteThread = {studentId: string; name: string; number: number; lastAt: string | null; lastFrom: 'teacher' | 'student' | null; preview: string; unread: number};
 

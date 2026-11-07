@@ -30,6 +30,7 @@ assert.notEqual(buildCatalog(tools, {playground: false, cards: false}).version, 
 const readOnly = buildCatalog(tools.filter(entry => !entry.name.startsWith('create_') && !entry.name.startsWith('approve_') && entry.name !== 'publish_review' && entry.name !== 'confirm_write'), {});
 assert.ok(!readOnly.domains.some(domain => domain.key === 'confirm'));
 // Berry's brain renders the table into at most 14,000 characters; each new tool row adds about 200 bytes here.
+assert.ok(open.rules.some(rule => rule.includes('기본 어휘')) && open.domains.find(domain => domain.key === 'cards')?.tools.includes('find_base_vocab'), 'base vocabulary: Berry looks words up, the teacher makes sets');
 assert.ok(new TextEncoder().encode(JSON.stringify(full)).length < 18_000, 'the whole table stays small');
 assert.ok(full.domains.every(domain => domain.key !== 'other'), 'every tool has a menu (no 기타)');
 console.log('catalog tests ok');

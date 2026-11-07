@@ -3077,6 +3077,18 @@
       "indexes": []
     },
     {
+      "collectionGroup": "cardNotes",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "messages",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
       "collectionGroup": "rateLimits",
       "fieldPath": "expiresAt",
       "ttl": true,

@@ -1,5 +1,6 @@
 'use client';
 import {useEffect, useRef, useState} from 'react';
+import dynamic from 'next/dynamic';
 import {Camera, FileUp, Sparkles, Trash2, X} from 'lucide-react';
 import ko from '@/messages/cards-import-ko.json';
 import en from '@/messages/cards-import-en.json';
@@ -11,10 +12,13 @@ import {useCardsCopy} from '@/lib/cards-copy';
 import {cardsMetadataPages, cardsRequest, CardsDialog, CardsLoading, CardsRequestError} from './cards-shared';
 import '@/styles/cards-import.css';
 
-type Tab = 'words' | 'text' | 'photo' | 'passage' | 'topic' | 'table' | 'merge';
+// 기본 어휘 (§37) loads its screen and the word list only when the tab opens.
+const BaseVocabImportTab = dynamic(() => import('./cards-base-vocab').then(module => module.BaseVocabImportTab), {ssr: false});
+
+type Tab = 'words' | 'text' | 'photo' | 'passage' | 'topic' | 'table' | 'merge' | 'vocab';
 type DraftRow = CardAiDraft & {id: string; keep: boolean};
 type Photo = {id: string; name: string; image: string};
-const TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic', 'table', 'merge'], AI_TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic'], CARD_LIMIT = 200;
+const TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic', 'table', 'merge', 'vocab'], AI_TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic'], CARD_LIMIT = 200;
 
 /** Shrinks in the browser: long edge 1600px, JPEG re-encode (drops EXIF and location). The photo only leaves in the draft request and is never stored. */
 async function shrinkPhoto(file: File): Promise<string> {
@@ -161,6 +165,7 @@ export default function CardsImportDialog({fronts, setId, onAppend, onClose}: {f
   return <CardsDialog title={copy.title} closeLabel={t('close')} onClose={close}>
     <div className="cards-import-tabs" role="tablist" aria-label={copy.title}>{TABS.map(item => <button key={item} type="button" role="tab" aria-selected={tab === item} disabled={running || shrinking} onClick={() => {setTab(item); setError('');}}>{copy[item]}</button>)}</div>
     {tab === 'table' && <section className="cards-import" role="tabpanel"><p>{copy.tableHint}</p><textarea aria-label={t('paste')} rows={5} value={bulk} onChange={e => setBulk(e.target.value)} placeholder={t('pastePlaceholder')}/><div className="cards-actions"><label className="button cards-file-button"><FileUp size={16}/>{copy.importFile}<input type="file" accept=".csv,.tsv,.txt,.xlsx,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={e => {const file = e.target.files?.[0]; e.target.value = ''; if (file) void importFile(file);}}/></label><button type="button" className="button primary" onClick={() => appendTable(parseCardImport(bulk))}>{t('append')}</button></div></section>}
+    {tab === 'vocab' && <BaseVocabImportTab fronts={fronts} limit={CARD_LIMIT} onAppend={onAppend}/>}
     {tab === 'merge' && <section className="cards-import" role="tabpanel"><p>{copy.mergeHint}</p>
       {!sets ? <CardsLoading label={copy.mergeLoading}/> : !sets.length ? <p className="cards-muted">{copy.mergeEmpty}</p> : <label className="cards-import-merge">{copy.mergePick}<select value={mergeId} disabled={mergeBusy} onChange={e => void chooseMerge(e.target.value)}><option value="">{copy.mergeChoose}</option>{sets.map(item => <option key={item.id} value={item.id}>{item.title} · {item.cardCount}{t('cards')}{item.archived ? ` · ${copy.archived}` : ''}</option>)}</select></label>}
       {mergeBusy && <CardsLoading label={copy.mergeLoading}/>}

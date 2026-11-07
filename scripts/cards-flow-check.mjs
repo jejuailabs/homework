@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone sharing versus hunt chunks drill notes rate. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone sharing versus hunt chunks drill notes rate vocab. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,6 +30,8 @@ registerHooks({
     return next(specifier, context);
   },
   load(url, context, next) {
+    // The app's own JSON (the base vocabulary) loads as a plain module, as Next bundles it. Packages keep Node's own loader.
+    if (url.endsWith('.json') && url.startsWith(pathToFileURL(src).href + '/')) return {format: 'module', source: `export default ${fs.readFileSync(fileURLToPath(url), 'utf8')};`, shortCircuit: true};
     if (url.endsWith('.ts')) return {format: 'module', source: ts.transpileModule(fs.readFileSync(fileURLToPath(url), 'utf8'), {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext}}).outputText, shortCircuit: true};
     return next(url, context);
   },
@@ -1368,6 +1370,31 @@ async function notesSection() {
     same((await call(pupil(1), 'GET', ['notes'])).data.notes.map(note => note.text), ['새 담임이에요'], 'the student sees only the new conversation');
   } finally {await db().doc('classes/class-a').update({ownerUid: teacher});}
   same((await call(teacher, 'GET', [...base, 's1'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'back with the old owner, the old conversation is intact');
+  // 1년 보관 (§34): new notes and threads carry expireAt for the TTL policy; anything older than a year is hidden from every read.
+  const YEAR = 365 * 24 * HOUR;
+  const live = (await db().collection('cardNotes').where('classId', '==', 'class-a').where('studentId', '==', 's1').where('ownerUid', '==', teacher).get()).docs[0];
+  const firstNote = (await live.ref.collection('messages').get()).docs[0].data();
+  check(firstNote.expireAt?.toMillis() === Date.parse(firstNote.createdAt) + YEAR, 'a new note carries expireAt = sent + 365 days', firstNote);
+  check(live.data().expireAt?.toMillis() === Date.parse(live.data().lastAt) + YEAR, 'the thread expires a year after its last note', live.data());
+  // A note from before this change: no expireAt, sent 366 days ago, still unread.
+  await live.ref.collection('messages').doc('old-note').set({from: 'teacher', text: '작년 쪽지', createdAt: iso(-YEAR - 24 * HOUR), read: false, authorUid: teacher});
+  same((await call(pupil(1), 'GET', ['notes'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'a note older than a year is hidden from the student');
+  same((await call(teacher, 'GET', [...base, 's1'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'and from the teacher');
+  accepted(await call(teacher, 'POST', [...base, 's1'], {text: '올해 쪽지', requestId: 'n-year'}), 'writing next to an old note works');
+  const latest = (await call(teacher, 'GET', [...base, 's1'])).data.notes;
+  accepted(await call(teacher, 'DELETE', [...base, 's1', latest.at(-1).id]), 'deleting the newest note');
+  const recounted = (await live.ref.get()).data();
+  check(recounted.preview === '숙제 잘했어요!' && recounted.expireAt.toMillis() === Date.parse(recounted.lastAt) + YEAR, 'a recount skips the old note and moves expireAt back', recounted);
+  // A whole thread whose last note is over a year old, with stale unread counters.
+  await db().doc('cardNotes/old-thread-s3').set({classId: 'class-a', studentId: 's3', ownerUid: teacher, lastAt: iso(-YEAR - 40 * 24 * HOUR), lastFrom: 'student', preview: '오래된 쪽지', unreadTeacher: 2, unreadStudent: 1});
+  await db().doc('cardNotes/old-thread-s3/messages/m1').set({from: 'student', text: '오래된 쪽지', createdAt: iso(-YEAR - 40 * 24 * HOUR), read: false, authorUid: 'u3'});
+  try {
+    same((await call(teacher, 'GET', base, undefined, {query: '?summary=1'})).data.unread, 0, 'an expired thread adds nothing to the badge');
+    const s3 = (await call(teacher, 'GET', base)).data.threads.find(row => row.studentId === 's3');
+    same([s3.unread, s3.preview, s3.lastAt], [0, '', null], 'and shows as an empty conversation');
+    same((await call(pupil(3), 'GET', ['student'])).data.notes.unread, 0, 'the student badge ignores it too');
+    same((await callClassroomTool('list_card_sets', {class_id: 'class-a'}, bearerOf(teacher))).notes[0].unread, 0, 'Berry counts skip expired threads');
+  } finally {await db().recursiveDelete(db().doc('cardNotes/old-thread-s3'));}
 }
 sections.notes = notesSection;
 // 구역 rate: 선생님별 시간당 한도(옮기기·복제·공유 변경·공유 세트 복사). 한도에 닿으면 429이고 아무것도 쓰지 않는다. `node scripts/cards-flow-check.mjs rate`
@@ -1395,6 +1422,34 @@ async function rateSection() {
   same((await call(teacher, 'POST', ['shared', 'sets', shared.data.set.id, 'copy'], {requestId: 'rate-copy'})).status, 201, 'an hour later copying works again');
 }
 sections.rate = rateSection;
+// 구역 vocab: 기본 어휘(§37). 선생님만 목록을 받고, 고른 묶음은 보통 세트로 만들어져 배부·학습이 그대로 돈다. 베리는 찾기만 한다. `node scripts/cards-flow-check.mjs vocab`
+async function vocabSection() {
+  section('basic vocabulary');
+  const vocab = await import('@/lib/cards-base-vocab');
+  const list = await call(teacher, 'GET', ['base-vocab']);
+  same([list.status, list.data.words.length, list.data.words.filter(entry => entry.tier === 1).length, list.data.meaningNote], [200, 3000, 800, '뜻은 AI 초안, 교사 검토 권장'], 'the teacher gets the 3,000 words with the AI-draft note');
+  check(list.data.source.notice.includes('제2022-33호'), 'the source and version travel with the list', list.data.source);
+  refused(await call(pupil(1), 'GET', ['base-vocab']), 403, 'FORBIDDEN', 'a student cannot read the list');
+  refused(await call(null, 'GET', ['base-vocab']), 401, undefined, 'signed out cannot read it');
+  const chunks = vocab.chunkBaseVocab(vocab.filterBaseVocab(list.data.words, {scope: 'elementary', from: 'a', to: 'b'}), 20);
+  const folder = (await call(teacher, 'POST', ['folders'], {name: '기본 어휘 초등 A–B'})).data.folder;
+  const body = index => ({requestId: `vocab-${index}`, title: vocab.baseVocabSetTitle('기본 어휘 초등', index, chunks.length, chunks[index]), description: '2022 개정 영어과 교육과정 기본 어휘(초등 권장 800). 뜻은 AI 초안, 교사 검토 권장.', type: 'word', folderId: folder.id, cards: vocab.baseVocabCards(chunks[index])});
+  const made = await call(teacher, 'POST', ['sets'], body(0));
+  same([made.status, made.data.set.cardCount, made.data.set.cards[0].front, made.data.set.folderId], [201, 20, chunks[0][0].word, folder.id], 'a group becomes an ordinary owned set in the folder');
+  same((await call(teacher, 'POST', ['sets'], body(0))).data.set.id, made.data.set.id, 'a retried group makes no second set');
+  accepted(await call(teacher, 'POST', ['sets'], body(1)), 'the next group');
+  same((await db().collection('cardSets').where('folderId', '==', folder.id).get()).size, 2, 'two sets, no duplicates');
+  refused(await call(stranger, 'GET', ['sets', made.data.set.id]), 404, undefined, 'another teacher cannot open it');
+  const dist = await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: made.data.set.id, expectedVersion: made.data.set.version, requestId: 'vocab-dist'});
+  same(dist.status, 201, 'the set is assigned like any other');
+  const card = made.data.set.cards[0];
+  same((await call(pupil(1), 'POST', ['distributions', dist.data.distribution.id, 'study'], {requestId: 'vocab-study', mode: 'recall', direction: 'front-back', responses: [{cardId: card.id, answer: card.back}]})).status, 200, 'and a student studies it');
+  const berry = await callClassroomTool('find_base_vocab', {query: 'apple', level: 'elementary'}, bearerOf(teacher));
+  check(berry.words.some(entry => entry.word === 'apple' && entry.elementary_800) && berry.meaning_note === '뜻은 AI 초안, 교사 검토 권장' && berry.source.includes('2022'), 'Berry finds a word with its source and note', berry);
+  const letters = await callClassroomTool('find_base_vocab', {level: 'all', from: 'x', to: 'z', limit: 5}, bearerOf(teacher));
+  check(letters.words.length === 5 && letters.total > 5 && letters.truncated && letters.words.every(entry => /^[xyz]/.test(entry.word)), 'Berry filters by letters and caps the list', letters);
+}
+sections.vocab = vocabSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
