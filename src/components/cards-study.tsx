@@ -61,14 +61,14 @@ function stableMixed<T>(items: T[], seed: number): T[] {const result = [...items
 
 type PracticeSession = {queue: string[]; index: number; direction: CardDirection; outcomes: {cardId: string; correct: boolean}[]; feedback?: {correct: boolean; expected: string; answer?: string}; finished?: boolean};
 const newRequestId = () => crypto.randomUUID();
-type PracticeProps = {title: string; cards: CardEntry[]; mode: CardStudyMode; type?: CardSetType; character?: Character; distributionId?: string; studentId?: string; requirement?: CardModeRequirement; progress?: CardProgress; from?: string; to?: string; onProgress?: (progress: CardProgress) => void; onClose?: () => void};
+type PracticeProps = {title: string; cards: CardEntry[]; mode: CardStudyMode; type?: CardSetType; character?: Character; distributionId?: string; studentId?: string; requirement?: CardModeRequirement; progress?: CardProgress; from?: string; to?: string; onProgress?: (progress: CardProgress) => void; onClose?: () => void; speechRate?: number | null};
 
 export function CardsPracticePreview(props: {title: string; cards: CardEntry[]; mode: CardStudyMode | 'test'; type?: CardSetType; onClose?: () => void}) {
   if (props.mode === 'test') return <CardsLocalTestPreview {...props}/>;
   return <CardsPractice key={props.mode} {...props} mode={props.mode}/>;
 }
 
-export function CardsPractice({title, cards, mode, type = 'word', character = 'cat', distributionId, studentId, requirement, progress, from, to, onProgress, onClose}: PracticeProps) {
+export function CardsPractice({title, cards, mode, type = 'word', character = 'cat', distributionId, studentId, requirement, progress, from, to, onProgress, onClose, speechRate}: PracticeProps) {
   const {copy: c} = useCardCopy();
   const isPreview = !distributionId;
   const fixed = !!requirement?.requiredCount;
@@ -79,7 +79,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [session, setSession] = useState<PracticeSession | null>(null), [resume, setResume] = useState<PracticeSession | null>(null);
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
   const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
-  const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(1);
+  const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(speechRate || 1);
   const [hintIndex, setHintIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
@@ -253,7 +253,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     </div>
     {(error || starError) && <div className="cs-alert" role="alert"><p>{error || c.saveError}</p></div>}{saveNotice}
     <div className="cs-study-controls">{feedback ? <><span className="cs-muted">{!answersLost && <><Check size={16}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</>}</span><button className="button primary" autoFocus onKeyDown={event => {if (event.repeat) event.preventDefault();}} onClick={next}>{c.next}<ChevronRight size={18}/></button></> : mode === 'memorize' ? revealed ? <><button className="button" onClick={again}><RotateCcw size={17}/>{c.again}</button><button className="button primary" onClick={() => check('')}><Check size={17}/>{c.remember}</button></> : <button className="button primary" onClick={() => setRevealed(true)}>{c.reveal}</button> : (mode === 'spell' || sentenceRecall) ? <button className="button primary" disabled={sentenceRecall ? selectedTokens.length !== tokens.length : !answer.trim()} onClick={() => check(sentenceRecall ? selectedTokens.map(id => tokens.find(item => item.id === id)?.text).join(' ') : answer)}>{c.check}<Check size={17}/></button> : null}</div>
-    <div className="cs-study-foot"><p><Keyboard size={16}/>{c.keyboard}</p>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}><option value={0.7}>0.7×</option><option value={1}>1×</option><option value={1.2}>1.2×</option></select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
+    <div className="cs-study-foot"><p><Keyboard size={16}/>{c.keyboard}</p>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}>{[...new Set([0.5, 0.7, 1, 1.2, 1.5, speed])].sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
   </section>;
 }
 

@@ -86,6 +86,12 @@ export function parseAfterDue(value: unknown): CardAfterDue {
   if (value !== 'open' && value !== 'late' && value !== 'lock') throw new ApiError(400, '마감 후 처리 방법을 확인해 주세요.');
   return value;
 }
+/** 읽어 주기 기본 속도 (0.5~1.5배, 0.1 단위). null means the student's own choice, starting at 1×. */
+export function parseSpeechRate(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.5 || value > 1.5 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-9) throw new ApiError(400, '읽어 주기 속도를 확인해 주세요.');
+  return Math.round(value * 10) / 10;
+}
 type Deadline = { dueAt: string | null; afterDue?: CardAfterDue };
 /** Starting study or a new test is refused once a locked deadline and its grace have passed. Finishing a started test is not. */
 export function assertDueOpen(deadline: Deadline, time = Date.now()) {
@@ -116,7 +122,7 @@ export function widenedTargets<T extends { id: string; name: string; number: num
 type EditableDistribution = { cardCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null };
 /** The fields a PATCH may change, each through the validator used at creation. Nested settings merge over the saved ones, so a partial edit never resets the rest. */
 export function distributionPatch(input: Value, current: EditableDistribution) {
-  const update: { active?: boolean; allStudents?: boolean; requiredModes?: CardRequiredModes; test?: CardTestSettings; dueAt?: string | null; afterDue?: CardAfterDue } = {};
+  const update: { active?: boolean; allStudents?: boolean; requiredModes?: CardRequiredModes; test?: CardTestSettings; dueAt?: string | null; afterDue?: CardAfterDue; speechRate?: number | null } = {};
   for (const key of ['active', 'allStudents'] as const) {
     if (input[key] === undefined) continue;
     if (typeof input[key] !== 'boolean') throw new ApiError(400, '배부 상태를 확인해 주세요.');
@@ -129,6 +135,7 @@ export function distributionPatch(input: Value, current: EditableDistribution) {
   if (input.test !== undefined) update.test = parseTestSettings({ ...current.test, ...object(input.test) }, current.cardCount);
   if (input.dueAt !== undefined) update.dueAt = parseDueAt(input.dueAt);
   if (input.afterDue !== undefined) update.afterDue = parseAfterDue(input.afterDue);
+  if (input.speechRate !== undefined) update.speechRate = parseSpeechRate(input.speechRate);
   if (!Object.keys(update).length) throw new ApiError(400, '바꿀 배부 설정을 확인해 주세요.');
   if ((update.test ?? current.test).answerRelease === 'after-due' && !(update.dueAt === undefined ? current.dueAt : update.dueAt)) throw new ApiError(400, '마감 후 정답 공개에는 마감 날짜가 필요해요.');
   return update;

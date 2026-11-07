@@ -53,4 +53,15 @@ bad({test: {time_limit_seconds: 59}}, /제한 시간/);
 bad({test: {time_limit_seconds: 7201}}, /제한 시간/);
 bad({after_due: 'soon'}, /after_due/, true);
 bad({after_due: 'lock'}, /마감/);
+// 우리 반 학습 기본값 fill what the teacher left out; what the teacher says still wins.
+const classDefaults = {modes: {memorize: {on: false, percent: 100, direction: 'front-back'}, recall: {on: true, percent: 200, direction: 'back-front'}, spell: {on: true, percent: 50, direction: 'front-back'}}, speechRate: 0.7, test: {questionCount: 15, goalScore: 90, maxAttempts: 2, requireStudy: true, direction: 'front-back', answerRelease: 'after-due', format: 'choice', timeLimitMinutes: 10}, afterDue: 'lock'} as const;
+const fromClass = cardDistributionSettings({}, 10, true, classDefaults);
+assert.deepEqual([fromClass.requiredModes.memorize.requiredCount, fromClass.requiredModes.recall.requiredCount, fromClass.requiredModes.recall.direction, fromClass.requiredModes.spell.requiredCount], [0, 20, 'back-front', 5], 'off is optional, on is the percent of the cards');
+assert.deepEqual(fromClass.test, {questionCount: 10, goalScore: 90, maxAttempts: 2, requireStudy: true, direction: 'front-back', answerRelease: 'after-due', format: 'choice', timeLimitSeconds: 600});
+assert.deepEqual([fromClass.afterDue, fromClass.speechRate, fromClass.lines.at(-1)], ['lock', 0.7, '빈 칸은 우리 반 학습 기본값']);
+const noDue = cardDistributionSettings({}, 10, false, classDefaults);
+assert.equal(noDue.test.answerRelease, 'immediate', 'an after-due default needs a deadline, so it falls back');
+const said = cardDistributionSettings({required_modes: {memorize: {count: 3}, recall: {range_start: 1, range_end: 4}}, test: {goal_score: 70, require_study: false, time_limit_seconds: null}}, 10, false, classDefaults);
+assert.deepEqual([said.requiredModes.memorize.requiredCount, said.requiredModes.recall.requiredCount, said.test.goalScore, said.test.requireStudy, said.test.timeLimitSeconds], [3, 8, 70, false, null], 'spoken values win; a range takes the percent of that range');
+assert.equal(cardDistributionSettings({}, 10, false, null).speechRate, null, 'no class defaults, no speech rate');
 console.log('card settings tests ok');

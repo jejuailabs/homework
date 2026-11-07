@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,7 +22,7 @@ registerHooks({
     if (specifier === 'server-only') return {url: 'data:text/javascript,', shortCircuit: true};
     if (specifier === 'firebase-admin/auth') return {url: 'data:text/javascript,export const getAuth = () => globalThis.__fakeAuth;', shortCircuit: true};
     if (specifier === 'firebase-admin/storage') return {url: 'data:text/javascript,export const getStorage = () => null;', shortCircuit: true};
-    if (specifier === 'next/server') return {url: 'data:text/javascript,export const NextResponse = {json: (value, init) => Response.json(value, init)};', shortCircuit: true};
+    if (specifier === 'next/server') return {url: 'data:text/javascript,export const NextResponse = {json: (value, init) => Response.json(value, init)}; export const after = () => {};', shortCircuit: true};
     if (specifier.startsWith('@/') || specifier.startsWith('.') && context.parentURL?.startsWith('file:') && context.parentURL.includes('/src/')) {
       const base = specifier.startsWith('@/') ? path.join(src, specifier.slice(2)) : path.resolve(path.dirname(fileURLToPath(context.parentURL)), specifier), file = candidates(base);
       if (file) return {url: pathToFileURL(file).href, shortCircuit: true};
@@ -701,7 +701,78 @@ async function masterySection() {
   same((await db().doc('cardMisses/class-a_s6').get()).data().misses, {[old.id]: {card1: today}}, 'the first miss creates the index');
 }
 
-const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, games: gamesSection, mastery: masterySection};
+async function classSection() {
+  section('class defaults, lesson notes and order');
+  const path = classId => ['classes', classId, 'settings'];
+  // A class that never saved the doc reads as the app defaults and newest-first order.
+  const fresh = await call(teacher, 'GET', path('class-a'));
+  same([fresh.status, fresh.data.settings.saved, fresh.data.settings.plan, fresh.data.settings.revision, fresh.data.settings.defaults.word.modes.spell.on, fresh.data.settings.defaults.sentence.afterDue], [200, false, [], 0, false, 'late'], 'an old class without the doc reads as app defaults');
+  // Ownership: only the class owner, never a student or another teacher.
+  refused(await call(stranger, 'GET', path('class-a')), 404, 'NOT_FOUND', 'another teacher cannot read the class settings');
+  refused(await call(stranger, 'PATCH', path('class-a'), {plan: []}), 404, 'NOT_FOUND', 'another teacher cannot write them');
+  refused(await call(pupil(1), 'GET', path('class-a')), 403, 'FORBIDDEN', 'a student cannot read them');
+  refused(await call(teacher, 'GET', path('class-b')), 404, 'NOT_FOUND', 'the teacher cannot read a class of another teacher');
+  refused(await call(teacher, 'PATCH', path('class-a'), {defaults: {word: {modes: {recall: {percent: 120}}}}}), 400, 'CLASS_SETTINGS', 'an unknown percent is refused');
+  refused(await call(teacher, 'PATCH', path('class-a'), {}), 400, undefined, 'an empty save is refused');
+  const before = await distribute({test: {questionCount: 3}});
+  const studentBefore = await call(pupil(1), 'GET', ['student']);
+  same(studentBefore.data.layout?.[0], {kind: 'set', id: studentBefore.data.distributions[0].id, highlight: false}, 'without a doc the student list still gets a newest-first layout');
+  // Defaults: saved per type, reused by Berry; existing distributions untouched.
+  const defaults = {word: {modes: {memorize: {on: false, percent: 100, direction: 'front-back'}, recall: {on: true, percent: 200, direction: 'back-front'}, spell: {on: true, percent: 50, direction: 'front-back'}}, speechRate: 0.7, test: {questionCount: 5, goalScore: 90, maxAttempts: 2, requireStudy: true, direction: 'front-back', answerRelease: 'immediate', format: 'choice', timeLimitMinutes: 10}, afterDue: 'lock'}};
+  const saved = await call(teacher, 'PATCH', path('class-a'), {defaults, expectedRevision: 0});
+  same([saved.status, saved.data.settings.revision, saved.data.settings.defaults.word.speechRate, saved.data.settings.defaults.sentence.speechRate, saved.data.classes], [200, 1, 0.7, 1, 1], 'the teacher saves word defaults; sentence keeps app defaults');
+  refused(await call(teacher, 'PATCH', path('class-a'), {plan: [], expectedRevision: 0}), 409, 'STALE_SETTINGS', 'a save from a stale tab is refused');
+  const untouched = (await call(teacher, 'GET', ['distributions', before.id])).data.distribution;
+  same([untouched.test.questionCount, untouched.speechRate], [3, null], 'saving defaults leaves existing distributions alone');
+  // 기존 배부에도 적용: the same PATCH the dialog sends, keeping each mode's range.
+  const {patchFromDefaults, parseClassDefaults} = await import('@/lib/cards-class-plan');
+  const ranged = await distribute({requiredModes: {recall: {requiredCount: 1, direction: 'front-back', rangeStart: 3, rangeEnd: 6}}});
+  const applied = await call(teacher, 'PATCH', ['distributions', ranged.id], patchFromDefaults(parseClassDefaults(defaults.word), ranged));
+  same([applied.status, applied.data.distribution.requiredModes.recall, applied.data.distribution.requiredModes.memorize.requiredCount, applied.data.distribution.test.timeLimitSeconds, applied.data.distribution.afterDue, applied.data.distribution.speechRate], [200, {requiredCount: 8, direction: 'back-front', rangeStart: 3, rangeEnd: 6}, 0, 600, 'lock', 0.7], 'applying to an existing distribution keeps its range and records the speech rate');
+  refused(await call(teacher, 'PATCH', ['distributions', ranged.id], {speechRate: 0.75}), 400, undefined, 'an odd speech rate is refused');
+  const spoken = await distribute({speechRate: 1.2});
+  same([spoken.speechRate, (await call(pupil(2), 'GET', ['distributions', spoken.id])).data.distribution.speechRate], [1.2, 1.2], 'the student detail carries the speech rate');
+  // Order, memos, highlight and hidden rows.
+  const plan = [{kind: 'memo', id: 'm-1', text: '3/12 수업: Unit 1-2'}, {kind: 'set', id: ranged.id, highlight: true}, {kind: 'set', id: before.id, hidden: true}, {kind: 'memo', id: 'm-2', text: '학생1 보충', hidden: true}, {kind: 'memo', id: 'm-3', text: '학생2 발표 연습'}, {kind: 'set', id: 'gone-distribution'}];
+  const ordered = await call(teacher, 'PATCH', path('class-a'), {plan, expectedRevision: 1});
+  same([ordered.status, ordered.data.settings.plan.length, ordered.data.settings.defaults.word.speechRate], [200, 6, 0.7], 'the plan saves next to the defaults without dropping them');
+  const list = await call(pupil(1), 'GET', ['student']), ids = list.data.distributions.map(row => row.id);
+  check(!ids.includes(before.id), 'a hidden row is not in the student list', ids);
+  same(list.data.layout.filter(row => row.kind === 'memo').map(row => row.id), ['m-1', 'm-3'], 'students get visible memos only');
+  const memoAt = list.data.layout.findIndex(row => row.id === 'm-1'), pickAt = list.data.layout.findIndex(row => row.id === ranged.id);
+  same([pickAt, list.data.layout[pickAt].highlight, ids.indexOf(spoken.id) < ids.indexOf(ranged.id)], [memoAt + 1, true, true], 'the teacher order holds: new rows first, then the memo and the highlighted set');
+  same(list.data.distributions.length, list.data.layout.filter(row => row.kind === 'set').length, 'every listed set has its place in the layout');
+  same((await call(pupil(1), 'GET', ['distributions', before.id])).status, 200, 'the hidden distribution and its data stay (direct open still works)');
+  check((await call(teacher, 'GET', ['distributions'], undefined, {query: '?classId=class-a'})).data.distributions.some(row => row.id === before.id), 'the teacher list keeps the hidden row');
+  const leak = await call(pupil(9), 'GET', ['student']);
+  check(!JSON.stringify(leak.data).includes('Unit 1-2'), 'a student of another class never sees these memos', leak.data);
+  refused(await call(teacher, 'PATCH', path('class-a'), {plan: [{kind: 'memo', id: 'long', text: '가'.repeat(201)}]}), 400, 'CLASS_SETTINGS', 'a memo over 200 characters is refused');
+  refused(await call(teacher, 'PATCH', path('class-a'), {plan: Array.from({length: 101}, (_, index) => ({kind: 'memo', id: `m${index}`, text: 'x'}))}), 400, 'CLASS_SETTINGS', 'more than 100 memos are refused');
+  refused(await call(teacher, 'PATCH', path('class-a'), {plan: [{kind: 'set', id: 'a/b'}]}), 400, 'CLASS_SETTINGS', 'a row id with a path is refused');
+  // 모든 반에 적용: defaults only; another class keeps its own plan, and an earlier owner's doc is replaced, not merged.
+  await db().doc('classes/class-c').set({ownerUid: teacher, name: '3-3', grade: 3});
+  await db().doc('cardClassSettings/class-c').set({ownerUid: stranger, classId: 'class-c', defaults: {word: {speechRate: 1.5}}, plan: [{kind: 'memo', id: 'old', text: '전 주인 메모'}], revision: 9});
+  const everywhere = await call(teacher, 'PATCH', path('class-a'), {defaults: {...defaults, sentence: {afterDue: 'open'}}, allClasses: true});
+  const other = (await db().doc('cardClassSettings/class-c').get()).data(), mine = (await call(teacher, 'GET', path('class-a'))).data.settings;
+  same([everywhere.data.classes, other.ownerUid, other.plan, other.defaults.word.speechRate, other.defaults.sentence.afterDue, mine.plan.length], [(await db().collection('classes').where('ownerUid', '==', teacher).get()).size, teacher, [], 0.7, 'open', 6], 'all classes get the defaults; their own plans stay and an old owner memo goes');
+  check(!(await db().doc('cardClassSettings/class-b').get()).exists, 'a class of another teacher is never written');
+  refused(await call(teacher, 'PATCH', path('class-a'), {plan: [], allClasses: true}), 400, undefined, 'only defaults go to all classes');
+  // Berry: order, hidden and memos, pseudonymous; distribute fills gaps from the class defaults.
+  const bearer = {uid: teacher, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read', 'classroom:write']};
+  const berry = await callClassroomTool('list_card_sets', {class_id: 'class-a'}, bearer);
+  const row = id => berry.card_sets.find(item => item.id === id);
+  same([row(before.id)?.hidden_from_students, row(ranged.id)?.highlight, row(ranged.id)?.order > row(spoken.id)?.order], [true, true, true], 'list_card_sets carries order, hidden and highlight');
+  check(berry.memos?.some(memo => memo.text === '3/12 수업: Unit 1-2') && !JSON.stringify(berry.memos).includes('학생1') && !JSON.stringify(berry.memos).includes('학생2') && berry.memos.some(memo => memo.hidden_from_students), 'memos reach Berry name-masked, hidden ones marked', berry.memos);
+  try {
+    const {planManage} = await import('@/modules/berry-connector/manage-tools');
+    const planned = await planManage('manage_cards', {action: 'distribute', class_id: 'class-a', set_id: setId}, bearer), body = planned.calls[0].body;
+    same([body.requiredModes.memorize.requiredCount, body.requiredModes.recall.requiredCount, body.test.questionCount, body.test.format, body.afterDue, body.speechRate], [0, 24, 5, 'choice', 'lock', 0.7], 'Berry distribute uses the class defaults when args are left out');
+    const told = await planManage('manage_cards', {action: 'distribute', class_id: 'class-a', set_id: setId, test: {goal_score: 60}}, bearer);
+    same(told.calls[0].body.test.goalScore, 60, 'what the teacher tells Berry still wins');
+  } catch (error) {check(false, 'manage_cards planning ran', String(error.stack ?? error).slice(0, 300));}
+}
+
+const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, games: gamesSection, mastery: masterySection, class: classSection};
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

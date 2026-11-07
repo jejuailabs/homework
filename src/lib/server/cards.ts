@@ -7,6 +7,8 @@ import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
 import { CARD_DUE_GRACE_MS, CARD_REVIEW_SESSION, buildCardChoices, buildTestQuestions, cardAfterDue, cardDueState, cardMissList, cardReviewDate, cardReviewStates, dueCardIds, isTestOvertime, nextCardReview, recordCardMisses, summarizeCardMisses, testTimeLimit } from '../cards-logic';
+import { parseSpeechRate } from './cards-policy';
+import { applyStudentPlan, cardClassSettings, classSettingsRef } from './cards-class-settings';
 import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
 import type { CardDirection, CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardReviewItem, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
 
@@ -58,7 +60,7 @@ function setSummary(snap: FirebaseFirestore.DocumentSnapshot): CardSetSummary {
   return { id: snap.id, title: value.title, description: value.description, type: value.type, cardCount: value.cardCount, folderId: value.folderId, version: value.version, versionId: value.versionId, archived: !!value.archived, createdAt: value.createdAt, updatedAt: value.updatedAt };
 }
 function distributionSummary(value: Distribution): CardDistributionSummary {
-  return { id: value.id, classId: value.classId, className: value.className, setId: value.setId, setVersion: value.setVersion, versionId: value.versionId, title: value.title, type: value.type, cardCount: value.cardCount, targetCount: value.targetCount, requiredModes: value.requiredModes, test: value.test, dueAt: value.dueAt, afterDue: cardAfterDue(value), allStudents: !!value.allStudents, active: value.active, createdAt: value.createdAt, updatedAt: value.updatedAt };
+  return { id: value.id, classId: value.classId, className: value.className, setId: value.setId, setVersion: value.setVersion, versionId: value.versionId, title: value.title, type: value.type, cardCount: value.cardCount, targetCount: value.targetCount, requiredModes: value.requiredModes, test: value.test, dueAt: value.dueAt, afterDue: cardAfterDue(value), allStudents: !!value.allStudents, active: value.active, createdAt: value.createdAt, updatedAt: value.updatedAt, speechRate: value.speechRate ?? null };
 }
 function visibleDistribution(value: Distribution, ctx: Context): CardDistribution {
   return { ...distributionSummary(value), snapshot: value.snapshot, targetStudentIds: ctx.role === 'student' ? [ctx.studentId!] : value.targetStudentIds };
@@ -213,7 +215,7 @@ async function distributions(ctx: Context, request: Request) {
   if (request.method === 'GET') {
     const params = new URL(request.url).searchParams, classId = id(params.get('classId'), '우리 반');
     await managedClass(ctx, classId);
-    const result = await pageQuery('cardClassSets', 'classId', classId, params.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt').get();
+    const result = await pageQuery('cardClassSets', 'classId', classId, params.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt', 'speechRate').get();
     const rows = result.docs.slice(0, CARD_LIST_LIMIT).map(asDistribution).filter(value => value.ownerUid === ctx.uid);
     return json({ distributions: (await liveTargetCounts(classId, rows)).map(distributionSummary), nextCursor: result.size > CARD_LIST_LIMIT ? rows.at(-1)?.id ?? null : null });
   }
@@ -241,11 +243,11 @@ async function distributions(ctx: Context, request: Request) {
     const targetStudentIds: string[] = allStudents || !requested.length ? activeIds : requested.map(value => id(value));
     if (!targetStudentIds.length || new Set(targetStudentIds).size !== targetStudentIds.length || targetStudentIds.some(value => !activeIds.includes(value))) throw new ApiError(400, '우리 반의 이용 가능한 학생을 선택해 주세요.', 'DISTRIBUTION_TARGETS');
     const data = version.data()!, snapshot: CardSnapshot = { title: data.title, description: data.description, type: data.type, cards: data.cards };
-    const requiredModes = parseRequirements(input.requiredModes, snapshot.cards.length), test = parseTestSettings(input.test, snapshot.cards.length), dueAt = parseDueAt(input.dueAt), afterDue = parseAfterDue(input.afterDue);
+    const requiredModes = parseRequirements(input.requiredModes, snapshot.cards.length), test = parseTestSettings(input.test, snapshot.cards.length), dueAt = parseDueAt(input.dueAt), afterDue = parseAfterDue(input.afterDue), speechRate = parseSpeechRate(input.speechRate);
     if (test.answerRelease === 'after-due' && !dueAt) throw new ApiError(400, '마감 후 정답 공개에는 마감 날짜가 필요해요.');
     const stamp = now();
     const targetStudents = roster.docs.filter(pupil => targetStudentIds.includes(pupil.id)).map(pupil => ({ id: pupil.id, name: String(pupil.data().name ?? ''), number: Number(pupil.data().number ?? 0) }));
-    const value: Distribution = { id: ref.id, ownerUid: ctx.uid, classId, className: cls.name, setId: set.id, setVersion: set.data()!.version, versionId: version.id, title: snapshot.title, type: snapshot.type, cardCount: snapshot.cards.length, cardIds: snapshot.cards.map(card => card.id), targetStudentIds, targetStudents, targetCount: targetStudentIds.length, allStudents, requiredModes, test, dueAt, afterDue, active: true, snapshot, createdAt: stamp, updatedAt: stamp };
+    const value: Distribution = { id: ref.id, ownerUid: ctx.uid, classId, className: cls.name, setId: set.id, setVersion: set.data()!.version, versionId: version.id, title: snapshot.title, type: snapshot.type, cardCount: snapshot.cards.length, cardIds: snapshot.cards.map(card => card.id), targetStudentIds, targetStudents, targetCount: targetStudentIds.length, allStudents, requiredModes, test, dueAt, afterDue, speechRate, active: true, snapshot, createdAt: stamp, updatedAt: stamp };
     tx.create(ref, value);
     if (requestState) tx.create(requestState.ref, { ownerUid: ctx.uid, fingerprint: requestState.fingerprint, distributionId: ref.id, createdAt: stamp });
     return value;
@@ -277,16 +279,19 @@ async function studentList(ctx: Context, request: Request) {
   student(ctx);
   const selected = new URL(request.url).searchParams.get('classId');
   if (selected && selected !== ctx.classId) throw new ApiError(403, '우리 반 세트만 볼 수 있어요.', 'FORBIDDEN');
-  const [result, cls, pupil, missed] = await Promise.all([
-    pageQuery('cardClassSets', 'classId', ctx.classId, new URL(request.url).searchParams.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'cardIds', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt').get(),
-    db().doc(`classes/${ctx.classId}`).get(), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), missRef(ctx.classId, ctx.studentId).get(),
+  const cursor = new URL(request.url).searchParams.get('cursor');
+  const [result, cls, pupil, missed, plan] = await Promise.all([
+    pageQuery('cardClassSets', 'classId', ctx.classId, new URL(request.url).searchParams.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'cardIds', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt', 'speechRate').get(),
+    db().doc(`classes/${ctx.classId}`).get(), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), missRef(ctx.classId, ctx.studentId).get(), cursor ? undefined : classSettingsRef(ctx.classId).get(),
   ]);
   if (!cls.exists || !pupil.exists || pupil.data()?.disabled || pupil.data()?.authUid !== ctx.uid) throw new ApiError(403, '우리 반 정보를 확인해 주세요.', 'STUDENT_UNAVAILABLE');
   const page = result.docs.slice(0, CARD_LIST_LIMIT);
-  const rows = page.map(asDistribution).filter(value => canStudyDistribution(ctx, value) && cls.data()!.ownerUid === value.ownerUid);
+  // Hidden rows leave the list only; the distribution and its records stay. Later pages keep server order and no memos.
+  const visible = page.map(asDistribution).filter(value => canStudyDistribution(ctx, value) && cls.data()!.ownerUid === value.ownerUid);
+  const { distributions: rows, layout } = cursor ? { distributions: visible, layout: undefined } : applyStudentPlan(visible, plan, cls.data()!.ownerUid);
   const states = rows.length ? await db().getAll(...rows.map(value => progressRef(value.id, ctx.studentId))) : [];
   const reviewable = new Set(rows.filter(value => cardDueState(value, Date.now(), CARD_DUE_GRACE_MS) !== 'lock').map(value => value.id));
-  return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), review: summarizeCardMisses(missed.data()?.misses, cardReviewDate(), reviewable), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null, serverTime: now() });
+  return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), review: summarizeCardMisses(missed.data()?.misses, cardReviewDate(), reviewable), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, ...(layout ? { layout } : {}), nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null, serverTime: now() });
 }
 function progressPreferences(input: Data, distribution: Distribution) {
   const update: Data = {}, ids = new Set(distribution.snapshot.cards.map(card => card.id));
@@ -527,6 +532,7 @@ export async function handleCards(request: Request, segments: string[] = []) {
     if (resource === 'library' && segments.length === 1 && method === 'GET') return await library(ctx, request);
     if (resource === 'student' && segments.length === 1 && method === 'GET') return await studentList(ctx, request);
     if (resource === 'review' && segments.length === 1 && method === 'GET') return await reviewCards(ctx, request);
+    if (resource === 'classes' && resourceId && operation === 'settings' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await cardClassSettings(ctx, request, resourceId);
     if (resource === 'folders' && segments.length <= 2 && ['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return await folders(ctx, request, resourceId);
     if (resource === 'sets') {
       if (!resourceId && method === 'POST') return await saveSet(ctx, request);

@@ -1,0 +1,21 @@
+/* 우리 반 학습 기본값·차시 메모·순서 (teacher dialogs) and the student list's memo and highlight rows. */
+.cards-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.cards-class-defaults h3,.cards-class-apply h3{font-size:15px;margin:18px 0 6px}
+.cards-class-tabs{display:flex;gap:6px;margin:12px 0 4px;padding:4px;background:var(--surface-alt);border-radius:13px}.cards-class-tabs button{flex:1;min-height:40px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-weight:600;cursor:pointer}.cards-class-tabs button[aria-selected=true]{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px #0002}
+.cards-class-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.cards-class-mode{border:1px solid var(--border);border-radius:13px;padding:8px 14px}.cards-class-mode.is-off{background:var(--surface-alt)}.cards-class-mode .cards-form-grid{gap:10px}.cards-class-mode strong{color:var(--accent)}
+.cards-class-defaults label small{display:block;margin-top:4px;font-size:11px}.cards-class-defaults .cards-check .cards-muted{font-size:11px}
+.cards-class-apply{border-top:1px solid var(--border);margin-top:16px}.cards-class-confirm{border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));background:var(--accent-soft);border-radius:13px;padding:12px 16px}.cards-class-confirm p{margin:0;font-size:13px;line-height:1.7}
+.cards-plan-add{margin:6px 0 10px}
+.cards-plan-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cards-plan-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:13px;background:var(--surface)}
+.cards-plan-row.memo{background:var(--surface-alt);border-style:dashed}.cards-plan-row.is-highlight{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}.cards-plan-row.is-hidden{opacity:.6}.cards-plan-row.is-dragging{opacity:.4}
+.cards-plan-grip{color:var(--muted);cursor:grab;user-select:none;padding:6px 2px;display:grid;place-items:center;touch-action:none}
+.cards-plan-body{flex:1;min-width:0;display:flex;align-items:center;gap:10px}.cards-plan-body .cards-set-icon{width:34px;height:38px;box-shadow:none}
+.cards-plan-copy{display:grid;gap:2px;min-width:0}.cards-plan-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cards-plan-copy small{color:var(--muted);font-size:11px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.cards-plan-memo{flex:1;display:flex;align-items:center;gap:8px;margin:0;color:var(--accent)}.cards-plan-memo input{flex:1;min-width:0;font-size:14px}
+.cards-plan-tools{display:flex;gap:2px;flex:none}.cards-plan-tools .icon-button[aria-pressed=true]{color:var(--accent)}
+.cards-class-plan .cards-dialog-footer>.cards-muted{margin-right:auto}
+.cards-class-buttons{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.cards-class-buttons .button{font-size:12px;min-height:36px;padding:7px 12px}
+.cs-plan-memo{display:flex;align-items:center;gap:8px;margin:6px 4px 0;padding:8px 14px;border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:0 12px 12px 0;font-weight:600;font-size:14px;color:var(--text);overflow-wrap:anywhere}.cs-plan-memo.is-highlight{box-shadow:0 0 0 2px var(--accent)}
+.cs-distribution.is-highlight{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}.cs-pick{display:inline-flex;align-items:center;gap:4px;color:var(--accent);font-weight:700}
+@media(max-width:740px){.cards-class-modes{grid-template-columns:1fr}.cards-class-mode .cards-form-grid{grid-template-columns:1fr 1fr}.cards-class-mode .cards-form-grid label{margin:4px 0 8px}.cards-plan-row{flex-wrap:wrap}.cards-plan-body{flex-basis:calc(100% - 40px)}.cards-plan-tools{width:100%;justify-content:flex-end}.cards-plan-tools .icon-button{min-width:40px;min-height:40px}}
