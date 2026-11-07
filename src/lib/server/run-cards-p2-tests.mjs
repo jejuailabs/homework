@@ -17,3 +17,6 @@ await import(dataUrl(compile('../cards-chunks.test.ts').replace("'./cards-chunks
 await import(dataUrl(compile('../cards-drill.test.ts').replace("'./cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))).replace("'./cards-logic'", JSON.stringify(logic))));
 await import(dataUrl(compile('../cards-notes.test.ts').replace("'./cards-notes'", JSON.stringify(dataUrl(compile('../cards-notes.ts'))))));
 await import(dataUrl(compile('../cards-rate.test.ts').replace("'./cards-rate'", JSON.stringify(dataUrl(compile('../cards-rate.ts'))))));
+// 기본 어휘 (§37): the data file is handed to the test as a module.
+const baseVocabData = dataUrl(`export default ${fs.readFileSync(new URL('../../data/cards-base-vocab.json', import.meta.url), 'utf8')};`);
+await import(dataUrl(compile('../cards-base-vocab.test.ts').replace("'../data/cards-base-vocab.json'", JSON.stringify(baseVocabData)).replace("'./cards-base-vocab'", JSON.stringify(dataUrl(compile('../cards-base-vocab.ts'))))));

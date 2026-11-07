@@ -1,16 +1,20 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { Timestamp } from 'firebase-admin/firestore';
 import { db } from './admin';
 import type { Context } from './auth';
 import { ApiError, canManageClass, id } from './policy';
-import { NOTE_THREAD_PAGE, noteRate, notePreview, noteText, sortThreads, type CardNote, type CardNoteThread } from '../cards-notes';
+import { NOTE_THREAD_PAGE, noteExpireMs, noteKeepFrom, noteKept, noteRate, notePreview, noteText, sortThreads, type CardNote, type CardNoteThread } from '../cards-notes';
 
 /**
  * 쪽지. One thread per student, `cardNotes/{classId}_{studentId}` with its messages below. The class switch
  * (`classes/{classId}/settings/cards.notesEnabled`, default off) lets students write to the teacher; the teacher may always write
  * and delete. A student only ever reaches their own thread through their verified session; nothing lists other students' notes.
  * Notes are a classroom message, not a record: Berry gets unread counts only, never the text.
+ * 1년 보관: every message carries `expireAt` (sent + 365 days) and the thread `expireAt` (last note + 365 days), which the
+ * Firestore TTL policies in firestore.indexes.json delete. Until TTL runs (and for older docs without the field) every read hides
+ * anything older than a year by `createdAt`/`lastAt`. scripts/backfill-card-note-expiry.mjs fills the field on older docs.
  */
 type Data = Record<string, any>;
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -19,6 +23,9 @@ const digest = (...parts: string[]) => createHash('sha256').update(JSON.stringif
 const settingsRef = (classId: string) => db().doc(`classes/${id(classId, '우리 반')}/settings/cards`);
 /** One thread per class, student and class owner: a new owner of the class starts a new thread and never reads or changes the old one. */
 export const noteThreadRef = (classId: string, studentId: string, ownerUid: string) => db().doc(`cardNotes/${id(classId)}_${id(studentId)}_${digest('note-owner', ownerUid).slice(0, 16)}`);
+const expireAt = (at: string) => Timestamp.fromMillis(noteExpireMs(at));
+/** A thread whose last note is older than a year reads as empty, whatever its stored counters say. */
+const liveThread = (data: Data | undefined) => data && noteKept(data.lastAt, Date.now()) ? data : undefined;
 const noteOf = (snap: FirebaseFirestore.DocumentSnapshot): CardNote => ({ id: snap.id, from: snap.data()!.from, text: snap.data()!.text, createdAt: snap.data()!.createdAt, read: snap.data()!.read === true });
 
 async function ownedClass(ctx: Context, classId: string) {
@@ -28,7 +35,7 @@ async function ownedClass(ctx: Context, classId: string) {
   return snap;
 }
 async function messages(thread: FirebaseFirestore.DocumentReference) {
-  const snap = await thread.collection('messages').orderBy('createdAt', 'desc').limit(NOTE_THREAD_PAGE).get();
+  const snap = await thread.collection('messages').where('createdAt', '>=', noteKeepFrom(Date.now())).orderBy('createdAt', 'desc').limit(NOTE_THREAD_PAGE).get();
   return snap.docs.map(noteOf).reverse();
 }
 /** Unread counts are recounted from the messages so a deleted message never leaves a badge behind. */
@@ -36,10 +43,10 @@ async function recount(thread: FirebaseFirestore.DocumentReference) {
   const [fromStudent, fromTeacher, last] = await Promise.all([
     thread.collection('messages').where('from', '==', 'student').where('read', '==', false).count().get(),
     thread.collection('messages').where('from', '==', 'teacher').where('read', '==', false).count().get(),
-    thread.collection('messages').orderBy('createdAt', 'desc').limit(1).get(),
+    thread.collection('messages').where('createdAt', '>=', noteKeepFrom(Date.now())).orderBy('createdAt', 'desc').limit(1).get(),
   ]);
   const latest = last.docs[0]?.data();
-  return { unreadTeacher: fromStudent.data().count, unreadStudent: fromTeacher.data().count, lastAt: latest?.createdAt ?? null, lastFrom: latest?.from ?? null, preview: latest ? notePreview(String(latest.text)) : '' };
+  return { unreadTeacher: fromStudent.data().count, unreadStudent: fromTeacher.data().count, lastAt: latest?.createdAt ?? null, lastFrom: latest?.from ?? null, preview: latest ? notePreview(String(latest.text)) : '', expireAt: latest ? expireAt(latest.createdAt) : Timestamp.now() };
 }
 async function markRead(thread: FirebaseFirestore.DocumentReference, from: 'teacher' | 'student') {
   const unread = await thread.collection('messages').where('from', '==', from).where('read', '==', false).limit(200).get();
@@ -62,9 +69,9 @@ async function send(ctx: Context, classId: string, studentId: string, ownerUid: 
     }
     const rate = noteRate(saved.data()?.recent, time);
     if (from === 'student' && !rate.allowed) throw new ApiError(429, '쪽지는 한 시간에 10개까지 보낼 수 있어요.', 'NOTE_RATE');
-    const note = { from, text, createdAt: stamp, read: false, authorUid: ctx.uid };
+    const note = { from, text, createdAt: stamp, read: false, authorUid: ctx.uid, expireAt: expireAt(stamp) };
     tx.create(messageRef, note);
-    tx.set(thread, { classId, studentId, ownerUid, lastAt: stamp, lastFrom: from, preview: notePreview(text), unreadTeacher: (saved.data()?.unreadTeacher ?? 0) + (from === 'student' ? 1 : 0), unreadStudent: (saved.data()?.unreadStudent ?? 0) + (from === 'teacher' ? 1 : 0), ...(from === 'student' ? { recent: [...rate.kept, time] } : {}), updatedAt: stamp }, { merge: true });
+    tx.set(thread, { classId, studentId, ownerUid, lastAt: stamp, lastFrom: from, preview: notePreview(text), unreadTeacher: (saved.data()?.unreadTeacher ?? 0) + (from === 'student' ? 1 : 0), unreadStudent: (saved.data()?.unreadStudent ?? 0) + (from === 'teacher' ? 1 : 0), ...(from === 'student' ? { recent: [...rate.kept, time] } : {}), expireAt: expireAt(stamp), updatedAt: stamp }, { merge: true });
     return { id: messageRef.id, from, text, createdAt: stamp, read: false } satisfies CardNote;
   });
 }
@@ -80,7 +87,7 @@ export async function teacherNotes(ctx: Context, request: Request, classId: stri
     }
     if (method !== 'GET') throw new ApiError(404, '카드놀이 기능을 찾을 수 없어요.', 'NOT_FOUND');
     const [settings, threads] = await Promise.all([settingsRef(cls.id).get(), db().collection('cardNotes').where('classId', '==', cls.id).limit(400).get()]);
-    const mine = threads.docs.filter(doc => doc.data().ownerUid === ctx.uid), enabled = settings.data()?.notesEnabled === true;
+    const mine = threads.docs.filter(doc => doc.data().ownerUid === ctx.uid && liveThread(doc.data())), enabled = settings.data()?.notesEnabled === true;
     const unread = mine.reduce((sum, doc) => sum + Number(doc.data().unreadTeacher ?? 0), 0);
     // The light summary for the button badge reads no roster.
     if (new URL(request.url).searchParams.get('summary') === '1') return json({ enabled, unread });
@@ -129,14 +136,14 @@ export async function studentNotes(ctx: Context, request: Request, input: Data) 
 /** For the student list: whether notes are on and how many teacher notes wait unread. Two small reads. */
 export async function studentNoteSummary(classId: string, studentId: string, ownerUid: string) {
   const [settings, thread] = await db().getAll(settingsRef(classId), noteThreadRef(classId, studentId, ownerUid));
-  const mine = thread.exists && thread.data()?.ownerUid === ownerUid;
+  const mine = thread.exists && thread.data()?.ownerUid === ownerUid && !!liveThread(thread.data());
   return { enabled: settings.data()?.notesEnabled === true, unread: mine ? Number(thread.data()?.unreadStudent ?? 0) : 0, any: mine };
 }
 /** For Berry: per class whether notes are on and how many student notes wait. Never the text or who wrote. */
 export async function cardNoteCounts(classIds: string[], ownerUid: string) {
   return Promise.all(classIds.map(async classId => {
-    const [settings, threads] = await Promise.all([settingsRef(classId).get(), db().collection('cardNotes').where('classId', '==', classId).select('ownerUid', 'unreadTeacher').limit(400).get()]);
-    const mine = threads.docs.filter(doc => doc.data().ownerUid === ownerUid);
+    const [settings, threads] = await Promise.all([settingsRef(classId).get(), db().collection('cardNotes').where('classId', '==', classId).select('ownerUid', 'unreadTeacher', 'lastAt').limit(400).get()]);
+    const mine = threads.docs.filter(doc => doc.data().ownerUid === ownerUid && liveThread(doc.data()));
     return { classId, enabled: settings.data()?.notesEnabled === true, unread: mine.reduce((sum, doc) => sum + Number(doc.data().unreadTeacher ?? 0), 0), students_waiting: mine.filter(doc => Number(doc.data().unreadTeacher ?? 0) > 0).length };
   }));
 }
