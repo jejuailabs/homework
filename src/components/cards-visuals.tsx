@@ -199,7 +199,7 @@ export function CardCountdownDigit({value, size = 160}: {value: number; size?: n
 }
 
 /** 많이 틀린 단어. 정렬은 쓰는 쪽에서 하지 않아도 되도록 오답률 높은 순으로 그린다. */
-export function CardHardWordsChart({words, width = 480, limit = 6}: {words: Array<{word: string; wrongRate: number; wrongCount: number}>; width?: number; limit?: number}) {
+export function CardHardWordsChart({words, width = 480, limit = 6, copy = {title: '많이 틀린 단어', rate: '오답률', times: (count) => `${count}번`}}: {words: Array<{word: string; wrongRate: number; wrongCount: number}>; width?: number; limit?: number; copy?: {title: string; rate: string; times: (count: number) => string}}) {
   const rows = [...words].sort((a, b) => b.wrongRate - a.wrongRate).slice(0, limit);
   const rowHeight = 30;
   const height = rows.length * rowHeight + 4;
@@ -207,17 +207,17 @@ export function CardHardWordsChart({words, width = 480, limit = 6}: {words: Arra
   const right = 92;
   const track = 480 - left - right;
   return (
-    <svg width={width} height={width * height / 480} viewBox={`0 0 480 ${height}`} role="img" aria-label={`많이 틀린 단어: ${rows.map((row) => `${row.word} ${Math.round(row.wrongRate)}%`).join(', ')}`}>
+    <svg width={width} height={width * height / 480} viewBox={`0 0 480 ${height}`} role="img" aria-label={`${copy.title}: ${rows.map((row) => `${row.word} ${Math.round(row.wrongRate)}%`).join(', ')}`}>
       {rows.map((row, index) => {
         const y = index * rowHeight + 4;
         const percent = clampPercent(row.wrongRate);
         return (
           <g key={row.word}>
-            <title>{`${row.word}: 오답률 ${Math.round(percent)}%, ${row.wrongCount}번 틀림`}</title>
+            <title>{`${row.word}: ${copy.rate} ${Math.round(percent)}%, ${copy.times(row.wrongCount)}`}</title>
             <text x={left - 10} y={y + 13} textAnchor="end" fontSize="13" fontWeight="600" fill="var(--text)">{row.word}</text>
             <path d={`M${left} ${y + 18}h${track}`} stroke="var(--border)" strokeWidth="1"/>
             {percent > 0 && <rect x={left} y={y + 3} width={Math.max(4, track * percent / 100)} height="14" rx="4" fill="var(--coral)"/>}
-            <text x={left + track + 10} y={y + 14} fontSize="12" fill="var(--text)" style={{fontVariantNumeric: 'tabular-nums'}}>{`${Math.round(percent)}%`}<tspan fill="var(--muted)">{` · ${row.wrongCount}번`}</tspan></text>
+            <text x={left + track + 10} y={y + 14} fontSize="12" fill="var(--text)" style={{fontVariantNumeric: 'tabular-nums'}}>{`${Math.round(percent)}%`}<tspan fill="var(--muted)">{` · ${copy.times(row.wrongCount)}`}</tspan></text>
           </g>
         );
       })}
@@ -226,11 +226,11 @@ export function CardHardWordsChart({words, width = 480, limit = 6}: {words: Arra
 }
 
 /** 완료·진행·미시작 학생 수 띠. 값이 0인 칸은 그리지 않는다. */
-export function CardClassStatusBar({done, active, waiting, width = 480}: {done: number; active: number; waiting: number; width?: number}) {
+export function CardClassStatusBar({done, active, waiting, width = 480, copy = {done: '완료', active: '진행 중', waiting: '미시작', people: (count) => `${count}명`}}: {done: number; active: number; waiting: number; width?: number; copy?: {done: string; active: string; waiting: string; people: (count: number) => string}}) {
   const items = [
-    {label: '완료', value: done, fill: 'var(--accent)'},
-    {label: '진행 중', value: active, fill: 'var(--accent-soft)'},
-    {label: '미시작', value: waiting, fill: 'var(--border)'},
+    {label: copy.done, value: done, fill: 'var(--accent)'},
+    {label: copy.active, value: active, fill: 'var(--accent-soft)'},
+    {label: copy.waiting, value: waiting, fill: 'var(--border)'},
   ];
   const total = items.reduce((sum, item) => sum + item.value, 0);
   const gap = 2;
@@ -238,17 +238,17 @@ export function CardClassStatusBar({done, active, waiting, width = 480}: {done: 
   const usable = 480 - gap * Math.max(present.length - 1, 0);
   let x = 0;
   return (
-    <svg width={width} height={width * 52 / 480} viewBox="0 0 480 52" role="img" aria-label={items.map((item) => `${item.label} ${item.value}명`).join(', ')}>
+    <svg width={width} height={width * 52 / 480} viewBox="0 0 480 52" role="img" aria-label={items.map((item) => `${item.label} ${copy.people(item.value)}`).join(', ')}>
       {present.map((item) => {
         const segment = total ? usable * item.value / total : 0;
-        const node = <rect key={item.label} x={x} y="0" width={segment} height="18" rx="4" fill={item.fill}><title>{`${item.label} ${item.value}명`}</title></rect>;
+        const node = <rect key={item.label} x={x} y="0" width={segment} height="18" rx="4" fill={item.fill}><title>{`${item.label} ${copy.people(item.value)}`}</title></rect>;
         x += segment + gap;
         return node;
       })}
       {items.map((item, index) => (
         <g key={item.label} transform={`translate(${index * 112} 30)`}>
           <rect y="4" width="12" height="12" rx="3" fill={item.fill}/>
-          <text x="18" y="15" fontSize="13" fill="var(--text)" style={{fontVariantNumeric: 'tabular-nums'}}>{`${item.label} ${item.value}명`}</text>
+          <text x="18" y="15" fontSize="13" fill="var(--text)" style={{fontVariantNumeric: 'tabular-nums'}}>{`${item.label} ${copy.people(item.value)}`}</text>
         </g>
       ))}
     </svg>
