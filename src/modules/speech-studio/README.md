@@ -10,11 +10,11 @@
     - PDF는 `pdfjs-dist`로 브라우저에서 열고 페이지 글을 꺼낸다.
     - 글이 없는 그림 페이지는 직접 입력하거나 AI로 읽게 한다.
   - 책을 추가할 때 출처, 이용 조건, 사용 확인을 반드시 받는다.
-  - 책·PDF·AI 목소리는 이 기기의 IndexedDB에만 저장한다. 서버에 올리거나 공개하지 않는다.
+  - 책·PDF는 이 기기의 IndexedDB에만 저장한다. 서버에 올리거나 공개하지 않는다. AI 목소리를 쓰면 읽을 문장만 서버로 보내 음성을 만들고, 그 음성은 서버 공용 캐시와 이 기기에 남는다.
 - **읽어 주기**
   - 문장 단위로 읽으며 읽는 문장을 강조한다.
   - 방법은 혼자 듣기, 한 문장씩 따라 읽기, 번갈아 읽기(AI 한 문장·아이 한 문장) 세 가지다.
-  - 목소리는 기본이 기기 목소리(`speechSynthesis`, 무료)다. AI 목소리는 문장마다 한 번 만들어 기기에 캐시한다.
+  - 목소리는 기본이 기기 목소리(`speechSynthesis`, 무료)다. AI 목소리는 카드놀이와 같은 원어민 음성(Google Chirp 3 HD, `/api/tts`)이다. 같은 문장은 모든 반이 서버 캐시(`tts/v1/`)를 함께 쓰고, 이 기기에서도 IndexedDB에 한 번 더 저장한다. 빠르기는 기기에서 재생 속도로 바꾼다. 서버 음성이 꺼졌거나 실패하면 그 문장을 기기 목소리로 읽는다.
 - **말하기 연습**
   - 활동은 따라 읽기, 주제 말하기, 말로 쓰기 세 가지다.
   - 녹음은 최대 2분이고, 16kHz 모노 WAV로 바꾼다.
@@ -42,7 +42,7 @@
 
 AI 전사 때 원문을 프롬프트로 넘기지 않는다. 넘기면 아이가 실제로 읽은 말 대신 읽어야 할 말을 듣게 되기 때문이다. 기본 모델 `gpt-transcribe`는 글만 돌려주므로 "확인 필요" 구간 표시가 없다. `SPEECH_TRANSCRIBE_MODEL=whisper-1`(2027-02-26 종료 예정)로 바꾸면 구간별 신뢰도(`avg_logprob`, `no_speech_prob`, `compression_ratio`)가 낮은 부분을 표시한다.
 
-`gpt-4o-mini-tts`는 숫자 속도 대신 말투 지시(`instructions`)로 빠르기를 전한다. `tts-1` 계열로 바꾸면 숫자 속도를 쓴다. 두 모델 모두 2027-01-06 종료 예정이며 후속 방식은 [AGENTS.md](../../../AGENTS.md)의 모델 종료 일정을 따른다.
+읽어 주기 AI 목소리는 2026-11-08부터 공용 서버 음성(`GOOGLE_TTS_ENABLED=true`, [CARDS_SPEC.md §37](../../../CARDS_SPEC.md))을 쓴다. 예전 OpenAI 목소리(`gpt-4o-mini-tts`, 기기 캐시만)는 `SPEECH_TTS_PROVIDER=openai`일 때만 남아 있고, 모델이 2027-01-06에 끝나므로 그때 `voice()` 경로와 함께 지운다. 기본값에서 예전 경로는 410 `VOICE_MOVED`를 돌려준다.
 
 ## 저장과 개인정보
 
@@ -59,13 +59,13 @@ AI 전사 때 원문을 프롬프트로 넘기지 않는다. 넘기면 아이가
 
 ## AI와 비용
 
-`SPEECH_AI_ENABLED=true`와 `OPENAI_API_KEY`가 모두 있어야 켜진다. 꺼져 있으면 서재, 기기 목소리, 녹음, 기기 인식·직접 입력, 모든 측정, 기록 저장은 그대로 쓸 수 있고 별도 비용이 없다.
+전사·피드백·페이지 글 읽기는 `SPEECH_AI_ENABLED=true`와 `OPENAI_API_KEY`가 모두 있어야 켜진다. AI 목소리는 `GOOGLE_TTS_ENABLED=true`로 따로 켠다. 꺼져 있으면 서재, 기기 목소리, 녹음, 기기 인식·직접 입력, 모든 측정, 기록 저장은 그대로 쓸 수 있고 별도 비용이 없다.
 
 | 기능 | API 경로 | 기본 모델 | 비용이 드는 때 |
 |---|---|---|---|
 | 전사 | `POST /api/speech-studio/transcribe` | `gpt-transcribe` | 녹음 1건마다(분 단위) |
 | 피드백 | `POST /api/speech-studio/feedback` | `gpt-6-luna` | 교사가 버튼을 누를 때마다 |
-| 읽어 주기 목소리 | `POST /api/speech-studio/voice` | `gpt-4o-mini-tts` | 문장마다 처음 1번. 이후는 기기 캐시를 쓴다 |
+| 읽어 주기 목소리 | `POST /api/tts` (공용) | Google Chirp 3 HD (`GOOGLE_TTS_FAMILY=neural2`면 Neural2) | 모든 반을 통틀어 같은 문장 처음 1번. `SPEECH_AI_ENABLED`와 별개로 `GOOGLE_TTS_ENABLED`로 켠다 |
 | 그림 페이지 글 읽기 | `POST /api/speech-studio/page-text` | `gpt-6-luna` | 교사가 버튼을 누를 때마다 |
 
 - 모든 호출은 `runMeteredAi`의 교사·전체 한도를 따르고, 관리자 **API 사용량** 화면에 기능별로 집계된다.

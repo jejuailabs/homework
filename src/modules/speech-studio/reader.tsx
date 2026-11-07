@@ -5,14 +5,14 @@ import type {PDFDocumentProxy} from 'pdfjs-dist';
 import {BOOK_PDF_MAX, bookLevel, bookLicenses, isBookLicense, pageSentences, pagesFromText, sampleBooks, type Book, type BookLicense, type BookPage} from './books';
 import {deleteBook, listBooks, loadPdf, saveBook} from './store';
 import {openPdf, pdfPageImage, pdfPageTexts, renderPdfPage} from './pdf';
-import {deviceVoiceAvailable, readModeName, useReadAloud, type ReadMode, type VoiceSource} from './read-aloud';
+import {deviceVoiceAvailable, readModeName, useReadAloud, type ReadMode, type VoiceProvider, type VoiceSource} from './read-aloud';
 import type {ReaderVoice} from './policy';
 
 export const levelName = (level: number) => `${level}단계`;
 const voiceName: Record<ReaderVoice, string> = {bright: '밝은 목소리', calm: '차분한 목소리', warm: '따뜻한 목소리'};
 
-export default function Reader({scope, classId, ai, books, setBooks, onPractice}: {
-  scope: string; classId: string; ai: boolean; books: Book[]; setBooks: (books: Book[]) => void;
+export default function Reader({scope, classId, ai, voiceProvider, books, setBooks, onPractice}: {
+  scope: string; classId: string; ai: boolean; voiceProvider: VoiceProvider | null; books: Book[]; setBooks: (books: Book[]) => void;
   onPractice: (book: Book, page: number) => void;
 }) {
   const [open, setOpen] = useState<Book | null>(null), [adding, setAdding] = useState(false), [error, setError] = useState('');
@@ -31,7 +31,7 @@ export default function Reader({scope, classId, ai, books, setBooks, onPractice}
     await deleteBook(scope, book.id).catch(() => undefined);
     setBooks(books.filter(b => b.id !== book.id)); setOpen(null);
   }
-  if (open) return <BookView key={open.id} book={open} scope={scope} classId={classId} ai={ai} onBack={() => setOpen(null)} onChange={update} onDelete={() => void remove(open)} onPractice={page => onPractice(open, page)}/>;
+  if (open) return <BookView key={open.id} book={open} scope={scope} classId={classId} ai={ai} voiceProvider={voiceProvider} onBack={() => setOpen(null)} onChange={update} onDelete={() => void remove(open)} onPractice={page => onPractice(open, page)}/>;
   return <div className="ss-library">
     <div className="ss-library-head">
       <div><h3>동화 서재</h3><p>책은 이 기기에만 저장돼요. 다른 곳에 공개되지 않아요.</p></div>
@@ -105,15 +105,15 @@ function AddBook({scope, onClose, onAdded}: {scope: string; onClose: () => void;
   </dialog>;
 }
 
-function BookView({book, scope, classId, ai, onBack, onChange, onDelete, onPractice}: {
-  book: Book; scope: string; classId: string; ai: boolean; onBack: () => void; onChange: (book: Book) => Promise<void>; onDelete: () => void; onPractice: (page: number) => void;
+function BookView({book, scope, classId, ai, voiceProvider, onBack, onChange, onDelete, onPractice}: {
+  book: Book; scope: string; classId: string; ai: boolean; voiceProvider: VoiceProvider | null; onBack: () => void; onChange: (book: Book) => Promise<void>; onDelete: () => void; onPractice: (page: number) => void;
 }) {
   const [page, setPage] = useState(0), [doc, setDoc] = useState<PDFDocumentProxy | null>(null), [pdfError, setPdfError] = useState('');
   const [mode, setMode] = useState<ReadMode>('listen'), [source, setSource] = useState<VoiceSource>(deviceVoiceAvailable() ? 'device' : 'ai');
   const [voice, setVoice] = useState<ReaderVoice>('bright'), [speed, setSpeed] = useState(0.9), [editing, setEditing] = useState(false), [draft, setDraft] = useState('');
   const [ocr, setOcr] = useState(false), [notice, setNotice] = useState(''), [showPdf, setShowPdf] = useState(true);
   const canvas = useRef<HTMLCanvasElement>(null), frame = useRef<HTMLDivElement>(null);
-  const reader = useReadAloud({scope, bookId: book.id, classId, source, voice, speed, mode});
+  const reader = useReadAloud({scope, bookId: book.id, classId, source, provider: voiceProvider ?? 'google', voice, speed, mode});
   const sentences = useMemo(() => pageSentences(book.pages[page]), [book.pages, page]);
   const total = book.pages.length;
 
@@ -194,11 +194,11 @@ function BookView({book, scope, classId, ai, onBack, onChange, onDelete, onPract
       <label className="ss-inline">방법<select value={mode} onChange={e => {reader.stop(); setMode(e.target.value as ReadMode);}}>{Object.entries(readModeName).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
       <label className="ss-inline">목소리<select value={source === 'ai' ? voice : 'device'} onChange={e => {reader.stop(); if (e.target.value === 'device') setSource('device'); else {setSource('ai'); setVoice(e.target.value as ReaderVoice);}}}>
         {deviceVoiceAvailable() && <option value="device">기기 목소리 (무료)</option>}
-        {ai && Object.entries(voiceName).map(([k, v]) => <option key={k} value={k}>AI {v}</option>)}
+        {voiceProvider && Object.entries(voiceName).map(([k, v]) => <option key={k} value={k}>AI {v}</option>)}
       </select></label>
       <label className="ss-inline">빠르기<input type="range" min={0.7} max={1.2} step={0.1} value={speed} onChange={e => {reader.stop(); setSpeed(+e.target.value);}} aria-valuetext={`${speed}배`}/><span>{speed.toFixed(1)}배</span></label>
       <button type="button" className="ss-secondary ss-push" disabled={!sentences.length} onClick={() => {reader.stop(); onPractice(page);}}><Mic size={16}/>이 쪽 따라 읽기 녹음</button>
     </div>
-    {source === 'ai' && <p className="ss-foot">AI 목소리는 문장마다 한 번 만들어 이 기기에 저장해 두고 다시 써요. 처음 만들 때만 비용이 들어요.</p>}
+    {source === 'ai' && <p className="ss-foot">{voiceProvider === 'openai' ? 'AI 목소리는 문장마다 한 번 만들어 이 기기에 저장해 두고 다시 써요. 처음 만들 때만 비용이 들어요.' : 'AI 목소리(원어민 음성)는 같은 문장을 모든 반이 함께 써요. 처음 만들 때만 비용이 들고, 안 되면 기기 목소리로 읽어요.'}</p>}
   </div>;
 }

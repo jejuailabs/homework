@@ -1,6 +1,8 @@
 export const AI_USAGE_PRICING_DATE='2026-10-24';
-export type AiProviderUsage={inputTokens:number|null;cachedInputTokens:number|null;outputTokens:number|null;totalTokens:number|null;audioSeconds:number|null;webSearchCalls:number;serviceTier:string|null;estimatedUsd:number|null;pricingDate:string};
-export type AiUsageHints={audioSeconds?:number;serviceTier?:string};
+export type AiProviderUsage={inputTokens:number|null;cachedInputTokens:number|null;outputTokens:number|null;totalTokens:number|null;audioSeconds:number|null;characters?:number|null;webSearchCalls:number;serviceTier:string|null;estimatedUsd:number|null;pricingDate:string};
+export type AiUsageHints={audioSeconds?:number;serviceTier?:string;characters?:number};
+/** Google Cloud Text-to-Speech, USD per 1M input characters (list price checked 2026-11-08). Cache hits are never metered. */
+export const TTS_USD_PER_MILLION_CHARS:Record<string,number>={'google-tts-chirp3-hd':30,'google-tts-neural2':16};
 export type AiUsageObserver=(payload:unknown,hints?:AiUsageHints)=>void;
 const record=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
 const amount=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1_000_000_000?value:null;
@@ -13,7 +15,9 @@ export function aiProviderUsage(payload:unknown,model:string,hints:AiUsageHints=
   if(model==='gpt-6-luna'&&inputTokens!==null&&outputTokens!==null){const multiplier=serviceTier==='default'?1:serviceTier==='flex'?.5:serviceTier==='priority'||serviceTier==='fast'?2:null;if(multiplier!==null){const cached=Math.min(inputTokens,cachedInputTokens??0);estimatedUsd=((inputTokens-cached)*.1+cached*.01+outputTokens*.5)/1_000_000*multiplier+webSearchCalls*.01;}}
   if(model==='gpt-transcribe'&&audioSeconds!==null)estimatedUsd=audioSeconds/60*.0045;
   if(model==='whisper-1'&&audioSeconds!==null)estimatedUsd=audioSeconds/60*.006;
-  return{inputTokens,cachedInputTokens,outputTokens,totalTokens,audioSeconds,webSearchCalls,serviceTier,estimatedUsd,pricingDate:AI_USAGE_PRICING_DATE};
+  const characters=amount(hints.characters);
+  if(Object.hasOwn(TTS_USD_PER_MILLION_CHARS,model)&&characters!==null)estimatedUsd=characters/1_000_000*TTS_USD_PER_MILLION_CHARS[model];
+  return{inputTokens,cachedInputTokens,outputTokens,totalTokens,audioSeconds,...(characters!==null?{characters}:{}),webSearchCalls,serviceTier,estimatedUsd,pricingDate:AI_USAGE_PRICING_DATE};
 }
 export type AiUsageJob={actorUid:string;classId?:string;tool?:string;model?:string;status:string;createdAt:string;usage?:AiProviderUsage;durationMs?:number|null};
 export type AiUsageMetrics={requests:number;done:number;failed:number;running:number;measuredCalls:number;pricedCalls:number;inputTokens:number;cachedInputTokens:number;outputTokens:number;totalTokens:number;audioSeconds:number;webSearchCalls:number;estimatedUsd:number};
@@ -30,7 +34,7 @@ export function aiUsagePeriod(from:string|null,to:string|null,now=new Date()){
   const parse=(day:string)=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(day))throw Error('INVALID_DATE');const time=Date.parse(day+'T00:00:00+09:00');if(!Number.isFinite(time)||new Date(time+9*3600_000).toISOString().slice(0,10)!==day)throw Error('INVALID_DATE');return time;};
   const begin=parse(start),finish=parse(end)+86_400_000;if(finish<=begin||finish-begin>31*86_400_000)throw Error('INVALID_DATE_RANGE');return{from:start,to:end,start:new Date(begin).toISOString(),end:new Date(finish).toISOString()};
 }
-export const aiFeatureName=(tool:string)=>({handwriting:'사진 글 정리',resource:'수업자료',adapt:'수준 맞추기',feedback:'피드백',notice:'안내문',conference:'상담 준비',notes:'관찰·회의 기록','tool-plan':'도구 AI 보조',report:'수업 리포트',neighborhood:'우리 동네 탐험','artwork-author':'작가명 읽기','voice-caption':'음성 설명 텍스트 변환','speech-transcribe':'말하기 전사','speech-feedback':'말하기 피드백','speech-voice':'동화 읽어주기 음성','speech-page-text':'동화 페이지 글 읽기'} as Record<string,string>)[tool]||tool;
+export const aiFeatureName=(tool:string)=>({handwriting:'사진 글 정리',resource:'수업자료',adapt:'수준 맞추기',feedback:'피드백',notice:'안내문',conference:'상담 준비',notes:'관찰·회의 기록','tool-plan':'도구 AI 보조',report:'수업 리포트',neighborhood:'우리 동네 탐험','artwork-author':'작가명 읽기','voice-caption':'음성 설명 텍스트 변환','speech-transcribe':'말하기 전사','speech-feedback':'말하기 피드백','speech-voice':'동화 읽어주기 음성','speech-page-text':'동화 페이지 글 읽기','tts':'원어민 읽어주기 음성'} as Record<string,string>)[tool]||tool;
 /** Per-teacher token totals with the same totals split by feature, largest token use first. */
 export function summarizeTeacherTokens(jobs:AiUsageJob[]){
   const teachers=new Map<string,{total:AiUsageJob[];tools:Map<string,AiUsageJob[]>}>();

@@ -62,6 +62,7 @@ await import(moduleUrl(compile('../photo-taken-date.test.ts').replace("'./photo-
 const homeworkSyncPolicyUrl = moduleUrl(compile('./homework-sync-policy.ts').replace("'./policy'", JSON.stringify(policyUrl)));
 await import(moduleUrl(compile('./homework-sync-policy.test.ts').replace("'./homework-sync-policy'", JSON.stringify(homeworkSyncPolicyUrl))));
 await import('./run-ai-tests.mjs');
+await import('./run-tts-tests.mjs');
 await import('./run-upload-transfer-tests.mjs');
 await import('./run-assignment-visibility-tests.mjs');
 await import('./run-video-tests.mjs');

@@ -6,6 +6,7 @@ import {fitFontSize, speechLang} from '@/lib/cards-classroom';
 import ko from '@/messages/cards-classroom-ko.json';
 import en from '@/messages/cards-classroom-en.json';
 import {cardsRequest} from './cards-shared';
+import {speakWithDevice, ttsPlayer} from '@/lib/tts-client';
 
 export type ClassroomCopyKey = keyof typeof ko;
 export function useClassroomCopy() {
@@ -42,12 +43,14 @@ export function FitText({text, min = 18, max = 220, className = ''}: {text: stri
   return <div ref={box} className={`cards-fit ${className}`}><span ref={inner} lang={speechLang(text).slice(0, 2)}>{text}</span></div>;
 }
 
+/** 원어민 음성(서버 TTS)으로 읽고, 꺼졌거나 실패하면 기기 목소리(`speechSynthesis`)로 읽는다. */
 export function useSpeech() {
   const [can, setCan] = useState(false);
-  useEffect(() => {setCan('speechSynthesis' in window); return () => {if ('speechSynthesis' in window) window.speechSynthesis.cancel();};}, []);
+  useEffect(() => {setCan('speechSynthesis' in window || typeof Audio !== 'undefined'); return () => {ttsPlayer().stop(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();};}, []);
   const speak = useCallback((text: string, rate: number) => {
-    if (!('speechSynthesis' in window) || !text.trim()) return;
-    window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.lang = speechLang(text); utterance.rate = rate; window.speechSynthesis.speak(utterance);
+    if (!text.trim()) return;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    void ttsPlayer().speak(text, {rate, fallback: () => speakWithDevice(text, rate, undefined, speechLang(text))});
   }, []);
   return {can, speak};
 }

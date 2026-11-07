@@ -8,6 +8,7 @@ import {AiError, completedAiText, providerFailure, readBoundedJson} from '@/lib/
 import {ApiError, id} from '@/lib/server/policy';
 import {handwritingImage} from '@/lib/server/handwriting-image';
 import {HANDWRITING_IMAGE_LIMIT} from '@/lib/server/handwriting-policy';
+import {googleTtsEnabled} from '@/lib/server/tts';
 import {
   cleanFeedback, cleanMetrics, cleanRecord, feedbackInput, feedbackInstructions, feedbackSchema, readerVoices, REFERENCE_LIMIT,
   speechModes, speechTranscript, speechWavSeconds, SPEECH_MAX_BYTES, TRANSCRIPT_LIMIT, VOICE_TEXT_LIMIT, type ReaderVoice, type SpeechMode,
@@ -24,6 +25,12 @@ const model = {
 };
 /** Paid features stay off until the owner approves the cost and sets SPEECH_AI_ENABLED=true. */
 const aiEnabled = () => process.env.SPEECH_AI_ENABLED === 'true' && Boolean(process.env.OPENAI_API_KEY?.trim());
+/**
+ * Reader voices come from the shared Google audio (/api/tts, GOOGLE_TTS_ENABLED=true). SPEECH_TTS_PROVIDER=openai
+ * keeps the old per-device OpenAI voice until gpt-4o-mini-tts ends on 2027-01-06; remove it then.
+ */
+const legacyVoice = () => process.env.SPEECH_TTS_PROVIDER?.trim() === 'openai';
+const voiceProvider = () => legacyVoice() ? (aiEnabled() ? 'openai' : null) : googleTtsEnabled() ? 'google' : null;
 function requireAi() {
   if (process.env.SPEECH_AI_ENABLED !== 'true') throw new ApiError(503, 'AI 기능이 꺼져 있어요. 기기 인식이나 직접 입력으로 계속할 수 있어요.', 'SPEECH_AI_DISABLED');
   if (!process.env.OPENAI_API_KEY?.trim()) throw new AiError(503, 'AI 연결 설정을 확인해 주세요.', 'AI_NOT_CONFIGURED');
@@ -112,8 +119,9 @@ async function feedback(request: Request, ctx: Context) {
   }, optionalClass(input.classId));
 }
 
-/** Read-aloud audio for one page. The browser caches it per book, so each page is paid for once per device. */
+/** Legacy OpenAI read-aloud audio for one page (SPEECH_TTS_PROVIDER=openai). The browser caches it per book, so each page is paid for once per device. */
 async function voice(request: Request, ctx: Context) {
+  if (!legacyVoice()) throw new ApiError(410, '읽어 주기 목소리는 새 방식으로 바뀌었어요. 화면을 새로 고쳐 주세요.', 'VOICE_MOVED');
   requireAi();
   const input = await body(request, 16_000);
   const text = typeof input.text === 'string' ? input.text.replace(/\s+/g, ' ').trim() : '';
@@ -161,7 +169,7 @@ async function records(request: Request, ctx: Context, recordId?: string) {
     const snapshot = await db().collection('speechRecords').where('classId', '==', classId).limit(RECORDS_LIMIT + 1).get();
     const list = snapshot.docs.map(doc => ({...doc.data(), id: doc.id}) as Record<string, unknown>).filter(row => row.ownerUid === ctx.uid)
       .map(({ownerUid: _owner, ...row}) => row).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    return json({records: list.slice(0, RECORDS_LIMIT), truncated: snapshot.size > RECORDS_LIMIT, ai: aiEnabled()});
+    return json({records: list.slice(0, RECORDS_LIMIT), truncated: snapshot.size > RECORDS_LIMIT, ai: aiEnabled(), voice: voiceProvider()});
   }
   if (request.method === 'POST' && !recordId) {
     let record;
@@ -191,7 +199,7 @@ export async function speechStudio(request: Request, segments: string[] = []) {
     if (route === 'transcribe') assertAudioOrigin(request);
     else if (request.method !== 'GET') assertOrigin(request);
     const ctx = await requireTeacher(request);
-    if (route === 'status' && request.method === 'GET' && !extra) return json({ai: aiEnabled()});
+    if (route === 'status' && request.method === 'GET' && !extra) return json({ai: aiEnabled(), voice: voiceProvider()});
     if (route === 'records') return await records(request, ctx, extra);
     if (request.method === 'POST' && !extra) {
       if (route === 'transcribe') return json(await transcribe(request, ctx));
