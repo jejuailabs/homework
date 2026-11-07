@@ -1,0 +1,13 @@
+.cards-print-kinds{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 18px}
+.cards-print-kinds button{display:grid;justify-items:start;gap:4px;padding:13px;text-align:left;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:15px;cursor:pointer}
+.cards-print-kinds button:hover{border-color:var(--accent)}
+.cards-print-kinds button.is-active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cards-print-kinds small{font-size:11px;color:var(--muted);line-height:1.5}
+.cards-print-layout{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:24px;align-items:start}
+.cards-print-field{padding-bottom:12px}
+.cards-print-field h3,.cards-print-summary h3{margin:0 0 8px;font-size:13px}
+.cards-print-pair{display:flex;flex-wrap:wrap;gap:0 20px}
+.cards-print-summary{position:sticky;top:0;padding:16px;border:1px solid var(--border);border-radius:15px;font-size:13px;overflow-wrap:anywhere}
+.cards-print-summary p{margin:6px 0;line-height:1.6}
+.cards-print-code b{font-size:16px;letter-spacing:.06em}
+@media(max-width:740px){.cards-print-kinds{grid-template-columns:repeat(2,minmax(0,1fr))}.cards-print-layout{grid-template-columns:minmax(0,1fr)}.cards-print-summary{position:static}}

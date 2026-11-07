@@ -21,7 +21,7 @@ export async function cardsMetadataPages<T>(path: string, key: string): Promise<
   } while (cursor);
   return rows;
 }
-export function downloadCardsFile(name: string, content: string, type = 'text/csv;charset=utf-8') {
+export function downloadCardsFile(name: string, content: BlobPart, type = 'text/csv;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([content], {type}));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = name.replace(/[<>:"/\\|?*]/g, '_'); anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
