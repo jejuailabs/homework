@@ -4,7 +4,7 @@ import {FileUp, Sparkles, Trash2} from 'lucide-react';
 import ko from '@/messages/cards-import-ko.json';
 import en from '@/messages/cards-import-en.json';
 import {CARD_AI_LEVELS, CARD_AI_TEXT_LIMIT, CARD_AI_WORD_LENGTH, cardAiFailureKey, chunkList, dedupeByFront, parseCardWords, splitCardText, type CardAiDraft, type CardAiLevel, type CardAiRequest} from '@/lib/cards-ai-draft';
-import {parseCardImport, type ImportedCard} from '@/lib/cards-import';
+import {groupImportErrors, parseCardImport, type ImportedCard} from '@/lib/cards-import';
 import {useCardsCopy} from '@/lib/cards-copy';
 import {cardsRequest, CardsDialog, CardsRequestError} from './cards-shared';
 import '@/styles/cards-import.css';
@@ -70,7 +70,7 @@ export default function CardsImportDialog({fronts, onAppend, onClose}: {fronts: 
   }
   function importTable() {
     const result = parseCardImport(bulk);
-    if (result.errors.length) {const issue = result.errors[0]; setError(`${t('importError')} ${issue.line}: ${t(issue.reason === 'format' ? 'format' : issue.reason === 'empty' ? 'emptyCell' : 'tooLong')}`); return;}
+    if (result.errors.length) {setError(groupImportErrors(result.errors).map(({reason, lines}) => `${t('importError')} ${lines.join(', ')}: ${t(reason === 'format' ? 'format' : reason === 'empty' ? 'emptyCell' : 'tooLong')}`).join('\n')); return;}
     if (fronts.length + result.cards.length > CARD_LIMIT) {setError(t('limit')); return;}
     onAppend(result.cards);
   }
@@ -87,7 +87,7 @@ export default function CardsImportDialog({fronts, onAppend, onClose}: {fronts: 
         {running ? <button type="button" className="button" onClick={() => control.current?.abort()}>{copy.stop}</button> : <button type="button" className="button primary" onClick={generate}><Sparkles size={16}/>{copy.generate}</button>}</div>
     </section>}
     {progress && <div className="cards-import-progress" role="status"><p>{copy.progress} {progress.done + 1}/{progress.total}</p><progress max={progress.total} value={progress.done}/></div>}
-    <div ref={messages}>{error && <div role="alert" className="cards-error"><span>{error}</span>{!!pending.length && <button type="button" className="button" onClick={() => void run(pending)}>{copy.retry}</button>}</div>}
+    <div ref={messages}>{error && <div role="alert" className="cards-error"><span style={{whiteSpace: 'pre-line'}}>{error}</span>{!!pending.length && <button type="button" className="button" onClick={() => void run(pending)}>{copy.retry}</button>}</div>}
     {!error && !running && !!pending.length && <div className="cards-actions secondary"><button type="button" className="button" onClick={() => void run(pending)}>{copy.resume}</button></div>}
     {!!skipped.length && <p className="cards-import-note">{copy.duplicates} {skipped.join(', ')}</p>}</div>
     {!!draft.length && <section className="cards-draft" aria-label={copy.draftCards}>

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
-import { CARD_DUE_GRACE_MS, cardAnswer, cardDueState, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
+import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
 import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
 
 export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
@@ -46,10 +46,10 @@ export function parseCards(value: unknown): CardEntry[] {
   const cards = value.map((entry, index) => {
     const raw = object(entry), label = `${index + 1}번 카드`;
     const alternatives = raw.alternatives ?? [];
-    if (!Array.isArray(alternatives) || alternatives.length > 10) throw new ApiError(400, `${label}의 대체 정답은 10개까지 입력해 주세요.`);
+    if (!Array.isArray(alternatives) || alternatives.length > CARD_ALTERNATIVE_LIMIT) throw new ApiError(400, `${label}의 대체 정답은 ${CARD_ALTERNATIVE_LIMIT}개까지 입력해 주세요.`);
     const cardId = raw.id === undefined ? randomUUID() : id(raw.id, `${label} ID`);
     if (['__proto__', 'constructor', 'prototype'].includes(cardId)) throw new ApiError(400, `${label} ID를 확인해 주세요.`);
-    return { id: cardId, front: text(raw.front, `${label} 앞면`, 1000), back: text(raw.back, `${label} 뒷면`, 1000), example: text(raw.example, `${label} 예문`, 2000, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, 1000)))] };
+    return { id: cardId, front: text(raw.front, `${label} 앞면`, CARD_TEXT_LIMIT), back: text(raw.back, `${label} 뒷면`, CARD_TEXT_LIMIT), example: text(raw.example, `${label} 예문`, CARD_EXAMPLE_LIMIT, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, CARD_TEXT_LIMIT)))] };
   });
   if (new Set(cards.map(card => card.id)).size !== cards.length) throw new ApiError(400, '중복된 카드 ID가 있어요.');
   // Leave room for distribution settings and Firestore's document size overhead.

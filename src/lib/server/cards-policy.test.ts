@@ -313,6 +313,10 @@ test('late stamp is set once, only in late mode, and survives only while the dea
   assert.equal(publicProgress(undefined, snapshot, requirements, settings).lateAt, null);
 });
 
+test('the server accepts exactly the card sizes bulk import accepts', () => {
+  assert.doesNotThrow(() => parseCards([{ front: 'a'.repeat(1000), back: 'b'.repeat(1000), example: 'c'.repeat(2000), alternatives: ['d'.repeat(1000)] }]));
+  for (const card of [{ front: 'a'.repeat(1001), back: 'b' }, { front: 'a', back: 'b'.repeat(1001) }, { front: 'a', back: 'b', example: 'c'.repeat(2001) }, { front: 'a', back: 'b', alternatives: ['d'.repeat(1001)] }]) assert.throws(() => parseCards([card]));
+});
 test('an all-students distribution reaches any student of the class, and old documents keep their target list', () => {
   const room = { classId: 'class', targetStudentIds: ['first'], active: true };
   const joined = { role: 'student' as const, classId: 'class', studentId: 'joined-later' };

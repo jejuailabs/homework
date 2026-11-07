@@ -1,6 +1,11 @@
 // Pure card rules shared by the browser and the server, so instant practice feedback can never drift from server grading.
 import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardRequiredModes, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
 
+// One set of card size limits for the server, the editor and bulk import.
+export const CARD_TEXT_LIMIT = 1000;
+export const CARD_EXAMPLE_LIMIT = 2000;
+export const CARD_ALTERNATIVE_LIMIT = 10;
+
 export function normalizeCardAnswer(value: string) {
   return value.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
 }
