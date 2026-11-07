@@ -246,6 +246,7 @@ async function roomState(ctx: Context, roomId: string, known: string | null) {
 async function roomReview(ctx: Context, roomId: string) {
   if(ctx.role==='student')throw new ApiError(403,'선생님만 볼 수 있어요.');
   const ref=refFor(roomId),room=(await ref.get()).data() as PlayRoom|undefined;
+  if(room)requireRoomOpen(room);
   if(!room||room.expiresAtMs<=Date.now())throw new ApiError(410,'이 방은 종료되었어요.');
   if(room.ownerUid!==ctx.uid)await teacherClass(ctx,room.classId);
   if(room.round<0)return {review:[]};
