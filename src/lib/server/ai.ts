@@ -133,10 +133,15 @@ export async function getAiOperations() {
   }};
 }
 
+/**
+ * Options for providers other than OpenAI. `google` skips the OpenAI key check. `trustedClassId` is a class the
+ * caller already verified (a student's own class), recorded as-is instead of the teacher-ownership check.
+ */
+export type MeteredAiOptions={provider?:'openai'|'google';trustedClassId?:string};
 /** Shared quota/telemetry boundary for independently removable AI feature modules. */
-export async function runMeteredAi<T>(uid:string,tool:string,model:string,fingerprint:string,operation:(observe:AiUsageObserver)=>Promise<T>,requestedClass?:string):Promise<T>{
- const config=configuration();if(!config.configured)throw new AiError(503,'AI 연결 설정을 확인해 주세요.','AI_NOT_CONFIGURED');
- const classId=await aiScopeClass(uid,requestedClass),reservation=await reserve(uid,hash(`${uid}:${classId}:${tool}:${fingerprint}`),{tool},model,config.limits,classId);let usage:AiProviderUsage|undefined;const observe:AiUsageObserver=(payload,hints)=>{usage=aiProviderUsage(payload,model,hints);};
+export async function runMeteredAi<T>(uid:string,tool:string,model:string,fingerprint:string,operation:(observe:AiUsageObserver)=>Promise<T>,requestedClass?:string,options:MeteredAiOptions={}):Promise<T>{
+ const config=configuration();if(options.provider!=='google'&&!config.configured)throw new AiError(503,'AI 연결 설정을 확인해 주세요.','AI_NOT_CONFIGURED');
+ const classId=options.trustedClassId!==undefined?options.trustedClassId:await aiScopeClass(uid,requestedClass),reservation=await reserve(uid,hash(`${uid}:${classId}:${tool}:${fingerprint}`),{tool},model,config.limits,classId);let usage:AiProviderUsage|undefined;const observe:AiUsageObserver=(payload,hints)=>{usage=aiProviderUsage(payload,model,hints);};
  try{const result=await operation(observe);await finish(reservation,'done',undefined,usage);return result;}catch(error){await finish(reservation,'failed',error instanceof ApiError?error.code:'AI_MODULE_FAILED',usage);throw error;}
 }
 
