@@ -20,7 +20,10 @@ type Distribution = CardDistribution & { ownerUid: string; targetStudents?: { id
 export type CardShareRow = { id: string; studentId: string; state: 'active' | 'expired' | 'revoked'; expiresAt: string; createdAt: string; revokedAt: string | null; views: number; nameMode: string };
 const json = (value: unknown, status = 200, headers: Record<string, string> = {}) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store', ...headers } });
 const sharesOf = (distributionId: string) => db().collection('cardReportShares').where('distributionId', '==', distributionId).limit(1000);
-const SHARE_BATCH = 200;
+const SHARE_BATCH = 200, CREATE_PARALLEL = 20;
+// The student's current link (`{distributionId}_{studentId}` → share ID). Every create reads and rewrites it in one transaction,
+// so two creates at once for the same student serialize and leave exactly one open link.
+const currentShareRef = (distributionId: string, studentId: string) => db().doc(`cardReportSharePointers/${id(distributionId)}_${id(studentId)}`);
 const RATE_WINDOW = 600_000, RATE_TOTAL = 60, RATE_FAILED = 12;
 const PUBLIC_HEADERS = { 'X-Robots-Tag': 'noindex, nofollow, noarchive', 'Referrer-Policy': 'no-referrer' };
 
@@ -70,16 +73,27 @@ export async function cardShares(ctx: Context, request: Request, distributionId:
   }
   if (!chosen.length) throw new ApiError(400, '링크를 만들 학생이 없어요.', 'SHARE_STUDENTS');
   if (chosen.length > SHARE_BATCH) chosen = chosen.slice(0, SHARE_BATCH);
-  const stamp = new Date().toISOString(), expiresAt = shareExpiry(days), picked = new Set(chosen);
-  // A new link replaces the student's open one: the old token cannot be shown again, so it should not stay usable.
-  const previous = (await sharesOf(distribution.id).get()).docs.filter(doc => doc.data().ownerUid === ctx.uid && picked.has(doc.data().studentId) && shareState(doc.data()) === 'active');
+  const stamp = new Date().toISOString(), expiresAt = shareExpiry(days);
   const links = chosen.map(studentId => {
     const pupil = active.get(studentId)!, token = newShareToken();
     return { token, studentId, number: Number(pupil.number) || 0, name: String(pupil.name ?? ''), record: { ownerUid: ctx.uid, classId: distribution.classId, distributionId: distribution.id, studentId, nameMode, displayName: shareName(pupil.name, nameMode), note, expiresAt, createdAt: stamp, revokedAt: null, views: 0 } };
   });
-  const writes: ((batch: FirebaseFirestore.WriteBatch) => void)[] = [...previous.map(doc => (batch: FirebaseFirestore.WriteBatch) => { batch.update(doc.ref, { revokedAt: stamp }); }), ...links.map(link => (batch: FirebaseFirestore.WriteBatch) => { batch.create(db().doc(`cardReportShares/${shareTokenHash(link.token)}`), link.record); })];
-  for (let index = 0; index < writes.length; index += 400) { const batch = db().batch(); writes.slice(index, index + 400).forEach(write => write(batch)); await batch.commit(); }
-  return json({ links: links.sort((a, b) => a.number - b.number).map(link => ({ studentId: link.studentId, number: link.number, name: link.name, displayName: link.record.displayName, path: `/family/cards/${link.token}`, expiresAt })), replaced: previous.length, expiresAt }, 201);
+  // A new link replaces the student's open one: the old token cannot be shown again, so it should not stay usable.
+  // One transaction per student: the current-link pointer, plus any open link made before pointers existed, are revoked with the create.
+  let replaced = 0;
+  const replace = (link: typeof links[number]) => db().runTransaction(async tx => {
+    const pointer = currentShareRef(distribution.id, link.studentId);
+    const [current, older] = await Promise.all([tx.get(pointer), tx.get(db().collection('cardReportShares').where('distributionId', '==', distribution.id).where('studentId', '==', link.studentId).limit(50))]);
+    const pointed = current.data()?.shareId ? await tx.get(db().doc(`cardReportShares/${id(current.data()!.shareId)}`)) : null;
+    const open = new Map([...older.docs, ...(pointed?.exists ? [pointed] : [])].filter(doc => doc.data()?.ownerUid === ctx.uid && shareState(doc.data()!) === 'active').map(doc => [doc.id, doc.ref]));
+    open.forEach(ref => tx.update(ref, { revokedAt: stamp }));
+    const shareId = shareTokenHash(link.token);
+    tx.create(db().doc(`cardReportShares/${shareId}`), link.record);
+    tx.set(pointer, { ownerUid: ctx.uid, distributionId: distribution.id, studentId: link.studentId, shareId, updatedAt: stamp });
+    return open.size;
+  });
+  for (let index = 0; index < links.length; index += CREATE_PARALLEL) replaced += (await Promise.all(links.slice(index, index + CREATE_PARALLEL).map(replace))).reduce((sum, count) => sum + count, 0);
+  return json({ links: links.sort((a, b) => a.number - b.number).map(link => ({ studentId: link.studentId, number: link.number, name: link.name, displayName: link.record.displayName, path: `/family/cards/${link.token}`, expiresAt })), replaced, expiresAt }, 201);
 }
 
 /** Share and reward counts for Berry: numbers only, never tokens or names. */

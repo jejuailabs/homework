@@ -954,6 +954,12 @@ async function familySection() {
   for (let index = 0; index < 12; index++) await view('y'.repeat(43), ip);
   same((await view(tokenOf(link('s1')), ip)).status, 429, 'many wrong tokens from one address are slowed down');
   await db().doc('classes/class-a/students/s1').set({disabled: true}, {merge: true});
+  // Two creates at once for one student leave exactly one open link.
+  const racing = await Promise.all([call(teacher, 'POST', shares, {studentIds: ['s3']}), call(teacher, 'POST', shares, {studentIds: ['s3']}), call(teacher, 'POST', shares, {studentIds: ['s3', 's2']})]);
+  check(racing.every(result => result.status === 201), 'three creates at once all answer', racing.map(result => result.status));
+  const openFor = async studentId => (await call(teacher, 'GET', shares)).data.shares.filter(row => row.studentId === studentId && row.state === 'active').length;
+  same([await openFor('s3'), await openFor('s2')], [1, 1], 'concurrent creates leave one open link per student');
+  same((await Promise.all(racing.flatMap(result => result.data.links.filter(row => row.studentId === 's3')).map(row => view(tokenOf(row), '10.4.0.1')))).filter(result => result.status === 200).length, 1, 'and exactly one of the new s3 links opens');
   const again = await call(teacher, 'POST', shares, {studentIds: ['s4']});
   accepted(again, 'a fresh link for s4');
   refused(await call(teacher, 'POST', shares, {studentIds: ['s1']}), 400, 'SHARE_STUDENTS', 'a disabled student gets no link');
