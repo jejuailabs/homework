@@ -44,5 +44,5 @@ export default function CardsEditor({set, folders, folderId, onClose, onSaved}: 
       <button type="button" className="button" disabled={rows.length >= 200} onClick={() => {setRows(current => [...current, newCard()]); setDirty(true);}}><Plus size={17}/>{t('addRow')}</button>
     </fieldset>
     <div className="cards-dialog-footer"><p className="cards-muted">{t('saveHint')}</p>{error && <p role="alert" className="cards-error">{error}</p>}<div className="cards-actions"><button type="button" className="button" disabled={busy} onClick={close}>{t('cancel')}</button><button type="submit" className="button primary" disabled={busy}>{t(busy ? 'saving' : 'save')}</button></div></div>
-  </form>{importOpen && <CardsImportDialog fronts={filledRows.map(row => row.front)} onAppend={appendRows} onClose={() => setImportOpen(false)}/>}</CardsDialog>;
+  </form>{importOpen && <CardsImportDialog fronts={filledRows.map(row => row.front)} setId={set?.id} onAppend={appendRows} onClose={() => setImportOpen(false)}/>}</CardsDialog>;
 }

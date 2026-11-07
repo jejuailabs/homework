@@ -47,3 +47,26 @@ test('provider failures and timeouts become friendly errors', async () => {
     await assert.rejects(cardsAiDraft(teacher, post(words)), {status: 504, code: 'AI_TIMEOUT'});
   } finally {AbortSignal.timeout = original;}
 });
+test('a photo goes to the provider as an input image under its own meter, and is not in the reply', async () => {
+  scope.__cardsAiMeter.calls.length = 0;
+  const image = 'data:image/jpeg;base64,' + 'A'.repeat(200_000);
+  const sent = provider(() => completed({cards: [{front: 'river', back: '강', example: 'The river is long.'}]}));
+  const result = await cardsAiDraft(teacher, post({mode: 'photo', level: 'middle', image}));
+  assert.deepEqual(result, {cards: [{front: 'river', back: '강', example: 'The river is long.'}]});
+  assert.equal(JSON.parse(String(sent[0].body)).input[0].content[1].image_url, image);
+  assert.deepEqual(scope.__cardsAiMeter.calls, [{uid: 'teacher-1', tool: 'cards-ai-photo', classId: undefined}]);
+  assert.ok(!JSON.stringify(result).includes('AAAA'));
+  provider(() => completed({cards: []}));
+  await assert.rejects(cardsAiDraft(teacher, post({mode: 'photo', level: 'middle', image: 'data:image/png;base64,AAAA'})), {status: 400, code: 'INPUT_INVALID'});
+  await assert.rejects(cardsAiDraft(teacher, post({mode: 'text', level: 'middle', text: 'a', pad: 'A'.repeat(70_000)})), {status: 413, code: 'BODY_TOO_LARGE'}, 'only a photo gets the larger body');
+  await assert.rejects(cardsAiDraft({...teacher, role: 'student'}, post({mode: 'photo', level: 'middle', image})), {status: 403});
+});
+test('passage drafts keep only passage words with passage sentences; topic drafts stop at the count', async () => {
+  scope.__cardsAiMeter.calls.length = 0;
+  provider(() => completed({cards: [{front: 'harvest', back: '수확', example: 'Farmers harvest rice.'}, {front: 'unicorn', back: '유니콘', example: 'A unicorn.'}, {front: 'village', back: '마을', example: ''}]}));
+  assert.deepEqual(await cardsAiDraft(teacher, post({mode: 'passage', level: 'middle', text: 'In autumn the whole village helped. They harvested rice together.', count: 5})), {cards: [
+    {front: 'harvest', back: '수확', example: 'They harvested rice together.'}, {front: 'village', back: '마을', example: 'In autumn the whole village helped.'}]});
+  provider(() => completed({cards: [{front: 'sun', back: '해', example: ''}, {front: 'Sun', back: '태양', example: ''}, {front: 'rain', back: '비', example: ''}, {front: 'snow', back: '눈', example: ''}]}));
+  assert.deepEqual((await cardsAiDraft(teacher, post({mode: 'topic', level: 'elementary', topic: 'weather', count: 2}))).cards.map(card => card.front), ['sun', 'rain']);
+  assert.deepEqual(scope.__cardsAiMeter.calls.map(call => call.tool), ['cards-ai-passage', 'cards-ai-topic']);
+});
