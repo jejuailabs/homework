@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -515,6 +515,59 @@ async function berrySection() {
   same(one.card_sets[0].students, (await db().collection('classes/class-a/students').get()).docs.filter(doc => !doc.data().disabled).length, 'all_students sets report the live class size');
 }
 
+async function gamesSection() {
+  section('review games');
+  const given = await distribute(), base = given.id, path = ['distributions', base, 'games'];
+  const play = (who, body, target = path) => call(who, 'POST', target, body), board = who => call(who, 'GET', path);
+  const empty = await board(pupil(1));
+  accepted(empty, 'student reads the game boards');
+  same([empty.data.games.pair.best, empty.data.games.pair.ranking, empty.data.rankingsShown], [null, [], true], 'no records yet, rankings shown by default');
+  const first = await play(pupil(1), {requestId: 'g-1', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 2});
+  accepted(first, 'a pairs round is saved');
+  same([first.data.improved, first.data.best.score, first.data.best.timeMs, first.data.best.plays], [true, 34_000, 30_000, 1], 'the server adds the mistake time itself');
+  const replay = await play(pupil(1), {requestId: 'g-1', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 2});
+  check(replay.status === 200 && replay.data.duplicate === true && replay.data.best.plays === 1, 'a replayed round counts once', replay.data);
+  refused(await play(pupil(1), {requestId: 'g-1', game: 'pair', pairs: 6, elapsedMs: 20_000, mistakes: 0}), 409, 'REQUEST_CONFLICT', 'a different result under one requestId is refused');
+  const worse = await play(pupil(1), {requestId: 'g-2', game: 'pair', pairs: 6, elapsedMs: 50_000, mistakes: 0});
+  same([worse.data.improved, worse.data.best.score, worse.data.best.plays], [false, 34_000, 2], 'a slower round keeps the best and counts the play');
+  refused(await play(pupil(1), {requestId: 'g-3', game: 'pair', pairs: 6, elapsedMs: 900, mistakes: 0}), 400, 'GAME_RESULT', 'an impossible time is refused');
+  refused(await play(pupil(1), {requestId: 'g-4', game: 'pair', pairs: 12, elapsedMs: 30_000, mistakes: 0}), 400, 'GAME_RESULT', 'a pair count the set cannot give is refused');
+  refused(await play(pupil(1), {requestId: 'g-5', game: 'rain', correct: 200, missed: 0, elapsedMs: 60_000}), 400, 'GAME_RESULT', 'more rain words than could fall is refused');
+  refused(await play(pupil(1), {requestId: 'g-6', game: 'puzzle', results: [0], elapsedMs: 9000}), 400, 'GAME_RESULT', 'a word set without examples has no puzzle record');
+  refused(await play(pupil(1), {requestId: 'g-7', game: 'chess', elapsedMs: 9000}), 400, 'GAME_INPUT', 'an unknown game is refused');
+  refused(await play(pupil(1), {game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}), 400, undefined, 'a missing requestId is refused');
+  const rain = await play(pupil(2), {requestId: 'g-8', game: 'rain', correct: 12, missed: 3, elapsedMs: 60_000, direction: 'back-front', still: true});
+  same(rain.data.best?.score, 5 * 10 + 5 * 20 + 2 * 30, 'rain points are counted by the server: ten per word times the level');
+  const seen = await board(pupil(1));
+  same(seen.data.games.rain.ranking, [{id: '', name: '학생2', score: 210, timeMs: 60_000, rank: 1}], 'classmates appear by name without their ID');
+  same(seen.data.games.pair.ranking.map(row => [row.id, row.rank]), [['s1', 1]], 'the student sees their own row with its ID');
+  same([seen.data.games.pair.rank, seen.data.games.rain.rank, seen.data.games.rain.best], [1, null, null], 'own rank and best per game');
+  const stored = (await db().doc(`cardGameScores/${base}_s1`).get()).data();
+  same(Object.keys(stored.games), ['pair'], 'only games with a record are stored');
+  same(Object.keys(stored.games.pair).sort(), ['at', 'plays', 'score', 'timeMs'], 'a game keeps only its best record');
+  same((await db().collection(`cardGameScores/${base}_s1/plays`).get()).docs.map(doc => Object.keys(doc.data()).sort().join()), ['createdAt,fingerprint,improved', 'createdAt,fingerprint,improved'], 'receipts carry no scores or answers');
+  const full = await board(teacher);
+  check(full.status === 200 && full.data.games.pair.ranking[0]?.id === 's1' && full.data.games.rain.ranking[0]?.id === 's2', 'the teacher sees everyone with IDs', full.data);
+  refused(await play(teacher, {requestId: 'g-9', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}), 403, 'FORBIDDEN', 'a teacher cannot post a record');
+  refused(await board(stranger), 404, 'NOT_FOUND', 'another teacher cannot read the boards');
+  refused(await board('u9:0'), 404, 'NOT_FOUND', 'a student of another class cannot read the boards');
+  refused(await play('u9:0', {requestId: 'g-10', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}), 404, 'NOT_FOUND', 'a student of another class cannot post');
+  await db().doc('classes/class-a/settings/playground').set({showRankings: false});
+  const hidden = await board(pupil(1));
+  same([hidden.data.rankingsShown, hidden.data.games.pair.ranking, hidden.data.games.pair.rank, hidden.data.games.pair.best?.score], [false, [], null, 34_000], 'with rankings hidden a student sees only their own best');
+  same((await board(teacher)).data.games.rain.ranking.length, 1, 'the teacher still sees the ranking');
+  await db().doc('classes/class-a/settings/playground').delete();
+  let limited = null;
+  for (let index = 0; index < 7; index++) {const result = await play(pupil(3), {requestId: `rate-${index}`, game: 'pair', pairs: 6, elapsedMs: 30_000 + index, mistakes: 0}); if (result.status !== 200) {limited = {index, result}; break;}}
+  check(limited?.index === 6 && limited.result.status === 429 && limited.result.data.code === 'GAME_RATE', 'the seventh round in a minute is rate limited', limited);
+  const bearer = {uid: teacher, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read']};
+  const berry = await callClassroomTool('list_card_sets', {distribution_id: base}, bearer);
+  same(berry.card_sets[0].game_players, {pair: 2, rain: 1, puzzle: 0}, 'Berry gets game player counts only');
+  const locked = await distribute({dueAt: iso(HOUR), afterDue: 'lock'});
+  accepted(await call(teacher, 'PATCH', ['distributions', locked.id], {dueAt: iso(-HOUR)}), 'the locked set passes its deadline');
+  refused(await play(pupil(1), {requestId: 'g-11', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}, ['distributions', locked.id, 'games']), 403, 'DUE_CLOSED', 'a locked set takes no game records');
+}
+
 async function aiSection() {
   section('ai-draft');
   const original = globalThis.fetch, sent = [];
@@ -648,7 +701,7 @@ async function masterySection() {
   same((await db().doc('cardMisses/class-a_s6').get()).data().misses, {[old.id]: {card1: today}}, 'the first miss creates the index');
 }
 
-const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, mastery: masterySection};
+const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, games: gamesSection, mastery: masterySection};
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

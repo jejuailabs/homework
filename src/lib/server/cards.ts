@@ -534,6 +534,7 @@ export async function handleCards(request: Request, segments: string[] = []) {
       if (resourceId && segments.length === 2 && method === 'PATCH') return await saveSet(ctx, request, resourceId);
       if (resourceId && operation === 'duplicate' && segments.length === 3 && method === 'POST') return await saveSet(ctx, request, resourceId, true);
     }
+    if (resource === 'distributions' && resourceId && operation === 'games' && segments.length === 3) return await (await import('./cards-games')).cardGames(ctx, request, resourceId);
     if (resource === 'distributions') {
       if (!resourceId && ['GET', 'POST'].includes(method)) return await distributions(ctx, request);
       if (resourceId && segments.length === 2 && ['GET', 'PATCH'].includes(method)) return await distributionDetail(ctx, request, resourceId);

@@ -19,3 +19,4 @@ globalThis.__cardsAiMeter = { calls: [] };
 const meter = dataUrl('export async function runMeteredAi(uid, tool, model, fingerprint, operation, classId) { globalThis.__cardsAiMeter.calls.push({ uid, tool, classId }); return operation(() => {}); }');
 const cardsAi = dataUrl(compile('./cards-ai.ts').replace("import 'server-only';", '').replace("'../cards-ai-draft'", JSON.stringify(draftRules)).replace("'./ai'", JSON.stringify(meter)).replace("'./ai-policy'", JSON.stringify(aiPolicy)).replace("'./policy'", JSON.stringify(policy)));
 await import(dataUrl(compile('./cards-ai.test.ts').replace("'./cards-ai'", JSON.stringify(cardsAi))));
+await import(dataUrl(compile('../cards-games.test.ts').replace("'./cards-games'", JSON.stringify(dataUrl(compile('../cards-games.ts').replace("'./cards-logic'", JSON.stringify(logic)))))));

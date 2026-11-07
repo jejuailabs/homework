@@ -233,12 +233,18 @@ async function cardProgressOf(id: string, value: Data) {
   return {...summary, most_missed: summary.most_missed.map(row => ({...row, word: maskNames(String(row.word), students), meaning: maskNames(String(row.meaning), students)}))};
 }
 
+/** How many students have a 복습 게임 record on this set, per game. Counts only: no names, scores or rankings leave here. */
+async function cardGamePlayers(id: string, classId: string) {
+  const rows = (await db().collection('cardGameScores').where('distributionId', '==', id).select('classId', 'games').get()).docs.filter(doc => doc.data().classId === classId);
+  return Object.fromEntries(['pair', 'rain', 'puzzle'].map(game => [game, rows.filter(doc => doc.data().games?.[game]).length]));
+}
+
 async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: unknown) {
   if (distributionId !== undefined) {
     const id = safeId(distributionId, '배부'), snap = await db().doc(`cardClassSets/${id}`).get();
     if (!snap.exists || snap.data()?.ownerUid !== ctx.uid) throw new BerryError('그 카드 배부를 찾지 못했어요.', 404, 'not_found');
     const value = snap.data()!, room = await ownedClass(ctx.uid, value.classId);
-    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value)}]};
+    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value), game_players: await cardGamePlayers(id, value.classId)}]};
   }
   const classes = classId === undefined ? await ownedClasses(ctx.uid) : [await ownedClass(ctx.uid, classId)];
   // The list stays light (no card text); only the few sets a teacher is likely asking about load their cards and progress.
@@ -250,7 +256,7 @@ async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: 
   return {card_sets: await Promise.all(rows.map(async row => {
     if (!detailed.has(row.id)) return {...cardRow(row.id, row.value, row.className, row.students), progress: null};
     const full = await db().doc(`cardClassSets/${row.id}`).get();
-    return {...cardRow(row.id, row.value, row.className, row.students), progress: await cardProgressOf(row.id, full.data()!)};
+    return {...cardRow(row.id, row.value, row.className, row.students), progress: await cardProgressOf(row.id, full.data()!), game_players: await cardGamePlayers(row.id, row.value.classId)};
   }))};
 }
 
