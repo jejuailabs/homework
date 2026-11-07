@@ -11,6 +11,7 @@ export type CardTestSettings = { questionCount: number; goalScore: number; maxAt
 export type CardSnapshot = { title: string; description: string; type: CardSetType; cards: CardEntry[] };
 export type CardDistributionSummary = { id: string; classId: string; className: string; setId: string; setVersion: number; versionId: string; title: string; type: CardSetType; cardCount: number; targetCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; active: boolean; createdAt: string; updatedAt: string };
 export type CardDistribution = CardDistributionSummary & { snapshot: CardSnapshot; targetStudentIds: string[] };
+export type CardCoverage = Record<CardStudyMode, Record<string, number>>;
 export type CardProgress = {
   counts: Record<CardStudyMode, number>;
   correctCounts: Record<CardStudyMode, number>;

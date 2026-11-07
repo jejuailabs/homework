@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="빈 표와 돋보기"><defs><filter id="cut" x="-25%" y="-25%" width="150%" height="160%"><feMorphology in="SourceAlpha" operator="dilate" radius="4" result="border"/><feFlood flood-color="#fffdf8"/><feComposite in2="border" operator="in" result="white"/><feMerge><feMergeNode in="white"/><feMergeNode in="SourceGraphic"/></feMerge><feDropShadow dx="0" dy="3" stdDeviation="1.6" flood-color="#76624e" flood-opacity=".15"/></filter></defs><g filter="url(#cut)" stroke-linejoin="round" stroke-linecap="round" stroke="#3a5a52" stroke-width="3" fill="none"><rect x="20" y="24" width="100" height="100" rx="13" fill="#fffdf8"/>
+  <path d="M20 37a13 13 0 0 1 13-13h74a13 13 0 0 1 13 13v13H20Z" fill="#d9f0e3"/>
+  <path d="M54 26v96M20 76h100M20 100h100" stroke-width="2.5" opacity=".5"/>
+  <circle cx="100" cy="98" r="27" fill="#dcecfb"/><path d="M119 118l21 21" stroke-width="7"/>
+  <path d="M88 92q3-8 12-9" stroke="#fffdf8" stroke-width="3.5"/>
+  <path d="M30.0 7.0L31.9 11.4L36.7 11.8L33.1 15.0L34.1 19.7L30.0 17.2L25.9 19.7L26.9 15.0L23.3 11.8L28.1 11.4Z" fill="#D7AD56" stroke-width="2"/></g></svg>

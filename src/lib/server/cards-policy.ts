@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
-import type { CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
+import { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
+import type { CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
 
+export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
+export type { CardCoverage };
 export const CARD_LIMIT = 200;
 export const CARD_LIST_LIMIT = 200;
 export const CARD_MODES: CardStudyMode[] = ['memorize', 'recall', 'spell'];
@@ -79,15 +82,6 @@ export function ownsCardResource(ctx: { uid: string; role: Role }, resource: { o
 export function canStudyDistribution(ctx: { role: Role; classId?: string; studentId?: string }, distribution: { classId: string; targetStudentIds: string[]; active: boolean }) {
   return ctx.role === 'student' && distribution.active && ctx.classId === distribution.classId && !!ctx.studentId && distribution.targetStudentIds.includes(ctx.studentId);
 }
-export function normalizeCardAnswer(value: string) {
-  return value.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
-}
-export function cardAnswer(card: CardEntry, direction: CardDirection) { return direction === 'front-back' ? card.back : card.front; }
-export function isCorrectCardAnswer(card: CardEntry, direction: CardDirection, answer: string) {
-  const expected = direction === 'front-back' ? [card.back, ...card.alternatives] : [card.front];
-  return expected.some(value => normalizeCardAnswer(value) === normalizeCardAnswer(answer));
-}
-export type CardCoverage = Record<CardStudyMode, Record<string, number>>;
 export const emptyModeCounts = () => ({ memorize: 0, recall: 0, spell: 0 });
 export function completedCounts(snapshot: CardSnapshot, requirements: CardRequiredModes, coverage: CardCoverage) {
   return Object.fromEntries(CARD_MODES.map(mode => {

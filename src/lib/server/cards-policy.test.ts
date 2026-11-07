@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answersReleased, canStudyDistribution, cardMutationFingerprint, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
+import { addStudyResponse, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -137,4 +138,53 @@ test('publication rejects stale or invalid expected versions, while accepting th
   assert.throws(() => expectedCardVersion(2, 3), { status: 409, code: 'STALE_VERSION' });
   assert.throws(() => expectedCardVersion(0, 3), { status: 400 });
   assert.throws(() => expectedCardVersion('3', 3), { status: 400 });
+});
+test('client grading matches server grading, including alternatives only for front-back', () => {
+  const answers = ['  ＭＥＡＮＩＮＧ   0 ', 'meaning 0', '뜻 0', ' 뜻  0', 'WORD 0', 'word0', 'wrong', ''];
+  for (const direction of ['front-back', 'back-front'] as const) for (const answer of answers) {
+    const server = studyResponses([{ cardId: 'card-0', answer }], snapshot, 'spell', direction, requirements)[0];
+    assert.deepEqual(gradeCardAnswer(cards[0], 'spell', direction, answer), { correct: server.correct, expected: server.expectedAnswer });
+  }
+  assert.equal(gradeCardAnswer(cards[0], 'memorize', 'front-back', '').correct, true);
+});
+test('answer batches seal at ten, before a repeated card and on a direction change', () => {
+  let count = 0;
+  const newId = () => `batch-${++count}`, add = (outbox: ReturnType<typeof emptyStudyOutbox>, cardId: string, direction: 'front-back' | 'back-front' = 'front-back') => addStudyResponse(outbox, { cardId, answer: '', direction }, 'memorize', newId);
+  let outbox = emptyStudyOutbox();
+  for (let index = 0; index < 9; index++) outbox = add(outbox, `card-${index}`);
+  assert.deepEqual([outbox.buffer.length, outbox.sealed.length], [9, 0]);
+  outbox = add(outbox, 'card-9');
+  assert.deepEqual([outbox.buffer.length, outbox.sealed.length], [0, 1]);
+  assert.equal(outbox.sealed[0].lastCardId, 'card-9');
+  outbox = add(add(add(outbox, 'card-1'), 'card-2'), 'card-1');
+  assert.deepEqual(outbox.buffer.map(item => item.cardId), ['card-1']);
+  assert.deepEqual(outbox.sealed[1].responses.map(item => item.cardId), ['card-1', 'card-2']);
+  assert.equal(outbox.sealed[1].lastCardId, 'card-2');
+  outbox = add(outbox, 'card-3', 'back-front');
+  assert.equal(outbox.sealed[2].direction, 'front-back');
+  assert.equal(studyOutboxSize(outbox), 14);
+  // Every sealed batch satisfies the server's own request rules.
+  for (const batch of outbox.sealed) assert.equal(studyResponses(batch.responses, snapshot, 'memorize', batch.direction, requirements).length, batch.responses.length);
+});
+test('a sealed batch keeps its request ID and content until the server accepts it', () => {
+  const ids = ['first', 'second'], newId = () => ids.shift()!;
+  const outbox = sealStudyBuffer(addStudyResponse(emptyStudyOutbox(), { cardId: 'card-0', answer: 'a', direction: 'front-back' }, 'spell', newId), 'spell', newId);
+  assert.equal(sealStudyBuffer(outbox, 'spell', newId), outbox);
+  assert.equal(ids.length, 1);
+  const stored = JSON.parse(JSON.stringify(outbox));
+  assert.deepEqual(restoreStudyOutbox(stored, 'spell'), outbox);
+  assert.equal(studyOutboxSize(settleStudyBatch(outbox, 'other')), 1);
+  assert.equal(studyOutboxSize(settleStudyBatch(outbox, 'first')), 0);
+});
+test('stored outboxes tolerate damage and carry over an answer saved before batching', () => {
+  const legacy: StudyBatch = { requestId: 'old', mode: 'spell', direction: 'front-back', responses: [{ cardId: 'card-0', answer: 'a' }], lastCardId: 'card-0' };
+  assert.deepEqual(restoreStudyOutbox(undefined, 'spell'), emptyStudyOutbox());
+  assert.deepEqual(restoreStudyOutbox({ buffer: 'x', sealed: [{ requestId: 1 }, { ...legacy, lastCardId: 'gone' }, { ...legacy, mode: 'recall' }] }, 'spell'), emptyStudyOutbox());
+  assert.deepEqual(restoreStudyOutbox(undefined, 'spell', legacy).sealed, [legacy]);
+  assert.equal(restoreStudyOutbox({ sealed: [{ ...legacy, responses: [...legacy.responses, ...legacy.responses] }] }, 'spell').sealed.length, 0);
+});
+test('keepalive sends stop before the browser body allowance', () => {
+  const big = (requestId: string): StudyBatch => ({ requestId, mode: 'spell', direction: 'front-back', responses: [{ cardId: 'card-0', answer: '가'.repeat(1000) }], lastCardId: 'card-0' });
+  assert.deepEqual(keepaliveStudyBatches({ buffer: [], sealed: [big('a'), big('b'), big('c')] }, 7000).map(batch => batch.requestId), ['a', 'b']);
+  assert.deepEqual(keepaliveStudyBatches(emptyStudyOutbox()), []);
 });
