@@ -284,7 +284,7 @@ async function testsSection() {
   const teacherRow = reported(await report(timed.id), 's4');
   check(teacherRow.attempts.find(row => row.id === expired.id)?.overtime === true, 'the teacher report shows overtime', teacherRow.attempts);
   check(teacherRow.attempts.find(row => row.id === late.id)?.overtime === undefined, 'and only on the attempt that ran over');
-  same(teacherRow.progress.latestScore, 0, 'report shows the blank attempt');
+  same([teacherRow.progress.latestScore, teacherRow.attempts.find(row => row.id === expired.id)?.score], [100, 0], 'the report shows the blank overtime attempt, which does not become the latest score');
   check(teacherRow.attempts.every(row => row.answersVisible === true), 'teachers always see graded answers');
 }
 
