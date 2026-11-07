@@ -7,6 +7,8 @@ const policy = moduleUrl(compile('./policy.ts').replace("'./types'", JSON.string
 await import(moduleUrl(compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policy))));
 const abilities = moduleUrl(compile('../berry-panel/abilities.ts').replace("'@/modules/berry-connector/types'", JSON.stringify(types)));
 await import(moduleUrl(compile('../berry-panel/abilities.test.ts').replace("'../berry-connector/types'", JSON.stringify(types)).replace("'./abilities'", JSON.stringify(abilities))));
+await import(moduleUrl(compile('./card-progress.test.ts').replace("'./card-progress'", JSON.stringify(moduleUrl(compile('./card-progress.ts'))))));
+await import(moduleUrl(compile('./card-settings.test.ts').replace("'./card-settings'", JSON.stringify(moduleUrl(compile('./card-settings.ts').replace("'./policy'", JSON.stringify(policy)))))));
 await import(moduleUrl(compile('./catalog.test.ts').replace("'./catalog'", JSON.stringify(moduleUrl(compile('./catalog.ts'))))));
 const neighborhoodCore = moduleUrl(compile('../../lib/neighborhood.ts'));
 const spots = moduleUrl(compile('../../lib/neighborhood-spots.ts').replace("'./neighborhood'", JSON.stringify(neighborhoodCore)));

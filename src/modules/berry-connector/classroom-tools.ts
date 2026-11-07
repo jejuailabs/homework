@@ -15,7 +15,12 @@ import {archiveRows} from '@/lib/server/exhibition-archive';
 import {filterArchive, tagCounts} from '@/lib/exhibition-tags';
 import {artworkToday} from '@/lib/exhibition-metadata';
 import {readingProfile} from '@/modules/speech-studio/scoring';
+import {publicProgress} from '@/lib/server/cards-policy';
+import {cardAfterDue} from '@/lib/cards-logic';
+import {cardSetUnfinished} from '@/lib/cards-summary';
+import {cardsMenuVisible} from '@/lib/menu-visibility';
 import {BerryError, alias, maskNames, safeId} from './policy';
+import {classCardProgress} from './card-progress';
 import {PACK_LINK, filterPacks, packDetail, packSummary} from './neighborhood-packs';
 import type {BearerContext, McpTool} from './types';
 
@@ -41,7 +46,7 @@ export const CLASSROOM_TOOLS: McpTool[] = [
   {name: 'get_review_status', scope: 'classroom:read', description: '복습하기: 최근 복습 목록(초안·발행·숨김)과 발행된 복습마다 참여한 학생 수.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'get_playground_status', scope: 'classroom:read', description: '말놀이터: 켜짐 여부와 설정, 이번 주 혼자하기·대결·꾸준함 순위(가명, 모두의 교실 기록 그대로), 진행 중인 실시간 방.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'get_points', scope: 'classroom:read', description: '보말(포인트): 학급 설정과 학생별 잔액·누적 적립(가명).', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
-  {name: 'list_card_sets', scope: 'classroom:read', description: '카드놀이: 학급에 배부한 카드 세트(제목·마감·진행 중 여부·대상 학생 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
+  {name: 'list_card_sets', scope: 'classroom:read', description: '카드놀이: 학급에 배부한 카드 세트(제목·마감·마감 후 처리·진행 중 여부·대상 학생 수·전체 학생 배부 여부·필수 학습량·목표 점수)와 최근 진행 중인 세트의 학습 진도(마친 학생 수, 안 끝낸 학생은 학생 07처럼 가명, 지각 학생 수, 목표 달성 수, 평균 최고 점수, 많이 틀린 단어). 오래되었거나 멈춘 배부는 progress가 null이니 distribution_id로 하나만 다시 부른다.', inputSchema: {type: 'object', properties: {class_id: cls, distribution_id: {type: 'string', description: 'list_card_sets의 id. 이 배부 하나만 진도까지 본다'}}, additionalProperties: false}},
   {name: 'get_speech', scope: 'classroom:read', description: '말하기·읽기 스튜디오: 학생별(가명) 읽기 정확도·추세·실수·다음 책 수준. 말한 글·녹음은 제외.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'list_class_tools', scope: 'classroom:read', description: 'Tools에서 쓰는 우리 반 캔버스와 투표(상태·마감·참여 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
   {name: 'list_neighborhood_packs', scope: 'classroom:read', description: 'Tools > 우리 동네 탐험에 저장한 수업 자료 목록: 제목·지역·학년·단원·연결 학급·저장한 날·AI 약도 여부, 최신순. 학급·기간(from·to)·낱말(제목·지역·단원)로 찾습니다. "지난달쯤"처럼 흐린 기간은 앞뒤 한 달을 넓혀 줍니다. 장소·출처는 get_neighborhood_pack으로 읽습니다.', inputSchema: {type: 'object', properties: {query: {type: 'string', description: '제목·지역·단원 낱말(띄어쓰기로 여러 개)'}, from: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, class_id: cls}, additionalProperties: false}},
@@ -106,7 +111,9 @@ async function quizRanges(classValue: Data) {
 }
 async function liveRooms(classId: string) {
   const rooms = await db().collection('playRooms').where('classId', '==', classId).limit(20).get();
-  return rooms.docs.map(doc => doc.data()).filter(room => (room.expiresAtMs ?? 0) > Date.now() && room.status !== 'finished').map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0}));
+  const open = rooms.docs.map(doc => doc.data()).filter(room => (room.expiresAtMs ?? 0) > Date.now() && room.status !== 'finished');
+  const students = open.some(room => room.cards) ? await roster(classId) : [];
+  return open.map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0, ...(room.cards ? {card_set: maskNames(String(room.cards.title ?? ''), students)} : {})}));
 }
 
 async function signals(ctx: BearerContext) {
@@ -139,7 +146,7 @@ export function menuFlags() {
     homework: true, exhibitions: true, boards: true, quiz: true, lesson_review: true,
     playground: process.env.PLAYGROUND_DISABLED !== 'true', playground_live: process.env.PLAYGROUND_DISABLED !== 'true' && process.env.PLAYGROUND_LIVE_DISABLED !== 'true',
     kids_daily: process.env.MY_SPACE_DISABLED !== 'true', tools: true, tools_disabled: tools, points: true,
-    cards: false, notebook: process.env.TEACHER_NOTEBOOK_DISABLED !== 'true', workspace: process.env.TEACHER_WORKSPACE_DISABLED !== 'true',
+    cards: cardsMenuVisible, notebook: process.env.TEACHER_NOTEBOOK_DISABLED !== 'true', workspace: process.env.TEACHER_WORKSPACE_DISABLED !== 'true',
   };
 }
 
@@ -205,10 +212,46 @@ async function speechProgress(ctx: BearerContext, classId: unknown) {
   };
 }
 
-async function cardSets(ctx: BearerContext, classId?: unknown) {
+const CARD_PROGRESS_SETS = 8;
+const cardLink = (value: Data, id: string) => value.setId ? `/teacher/cards/${value.setId}/report?classId=${value.classId}&distributionId=${id}` : `/teacher/cards?classId=${value.classId}`;
+// A set title is the teacher's words but may hold a child's name, so it is masked with that class's roster.
+const cardRow = (id: string, value: Data, className: unknown, students: Student[]) => ({
+  id, class: className, title: maskNames(String(value.title ?? ''), students), due_at: value.dueAt ?? null, after_due: cardAfterDue(value), active: value.active !== false, students: value.allStudents ? new Set([...(value.targetStudentIds ?? []), ...students.map(student => student.id)]).size : value.targetCount ?? null, all_students: !!value.allStudents,
+  required: value.requiredModes ? {memorize: value.requiredModes.memorize?.requiredCount ?? 0, recall: value.requiredModes.recall?.requiredCount ?? 0, spell: value.requiredModes.spell?.requiredCount ?? 0} : null,
+  goal_score: value.test?.goalScore ?? null, link: cardLink(value, id),
+});
+
+/** Who finished and which words tripped the class. Only current, active target students count; names never leave this function. */
+async function cardProgressOf(id: string, value: Data) {
+  const [students, states] = await Promise.all([roster(value.classId), db().collection('cardProgress').where('distributionId', '==', id).select('classId', 'studentId', 'counts', 'coverage', 'attempts', 'bestScore', 'mistakes', 'lateAt').get()]);
+  const targets = new Set<string>(value.targetStudentIds ?? []), records = new Map(states.docs.filter(doc => doc.data().classId === value.classId).map(doc => [doc.data().studentId as string, doc.data()]));
+  const learners = students.filter(student => value.allStudents || targets.has(student.id)).map(student => {
+    const record = records.get(student.id), progress = publicProgress(record, value.snapshot, value.requiredModes, value.test, {dueAt: value.dueAt ?? null, afterDue: cardAfterDue(value)});
+    return {number: student.number, unfinished: cardSetUnfinished(value.requiredModes, progress), goalReached: progress.goalReached, bestScore: progress.bestScore, late: !!progress.lateAt, mistakes: record?.mistakes};
+  });
+  const summary = classCardProgress(learners, value.snapshot.cards, alias);
+  return {...summary, most_missed: summary.most_missed.map(row => ({...row, word: maskNames(String(row.word), students), meaning: maskNames(String(row.meaning), students)}))};
+}
+
+async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: unknown) {
+  if (distributionId !== undefined) {
+    const id = safeId(distributionId, '배부'), snap = await db().doc(`cardClassSets/${id}`).get();
+    if (!snap.exists || snap.data()?.ownerUid !== ctx.uid) throw new BerryError('그 카드 배부를 찾지 못했어요.', 404, 'not_found');
+    const value = snap.data()!, room = await ownedClass(ctx.uid, value.classId);
+    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value)}]};
+  }
   const classes = classId === undefined ? await ownedClasses(ctx.uid) : [await ownedClass(ctx.uid, classId)];
-  const lists = await Promise.all(classes.map(value => db().collection('cardClassSets').where('classId', '==', value.id).limit(LIST).get()));
-  return {card_sets: lists.flatMap((snap, index) => snap.docs.map(doc => ({id: doc.id, class: classes[index].name, title: doc.data().title, due_at: doc.data().dueAt ?? null, active: doc.data().active !== false, students: doc.data().targetCount ?? null, link: doc.data().setId ? `/teacher/cards/${doc.data().setId}/report?classId=${classes[index].id}&distributionId=${doc.id}` : `/teacher/cards?classId=${classes[index].id}`}))).slice(0, LIST * 2)};
+  // The list stays light (no card text); only the few sets a teacher is likely asking about load their cards and progress.
+  const lists = await Promise.all(classes.map(value => db().collection('cardClassSets').where('classId', '==', value.id).select('ownerUid', 'classId', 'setId', 'title', 'dueAt', 'afterDue', 'allStudents', 'active', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'createdAt').limit(200).get()));
+  const rosters = await Promise.all(classes.map(value => roster(value.id)));
+  const rows = lists.flatMap((snap, index) => snap.docs.filter(doc => doc.data().ownerUid === ctx.uid).map(doc => ({id: doc.id, value: doc.data(), className: classes[index].name, students: rosters[index]})))
+    .sort((a, b) => String(b.value.createdAt ?? '').localeCompare(String(a.value.createdAt ?? ''))).slice(0, LIST * 2);
+  const detailed = new Set(rows.filter(row => row.value.active !== false).slice(0, CARD_PROGRESS_SETS).map(row => row.id));
+  return {card_sets: await Promise.all(rows.map(async row => {
+    if (!detailed.has(row.id)) return {...cardRow(row.id, row.value, row.className, row.students), progress: null};
+    const full = await db().doc(`cardClassSets/${row.id}`).get();
+    return {...cardRow(row.id, row.value, row.className, row.students), progress: await cardProgressOf(row.id, full.data()!)};
+  }))};
 }
 
 async function classTools(ctx: BearerContext, classId?: unknown) {
@@ -279,7 +322,7 @@ export async function callClassroomTool(name: string, args: Data, ctx: BearerCon
     case 'get_review_status': return reviewStatus(ctx, args.class_id);
     case 'get_playground_status': return playgroundStatus(ctx, args.class_id);
     case 'get_points': return points(ctx, args.class_id);
-    case 'list_card_sets': return cardSets(ctx, args.class_id);
+    case 'list_card_sets': return cardSets(ctx, args.class_id, args.distribution_id);
     case 'get_speech': return speechProgress(ctx, args.class_id);
     case 'list_class_tools': return classTools(ctx, args.class_id);
     case 'list_neighborhood_packs': return neighborhoodPacks(ctx, args);

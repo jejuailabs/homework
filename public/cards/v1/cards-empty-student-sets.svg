@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="카드를 기다리는 편지함"><defs><filter id="cut" x="-25%" y="-25%" width="150%" height="160%"><feMorphology in="SourceAlpha" operator="dilate" radius="4" result="border"/><feFlood flood-color="#fffdf8"/><feComposite in2="border" operator="in" result="white"/><feMerge><feMergeNode in="white"/><feMergeNode in="SourceGraphic"/></feMerge><feDropShadow dx="0" dy="3" stdDeviation="1.6" flood-color="#76624e" flood-opacity=".15"/></filter></defs><g filter="url(#cut)" stroke-linejoin="round" stroke-linecap="round" stroke="#3a5a52" stroke-width="3" fill="none"><path d="M80 150V102" stroke-width="7"/><path d="M58 150h44" />
+  <path d="M28 72a26 26 0 0 1 52 0v36H28Z" fill="#dcecfb"/>
+  <path d="M54 46h60a22 22 0 0 1 22 22v40H80V72a26 26 0 0 0-26-26Z" fill="#d9f0e3"/>
+  <path d="M36 80h36" />
+  <path d="M112 74V38l20 8-20 9" fill="#E8957D"/>
+  <g transform="rotate(-14 40 25)"><rect x="22" y="12" width="36" height="26" rx="9" fill="#fff0be"/></g>
+  <path d="M26 20l14 9 13-13" stroke-width="2.5" transform="rotate(-14 40 25)"/>
+  <path d="M60 28q10-8 18 0" stroke-dasharray="1 7" />
+  <circle cx="92" cy="86" r="3" fill="#3a5a52" stroke="none"/><circle cx="118" cy="86" r="3" fill="#3a5a52" stroke="none"/><path d="M99 92q6 6 12 0"/></g></svg>

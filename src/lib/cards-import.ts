@@ -1,5 +1,9 @@
+import {cardFrontKey} from './cards-ai-draft';
+import {CARD_ALTERNATIVE_LIMIT, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT} from './cards-logic';
+
 export type ImportedCard = {front: string; back: string; example: string; alternatives: string[]};
-export type CardImportResult = {cards: ImportedCard[]; errors: {line: number; reason: 'format' | 'empty' | 'length' | 'limit'}[]};
+export type CardImportError = {line: number; reason: 'format' | 'empty' | 'length' | 'limit'};
+export type CardImportResult = {cards: ImportedCard[]; errors: CardImportError[]};
 
 /** CSV/TSV with quoted delimiters, escaped quotes and multiline cells. */
 export function parseCardImport(source: string): CardImportResult {
@@ -47,10 +51,34 @@ export function parseCardImport(source: string): CardImportResult {
     if (row.cells.length < 2 || row.cells.length > 4) {result.errors.push({line: row.line, reason: 'format'}); continue;}
     if (!front || !back) {result.errors.push({line: row.line, reason: 'empty'}); continue;}
     const accepted = alternatives.split('|').map(s => s.trim()).filter(Boolean);
-    if (front.length > 500 || back.length > 500 || example.length > 1000 || accepted.length > 10 || accepted.some(s => s.length > 500)) {result.errors.push({line: row.line, reason: 'length'}); continue;}
+    if (front.length > CARD_TEXT_LIMIT || back.length > CARD_TEXT_LIMIT || example.length > CARD_EXAMPLE_LIMIT || accepted.length > CARD_ALTERNATIVE_LIMIT || accepted.some(s => s.length > CARD_TEXT_LIMIT)) {result.errors.push({line: row.line, reason: 'length'}); continue;}
     result.cards.push({front, back, example, alternatives: accepted});
   }
   return result;
+}
+
+/** Every bad line, grouped by what is wrong with it, so one message can list them all. */
+export function groupImportErrors(errors: CardImportError[]) {
+  const groups = new Map<CardImportError['reason'], number[]>();
+  for (const {line, reason} of errors) groups.set(reason, [...groups.get(reason) ?? [], line]);
+  return [...groups].map(([reason, lines]) => ({reason, lines}));
+}
+
+/** Cards whose fronts match, by 1-based position. Blank fronts are left for the "required" check. */
+export function findDuplicateFronts(cards: {front: string}[]) {
+  const seen = new Map<string, {front: string; numbers: number[]}>();
+  cards.forEach((card, index) => {
+    const key = cardFrontKey(card.front);
+    if (!key) return;
+    const group = seen.get(key);
+    if (group) group.numbers.push(index + 1); else seen.set(key, {front: card.front.trim(), numbers: [index + 1]});
+  });
+  return [...seen.values()].filter(group => group.numbers.length > 1);
+}
+/** Keeps the first card of each duplicate group and every blank row. */
+export function removeDuplicateFronts<T extends {front: string}>(cards: T[]) {
+  const later = new Set(findDuplicateFronts(cards).flatMap(group => group.numbers.slice(1)));
+  return cards.filter((_, index) => !later.has(index + 1));
 }
 
 export function cardsCsv(rows: string[][]) {

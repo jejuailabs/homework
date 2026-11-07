@@ -12,6 +12,7 @@ import {AI_COUNT_MAX, AI_COUNT_OPTIONS, duplicateOf, playAiDrafts, playAiRequest
 import {answerScore, choicesFor, DAILY_SIZE, dailyPick, emptyScore, gradeBand, hintsFor, nextPlaySkill, normalizeAnswer, PlayError, playDate, publicSession, rankRows, schoolYear, validateItem, validateSettings, weekStart} from './engine';
 import {playKinds, type PlayDaily, type PlayHome, type PlayItem, type PlayKind, type PlayRankings, type PlayReport, type PlayScore, type PlaySession, type PlaySkill, type PlayTeacherState} from './types';
 import {accessStudent, loadItems, requirePlayEnabled, settingsOf, settingsRef, teacherClass, type PlayAccess} from './server-access';
+import {roomEngineEnabled} from './flags';
 import {handleRoomRequest} from './rooms-server';
 import {handleSocialRequest} from './social-server';
 
@@ -276,7 +277,8 @@ async function saveTeacher(ctx: Context, path: string, classId: string, data: Re
 }
 export async function handlePlayground(request: Request, segments: string[]) {
   try {
-    if (process.env.PLAYGROUND_DISABLED === 'true') throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
+    // Rooms answer to their own switches, so a card team game survives a playground that is switched off.
+    if (process.env.PLAYGROUND_DISABLED === 'true' && !(segments[0] === 'rooms' && roomEngineEnabled())) throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
     const ctx = await getContext(request), path = segments.join('/'), url = new URL(request.url);
     if (request.method !== 'GET') assertOrigin(request);
     const data = request.method === 'GET' ? {} : await input(request);

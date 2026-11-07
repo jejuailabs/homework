@@ -6,11 +6,15 @@ import type {Context} from '@/lib/server/auth';
 import {ApiError, id} from '@/lib/server/policy';
 import {addPointBalance, pointBalance, wardrobeOutfit} from '@/lib/server/points-policy';
 import {companionProfile} from '@/modules/my-space/profile';
+import {cardDirection, ownsCardResource} from '@/lib/server/cards-policy';
+import type {CardEntry} from '@/lib/cards-types';
 import {accessStudent, teacherClass, loadItems, settingsOf, settingsRef, requirePlayEnabled} from './server-access';
-import {addDays, choicesFor, emptyScore, gradeBand, normalizeAnswer, playDate, schoolYear, weekStart} from './engine';
+import {addDays, choicesFor, emptyScore, gradeBand, isItemAnswer, playDate, schoolYear, weekStart} from './engine';
+import {CARD_ROOM_SECONDS, CARD_ROOM_TEAMS, cardRoomCapacity, cardRoomItems} from './cards-room';
+import {cardTeamEnabled, playgroundLive, roomEngineEnabled} from './flags';
 import {playKinds, type PlayItem, type PlayScore, type PlaySettings} from './types';
-import {activeKeys, canAnswer, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
-import type {PlayRoom, PlayRoomMode, RoomAnswer, RoomBootstrap, RoomPlayer, RoomPlayerSummary, PublicRoomRound} from './room-types';
+import {activeKeys, canAnswer, missedRounds, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
+import type {PlayRoom, PlayRoomMode, RoomAnswer, RoomCardSource, RoomBootstrap, RoomPlayer, RoomPlayerSummary, PublicRoomRound} from './room-types';
 
 type Data = Record<string, unknown>;
 type RoomAction = 'start'|'tick'|'next'|'pause'|'end';
@@ -19,7 +23,8 @@ const refFor = (roomId: string) => db().collection('playRooms').doc(id(roomId));
 const keyFor = (ctx: Context) => ctx.role === 'student' ? ctx.studentId! : `teacher_${ctx.uid}`;
 const summary = ({key,name,character,imageSrc,outfit,spaceOutfit,team,score,lastSeen,forfeited,reaction}: RoomPlayer): RoomPlayerSummary => ({key,name,character,...(imageSrc?{imageSrc}:{}),outfit,spaceOutfit,team,score,lastSeen,forfeited,reaction});
 const terminal = (room: PlayRoom) => room.status === 'finished' || room.status === 'closed';
-const liveEnabled = () => process.env.PLAYGROUND_DISABLED !== 'true' && process.env.PLAYGROUND_LIVE_DISABLED !== 'true';
+/** Card rooms run on their own switch and on no class setting, because their menu is the card set, not the playground. */
+const requireRoomOpen = (room: PlayRoom) => {if (room.cards ? !cardTeamEnabled() : !playgroundLive()) throw new ApiError(404,'지금은 이 방을 이용할 수 없어요.');};
 function bounded(value: unknown, fallback: number, min: number, max: number) {if (value === undefined) return fallback; if (!Number.isInteger(value) || Number(value) < min || Number(value) > max) throw new ApiError(400, `${min}~${max} 사이의 정수를 선택해 주세요.`); return Number(value);}
 function allowedTime(settings: PlaySettings, now: number) {const time = new Intl.DateTimeFormat('en-GB', {timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit'}).format(now);return !settings.timeWindows.length || settings.timeWindows.some(window => window.start <= time && time < window.end);}
 function playerFrom(ctx: Context, data: FirebaseFirestore.DocumentData, now: number, space?: FirebaseFirestore.DocumentData): RoomPlayer {
@@ -33,10 +38,11 @@ async function roomAccess(ctx: Context, roomId: string, tx: FirebaseFirestore.Tr
   const ref = refFor(roomId), snapshot = await tx.get(ref);
   if (!snapshot.exists) throw new ApiError(404, '방을 찾을 수 없어요.');
   const room = snapshot.data() as PlayRoom;
+  requireRoomOpen(room);
   if (room.expiresAtMs <= Date.now()) throw new ApiError(410, '이 방은 종료되었어요.');
   let settings: PlaySettings;
   if (ctx.role === 'student') {
-    const access = await accessStudent(ctx, tx); settings = access.settings; requirePlayEnabled(access);
+    const access = await accessStudent(ctx, tx); settings = access.settings; if (!room.cards) requirePlayEnabled(access);
     if (ctx.classId !== room.classId || !room.playerKeys.includes(ctx.studentId!)) throw new ApiError(403, '참가한 우리 반 방만 볼 수 있어요.');
   } else {await teacherClass(ctx, room.classId, tx); settings = settingsOf((await tx.get(settingsRef(room.classId))).data());}
   const playerSnapshot = ctx.role === 'student' ? await tx.get(ref.collection('players').doc(ctx.studentId!)) : null;
@@ -45,19 +51,30 @@ async function roomAccess(ctx: Context, roomId: string, tx: FirebaseFirestore.Tr
   return {ref, room, player, settings};
 }
 function roundPublic(item: PlayItem, round: number, roomId: string): PublicRoomRound {return {round,kind:item.kind,prompt:item.prompt,choices:choicesFor(item, `${roomId}:${round}`)};}
+/** The teacher's own set, read inside the transaction: the bank is fixed here and never leaves the server. */
+async function cardSource(ctx: Context, setId: string, cls: FirebaseFirestore.DocumentSnapshot, direction: RoomCardSource['direction'], tx: FirebaseFirestore.Transaction) {
+  const set = (await tx.get(db().doc(`cardSets/${setId}`))).data();
+  if (!set || !ownsCardResource(ctx, set as {ownerUid: string}) || !ownsCardResource(ctx, cls.data() as {ownerUid: string})) throw new ApiError(404, '세트를 찾을 수 없어요.', 'NOT_FOUND');
+  if (set.archived) throw new ApiError(409, '보관한 세트는 복구한 뒤 팀전을 열 수 있어요.');
+  const version = await tx.get(db().doc(`cardSetVersions/${id(set.versionId)}`));
+  if (!version.exists) throw new ApiError(409, '세트 버전을 확인해 주세요.', 'VERSION_MISSING');
+  return {cards: version.data()!.cards as CardEntry[], source: {setId, title: String(set.title).slice(0, 120), direction}};
+}
 async function createRoom(ctx: Context, data: Data) {
-  const now = Date.now(), mode = data.mode as PlayRoomMode;
+  const now = Date.now(), mode = data.mode as PlayRoomMode, cardSetId = data.cardSetId === undefined ? '' : id(data.cardSetId);
+  if (cardSetId ? !cardTeamEnabled() || ctx.role === 'student' || mode !== 'team' : !playgroundLive()) throw new ApiError(404, '지금은 이 방을 열 수 없어요.');
   if (!['duel','speed','team'].includes(mode) || ctx.role === 'student' && mode === 'team' || ctx.role !== 'student' && mode !== 'team') throw new ApiError(400, '놀이 모드를 다시 선택해 주세요.');
   const classId = ctx.role === 'student' ? ctx.classId! : id(data.classId), requestId = id(data.requestId), ref = refFor(digest(`${ctx.uid}:${requestId}`));
-  const kinds = Array.isArray(data.kinds) && data.kinds.length && data.kinds.every(kind => playKinds.includes(kind)) ? [...new Set(data.kinds)] as PlayRoom['kinds'] : [...playKinds];
-  const rounds = mode === 'duel' ? 7 : mode === 'speed' ? 10 : bounded(data.rounds,10,3,30), seconds = mode === 'duel' ? 15 : mode === 'speed' ? 10 : bounded(data.seconds,15,10,30), teamCount = bounded(data.teamCount,2,2,6);
+  const direction = cardSetId ? cardDirection(data.direction) : 'front-back';
+  const kinds = cardSetId ? ['vocab'] as PlayRoom['kinds'] : Array.isArray(data.kinds) && data.kinds.length && data.kinds.every(kind => playKinds.includes(kind)) ? [...new Set(data.kinds)] as PlayRoom['kinds'] : [...playKinds];
+  const rounds = mode === 'duel' ? 7 : mode === 'speed' ? 10 : bounded(data.rounds,10,cardSetId?1:3,30), seconds = mode === 'duel' ? 15 : mode === 'speed' ? 10 : bounded(data.seconds,CARD_ROOM_SECONDS.initial,CARD_ROOM_SECONDS.min,CARD_ROOM_SECONDS.max), teamCount = bounded(data.teamCount,CARD_ROOM_TEAMS.initial,CARD_ROOM_TEAMS.min,CARD_ROOM_TEAMS.max);
   // A class-scoped code is reserved in the same transaction as the room.
   for (let attempt=0; attempt<12; attempt++) {
     const code = String(randomInt(1000,10000)), codeRef = db().doc(`classes/${classId}/playRoomCodes/${code}`);
     const result = await db().runTransaction(async tx => {
       const student = ctx.role === 'student' ? await accessStudent(ctx,tx) : null;
       const cls = student?.cls || await teacherClass(ctx,classId,tx), settings = student?.settings || settingsOf((await tx.get(settingsRef(classId))).data());
-      if (!settings.enabled || student && (!settings.allowDuels || !allowedTime(settings,now))) throw new ApiError(403, '지금은 친구 대결을 열 수 없어요. 선생님 설정을 확인해 주세요.');
+      if (!cardSetId && !settings.enabled || student && (!settings.allowDuels || !allowedTime(settings,now))) throw new ApiError(403, '지금은 친구 대결을 열 수 없어요. 선생님 설정을 확인해 주세요.');
       const [existing,reserved,limit] = await Promise.all([tx.get(ref),tx.get(codeRef),tx.get(db().doc(`classes/${classId}/playRoomLimits/${ctx.uid}`))]);
       if (existing.exists) {const old = existing.data() as PlayRoom; return {roomId:old.id,code:old.code};}
       if (reserved.exists && reserved.data()!.expiresAtMs > now) return null;
@@ -66,16 +83,23 @@ async function createRoom(ctx: Context, data: Data) {
       const activeId = limit.data()?.activeId;
       let expiredLobby: FirebaseFirestore.DocumentReference | null = null;
       if (activeId) {const active = (await tx.get(refFor(activeId))).data() as PlayRoom | undefined;if(active && !terminal(active) && active.expiresAtMs>now){if(active.status==='lobby'&&active.statusEndsAt<=now)expiredLobby=refFor(activeId);else throw new ApiError(409,'이미 만든 방을 마치고 새 방을 열어 주세요.');}}
-      let items = (await loadItems(classId, student?.gradeBand || gradeBand(cls.data()?.grade),tx)).filter(item=>kinds.includes(item.kind)&&item.choices&&item.choices.length>=2);
+      const cardRoom = cardSetId ? await cardSource(ctx,cardSetId,cls,direction,tx) : null;
+      let items = cardRoom ? [] : (await loadItems(classId, student?.gradeBand || gradeBand(cls.data()?.grade),tx)).filter(item=>kinds.includes(item.kind)&&item.choices&&item.choices.length>=2);
+      if (cardRoom) {
+        const capacity = cardRoomCapacity(cardRoom.cards,direction);
+        if (capacity.answers<2) throw new ApiError(409,'답이 서로 다른 카드가 2개 이상 있어야 보기를 만들 수 있어요.','CARDS_TOO_FEW_ANSWERS');
+        if (capacity.questions<rounds) throw new ApiError(409,`이 세트로는 ${capacity.questions}문항까지 낼 수 있어요.`,'CARDS_TOO_FEW_QUESTIONS');
+        items = cardRoomItems(cardRoom.cards,direction,rounds,randomInt);
+      }
       if (ctx.role === 'student' && data.itemIds !== undefined) throw new ApiError(400,'학생 방은 서버가 문제를 골라요.');
-      if (Array.isArray(data.itemIds) && data.itemIds.length) {const selected = new Set(data.itemIds);items=items.filter(item=>selected.has(item.id));}
-      if (data.range === 'week') {const list=await tx.get(cls.ref.collection('playgroundLists').doc(weekStart(playDate())));const selected=new Set(list.data()?.itemIds||[]);items=items.filter(item=>selected.has(item.id));}
-      if (data.range === 'mistakes') {const pupils=await tx.get(cls.ref.collection('students')),counts=new Map<string,number>();for(const pupil of pupils.docs.filter(row=>!row.data().disabled)){const skills=await tx.get(pupil.ref.collection('playgroundYears').doc(String(schoolYear(playDate()))).collection('spelling'));for(const skill of skills.docs)counts.set(skill.id,(counts.get(skill.id)||0)+Number(skill.data().errors||0));}const top=new Set([...counts].filter(([,count])=>count>0).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([key])=>key));items=items.filter(item=>item.kind==='spelling'&&top.has(item.id));}
+      if (!cardRoom && Array.isArray(data.itemIds) && data.itemIds.length) {const selected = new Set(data.itemIds);items=items.filter(item=>selected.has(item.id));}
+      if (!cardRoom && data.range === 'week') {const list=await tx.get(cls.ref.collection('playgroundLists').doc(weekStart(playDate())));const selected=new Set(list.data()?.itemIds||[]);items=items.filter(item=>selected.has(item.id));}
+      if (!cardRoom && data.range === 'mistakes') {const pupils=await tx.get(cls.ref.collection('students')),counts=new Map<string,number>();for(const pupil of pupils.docs.filter(row=>!row.data().disabled)){const skills=await tx.get(pupil.ref.collection('playgroundYears').doc(String(schoolYear(playDate()))).collection('spelling'));for(const skill of skills.docs)counts.set(skill.id,(counts.get(skill.id)||0)+Number(skill.data().errors||0));}const top=new Set([...counts].filter(([,count])=>count>0).sort((a,b)=>b[1]-a[1]).slice(0,20).map(([key])=>key));items=items.filter(item=>item.kind==='spelling'&&top.has(item.id));}
       if (items.length<rounds) throw new ApiError(409, `선택한 범위에 보기 문제가 ${rounds}개 이상 있어야 해요.`);
       items.sort((a,b)=>digest(`${ref.id}:${a.id}`).localeCompare(digest(`${ref.id}:${b.id}`)));
       const space = student ? await tx.get(student.pupil.ref.collection('mySpace').doc('room')) : null;
       const player = student ? playerFrom(ctx,student.pupil.data()!,now,space?.data()) : null;
-      const room: PlayRoom = {id:ref.id,code,classId,ownerUid:cls.data()!.ownerUid,hostKey:keyFor(ctx),mode,status:'lobby',kinds,playerKeys:player?[player.key]:[],players:player?[summary(player)]:[],teams:[],teamCount,round:-1,roundsTotal:rounds,questionMs:seconds*1000,roundStartsAt:0,roundEndsAt:0,statusEndsAt:now+600_000,createdAt:now,updatedAt:now,expiresAtMs:now+3*3600_000,settled:false,pausedFrom:null,pausedAt:0,skippedRounds:[]};
+      const room: PlayRoom = {id:ref.id,code,classId,ownerUid:cls.data()!.ownerUid,hostKey:keyFor(ctx),mode,status:'lobby',kinds,playerKeys:player?[player.key]:[],players:player?[summary(player)]:[],teams:[],teamCount,round:-1,roundsTotal:rounds,questionMs:seconds*1000,roundStartsAt:0,roundEndsAt:0,statusEndsAt:now+600_000,createdAt:now,updatedAt:now,expiresAtMs:now+3*3600_000,settled:false,pausedFrom:null,pausedAt:0,skippedRounds:[],...(cardRoom?{cards:cardRoom.source}:{})};
       tx.create(ref,room);tx.set(codeRef,{roomId:ref.id,expiresAtMs:room.expiresAtMs});tx.set(limit.ref,{activeId:ref.id,created:[...recent,now]});
       if(expiredLobby)tx.update(expiredLobby,{status:'closed',expiresAtMs:now});
       items.slice(0,rounds).forEach((item,index)=>tx.create(ref.collection('secrets').doc(String(index)),{item}));
@@ -89,12 +113,13 @@ async function createRoom(ctx: Context, data: Data) {
 export async function joinRoom(ctx: Context, code: unknown, expectedRoomId?: string, inviteId?: string) {
   if (typeof code !== 'string' || !/^\d{4}$/.test(code)) throw new ApiError(400,'숫자 4자리 방 코드를 입력해 주세요.');
   return db().runTransaction(async tx=>{
-    const access = await accessStudent(ctx,tx);requirePlayEnabled(access);
+    const access = await accessStudent(ctx,tx);
     const reservation = await tx.get(db().doc(`classes/${ctx.classId}/playRoomCodes/${code}`));
     if(!reservation.exists || reservation.data()!.expiresAtMs<=Date.now())throw new ApiError(404,'우리 반의 열린 방 코드를 확인해 주세요.');
     const ref=refFor(reservation.data()!.roomId), snapshot=await tx.get(ref),room=snapshot.data() as PlayRoom|undefined,now=Date.now();
     if(expectedRoomId && room?.id!==expectedRoomId)throw new ApiError(409,'이 초대의 방은 닫혔어요. 새 초대를 받아 주세요.');
     if(!room || room.classId!==ctx.classId || room.expiresAtMs<=now || room.status==='closed')throw new ApiError(404,'방을 찾을 수 없어요.');
+    requireRoomOpen(room);if(!room.cards)requirePlayEnabled(access);
     if(room.status==='lobby'&&room.statusEndsAt<=now)throw new ApiError(410,'오래 기다린 방은 닫혔어요. 새 방을 열어 주세요.');
     const invite=inviteId?await tx.get(db().doc(`classes/${ctx.classId}/playInvites/${id(inviteId)}`)):null;
     if(invite && (!invite.exists||invite.data()!.to!==ctx.studentId||invite.data()!.roomId!==expectedRoomId||invite.data()!.code!==code||!['pending','accepted'].includes(invite.data()!.status)||invite.data()!.expiresAtMs<=now))throw new ApiError(409,'이 초대는 더 이상 사용할 수 없어요.');
@@ -110,12 +135,12 @@ export async function joinRoom(ctx: Context, code: unknown, expectedRoomId?: str
 }
 async function bootstrap(ctx: Context, roomId: string): Promise<RoomBootstrap> {
   return db().runTransaction(async tx=>{
-    const {ref,room,player}=await roomAccess(ctx,roomId,tx), now=Date.now();
+    const {ref,room,player,settings}=await roomAccess(ctx,roomId,tx), now=Date.now();
     const question=room.round<0?null:(await tx.get(ref.collection('rounds').doc(String(room.round)))).data() as PublicRoomRound|undefined;
     const roster=ctx.role!=='student'?(await tx.get(ref.collection('players'))).docs.map(doc=>doc.data() as RoomPlayer):undefined;
     if(player&&!player.forfeited&&!terminal(room)){if(now-player.lastSeen>30000&&room.status!=='lobby')player.eligibleFrom=room.round+1;player.lastSeen=now;tx.set(ref.collection('players').doc(player.key),player);}
     writeGrant(tx,ref,ctx,room.classId,now);
-    return {room,question:question||null,player:player||null,...(roster?{players:roster}:{}),viewer:{uid:ctx.uid,key:keyFor(ctx),teacher:ctx.role!=='student',canHost:ctx.role!=='student'||room.hostKey===keyFor(ctx)},serverTime:now};
+    return {room,question:question||null,player:player||null,...(roster?{players:roster}:{}),viewer:{uid:ctx.uid,key:keyFor(ctx),teacher:ctx.role!=='student',canHost:ctx.role!=='student'||room.hostKey===keyFor(ctx),rewardsEnabled:settings.rewardsEnabled},serverTime:now};
   });
 }
 async function heartbeat(ctx: Context, roomId: string) {
@@ -137,7 +162,7 @@ async function submitAnswer(ctx: Context, roomId: string, data: Data) {
     if(!secret)throw new ApiError(409,'문제를 다시 불러와 주세요.');
     const selected=choicesFor(secret,`${room.id}:${round}`).find(choice=>choice.id===choiceId);
     if(!selected)throw new ApiError(400,'화면에 나온 보기 중에서 골라 주세요.');
-    const correct=secret.answers.some(answer=>normalizeAnswer(answer,secret.kind)===normalizeAnswer(selected.label,secret.kind));
+    const correct=isItemAnswer(secret,selected.label);
     tx.create(answerRef,{key:player.key,round,choiceId,receivedAt,elapsedMs:Math.max(0,receivedAt-room.roundStartsAt),correct} satisfies RoomAnswer);
     tx.update(ref.collection('players').doc(player.key),{answered:player.answered+1,answeredRound:round,lastSeen:receivedAt});
     return {accepted:true,serverTime:receivedAt,mode:room.mode};
@@ -190,7 +215,7 @@ async function step(roomId: string, action: RoomAction, data: Data, ctx?: Contex
     if((next.status==='question'||next.status==='reveal')&&!secret)throw new ApiError(409,'다음 문제를 찾을 수 없어요.');
     if(next.status==='reveal'&&room.status==='question'&&secret){
       const results=roundResults(next,answers),question=roundPublic(secret,next.round,next.id);
-      const correctChoice=question.choices.find(choice=>secret.answers.some(answer=>normalizeAnswer(answer,secret.kind)===normalizeAnswer(choice.label,secret.kind)));
+      const correctChoice=question.choices.find(choice=>isItemAnswer(secret,choice.label));
       players.forEach(player=>{player.score+=results.find(result=>result.key===player.key)?.points||0;});
       question.correctChoiceId=correctChoice?.id||'';question.reveal=secret.reveal;question.results=results;question.distribution=Object.fromEntries(question.choices.map(choice=>[choice.id,answers.filter(answer=>answer.choiceId===choice.id).length]));question.skipped=next.skippedRounds.includes(next.round);
       next.players=players.map(summary);next.teams=next.mode==='team'?teamScores(players,next.teamCount):[];
@@ -206,6 +231,7 @@ async function roomState(ctx: Context, roomId: string, known: string | null) {
   const ref=refFor(roomId);
   let room=(await ref.get()).data() as PlayRoom|undefined;
   if(!room||room.expiresAtMs<=Date.now())throw new ApiError(410,'이 방은 종료되었어요.');
+  requireRoomOpen(room);
   if(ctx.role==='student'){if(ctx.classId!==room.classId||!room.playerKeys.includes(ctx.studentId!))throw new ApiError(403,'참가한 우리 반 방만 볼 수 있어요.');}
   else if(room.ownerUid!==ctx.uid)await teacherClass(ctx,room.classId);
   if(roomDue(room,Date.now())){await step(roomId,'tick',{});room=(await ref.get()).data() as PlayRoom;}
@@ -215,6 +241,17 @@ async function roomState(ctx: Context, roomId: string, known: string | null) {
     ctx.role!=='student'&&['lobby','question','paused'].includes(room.status)?ref.collection('players').get():null,
   ]);
   return {room,key,...(round?{question:(round.data() as PublicRoomRound|undefined)||null}:{}),...(players?{players:players.docs.map(doc=>doc.data() as RoomPlayer)}:{}),serverTime:Date.now()};
+}
+/** Host screen only: students never get the whole game's answers at once, even after it ends. */
+async function roomReview(ctx: Context, roomId: string) {
+  if(ctx.role==='student')throw new ApiError(403,'선생님만 볼 수 있어요.');
+  const ref=refFor(roomId),room=(await ref.get()).data() as PlayRoom|undefined;
+  if(room)requireRoomOpen(room);
+  if(!room||room.expiresAtMs<=Date.now())throw new ApiError(410,'이 방은 종료되었어요.');
+  if(room.ownerUid!==ctx.uid)await teacherClass(ctx,room.classId);
+  if(room.round<0)return {review:[]};
+  const rows=await db().getAll(...Array.from({length:room.round+1},(_,round)=>ref.collection('rounds').doc(String(round))));
+  return {review:missedRounds(rows.flatMap(row=>row.exists?[row.data() as PublicRoomRound]:[]))};
 }
 async function settleRoom(roomId: string) {
   await db().runTransaction(async tx=>{
@@ -240,7 +277,8 @@ async function settleRoom(roomId: string) {
       if(completed){record.games++;record.days=[...new Set([...record.days,date])];}
       const complete=room.completion==='complete'&&!player.forfeited&&player.answered>=room.roundsTotal-room.skippedRounds.length&&room.round+1>=room.roundsTotal;
       const paid=Number(day.data()?.duelRewardPaid||0),amount=room.mode!=='team'&&complete&&settings.rewardsEnabled&&!receipt.exists?Math.min(settings.duelReward,Math.max(0,3-paid)):0;
-      tx.set(score.ref,record,{merge:true});tx.set(day.ref,{duelGames:Number(day.data()?.duelGames||0)+(completed?1:0),duelRewardPaid:paid+amount},{merge:true});
+      // A card room is not a playground game: it must not fill the playground's weekly scores or daily counts.
+      if(!room.cards){tx.set(score.ref,record,{merge:true});tx.set(day.ref,{duelGames:Number(day.data()?.duelGames||0)+(completed?1:0),duelRewardPaid:paid+amount},{merge:true});}
       if(amount){const balance=addPointBalance(pointBalance(pupil.data()?.points),amount);tx.update(pupil.ref,{points:balance,pointsEarnedTotal:addPointBalance(pointBalance(pupil.data()?.pointsEarnedTotal),amount)});tx.create(receipt.ref,{amount,kind:'earn',source:'playground',sourceId:roomId,reason:'말놀이터 대결 참여',balanceAfter:balance,createdAt:new Date(now).toISOString(),classId:room.classId,studentId:player.key,actorUid:player.uid});}
     }
     if(room.completion==='complete'||room.completion==='forfeit')pairs.forEach((pair,index)=>tx.set(pairDocs[index].ref,{count:Number(pairDocs[index].data()?.count||0)+1,date,keys:pair.keys}));
@@ -267,16 +305,17 @@ async function rewardTeam(ctx: Context, roomId: string, data: Data) {
     if(receipt.exists){if(receipt.data()!.amount!==amount)throw new ApiError(409,'이 판의 보말은 이미 지급했어요.');return {ok:true};}
     const players=(await tx.get(ref.collection('players'))).docs.map(doc=>doc.data() as RoomPlayer).filter(player=>room.playerKeys.includes(player.key)&&!player.forfeited&&player.answered>0);
     const pupils=await Promise.all(players.map(player=>tx.get(db().doc(`classes/${room.classId}/students/${player.key}`))));
-    pupils.forEach((pupil,index)=>{if(!pupil.exists||pupil.data()?.disabled||pupil.data()?.authUid!==players[index].uid)return;const balance=addPointBalance(pointBalance(pupil.data()?.points),amount);if(amount){tx.update(pupil.ref,{points:balance,pointsEarnedTotal:addPointBalance(pointBalance(pupil.data()?.pointsEarnedTotal),amount)});tx.create(pupil.ref.collection('pointLedger').doc(`playground_team_${roomId}`),{amount,kind:'earn',source:'playground',sourceId:roomId,reason:'말놀이터 팀전 참여',balanceAfter:balance,createdAt:new Date().toISOString(),classId:room.classId,studentId:pupil.id,actorUid:ctx.uid});}});
+    pupils.forEach((pupil,index)=>{if(!pupil.exists||pupil.data()?.disabled||pupil.data()?.authUid!==players[index].uid)return;const balance=addPointBalance(pointBalance(pupil.data()?.points),amount);if(amount){tx.update(pupil.ref,{points:balance,pointsEarnedTotal:addPointBalance(pointBalance(pupil.data()?.pointsEarnedTotal),amount)});tx.create(pupil.ref.collection('pointLedger').doc(`playground_team_${roomId}`),{amount,kind:'earn',source:'playground',sourceId:roomId,reason:room.cards?'카드 팀전 참여':'말놀이터 팀전 참여',balanceAfter:balance,createdAt:new Date().toISOString(),classId:room.classId,studentId:pupil.id,actorUid:ctx.uid});}});
     tx.create(receipt.ref,{amount,actorUid:ctx.uid,at:Date.now()});return {ok:true};
   });
 }
 export async function handleRoomRequest(request: Request, ctx: Context, segments: string[], data: Data = {}) {
   if(segments[0]!=='rooms')return undefined;
-  if(!liveEnabled())throw new ApiError(404,'실시간 말놀이터는 준비 중이에요.');
+  if(!roomEngineEnabled())throw new ApiError(404,'실시간 말놀이터는 준비 중이에요.');
   if(request.method==='POST'&&segments.length===1)return createRoom(ctx,data);
   if(request.method==='POST'&&segments.length===2&&segments[1]==='join')return joinRoom(ctx,data.code);
   if(segments.length===2&&request.method==='GET')return bootstrap(ctx,id(segments[1]));
+  if(segments.length===3&&segments[2]==='review'&&request.method==='GET')return roomReview(ctx,id(segments[1]));
   if(segments.length===3&&segments[2]==='state'&&request.method==='GET'){const known=new URL(request.url).searchParams.get('known');return roomState(ctx,id(segments[1]),known&&known.length<=40?known:null);}
   if(segments.length===3&&request.method==='POST'){
     const roomId=id(segments[1]),action=segments[2];
@@ -290,7 +329,7 @@ export async function handleRoomRequest(request: Request, ctx: Context, segments
 }
 /** Explicit bounded recursive cleanup: deleting the parent alone leaves private answer documents behind. */
 export async function cleanupPlayRooms() {
-  if(!liveEnabled())return {deleted:0};
+  if(!roomEngineEnabled())return {deleted:0};
   const expired=await db().collection('playRooms').where('expiresAtMs','<=',Date.now()).limit(20).get();
   let deleted=0;
   for(const snapshot of expired.docs){

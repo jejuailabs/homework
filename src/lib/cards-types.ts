@@ -7,10 +7,13 @@ export type CardSetSummary = { id: string; title: string; description: string; t
 export type CardSet = CardSetSummary & { cards: CardEntry[] };
 export type CardModeRequirement = { requiredCount: number; direction: CardDirection; rangeStart: number; rangeEnd: number };
 export type CardRequiredModes = Record<CardStudyMode, CardModeRequirement>;
-export type CardTestSettings = { questionCount: number; goalScore: number; maxAttempts: number; requireStudy: boolean; direction: CardDirection; answerRelease: 'immediate' | 'after-due' | 'never' };
+export type CardTestFormat = 'written' | 'choice';
+export type CardTestSettings = { questionCount: number; goalScore: number; maxAttempts: number; requireStudy: boolean; direction: CardDirection; answerRelease: 'immediate' | 'after-due' | 'never'; format?: CardTestFormat; timeLimitSeconds?: number | null };
+export type CardAfterDue = 'open' | 'late' | 'lock';
 export type CardSnapshot = { title: string; description: string; type: CardSetType; cards: CardEntry[] };
-export type CardDistributionSummary = { id: string; classId: string; className: string; setId: string; setVersion: number; versionId: string; title: string; type: CardSetType; cardCount: number; targetCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; active: boolean; createdAt: string; updatedAt: string };
+export type CardDistributionSummary = { id: string; classId: string; className: string; setId: string; setVersion: number; versionId: string; title: string; type: CardSetType; cardCount: number; targetCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; afterDue: CardAfterDue; allStudents: boolean; active: boolean; createdAt: string; updatedAt: string };
 export type CardDistribution = CardDistributionSummary & { snapshot: CardSnapshot; targetStudentIds: string[] };
+export type CardCoverage = Record<CardStudyMode, Record<string, number>>;
 export type CardProgress = {
   counts: Record<CardStudyMode, number>;
   correctCounts: Record<CardStudyMode, number>;
@@ -21,12 +24,13 @@ export type CardProgress = {
   starredCardIds: string[];
   lastPosition: { mode: CardStudyMode; cardId: string } | null;
   updatedAt: string | null;
+  lateAt: string | null;
   studyComplete: boolean;
   goalReached: boolean;
 };
 export type CardStudentDistribution = CardDistributionSummary & { progress: CardProgress };
 export type CardStudyResult = { cardId: string; correct: boolean; expectedAnswer: string };
-export type CardTestQuestion = { id: string; cardId: string; prompt: string };
+export type CardTestQuestion = { id: string; cardId: string; prompt: string; choices?: string[] };
 export type CardTestResult = { questionId: string; answer: string; correct: boolean; expectedAnswer?: string };
-export type CardTestAttempt = { id: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; answersVisible: boolean; results?: CardTestResult[]; startedAt: string; submittedAt: string | null };
+export type CardTestAttempt = { id: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; answersVisible: boolean; results?: CardTestResult[]; startedAt: string; submittedAt: string | null; timeLimitSeconds?: number | null; overtime?: boolean };
 export type CardReportStudent = { id: string; name: string; number: number; disabled: boolean; progress: CardProgress; attempts: CardTestAttempt[]; mistakes: { cardId: string; count: number }[] };

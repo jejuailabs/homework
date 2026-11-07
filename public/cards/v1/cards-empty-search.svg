@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="돋보기 속 빈 카드"><defs><filter id="cut" x="-25%" y="-25%" width="150%" height="160%"><feMorphology in="SourceAlpha" operator="dilate" radius="4" result="border"/><feFlood flood-color="#fffdf8"/><feComposite in2="border" operator="in" result="white"/><feMerge><feMergeNode in="white"/><feMergeNode in="SourceGraphic"/></feMerge><feDropShadow dx="0" dy="3" stdDeviation="1.6" flood-color="#76624e" flood-opacity=".15"/></filter></defs><g filter="url(#cut)" stroke-linejoin="round" stroke-linecap="round" stroke="#3a5a52" stroke-width="3" fill="none"><circle cx="70" cy="70" r="47" fill="#ece1fa"/>
+  <g transform="rotate(8 70 71)"><rect x="45" y="44" width="50" height="54" rx="9" fill="#fffdf8"/></g>
+  <path d="M60 67q0-9 10-9t10 9q0 6-7 8-3 1-3 5" stroke-width="3" transform="rotate(8 70 70)"/>
+  <circle cx="71" cy="88" r="2.2" fill="#3a5a52" stroke="none"/>
+  <path d="M104 104l33 33" stroke-width="8"/>
+  <path d="M132 28v12M126 34h12" stroke="#D7AD56" stroke-width="3"/></g></svg>

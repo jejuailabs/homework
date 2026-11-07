@@ -1,3 +1,3 @@
 'use client';
 import PlayRoomScreen from './room';
-export default function LiveHost({roomId}:{roomId:string}) {return <PlayRoomScreen codeOrId={roomId} teacher/>;}
+export default function LiveHost({roomId,fromCards=false}:{roomId:string;fromCards?:boolean}) {return <PlayRoomScreen codeOrId={roomId} teacher fromCards={fromCards}/>;}

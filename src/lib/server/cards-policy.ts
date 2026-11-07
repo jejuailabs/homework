@@ -1,9 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
-import type { CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
+import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
+import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
 
+export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
+export type { CardCoverage };
 export const CARD_LIMIT = 200;
 export const CARD_LIST_LIMIT = 200;
+export const CARD_TIME_LIMIT_MIN = 60;
+export const CARD_TIME_LIMIT_MAX = 7200;
 export const CARD_MODES: CardStudyMode[] = ['memorize', 'recall', 'spell'];
 type Value = Record<string, unknown>;
 export function object(value: unknown): Value {
@@ -41,10 +46,10 @@ export function parseCards(value: unknown): CardEntry[] {
   const cards = value.map((entry, index) => {
     const raw = object(entry), label = `${index + 1}번 카드`;
     const alternatives = raw.alternatives ?? [];
-    if (!Array.isArray(alternatives) || alternatives.length > 10) throw new ApiError(400, `${label}의 대체 정답은 10개까지 입력해 주세요.`);
+    if (!Array.isArray(alternatives) || alternatives.length > CARD_ALTERNATIVE_LIMIT) throw new ApiError(400, `${label}의 대체 정답은 ${CARD_ALTERNATIVE_LIMIT}개까지 입력해 주세요.`);
     const cardId = raw.id === undefined ? randomUUID() : id(raw.id, `${label} ID`);
     if (['__proto__', 'constructor', 'prototype'].includes(cardId)) throw new ApiError(400, `${label} ID를 확인해 주세요.`);
-    return { id: cardId, front: text(raw.front, `${label} 앞면`, 1000), back: text(raw.back, `${label} 뒷면`, 1000), example: text(raw.example, `${label} 예문`, 2000, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, 1000)))] };
+    return { id: cardId, front: text(raw.front, `${label} 앞면`, CARD_TEXT_LIMIT), back: text(raw.back, `${label} 뒷면`, CARD_TEXT_LIMIT), example: text(raw.example, `${label} 예문`, CARD_EXAMPLE_LIMIT, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, CARD_TEXT_LIMIT)))] };
   });
   if (new Set(cards.map(card => card.id)).size !== cards.length) throw new ApiError(400, '중복된 카드 ID가 있어요.');
   // Leave room for distribution settings and Firestore's document size overhead.
@@ -66,28 +71,68 @@ export function parseTestSettings(value: unknown, cardCount: number): CardTestSe
   const answerRelease = raw.answerRelease ?? 'immediate';
   if (typeof requireStudy !== 'boolean') throw new ApiError(400, '테스트 응시 조건을 확인해 주세요.');
   if (!['immediate', 'after-due', 'never'].includes(answerRelease as string)) throw new ApiError(400, '정답 공개 시점을 확인해 주세요.');
-  return { questionCount: integer(raw.questionCount ?? Math.min(20, cardCount), 1, cardCount, '테스트 문항 수'), goalScore: integer(raw.goalScore ?? 80, 0, 100, '목표 점수'), maxAttempts: integer(raw.maxAttempts ?? 3, 1, 20, '응시 횟수'), requireStudy, direction: cardDirection(raw.direction ?? 'front-back'), answerRelease: answerRelease as CardTestSettings['answerRelease'] };
+  const format = raw.format ?? 'written';
+  if (format !== 'written' && format !== 'choice') throw new ApiError(400, '테스트 문제 형식을 확인해 주세요.');
+  const timeLimitSeconds = raw.timeLimitSeconds === undefined || raw.timeLimitSeconds === null ? null : integer(raw.timeLimitSeconds, CARD_TIME_LIMIT_MIN, CARD_TIME_LIMIT_MAX, '테스트 제한 시간(초)');
+  return { questionCount: integer(raw.questionCount ?? Math.min(20, cardCount), 1, cardCount, '테스트 문항 수'), goalScore: integer(raw.goalScore ?? 80, 0, 100, '목표 점수'), maxAttempts: integer(raw.maxAttempts ?? 3, 1, 20, '응시 횟수'), requireStudy, direction: cardDirection(raw.direction ?? 'front-back'), answerRelease: answerRelease as CardTestSettings['answerRelease'], format: format as CardTestSettings['format'], timeLimitSeconds };
 }
 export function parseDueAt(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value) || !Number.isFinite(Date.parse(value))) throw new ApiError(400, '마감 날짜를 확인해 주세요.');
   return new Date(value).toISOString();
 }
+export function parseAfterDue(value: unknown): CardAfterDue {
+  if (value === undefined || value === null) return 'open';
+  if (value !== 'open' && value !== 'late' && value !== 'lock') throw new ApiError(400, '마감 후 처리 방법을 확인해 주세요.');
+  return value;
+}
+type Deadline = { dueAt: string | null; afterDue?: CardAfterDue };
+/** Starting study or a new test is refused once a locked deadline and its grace have passed. Finishing a started test is not. */
+export function assertDueOpen(deadline: Deadline, time = Date.now()) {
+  if (cardDueState(deadline, time, CARD_DUE_GRACE_MS) === 'lock') throw new ApiError(403, '마감이 지나 더 이상 학습할 수 없어요.', 'DUE_CLOSED');
+}
+const afterDeadline = (value: unknown, dueAt: string | null): value is string => typeof value === 'string' && !!dueAt && Date.parse(value) > Date.parse(dueAt);
+/** The first activity after the deadline. A stamp from before a moved deadline no longer counts, so the next late activity sets it again. */
+export function lateMark(current: unknown, deadline: Deadline, stamp: string): string | null {
+  if (afterDeadline(current, deadline.dueAt)) return current;
+  return cardDueState(deadline, Date.parse(stamp), CARD_DUE_GRACE_MS) === 'late' ? stamp : null;
+}
 export function ownsCardResource(ctx: { uid: string; role: Role }, resource: { ownerUid: string }) {
   return ctx.role !== 'student' && ctx.uid === resource.ownerUid;
 }
-export function canStudyDistribution(ctx: { role: Role; classId?: string; studentId?: string }, distribution: { classId: string; targetStudentIds: string[]; active: boolean }) {
-  return ctx.role === 'student' && distribution.active && ctx.classId === distribution.classId && !!ctx.studentId && distribution.targetStudentIds.includes(ctx.studentId);
+export function canStudyDistribution(ctx: { role: Role; classId?: string; studentId?: string }, distribution: { classId: string; targetStudentIds: string[]; active: boolean; allStudents?: boolean }) {
+  return ctx.role === 'student' && distribution.active && ctx.classId === distribution.classId && !!ctx.studentId && (!!distribution.allStudents || distribution.targetStudentIds.includes(ctx.studentId));
 }
-export function normalizeCardAnswer(value: string) {
-  return value.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
+/** An all-students distribution also reaches students who joined after it; everyone originally targeted stays on the report. */
+export function reportStudentIds(distribution: { targetStudentIds: string[]; allStudents?: boolean }, activeIds: string[]) {
+  return distribution.allStudents ? [...new Set([...distribution.targetStudentIds, ...activeIds])] : distribution.targetStudentIds;
 }
-export function cardAnswer(card: CardEntry, direction: CardDirection) { return direction === 'front-back' ? card.back : card.front; }
-export function isCorrectCardAnswer(card: CardEntry, direction: CardDirection, answer: string) {
-  const expected = direction === 'front-back' ? [card.back, ...card.alternatives] : [card.front];
-  return expected.some(value => normalizeCardAnswer(value) === normalizeCardAnswer(answer));
+/** Turning all-students off keeps everyone who could study until now, later joiners included, instead of stranding them. */
+export function widenedTargets<T extends { id: string; name: string; number: number }>(distribution: { targetStudentIds: string[]; targetStudents?: T[] }, active: T[]) {
+  const known = new Map([...(distribution.targetStudents ?? []), ...active].map(student => [student.id, student]));
+  const targetStudentIds = [...new Set([...distribution.targetStudentIds, ...active.map(student => student.id)])];
+  return { targetStudentIds, targetStudents: targetStudentIds.flatMap(studentId => known.get(studentId) ?? []), targetCount: targetStudentIds.length };
 }
-export type CardCoverage = Record<CardStudyMode, Record<string, number>>;
+type EditableDistribution = { cardCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null };
+/** The fields a PATCH may change, each through the validator used at creation. Nested settings merge over the saved ones, so a partial edit never resets the rest. */
+export function distributionPatch(input: Value, current: EditableDistribution) {
+  const update: { active?: boolean; allStudents?: boolean; requiredModes?: CardRequiredModes; test?: CardTestSettings; dueAt?: string | null; afterDue?: CardAfterDue } = {};
+  for (const key of ['active', 'allStudents'] as const) {
+    if (input[key] === undefined) continue;
+    if (typeof input[key] !== 'boolean') throw new ApiError(400, '배부 상태를 확인해 주세요.');
+    update[key] = input[key];
+  }
+  if (input.requiredModes !== undefined) {
+    const raw = object(input.requiredModes);
+    update.requiredModes = parseRequirements(Object.fromEntries(CARD_MODES.map(mode => [mode, { ...current.requiredModes[mode], ...(raw[mode] === undefined ? {} : object(raw[mode])) }])), current.cardCount);
+  }
+  if (input.test !== undefined) update.test = parseTestSettings({ ...current.test, ...object(input.test) }, current.cardCount);
+  if (input.dueAt !== undefined) update.dueAt = parseDueAt(input.dueAt);
+  if (input.afterDue !== undefined) update.afterDue = parseAfterDue(input.afterDue);
+  if (!Object.keys(update).length) throw new ApiError(400, '바꿀 배부 설정을 확인해 주세요.');
+  if ((update.test ?? current.test).answerRelease === 'after-due' && !(update.dueAt === undefined ? current.dueAt : update.dueAt)) throw new ApiError(400, '마감 후 정답 공개에는 마감 날짜가 필요해요.');
+  return update;
+}
 export const emptyModeCounts = () => ({ memorize: 0, recall: 0, spell: 0 });
 export function completedCounts(snapshot: CardSnapshot, requirements: CardRequiredModes, coverage: CardCoverage) {
   return Object.fromEntries(CARD_MODES.map(mode => {
@@ -98,9 +143,9 @@ export function completedCounts(snapshot: CardSnapshot, requirements: CardRequir
     return [mode, wholeRounds + partialRound];
   })) as Record<CardStudyMode, number>;
 }
-export function publicProgress(raw: Record<string, any> | undefined, snapshot: CardSnapshot, requirements: CardRequiredModes, test: CardTestSettings): CardProgress {
+export function publicProgress(raw: Record<string, any> | undefined, snapshot: CardSnapshot, requirements: CardRequiredModes, test: CardTestSettings, deadline?: Deadline): CardProgress {
   const credited = completedCounts(snapshot, requirements, raw?.coverage ?? { memorize: {}, recall: {}, spell: {} });
-  return { counts: raw?.counts ?? emptyModeCounts(), correctCounts: raw?.correctCounts ?? emptyModeCounts(), completedCounts: credited, attempts: raw?.attempts ?? 0, bestScore: raw?.bestScore ?? null, latestScore: raw?.latestScore ?? null, starredCardIds: raw?.starredCardIds ?? [], lastPosition: raw?.lastPosition ?? null, updatedAt: raw?.updatedAt ?? null, studyComplete: CARD_MODES.every(mode => credited[mode] >= requirements[mode].requiredCount), goalReached: typeof raw?.bestScore === 'number' && raw.bestScore >= test.goalScore };
+  return { counts: raw?.counts ?? emptyModeCounts(), correctCounts: raw?.correctCounts ?? emptyModeCounts(), completedCounts: credited, attempts: raw?.attempts ?? 0, bestScore: raw?.bestScore ?? null, latestScore: raw?.latestScore ?? null, starredCardIds: raw?.starredCardIds ?? [], lastPosition: raw?.lastPosition ?? null, updatedAt: raw?.updatedAt ?? null, lateAt: deadline?.afterDue === 'late' && afterDeadline(raw?.lateAt, deadline.dueAt) ? raw!.lateAt : null, studyComplete: CARD_MODES.every(mode => credited[mode] >= requirements[mode].requiredCount), goalReached: typeof raw?.bestScore === 'number' && raw.bestScore >= test.goalScore };
 }
 export function answersReleased(settings: CardTestSettings, dueAt: string | null, time = Date.now()) {
   return settings.answerRelease === 'immediate' || (settings.answerRelease === 'after-due' && dueAt !== null && Date.parse(dueAt) <= time);
