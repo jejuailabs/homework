@@ -4,6 +4,7 @@ import {FileUp, Sparkles, Trash2} from 'lucide-react';
 import ko from '@/messages/cards-import-ko.json';
 import en from '@/messages/cards-import-en.json';
 import {CARD_AI_LEVELS, CARD_AI_TEXT_LIMIT, CARD_AI_WORD_LENGTH, cardAiFailureKey, chunkList, dedupeByFront, parseCardWords, splitCardText, type CardAiDraft, type CardAiLevel, type CardAiRequest} from '@/lib/cards-ai-draft';
+import {CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT} from '@/lib/cards-logic';
 import {groupImportErrors, parseCardImport, type ImportedCard} from '@/lib/cards-import';
 import {useCardsCopy} from '@/lib/cards-copy';
 import {cardsRequest, CardsDialog, CardsRequestError} from './cards-shared';
@@ -93,7 +94,7 @@ export default function CardsImportDialog({fronts, onAppend, onClose}: {fronts: 
     {!!draft.length && <section className="cards-draft" aria-label={copy.draftCards}>
       <p className="cards-draft-notice">{copy.notice}</p>
       <fieldset disabled={running} className="cards-fieldset"><div className="cards-draft-head" aria-hidden="true"><span>{t('front')}</span><span>{t('back')}</span><span>{t('example')}</span></div>
-        {draft.map((row, index) => <div key={row.id} className="cards-draft-row"><input aria-label={label('front', index)} aria-invalid={!row.front.trim()} maxLength={500} value={row.front} onChange={e => updateRow(row.id, {front: e.target.value})}/><input aria-label={label('back', index)} aria-invalid={!row.back.trim()} maxLength={500} value={row.back} onChange={e => updateRow(row.id, {back: e.target.value})}/><input aria-label={label('example', index)} maxLength={1000} value={row.example} onChange={e => updateRow(row.id, {example: e.target.value})}/><button type="button" className="icon-button" aria-label={`${copy.remove} ${index + 1}`} onClick={() => setDraft(current => current.filter(item => item.id !== row.id))}><Trash2 size={17}/></button></div>)}
+        {draft.map((row, index) => <div key={row.id} className="cards-draft-row"><input aria-label={label('front', index)} aria-invalid={!row.front.trim()} maxLength={CARD_TEXT_LIMIT} value={row.front} onChange={e => updateRow(row.id, {front: e.target.value})}/><input aria-label={label('back', index)} aria-invalid={!row.back.trim()} maxLength={CARD_TEXT_LIMIT} value={row.back} onChange={e => updateRow(row.id, {back: e.target.value})}/><input aria-label={label('example', index)} maxLength={CARD_EXAMPLE_LIMIT} value={row.example} onChange={e => updateRow(row.id, {example: e.target.value})}/><button type="button" className="icon-button" aria-label={`${copy.remove} ${index + 1}`} onClick={() => setDraft(current => current.filter(item => item.id !== row.id))}><Trash2 size={17}/></button></div>)}
       </fieldset>
       <div className="cards-dialog-footer"><p className="cards-muted">{copy.addHint}</p><div className="cards-actions"><strong>{draft.length} {t('cards')}</strong><button type="button" className="button primary" disabled={running} onClick={add}>{copy.add}</button></div></div>
     </section>}
