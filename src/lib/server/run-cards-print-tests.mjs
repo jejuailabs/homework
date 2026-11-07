@@ -7,3 +7,5 @@ const dataUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toStr
 const logic = dataUrl(compile('../cards-logic.ts'));
 const print = dataUrl(compile('../cards-print.ts').replace("'./cards-logic'", JSON.stringify(logic)));
 await import(dataUrl(compile('../cards-print.test.ts').replace("'./cards-print'", JSON.stringify(print)).replace("'./cards-logic'", JSON.stringify(logic))));
+const report = dataUrl(compile('../cards-print-report.ts').replace("'./cards-print'", JSON.stringify(print)));
+await import(dataUrl(compile('../cards-print-report.test.ts').replace("'./cards-print-report'", JSON.stringify(report)).replace("'./cards-print'", JSON.stringify(print))));

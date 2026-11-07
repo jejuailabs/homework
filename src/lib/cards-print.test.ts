@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {isCorrectCardAnswer} from './cards-logic';
-import {cardPrintCode, cardPrintRuns, clampPrintCounts, defaultCardPrintOptions, estimatePrintWidth as measure, fitCardText, flowBlocks, generateCardPrintTest, layoutCardPrint, printRange, restoreCardPrintOptions, seededRandom, wrapPrintText, A4, type CardPrintInput, type CardPrintOp, type CardPrintOptions} from './cards-print';
+import {cardBlank, cardPrintCode, cardPrintRuns, clampPrintCounts, combineCardSets, defaultCardPrintOptions, estimatePrintWidth as measure, fitCardText, flowBlocks, generateCardBlankTest, generateCardPrintTest, layoutCardPrint, layoutCardPrintJob, printRange, restoreCardPrintOptions, seededRandom, wrapPrintText, A4, type CardPrintInput, type CardPrintOp, type CardPrintOptions} from './cards-print';
 import type {CardEntry} from './cards-types';
 
 const cards: CardEntry[] = Array.from({length: 30}, (_, index) => ({id: `c${index}`, front: `word${index}`, back: `뜻 ${index}`, example: '', alternatives: []}));
@@ -111,4 +111,85 @@ assert.equal(pairs[0].filter(op => op.t === 'line' && op.dash?.length === 4).len
 const edges = duplex[0].filter(op => op.t === 'line').map(op => op.t === 'line' ? `${op.x1},${op.y1},${op.x2},${op.y2}` : '');
 assert.equal(new Set(edges).size, edges.length, 'shared card edges are drawn once, so the dashes stay visible');
 assert.ok(layoutCardPrint(input({kind: 'cards', grid: '3x6', start: 1, end: 12}, {type: 'sentence', cards: sentences}), measure).truncated > 0, 'cards cut to fit are counted');
+// Several sets: joined in order, duplicates dropped once, ids kept unique, each card remembers its set type.
+{
+  const a: CardEntry[] = [{id: 'x', front: 'Apple', back: '사과', example: '', alternatives: []}, {id: 'y', front: 'pear', back: '배', example: '', alternatives: []}];
+  const b: CardEntry[] = [{id: 'x', front: ' apple ', back: '사과', example: '', alternatives: []}, {id: 'z', front: 'apple', back: '애플 회사', example: '', alternatives: []}, {id: 'w', front: 'I like pears.', back: '나는 배를 좋아해요.', example: '', alternatives: []}];
+  const joined = combineCardSets([{title: 'A', type: 'word', cards: a}, {title: 'B', type: 'sentence', cards: b}], true);
+  assert.deepEqual(joined.cards.map(card => card.id), ['0:x', '0:y', '1:z', '1:w'], 'the same front and back is printed once; a different meaning stays');
+  assert.equal(joined.removed, 1);
+  assert.equal(joined.type, 'sentence', 'a mix of types counts as sentences');
+  assert.deepEqual([joined.types['0:x'], joined.types['1:w']], ['word', 'sentence']);
+  assert.equal(combineCardSets([{title: 'A', type: 'word', cards: a}, {title: 'B', type: 'word', cards: b}], false).cards.length, 5, 'duplicates kept when asked');
+  assert.deepEqual(combineCardSets([{title: 'A', type: 'word', cards: a}], true).cards.map(card => card.id), ['x', 'y'], 'one set keeps its ids, so its form codes do not change');
+  const job = layoutCardPrintJob(joined.groups.map(group => input({kind: 'list', start: 1, end: group.cards.length}, {title: group.title, type: group.type, cards: group.cards})), measure);
+  assert.equal(job.pages.length, 2, 'each set starts its own page');
+  assert.ok(words(job.pages[0]).includes('A') && words(job.pages[1]).includes('B'));
+  const tests = layoutCardPrintJob([input({}, {title: 'one'}), input({seed: 9}, {title: 'two'})], measure);
+  assert.match(tests.code!, /^[A-Z2-9]{4} · [A-Z2-9]{4}$/, 'every test part keeps its own form code');
+  assert.equal(tests.total, 30);
+}
+
+// Blanks: the word inside its example, with endings; sentences hide a content word.
+{
+  const card = (front: string, example: string, back = '뜻'): CardEntry => ({id: front, front, back, example, alternatives: []}), none = () => 0;
+  assert.deepEqual(cardBlank(card('apple', 'I ate an Apple today.'), 'word', 'longest', none), {before: 'I ate an ', answer: 'Apple', after: ' today.'}, 'case does not matter');
+  assert.equal(cardBlank(card('run', 'She is running fast.'), 'word', 'longest', none)?.answer, 'running', 'endings stay with the word');
+  assert.equal(cardBlank(card('make', 'We are making a cake.'), 'word', 'longest', none)?.answer, 'making', 'a dropped final e is found');
+  assert.equal(cardBlank(card('happy', 'They smiled happily.'), 'word', 'longest', none)?.answer, 'happily');
+  assert.equal(cardBlank(card('cat', 'A cat and a category.'), 'word', 'longest', none)?.before, 'A ', 'a whole word wins over a longer one');
+  assert.equal(cardBlank(card('look after', 'Please look  after my dog.'), 'word', 'longest', none)?.answer, 'look  after', 'phrases match across spaces');
+  assert.equal(cardBlank(card('go', 'He went home.'), 'word', 'longest', none), null, 'irregular forms are not guessed');
+  assert.equal(cardBlank(card('apple', ''), 'word', 'longest', none), null, 'no example, no blank');
+  assert.equal(cardBlank(card('사과', '나는 사과를 먹었어요.'), 'word', 'longest', none)?.answer, '사과', 'Korean words match inside a phrase');
+  assert.deepEqual(cardBlank(card('I want to visit the museum.', ''), 'sentence', 'longest', none), {before: 'I want to visit the ', answer: 'museum', after: '.'}, 'the longest word, without its punctuation');
+  assert.equal(cardBlank(card('It is on a box.', ''), 'sentence', 'longest', none)?.answer, 'box', 'function words are skipped');
+  const picks = new Set(Array.from({length: 40}, (_, seed) => cardBlank(card('Tom reads books every night.', ''), 'sentence', 'random', seededRandom(seed))?.answer));
+  assert.ok(picks.size >= 3 && !picks.has(undefined), 'random picks vary');
+  const cards = [card('apple', 'An apple a day.'), card('banana', ''), card('cherry', 'Cherries are red.'), card('grape', 'Grapes are sweet.'), card('melon', 'No match here.')];
+  const blank = (patch: Partial<CardPrintOptions> = {}) => ({...defaultCardPrintOptions('word', cards.length, 3), kind: 'blank' as const, blankCount: 10, ...patch});
+  const test = generateCardBlankTest(cards, 'word', blank());
+  assert.deepEqual([test.total, test.skipped], [3, 2], 'cards without a usable example are counted, not printed');
+  assert.deepEqual(generateCardBlankTest(cards, 'word', blank()), test, 'the seed fixes the test');
+  assert.equal(generateCardBlankTest(cards, 'word', blank({blankCount: 2})).total, 2);
+  assert.notEqual(generateCardBlankTest(cards, 'word', blank({blankHint: 'none'})).code, test.code, 'a changed setting changes the code');
+  assert.deepEqual(generateCardBlankTest(cards, 'word', blank({shuffle: false})).items.map(item => item.answer), ['apple', 'Cherries', 'Grapes']);
+  const mixed = generateCardBlankTest([card('apple', 'An apple.'), {...card('We play soccer after school.', ''), id: 's'}], 'word', blank({shuffle: false}), {s: 'sentence'});
+  assert.equal(mixed.items[1].answer, 'soccer', 'merged sentence cards use the sentence rule');
+  const sheet = layoutCardPrint(input({kind: 'blank', blankCount: 3, shuffle: false}, {cards}), measure), key = layoutCardPrint(input({kind: 'blankKey', blankCount: 3, shuffle: false}, {cards}), measure);
+  assert.equal(sheet.code, key.code, 'the blank sheet and its key match');
+  assert.equal(sheet.skipped, 2);
+  const sheetText = words(sheet.pages.flat()).join(' '), keyText = words(key.pages.flat()).join(' ');
+  assert.ok(!/apple|Cherries|Grapes/.test(sheetText.replace('1단원 단어', '')) && /_{6,}/.test(sheetText), 'the sheet hides the answers');
+  assert.ok(sheetText.includes('(뜻)'), 'the meaning is the hint');
+  assert.ok(['apple', 'Cherries', 'Grapes'].every(answer => words(key.pages.flat()).includes(answer)), 'the key shows them');
+  assert.ok(keyText.includes('printBlankKey') && sheetText.includes('printName'));
+  assert.match(words(layoutCardPrint(input({kind: 'blank', blankCount: 1, shuffle: false, blankHint: 'initial'}, {cards}), measure).pages.flat()).join(' '), /An a_{6,} a day\./, 'the first-letter hint');
+  assert.equal(layoutCardPrint(input({kind: 'blank'}), measure).total, 0, 'no examples, nothing to ask');
+}
+
+// Worksheets: four-line guides for English, plain rules otherwise, all inside the page.
+{
+  const dashed = (ops: CardPrintOp[]) => ops.filter(op => op.t === 'line' && op.dash?.join() === '4,3').length;
+  const practice = layoutCardPrint(input({kind: 'practice', start: 1, end: 10, writeLines: 2}), measure);
+  assert.equal(dashed(practice.pages.flat()), 10 * 2 * 2, 'two guides per English word, two dashed lines each');
+  assert.ok(words(practice.pages.flat()).filter(line => line === 'word3').length === 2, 'the word and its trace');
+  assert.ok(words(layoutCardPrint(input({kind: 'practice', start: 1, end: 10, trace: false}), measure).pages.flat()).filter(line => line === 'word3').length === 1, 'no trace when turned off');
+  const korean = layoutCardPrint(input({kind: 'practice', start: 1, end: 3, writeLines: 3}, {cards: cards.map(card => ({...card, front: `단어${card.id}`}))}), measure);
+  assert.equal(dashed(korean.pages.flat()), 0, 'Korean words get ruled lines');
+  const lines = layoutCardPrint(input({kind: 'lines', start: 1, end: 30, writeLines: 1}), measure);
+  assert.equal(dashed(lines.pages.flat()), 30 * 2, 'one guide per word');
+  assert.ok(lines.pages.length > 1, 'long sets continue on the next page');
+  const blank = layoutCardPrint(input({kind: 'lines', linesMode: 'blank'}), measure);
+  assert.equal(blank.pages.length, 1, 'a blank sheet is one page');
+  assert.ok(dashed(blank.pages[0]) >= 20, 'filled with guides');
+  const meaningFirst = words(layoutCardPrint(input({kind: 'lines', start: 1, end: 1}, {cards: [{id: 'k', front: '사과', back: 'apple', example: '', alternatives: []}]}), measure).pages.flat());
+  assert.ok(meaningFirst.filter(line => line === 'apple').length === 2, 'the English side is the model when the front is Korean');
+  for (const kind of ['blank', 'blankKey', 'practice', 'lines'] as const) {
+    insidePage(layoutCardPrint(input({kind, blankCount: 12}, {cards: sentences.map(card => ({...card, example: card.front}))}), measure).pages);
+    insidePage(layoutCardPrint(input({kind, writeLines: 3}, {type: 'sentence', cards: sentences}), measure).pages);
+  }
+  const restoredMore = restoreCardPrintOptions({kind: 'lines', blankCount: 500, writeLines: 7, combine: 'pages', blankHint: 'initial'}, options(), 30);
+  assert.deepEqual([restoredMore.kind, restoredMore.blankCount, restoredMore.writeLines, restoredMore.combine, restoredMore.blankHint], ['lines', 30, 2, 'pages', 'initial'], 'new settings are checked too');
+}
 console.log('cards print tests passed');
