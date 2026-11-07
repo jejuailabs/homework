@@ -1,10 +1,11 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { db } from './admin';
 import type { Context } from './auth';
 import { ApiError, id } from './policy';
+import { derivedServerKey } from './student-code-vault';
 import { object, publicProgress, reportStudentIds } from './cards-policy';
 import { cardAfterDue } from '../cards-logic';
 import { isShareToken, newShareToken, practiceWords, requiredStudyPercent, shareDays, shareExpiry, shareName, shareNameMode, shareNote, shareState, shareTokenHash } from './cards-share-policy';
@@ -105,7 +106,9 @@ export async function cardShareCounts(distributionId: string, ownerUid: string) 
 function clientAddress(request: Request) {
   return (request.headers.get('x-vercel-forwarded-for') ?? request.headers.get('x-forwarded-for') ?? 'local').split(',')[0].trim();
 }
-const rateRef = (kind: string, request: Request) => db().doc(`rateLimits/${createHash('sha256').update(`cards-parent-${kind}:${clientAddress(request)}:${Math.floor(Date.now() / RATE_WINDOW)}`).digest('hex')}`);
+// An HMAC with a server key, so a stored ID cannot be matched back to an address by hashing every IPv4 address.
+let rateKey: Buffer | undefined;
+const rateRef = (kind: string, request: Request) => db().doc(`rateLimits/cards_parent_${createHmac('sha256', rateKey ??= derivedServerKey('cards-parent-rate')).update(`${kind}:${clientAddress(request)}:${Math.floor(Date.now() / RATE_WINDOW)}`).digest('hex')}`);
 async function rateLimit(request: Request) {
   const total = rateRef('total', request), failed = rateRef('failed', request);
   await db().runTransaction(async tx => {

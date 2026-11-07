@@ -13,7 +13,7 @@ const host = process.env.FIRESTORE_EMULATOR_HOST || '';
 if (!/^(127\.0\.0\.1|localhost):\d+$/.test(host)) throw new Error('FIRESTORE_EMULATOR_HOST must point at a local emulator.');
 delete process.env.FIREBASE_SERVICE_ACCOUNT_JSON; delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
 const projectId = 'demo-homework';
-Object.assign(process.env, {FIREBASE_PROJECT_ID: projectId, GCLOUD_PROJECT: projectId, NEXT_PUBLIC_FIREBASE_PROJECT_ID: projectId, AUTH_CONTEXT_CACHE_MS: '0', OPENAI_API_KEY: 'stub-not-a-key', OPENAI_MODEL: 'stub-model'});
+Object.assign(process.env, {STUDENT_CODE_ENCRYPTION_KEY: (await import('node:crypto')).randomBytes(32).toString('base64'), FIREBASE_PROJECT_ID: projectId, GCLOUD_PROJECT: projectId, NEXT_PUBLIC_FIREBASE_PROJECT_ID: projectId, AUTH_CONTEXT_CACHE_MS: '0', OPENAI_API_KEY: 'stub-not-a-key', OPENAI_MODEL: 'stub-model'});
 delete process.env.AI_REQUEST_LIMITS;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), src = path.join(root, 'src');
 const candidates = base => [base, `${base}.ts`, path.join(base, 'index.ts')].find(file => fs.existsSync(file) && fs.statSync(file).isFile());
@@ -963,6 +963,9 @@ async function familySection() {
   const ip = '10.9.9.9';
   for (let index = 0; index < 12; index++) await view('y'.repeat(43), ip);
   same((await view(tokenOf(link('s1')), ip)).status, 429, 'many wrong tokens from one address are slowed down');
+  const {createHash} = await import('node:crypto'), window = Math.floor(Date.now() / 600_000), limits = (await db().collection('rateLimits').get()).docs.map(doc => doc.id);
+  const plain = ['failed', 'total'].map(kind => createHash('sha256').update(`cards-parent-${kind}:${ip}:${window}`).digest('hex'));
+  check(limits.filter(name => name.startsWith('cards_parent_')).length >= 2 && !limits.some(name => plain.some(hash => name.includes(hash))), 'rate limit IDs are keyed HMACs, not a plain hash of the address', limits);
   await db().doc('classes/class-a/students/s1').set({disabled: true}, {merge: true});
   // Two creates at once for one student leave exactly one open link.
   const racing = await Promise.all([call(teacher, 'POST', shares, {studentIds: ['s3']}), call(teacher, 'POST', shares, {studentIds: ['s3']}), call(teacher, 'POST', shares, {studentIds: ['s3', 's2']})]);
