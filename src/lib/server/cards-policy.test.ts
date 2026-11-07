@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
-import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
+import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, staleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -356,4 +356,9 @@ test('a card sharing the prompt is never a wrong choice, in any direction', () =
   assert.ok(!buildCardChoices(cards[0], cards, 'back-front', () => 0)!.includes('large'));
   assert.deepEqual(cardDistractors(cards[3], cards, 'front-back'), ['크다', '작다']);
   assert.equal(buildTestQuestions([cards[1]], cards, { direction: 'back-front', format: 'choice' }, () => 'q', () => 0)[0].choices?.includes('big'), false);
+});
+
+test('only refusals that can never succeed drop a study batch', () => {
+  for (const code of ['STUDY_DIRECTION', 'STUDY_CARD', 'REQUEST_CONFLICT']) assert.equal(staleStudyBatch(code), true);
+  for (const code of ['INTERNAL_ERROR', 'REQUEST_FAILED', 'DUE_CLOSED', 'UNAUTHENTICATED', 'Failed to fetch']) assert.equal(staleStudyBatch(code), false);
 });

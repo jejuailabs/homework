@@ -177,6 +177,8 @@ async function editedSection() {
   same(replay.data.progress?.counts.recall, 2, 'and is not counted twice');
   refused(await study(pupil(1), base.id, 'recall', 'e-1', [{cardId: 'card0', answer: 'changed'}, {cardId: 'card11', answer: '뜻 11'}]), 409, 'REQUEST_CONFLICT', 'a changed replay is still a conflict');
   refused(await study(pupil(1), base.id, 'recall', 'e-2', right(1)), 400, 'STUDY_DIRECTION', 'a new batch in the old direction is refused');
+  refused(await study(pupil(1), base.id, 'recall', 'e-3', [{cardId: 'card11', answer: 'x'}], {direction: 'back-front'}), 400, 'STUDY_CARD', 'a card outside the new range is refused for good');
+  same(logic.staleStudyBatch('STUDY_DIRECTION') && logic.staleStudyBatch('STUDY_CARD') && logic.staleStudyBatch('REQUEST_CONFLICT'), true, 'the browser drops those batches instead of retrying them');
 }
 
 async function testsSection() {

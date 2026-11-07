@@ -42,8 +42,8 @@ export function addStudyResponse(outbox: StudyOutbox, response: StudyBuffered, m
   const next = { ...ready, buffer: [...ready.buffer, { ...response, answer: response.answer.slice(0, STUDY_ANSWER_LIMIT) }] };
   return next.buffer.length >= limit ? sealStudyBuffer(next, mode, newId) : next;
 }
-/** The server refuses these for good: the batch was answered under a range or direction the teacher has since changed. */
-export const staleStudyBatch = (code: string) => code === 'STUDY_DIRECTION' || code === 'STUDY_CARD';
+/** The server refuses these for good, usually because the teacher changed the range or direction after the batch was answered. Retrying cannot help. */
+export const staleStudyBatch = (code: string) => code === 'STUDY_DIRECTION' || code === 'STUDY_CARD' || code === 'REQUEST_CONFLICT';
 export const settleStudyBatch = (outbox: StudyOutbox, requestId: string): StudyOutbox => ({ ...outbox, sealed: outbox.sealed.filter(batch => batch.requestId !== requestId) });
 /** The oldest sealed batches that fit one keepalive allowance. Anything left stays stored for the next visit. */
 export function keepaliveStudyBatches(outbox: StudyOutbox, limit = STUDY_KEEPALIVE_BYTES) {
