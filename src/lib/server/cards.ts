@@ -5,6 +5,7 @@ import { FieldPath } from 'firebase-admin/firestore';
 import { db } from './admin';
 import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
+import { cardsAiDraft } from './cards-ai';
 import { buildTestQuestions, isTestOvertime, testTimeLimit } from '../cards-logic';
 import { answersReleased, canStudyDistribution, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, object, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
 import type { CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
@@ -445,6 +446,7 @@ export async function handleCards(request: Request, segments: string[] = []) {
     if (resourceId) id(resourceId);
     if (operationId) id(operationId);
     const method = request.method;
+    if (resource === 'ai-draft' && segments.length === 1 && method === 'POST') return json(await cardsAiDraft(ctx, request));
     if (resource === 'library' && segments.length === 1 && method === 'GET') return await library(ctx, request);
     if (resource === 'student' && segments.length === 1 && method === 'GET') return await studentList(ctx, request);
     if (resource === 'folders' && segments.length <= 2 && ['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return await folders(ctx, request, resourceId);
