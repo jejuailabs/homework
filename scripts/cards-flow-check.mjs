@@ -327,7 +327,11 @@ async function deadlineSection() {
   same(resumed.data.attempt?.id, running.data.attempt.id, 'lock: the started test can be reopened');
   const finished = await submit(pupil(2), lock.id, running.data.attempt.id, running.data.attempt.questions.map(question => answerFor(question, 'front-back')));
   check(finished.status === 200 && finished.data.attempt.score === 100, 'lock: the started test can still be submitted', finished);
-  check((await call(pupil(1), 'GET', ['distributions', lock.id])).status === 200, 'lock: students can still read the set');
+  const lockedView = await call(pupil(1), 'GET', ['distributions', lock.id]), lockedList = await call(pupil(1), 'GET', ['student']);
+  check(lockedView.status === 200, 'lock: students can still read the set');
+  check(Math.abs(Date.parse(lockedView.data.serverTime) - Date.now()) < 5000 && Math.abs(Date.parse(lockedList.data.serverTime) - Date.now()) < 5000, 'detail and list give the server time for the deadline', lockedView.data.serverTime);
+  same(logic.cardDueState(lockedView.data.distribution, Date.parse(lockedView.data.serverTime)), 'lock', 'the server time closes the screen');
+  same(logic.cardDueState(lockedView.data.distribution, Date.parse(lockedView.data.distribution.dueAt) - 1000), 'before', 'a slow device clock cannot be what closes it');
   check((await call(pupil(1), 'GET', ['student'])).data.distributions.some(row => row.id === lock.id && row.afterDue === 'lock'), 'lock: still listed for the student');
   accepted(await edit(lock.id, {afterDue: 'open'}), 'teacher reopens');
   accepted(await study(pupil(1), lock.id, 'memorize', 'k-7', right(2)), 'studying works again');

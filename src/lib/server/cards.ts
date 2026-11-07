@@ -257,7 +257,7 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
   }
   const distribution = await loadDistribution(ctx, distributionId);
   const state = ctx.role === 'student' ? await progressRef(distributionId, ctx.studentId!).get() : null;
-  return json({ distribution: visibleDistribution(distribution, ctx), ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} } } : {}) });
+  return json({ distribution: visibleDistribution(distribution, ctx), ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} }, serverTime: now() } : {}) });
 }
 
 async function studentList(ctx: Context, request: Request) {
@@ -272,7 +272,7 @@ async function studentList(ctx: Context, request: Request) {
   const page = result.docs.slice(0, CARD_LIST_LIMIT);
   const rows = page.map(asDistribution).filter(value => canStudyDistribution(ctx, value) && cls.data()!.ownerUid === value.ownerUid);
   const states = rows.length ? await db().getAll(...rows.map(value => progressRef(value.id, ctx.studentId))) : [];
-  return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null });
+  return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null, serverTime: now() });
 }
 function progressPreferences(input: Data, distribution: Distribution) {
   const update: Data = {}, ids = new Set(distribution.snapshot.cards.map(card => card.id));

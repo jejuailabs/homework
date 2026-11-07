@@ -20,6 +20,31 @@ export async function cardRequest<T>(url: string, init?: RequestInit): Promise<T
   if (!response.ok) throw new Error(body.code || 'REQUEST_FAILED');
   return body as T;
 }
+const studyStorageKey = (studentId: string, distributionId: string, mode: CardStudyMode) => `cards-study:${studentId}:${distributionId}:${mode}`;
+/** Answers still on this device when a screen closes at the deadline: the server's grace may yet take them, so they go out before the notice shows. A connection failure keeps them for the next visit. */
+export async function flushStudyOutbox(distributionId: string, studentId: string) {
+  let saved = false, dropped = false;
+  for (const mode of ['memorize', 'recall', 'spell'] as CardStudyMode[]) {
+    const key = studyStorageKey(studentId, distributionId, mode);
+    try {
+      const value = JSON.parse(sessionStorage.getItem(key) || 'null');
+      if (!value) continue;
+      let outbox = sealStudyBuffer(restoreStudyOutbox(value.outbox, mode, value.v ? undefined : value.pending), mode, newRequestId);
+      const write = () => sessionStorage.setItem(key, JSON.stringify({...value, v: 2, outbox}));
+      write(); // The sealed IDs are stored first, so a second visit repeats the same batches instead of counting them again.
+      for (const batch of outbox.sealed) {
+        try {await cardRequest(`/api/cards/distributions/${distributionId}/study`, {method: 'POST', body: JSON.stringify(batch)}); saved = true;}
+        catch (cause) {
+          if (!(cause instanceof Error && (cause.message === 'DUE_CLOSED' || staleStudyBatch(cause.message)))) break;
+          dropped = true;
+        }
+        outbox = settleStudyBatch(outbox, batch.requestId); write();
+      }
+      if (!studyOutboxSize(outbox) && value.finished) sessionStorage.removeItem(key);
+    } catch {}
+  }
+  return {saved, dropped};
+}
 export function CardBuddy({character = 'cat', happy = false}: {character?: Character; happy?: boolean}) {
   return <img className={`cs-buddy ${happy ? 'is-happy' : ''}`} src={`/characters/${characterFiles[character] || characterFiles.cat}.webp`} alt="" aria-hidden="true"/>;
 }
@@ -56,7 +81,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
   const sessionRef = useRef<PracticeSession | null>(null), resumeRef = useRef<PracticeSession | null>(null), outboxRef = useRef<StudyOutbox>(emptyStudyOutbox()), flushing = useRef<Promise<void> | null>(null), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), failures = useRef(0), progressCallback = useRef(onProgress);
   useEffect(() => {progressCallback.current = onProgress;});
-  const storageKey = distributionId && studentId ? `cards-study:${studentId}:${distributionId}:${mode}` : null;
+  const storageKey = distributionId && studentId ? studyStorageKey(studentId, distributionId, mode) : null;
   const persist = useCallback(() => {
     if (!storageKey) return;
     const outbox = outboxRef.current, base = sessionRef.current && !sessionRef.current.finished ? sessionRef.current : resumeRef.current;
