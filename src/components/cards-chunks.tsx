@@ -9,6 +9,7 @@ import {useCardsP2Copy} from '@/lib/cards-p2-copy';
 import {fillCopy} from '@/lib/cards-class-copy';
 import {CardBuddy, CardError, CardLoading, cardRequest, useCardCopy} from './cards-study';
 import {CardTestWait} from './cards-care';
+import {speakWithDevice, ttsPlayer} from '@/lib/tts-client';
 import '@/styles/cards-p2.css';
 
 /** 끊어읽기 조각 편집: tap the gap between two words to put a break there or take it away. */
@@ -22,12 +23,11 @@ export function CardChunkEditor({text, chunks, onChange}: {text: string; chunks:
   </div>;
 }
 
+/** 원어민 음성(서버 TTS), 안 되면 기기 목소리. */
 function speakText(text: string, rate = 1) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = /[가-힣]/.test(text) ? 'ko-KR' : 'en-US'; utterance.rate = rate;
-  window.speechSynthesis.speak(utterance);
+  if (typeof window === 'undefined' || !text) return;
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  void ttsPlayer().speak(text, {rate, fallback: () => speakWithDevice(text, rate)});
 }
 const shuffle = <T,>(values: T[]) => {const result = [...values]; for (let index = result.length - 1; index > 0; index--) {const other = Math.floor(Math.random() * (index + 1)); [result[index], result[other]] = [result[other], result[index]];} return result;};
 

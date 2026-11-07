@@ -15,6 +15,7 @@ import reviewEn from '@/messages/cards-review-en.json';
 import '@/styles/cards-study.css';
 import '@/styles/cards-review.css';
 import {CardSoundSettings, useCardSound} from './cards-care';
+import {speakWithDevice, ttsPlayer} from '@/lib/tts-client';
 
 export const cardModes = ['memorize', 'recall', 'spell'] as const;
 export function useCardCopy() {const {locale} = usePreferences(); return {copy: locale === 'ko' ? ko : en, locale, points: (value: number) => locale === 'ko' ? `${value}${ko.score}` : `${value} ${en.score}`};}
@@ -81,6 +82,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
   const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
   const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(speechRate || 1);
+  const voiceUsed = useRef(false);
   const [hintIndex, setHintIndex] = useState<number | null>(null), sound = useCardSound();
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
@@ -129,7 +131,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const drain = useCallback(() => {clearTimeout(timer.current); seal(); return pump();}, [pump, seal]);
   useEffect(() => {drainRef.current = drain;}, [drain]);
   useEffect(() => {
-    setCanSpeak('speechSynthesis' in window);
+    setCanSpeak('speechSynthesis' in window || typeof Audio !== 'undefined');
     if (storageKey) {try {
       const value = JSON.parse(sessionStorage.getItem(storageKey) || 'null') as (PracticeSession & {v?: number; pending?: StudyBatch; outbox?: unknown}) | null;
       const legacy = value && !value.v ? value.pending : undefined, restored = restoreStudyOutbox(value?.outbox, mode, legacy);
@@ -141,7 +143,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
       }
       writeOutbox(restored); if (studyOutboxSize(restored)) void drainRef.current();
     } catch {}}
-    return () => {if ('speechSynthesis' in window) window.speechSynthesis.cancel();};
+    return () => {ttsPlayer().stop(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();};
   }, [storageKey, cards, fixed, requirement?.direction, mode, writeOutbox]);
   useEffect(() => {
     if (!distributionId) return;
@@ -215,15 +217,22 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     try {const result = await cardRequest<{progress: CardProgress}>(`/api/cards/distributions/${distributionId}/progress`, {method: 'PATCH', body: JSON.stringify({starredCardIds: nextStars})}); onProgress?.(result.progress);}
     catch {setStars(previous); setStarError(true);} finally {setStarBusy(false);}
   }
+  // 원어민 음성(서버 TTS)이 켜져 있으면 그 소리로, 꺼졌거나 실패하면 기기 목소리로 읽는다.
   function speak(text = content ? (revealed || feedback ? content.expected : content.prompt) : '') {
     if (!text || !canSpeak) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = /[가-힣]/.test(utterance.text) ? 'ko-KR' : 'en-US'; utterance.rate = speed;
-    utterance.onerror = () => setSpeechFailed(true); setSpeechFailed(false); window.speechSynthesis.speak(utterance);
+    voiceUsed.current = true; setSpeechFailed(false);
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    void ttsPlayer().speak(text, {rate: speed, fallback: () => speakWithDevice(text, speed, () => setSpeechFailed(true))});
   }
   // 카드 자동 읽기 (소리 설정, 기본 꺼짐): each new card's prompt once. The speaker button works either way.
   useEffect(() => {if (sound.autoSpeech && content && !session?.finished) speak(content.prompt);}, [session?.index, session?.direction, session?.finished, sound.autoSpeech, canSpeak]);
+  // Once sound is in use, fetch this card's answer and the next card's prompt ahead, so they play at once.
+  useEffect(() => {
+    if (!session || session.finished || !content || !(sound.autoSpeech || voiceUsed.current)) return;
+    const player = ttsPlayer(), upcoming = cards.find(item => item.id === session.queue[session.index + 1]);
+    player.prefetch(content.expected);
+    if (upcoming) player.prefetch(textFor(upcoming, session.direction).prompt);
+  }, [session?.index, session?.direction, session?.finished, sound.autoSpeech, revealed, feedback]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     function key(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || !session || session.finished) return;
