@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answersReleased, canStudyDistribution, cardMutationFingerprint, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
-import { addStudyResponse, buildCardSections, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
+import { addStudyResponse, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -220,4 +220,63 @@ test('section links preset the range only inside the requirement', () => {
   assert.deepEqual(cardRangePreset('5', '30', 10, 20), { start: 10, end: 20 });
   assert.deepEqual(cardRangePreset(undefined, undefined, 1, 50), { start: 1, end: 50 });
   for (const [from, to] of [['abc', '5'], ['20', '10'], ['60', '70'], ['1.5', '3'], ['1', '5']]) assert.deepEqual(cardRangePreset(from, to, 10, 50), { start: 10, end: 50 });
+});
+const random = (max: number) => Math.floor(Math.random() * max);
+test('test settings add format and time limit with safe defaults for old distributions', () => {
+  assert.deepEqual([settings.format, settings.timeLimitSeconds], ['written', null]);
+  assert.deepEqual([testFormat({}), testTimeLimit({})], ['written', null]);
+  const value = parseTestSettings({ format: 'choice', timeLimitSeconds: 600 }, 50);
+  assert.deepEqual([value.format, value.timeLimitSeconds], ['choice', 600]);
+  for (const bad of [{ format: 'oral' }, { timeLimitSeconds: 59 }, { timeLimitSeconds: 7201 }, { timeLimitSeconds: 90.5 }, { timeLimitSeconds: '600' }]) assert.throws(() => parseTestSettings(bad, 50));
+});
+test('choices hold the expected answer plus three distinct distractors that are not also correct', () => {
+  const pool = parseCards([{ id: 'a', front: 'apple', back: '사과', alternatives: ['능금'] }, { id: 'b', front: 'pear', back: '  배 ' }, { id: 'c', front: 'peach', back: '능금' }, { id: 'd', front: 'plum', back: '자두' }, { id: 'e', front: 'plum2', back: '자두' }, { id: 'f', front: 'kiwi', back: '키위' }, { id: 'g', front: 'apple2', back: '사과' }]);
+  for (let round = 0; round < 50; round++) {
+    const choices = buildCardChoices(pool[0], pool, 'front-back', random)!;
+    assert.equal(choices.length, 4);
+    assert.ok(choices.includes('사과'));
+    assert.equal(new Set(choices.map(normalizeCardAnswer)).size, 4);
+    assert.equal(choices.filter(choice => isCorrectCardAnswer(pool[0], 'front-back', choice)).length, 1);
+  }
+  assert.equal(buildCardChoices(pool[0], pool, 'back-front', random)!.filter(choice => choice === logicCardAnswer(pool[0], 'back-front')).length, 1);
+});
+test('few distinct answers shrink the choices, and under two falls back to a written question', () => {
+  const pool = parseCards([{ id: 'a', front: 'one', back: '하나' }, { id: 'b', front: 'two', back: '둘' }, { id: 'c', front: 'three', back: '둘' }]);
+  assert.equal(buildCardChoices(pool[0], pool, 'front-back', random)!.length, 2);
+  const same = parseCards([{ id: 'a', front: 'one', back: '같음' }, { id: 'b', front: 'two', back: ' 같음' }]);
+  assert.equal(buildCardChoices(same[0], same, 'front-back', random), null);
+  let ids = 0;
+  const [question] = buildTestQuestions([same[0]], same, { direction: 'front-back', format: 'choice' }, () => `q${++ids}`, random);
+  assert.equal('choices' in question, false);
+});
+test('written tests store no choices, and retests draw distractors from the whole set', () => {
+  assert.equal('choices' in buildTestQuestions(cards.slice(0, 1), cards, { direction: 'back-front' }, () => 'q', random)[0], false);
+  const [question] = buildTestQuestions(cards.slice(0, 1), cards, { direction: 'front-back', format: 'choice' }, () => 'q', random);
+  assert.equal(question.prompt, 'word 0');
+  assert.equal(question.choices!.length, 4);
+});
+test('huge choice text stops short of the document limit by falling back to written questions', () => {
+  const large = parseCards(Array.from({ length: 200 }, (_, index) => ({ id: `big-${index}`, front: `w${index}`, back: `${index}`.padEnd(1000, '가') })).slice(0, 180));
+  const questions = buildTestQuestions(large, large, { direction: 'front-back', format: 'choice' }, () => 'q', random);
+  const bytes = questions.reduce((total, question) => total + Buffer.byteLength((question.choices ?? []).join('')), 0);
+  assert.ok(bytes <= 400_000);
+  assert.ok(questions.some(question => question.choices) && questions.some(question => !question.choices));
+});
+test('choice answers grade through the same rule and blanks stay allowed', () => {
+  const [question] = buildTestQuestions(cards.slice(0, 1), cards, { direction: 'front-back', format: 'choice' }, () => 'q1', random);
+  const answers = testAnswers([{ questionId: 'q1', answer: '뜻 0' }], ['q1']);
+  assert.equal(isCorrectCardAnswer(cards[0], 'front-back', answers.get(question.id)!), true);
+  assert.equal(isCorrectCardAnswer(cards[0], 'front-back', testAnswers([{ questionId: 'q1', answer: '' }], ['q1']).get('q1')!), false);
+});
+test('overtime begins sixty seconds after the limit and never applies without one', () => {
+  const startedAt = '2026-11-07T00:00:00.000Z', start = Date.parse(startedAt);
+  assert.equal(isTestOvertime(startedAt, 600, start + 660_000), false);
+  assert.equal(isTestOvertime(startedAt, 600, start + 660_001), true);
+  assert.equal(isTestOvertime(startedAt, null, start + 1e9), false);
+  assert.equal(isTestOvertime(startedAt, undefined, start + 1e9), false);
+});
+test('the countdown rounds up and never shows a negative time', () => {
+  assert.equal(formatCountdown(61_000), '1:01');
+  assert.equal(formatCountdown(500), '0:01');
+  assert.equal(formatCountdown(-5000), '0:00');
 });

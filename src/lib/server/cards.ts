@@ -5,12 +5,13 @@ import { FieldPath } from 'firebase-admin/firestore';
 import { db } from './admin';
 import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
+import { buildTestQuestions, isTestOvertime, testTimeLimit } from '../cards-logic';
 import { answersReleased, canStudyDistribution, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, object, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
 import type { CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
 
 type Data = Record<string, any>;
 type Distribution = CardDistribution & { ownerUid: string; cardIds: string[]; targetStudents: { id: string; name: string; number: number }[] };
-type Attempt = { id: string; distributionId: string; studentId: string; classId: string; versionId: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; results: CardTestResult[]; startedAt: string; submittedAt: string | null; fingerprint: string | null };
+type Attempt = { id: string; distributionId: string; studentId: string; classId: string; versionId: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; results: CardTestResult[]; startedAt: string; submittedAt: string | null; fingerprint: string | null; timeLimitSeconds?: number | null; overtime?: boolean };
 const now = () => new Date().toISOString();
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
@@ -337,19 +338,20 @@ async function study(ctx: Context, request: Request, distributionId: string) {
 
 function visibleAttempt(value: Attempt, distribution: Distribution, isTeacher = false): CardTestAttempt {
   const answersVisible = value.status === 'submitted' && (isTeacher || answersReleased(distribution.test, distribution.dueAt));
-  return { id: value.id, status: value.status, number: value.number, retryWrong: value.retryWrong, questions: value.questions, score: value.score, answersVisible, ...(value.status === 'submitted' ? { results: value.results.map(result => answersVisible ? result : { questionId: result.questionId, answer: result.answer, correct: result.correct }) } : {}), startedAt: value.startedAt, submittedAt: value.submittedAt };
+  return { id: value.id, status: value.status, number: value.number, retryWrong: value.retryWrong, questions: value.questions, score: value.score, answersVisible, ...(value.status === 'submitted' ? { results: value.results.map(result => answersVisible ? result : { questionId: result.questionId, answer: result.answer, correct: result.correct }) } : {}), startedAt: value.startedAt, submittedAt: value.submittedAt, timeLimitSeconds: value.timeLimitSeconds ?? null, ...(isTeacher && value.overtime ? { overtime: true } : {}) };
 }
 function shuffled<T>(values: T[]) {
   const result = [...values];
   for (let index = result.length - 1; index > 0; index--) { const other = randomInt(index + 1); [result[index], result[other]] = [result[other], result[index]]; }
   return result;
 }
+const secureRandom = (max: number) => randomInt(max);
 async function tests(ctx: Context, request: Request, distributionId: string) {
   student(ctx);
   if (request.method === 'GET') {
     const distribution = await loadDistribution(ctx, distributionId);
     const result = await progressRef(distributionId, ctx.studentId).collection('tests').get();
-    return json({ attempts: result.docs.map(asAttempt).sort((a, b) => b.number - a.number).map(value => visibleAttempt(value, distribution)) });
+    return json({ attempts: result.docs.map(asAttempt).sort((a, b) => b.number - a.number).map(value => visibleAttempt(value, distribution)), serverTime: now() });
   }
   const input = await body(request), requestId = id(input.requestId, '응시 요청 ID');
   if (input.retryWrong !== undefined && typeof input.retryWrong !== 'boolean') throw new ApiError(400, '오답 재시험 설정을 확인해 주세요.');
@@ -360,13 +362,13 @@ async function tests(ctx: Context, request: Request, distributionId: string) {
     if (previousRequest.exists) {
       if (previousRequest.data()!.retryWrong !== retryWrong) throw new ApiError(409, '같은 요청 ID에 다른 응시 설정을 사용할 수 없어요.', 'REQUEST_CONFLICT');
       const attempt = await tx.get(ref.collection('tests').doc(previousRequest.data()!.attemptId));
-      return json({ attempt: visibleAttempt(asAttempt(attempt), distribution), progress: progress(state, distribution) });
+      return json({ attempt: visibleAttempt(asAttempt(attempt), distribution), progress: progress(state, distribution), serverTime: now() });
     }
     if (state.activeAttemptId) {
       const attempt = await tx.get(ref.collection('tests').doc(state.activeAttemptId));
       if (attempt.exists && attempt.data()!.status === 'started') {
         tx.create(requestRef, { attemptId: attempt.id, retryWrong, createdAt: now() });
-        return json({ attempt: visibleAttempt(asAttempt(attempt), distribution), progress: progress(state, distribution) });
+        return json({ attempt: visibleAttempt(asAttempt(attempt), distribution), progress: progress(state, distribution), serverTime: now() });
       }
     }
     if (distribution.test.requireStudy && !progress(state, distribution).studyComplete) throw new ApiError(403, '필수 학습을 마친 뒤 테스트에 도전해 주세요.', 'STUDY_REQUIRED');
@@ -380,15 +382,16 @@ async function tests(ctx: Context, request: Request, distributionId: string) {
       if (!cards.length) throw new ApiError(409, '직전 테스트에 틀린 문제가 없어요.', 'NO_WRONG_ANSWERS');
     }
     const attemptRef = ref.collection('tests').doc(), stamp = now();
-    const questions = shuffled(cards).slice(0, distribution.test.questionCount).map(card => ({ id: randomUUID(), cardId: card.id, prompt: distribution.test.direction === 'front-back' ? card.front : card.back }));
-    const attempt: Attempt = { id: attemptRef.id, distributionId, studentId: ctx.studentId, classId: ctx.classId, versionId: distribution.versionId, status: 'started', number: state.attempts + 1, retryWrong, questions, score: null, results: [], startedAt: stamp, submittedAt: null, fingerprint: null };
+    // Distractors come from the whole snapshot, so a short retest of wrong answers still gets full choices.
+    const questions = buildTestQuestions(shuffled(cards).slice(0, distribution.test.questionCount), distribution.snapshot.cards, distribution.test, randomUUID, secureRandom);
+    const attempt: Attempt = { id: attemptRef.id, distributionId, studentId: ctx.studentId, classId: ctx.classId, versionId: distribution.versionId, status: 'started', number: state.attempts + 1, retryWrong, questions, score: null, results: [], startedAt: stamp, submittedAt: null, fingerprint: null, timeLimitSeconds: testTimeLimit(distribution.test) };
     state.attempts++;
     state.activeAttemptId = attempt.id;
     state.updatedAt = stamp;
     tx.create(attemptRef, attempt);
     tx.create(requestRef, { attemptId: attempt.id, retryWrong, createdAt: stamp });
     tx.set(ref, state);
-    return json({ attempt: visibleAttempt(attempt, distribution), progress: progress(state, distribution) }, 201);
+    return json({ attempt: visibleAttempt(attempt, distribution), progress: progress(state, distribution), serverTime: stamp }, 201);
   });
 }
 async function submitTest(ctx: Context, request: Request, distributionId: string, attemptId: string) {
@@ -414,7 +417,7 @@ async function submitTest(ctx: Context, request: Request, distributionId: string
     });
     const score = Math.round(results.filter(result => result.correct).length / results.length * 100), stamp = now();
     for (const [index, result] of results.entries()) if (!result.correct) { const cardId = attempt.questions[index].cardId; state.mistakes[cardId] = (state.mistakes[cardId] ?? 0) + 1; }
-    const updated: Attempt = { ...attempt, status: 'submitted', score, results, fingerprint, submittedAt: stamp };
+    const updated: Attempt = { ...attempt, status: 'submitted', score, results, fingerprint, submittedAt: stamp, ...(isTestOvertime(attempt.startedAt, attempt.timeLimitSeconds, Date.parse(stamp)) ? { overtime: true } : {}) };
     Object.assign(state, { activeAttemptId: null, lastSubmittedAttemptId: attempt.id, bestScore: Math.max(state.bestScore ?? 0, score), latestScore: score, updatedAt: stamp });
     tx.update(attemptRef, updated);
     tx.set(ref, state);

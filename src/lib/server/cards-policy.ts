@@ -7,6 +7,8 @@ export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
 export type { CardCoverage };
 export const CARD_LIMIT = 200;
 export const CARD_LIST_LIMIT = 200;
+export const CARD_TIME_LIMIT_MIN = 60;
+export const CARD_TIME_LIMIT_MAX = 7200;
 export const CARD_MODES: CardStudyMode[] = ['memorize', 'recall', 'spell'];
 type Value = Record<string, unknown>;
 export function object(value: unknown): Value {
@@ -69,7 +71,10 @@ export function parseTestSettings(value: unknown, cardCount: number): CardTestSe
   const answerRelease = raw.answerRelease ?? 'immediate';
   if (typeof requireStudy !== 'boolean') throw new ApiError(400, '테스트 응시 조건을 확인해 주세요.');
   if (!['immediate', 'after-due', 'never'].includes(answerRelease as string)) throw new ApiError(400, '정답 공개 시점을 확인해 주세요.');
-  return { questionCount: integer(raw.questionCount ?? Math.min(20, cardCount), 1, cardCount, '테스트 문항 수'), goalScore: integer(raw.goalScore ?? 80, 0, 100, '목표 점수'), maxAttempts: integer(raw.maxAttempts ?? 3, 1, 20, '응시 횟수'), requireStudy, direction: cardDirection(raw.direction ?? 'front-back'), answerRelease: answerRelease as CardTestSettings['answerRelease'] };
+  const format = raw.format ?? 'written';
+  if (format !== 'written' && format !== 'choice') throw new ApiError(400, '테스트 문제 형식을 확인해 주세요.');
+  const timeLimitSeconds = raw.timeLimitSeconds === undefined || raw.timeLimitSeconds === null ? null : integer(raw.timeLimitSeconds, CARD_TIME_LIMIT_MIN, CARD_TIME_LIMIT_MAX, '테스트 제한 시간(초)');
+  return { questionCount: integer(raw.questionCount ?? Math.min(20, cardCount), 1, cardCount, '테스트 문항 수'), goalScore: integer(raw.goalScore ?? 80, 0, 100, '목표 점수'), maxAttempts: integer(raw.maxAttempts ?? 3, 1, 20, '응시 횟수'), requireStudy, direction: cardDirection(raw.direction ?? 'front-back'), answerRelease: answerRelease as CardTestSettings['answerRelease'], format: format as CardTestSettings['format'], timeLimitSeconds };
 }
 export function parseDueAt(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null;

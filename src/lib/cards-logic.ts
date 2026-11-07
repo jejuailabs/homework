@@ -1,5 +1,5 @@
 // Pure card rules shared by the browser and the server, so instant practice feedback can never drift from server grading.
-import type { CardCoverage, CardDirection, CardEntry, CardRequiredModes, CardStudyMode } from './cards-types';
+import type { CardCoverage, CardDirection, CardEntry, CardRequiredModes, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
 
 export function normalizeCardAnswer(value: string) {
   return value.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
@@ -92,4 +92,45 @@ export function cardRangePreset(from: string | undefined, to: string | undefined
   const start = Number(from), end = to === undefined ? max : Number(to);
   if (from === undefined || !Number.isInteger(start) || !Number.isInteger(end) || start > end || start > max || end < min) return { start: min, end: max };
   return { start: Math.max(start, min), end: Math.min(end, max) };
+}
+
+// Tests. Distributions published before these settings existed have neither field, so always read them through these helpers.
+export const CARD_CHOICE_COUNT = 4;
+export const CARD_TEST_GRACE_SECONDS = 60;
+export const CARD_CHOICE_BYTES = 400_000; // Attempt documents share Firestore's 1 MiB limit with prompts and later results.
+export const testFormat = (settings: Pick<CardTestSettings, 'format'>) => settings.format === 'choice' ? 'choice' as const : 'written' as const;
+export const testTimeLimit = (settings: Pick<CardTestSettings, 'timeLimitSeconds'>) => settings.timeLimitSeconds ?? null;
+function shuffleWith<T>(values: T[], random: (max: number) => number) {
+  const result = [...values];
+  for (let index = result.length - 1; index > 0; index--) { const other = random(index + 1); [result[index], result[other]] = [result[other], result[index]]; }
+  return result;
+}
+/** The expected answer plus up to three distractors that are different answers and would not themselves be graded correct. */
+export function buildCardChoices(card: CardEntry, pool: CardEntry[], direction: CardDirection, random: (max: number) => number) {
+  const expected = cardAnswer(card, direction), seen = new Set([normalizeCardAnswer(expected)]), distractors: string[] = [];
+  for (const other of pool) {
+    const value = cardAnswer(other, direction), key = normalizeCardAnswer(value);
+    if (other.id === card.id || seen.has(key) || isCorrectCardAnswer(card, direction, value)) continue;
+    seen.add(key); distractors.push(value);
+  }
+  const choices = shuffleWith([expected, ...shuffleWith(distractors, random).slice(0, CARD_CHOICE_COUNT - 1)], random);
+  return choices.length >= 2 ? choices : null;
+}
+/** A question without `choices` is answered in writing; the key is left out because Firestore rejects undefined. */
+export function buildTestQuestions(cards: CardEntry[], pool: CardEntry[], settings: Pick<CardTestSettings, 'direction' | 'format'>, newId: () => string, random: (max: number) => number): CardTestQuestion[] {
+  const encoder = new TextEncoder();
+  let bytes = 0;
+  return cards.map(card => {
+    const question: CardTestQuestion = { id: newId(), cardId: card.id, prompt: settings.direction === 'front-back' ? card.front : card.back };
+    const choices = testFormat(settings) === 'choice' ? buildCardChoices(card, pool, settings.direction, random) : null;
+    bytes += choices ? encoder.encode(choices.join('')).length : 0;
+    return choices && bytes <= CARD_CHOICE_BYTES ? { ...question, choices } : question;
+  });
+}
+export const testDeadline = (startedAt: string, limitSeconds: number) => Date.parse(startedAt) + limitSeconds * 1000;
+/** Late work is still graded and only flagged, because a connection problem should never cost a student their answers. */
+export const isTestOvertime = (startedAt: string, limitSeconds: number | null | undefined, time: number) => !!limitSeconds && time > testDeadline(startedAt, limitSeconds) + CARD_TEST_GRACE_SECONDS * 1000;
+export function formatCountdown(milliseconds: number) {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
