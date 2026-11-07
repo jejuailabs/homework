@@ -9,6 +9,7 @@ import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
 import { CARD_DUE_GRACE_MS, CARD_REVIEW_SESSION, buildCardChoices, buildTestQuestions, cardAfterDue, cardDueState, cardMissList, cardReviewDate, cardReviewStates, dueCardIds, isTestOvertime, nextCardReview, recordCardMisses, summarizeCardMisses, testTimeLimit } from '../cards-logic';
 import { parsePlanDate, parseSpeechRate } from './cards-policy';
+import { readSharing } from '../cards-sharing';
 import { cardTestActive, redactCardSnapshot, sealedAttempt } from '../cards-guard';
 import { applyStudentPlan, cardClassSettings, classSettingsRef, readClassSettings } from './cards-class-settings';
 import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
@@ -66,7 +67,7 @@ async function managedClass(ctx: Context, classId: string, tx?: FirebaseFirestor
 }
 function setSummary(snap: FirebaseFirestore.DocumentSnapshot): CardSetSummary {
   const value = snap.data()!;
-  return { id: snap.id, title: value.title, description: value.description, type: value.type, cardCount: value.cardCount, folderId: value.folderId, version: value.version, versionId: value.versionId, archived: !!value.archived, createdAt: value.createdAt, updatedAt: value.updatedAt };
+  return { id: snap.id, title: value.title, description: value.description, type: value.type, cardCount: value.cardCount, folderId: value.folderId, version: value.version, versionId: value.versionId, archived: !!value.archived, createdAt: value.createdAt, updatedAt: value.updatedAt, sharing: readSharing(value.sharing), ...(value.copiedFrom ? { copiedFrom: { title: String(value.copiedFrom.title ?? ''), ownerName: String(value.copiedFrom.ownerName ?? '') } } : {}) };
 }
 function distributionSummary(value: Distribution): CardDistributionSummary {
   return { id: value.id, classId: value.classId, className: value.className, setId: value.setId, setVersion: value.setVersion, versionId: value.versionId, title: value.title, type: value.type, cardCount: value.cardCount, targetCount: value.targetCount, requiredModes: value.requiredModes, test: value.test, dueAt: value.dueAt, afterDue: cardAfterDue(value), allStudents: !!value.allStudents, active: value.active, createdAt: value.createdAt, updatedAt: value.updatedAt, speechRate: value.speechRate ?? null, planDate: value.planDate ?? null, carriedFrom: value.carriedFrom ? { className: String(value.carriedFrom.className ?? '') } : null };
@@ -183,10 +184,13 @@ async function saveSet(ctx: Context, request: Request, setId?: string, duplicate
     const old = existing?.data();
     const stamp = now();
     if (old && !duplicate && input.action !== undefined) {
-      if (!['archive', 'restore', 'move'].includes(input.action)) throw new ApiError(400, '세트 변경 방법을 확인해 주세요.');
+      if (!['archive', 'restore', 'move', 'share'].includes(input.action)) throw new ApiError(400, '세트 변경 방법을 확인해 주세요.');
       const folderId = input.action === 'move' ? (input.folderId === null ? null : id(input.folderId)) : old.folderId;
       await checkFolder(ctx, folderId, tx);
-      const updated = { ...old, folderId, archived: input.action === 'archive' ? true : input.action === 'restore' ? false : old.archived, updatedAt: stamp };
+      // 동료 공유: who may see and copy this set. It shows only inside a folder its owner shared; private is the default.
+      if (input.action === 'share' && (!['private', 'shared'].includes(input.visibility) || typeof input.allowCopy !== 'boolean')) throw new ApiError(400, '공유 설정을 확인해 주세요.', 'SHARE_SETTINGS');
+      const sharing = input.action === 'share' ? { visibility: input.visibility, allowCopy: input.visibility === 'shared' && input.allowCopy } : old.sharing;
+      const updated = { ...old, folderId, archived: input.action === 'archive' ? true : input.action === 'restore' ? false : old.archived, ...(sharing ? { sharing } : {}), updatedAt: stamp };
       const version = await tx.get(versionRef(old.versionId));
       tx.update(ref, updated);
       if (folderId) tx.update(folderRef(folderId), { updatedAt: stamp });
@@ -583,6 +587,8 @@ export async function handleCards(request: Request, segments: string[] = []) {
     if (resource === 'classes' && resourceId && operation === 'settings' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await cardClassSettings(ctx, request, resourceId);
     if (resource === 'classes' && resourceId && operation === 'transfer' && segments.length === 3 && ['GET', 'POST'].includes(method)) return await (await import('./cards-transfer')).transferClass(ctx, request, resourceId, method === 'POST' ? await body(request) : {});
     if (resource === 'classes' && resourceId && operation === 'clone' && segments.length === 3 && method === 'POST') return await (await import('./cards-transfer')).cloneClass(ctx, resourceId, await body(request));
+    if (resource === 'folders' && resourceId && operation === 'share' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await (await import('./cards-sharing')).folderShare(ctx, request, resourceId, method === 'PATCH' ? await body(request) : {});
+    if (resource === 'shared' && segments.length <= 4) return await (await import('./cards-sharing')).handleShared(ctx, request, segments, method === 'POST' ? await body(request) : {});
     if (resource === 'folders' && segments.length <= 2 && ['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return await folders(ctx, request, resourceId);
     if (resource === 'sets') {
       if (!resourceId && method === 'POST') return await saveSet(ctx, request);

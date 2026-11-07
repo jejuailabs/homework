@@ -1117,7 +1117,44 @@ async function cloneSection() {
   same((await callClassroomTool('list_card_sets', {distribution_id: base}, bearerOf(teacher))).card_sets[0].plan_date, '2027-03-04', 'Berry reads the study day');
 }
 sections.clone = cloneSection;
-const chosen =process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
+// 구역 sharing: 동료 공유. 공유한 폴더의 '공유' 세트만 보이고, 복제 허용일 때만 복사되며, 이메일을 지우면 바로 못 본다. `node scripts/cards-flow-check.mjs sharing`
+async function sharingSection() {
+  section('share a folder with colleagues, search and copy');
+  const colleague = 'teacher-c', email = `${colleague}@demo.test`;
+  await db().doc(`users/${colleague}`).set({role: 'teacher'});
+  const folder = (await call(teacher, 'POST', ['folders'], {name: '3학년 공유'})).data.folder;
+  const made = await call(teacher, 'POST', ['sets'], {title: '공유 점검 단어', description: '교과서 3과', type: 'word', folderId: folder.id, cards, requestId: 'sh-set'});
+  const setIdShared = made.data.set.id;
+  same((await call(teacher, 'GET', ['sets', setIdShared])).data.set.sharing, {visibility: 'private', allowCopy: false}, 'a new set is private');
+  refused(await call(stranger, 'PATCH', ['folders', folder.id, 'share'], {members: email}), 404, 'NOT_FOUND', 'only the owner shares the folder');
+  refused(await call(pupil(1), 'GET', ['shared']), 403, 'FORBIDDEN', 'students have no shared library');
+  refused(await call(teacher, 'PATCH', ['folders', folder.id, 'share'], {members: 'not-an-email'}), 400, 'SHARE_MEMBERS', 'a broken email is refused');
+  const shared = await call(teacher, 'PATCH', ['folders', folder.id, 'share'], {members: `${email.toUpperCase()}\n${teacher}@demo.test`});
+  same([shared.data.members, shared.data.sharedSets], [[email], 0], 'the colleague is listed (lower-cased, owner left out); no set is visible yet');
+  const before = await call(colleague, 'GET', ['shared']);
+  same(before.data.folders?.map(row => [row.name, row.sets]), [['3학년 공유', 0]], 'the colleague sees the folder but not the private set');
+  refused(await call(colleague, 'GET', ['shared', 'sets', setIdShared]), 404, 'NOT_FOUND', 'a private set cannot be opened');
+  accepted(await call(teacher, 'PATCH', ['sets', setIdShared], {action: 'share', visibility: 'shared', allowCopy: false}), 'the owner shares the set, view only');
+  same((await call(colleague, 'GET', ['shared'], undefined, {query: `?q=${encodeURIComponent('교과서 단어')}`})).data.sets?.map(row => [row.id, row.allowCopy]), [[setIdShared, false]], 'search finds it within the shared scope');
+  same((await call(colleague, 'GET', ['shared'], undefined, {query: '?q=수학'})).data.sets, [], 'search finds nothing that is not there');
+  const opened = await call(colleague, 'GET', ['shared', 'sets', setIdShared]);
+  same([opened.status, opened.data.set?.cards.length, opened.data.set?.ownerName], [200, cards.length, teacher], 'the colleague previews the cards');
+  refused(await call(colleague, 'POST', ['shared', 'sets', setIdShared, 'copy'], {requestId: 'sh-copy-0'}), 403, 'COPY_NOT_ALLOWED', 'no copy without the owner\'s permission');
+  refused(await call(stranger, 'GET', ['shared', 'sets', setIdShared]), 404, 'NOT_FOUND', 'a teacher who is not listed cannot open it');
+  accepted(await call(teacher, 'PATCH', ['sets', setIdShared], {action: 'share', visibility: 'shared', allowCopy: true}), 'the owner allows copies');
+  const copied = await call(colleague, 'POST', ['shared', 'sets', setIdShared, 'copy'], {requestId: 'sh-copy-1'});
+  check(copied.status === 201 && copied.data.set.copiedFrom?.setId === setIdShared && copied.data.set.folderId === null, 'the colleague copies it into their own sets', copied.data);
+  const mine = (await call(colleague, 'GET', ['sets', copied.data.set.id])).data.set;
+  check(mine.cards.length === cards.length && mine.cards.every(card => !cards.some(source => source.id === card.id)) && mine.copiedFrom?.ownerName === teacher, 'the copy has its own card IDs and says where it came from', mine.copiedFrom);
+  same((await call(colleague, 'POST', ['shared', 'sets', setIdShared, 'copy'], {requestId: 'sh-copy-1'})).data.set?.id, copied.data.set.id, 'a retry returns the same copy');
+  refused(await call(teacher, 'GET', ['sets', copied.data.set.id]), 404, 'NOT_FOUND', 'the owner cannot open the colleague\'s copy');
+  same((await callClassroomTool('list_card_sets', {}, bearerOf(teacher))).sharing, {shared_folders: 1, colleagues: 1, shared_sets: 1, copied_sets: 0}, 'Berry reads sharing as counts');
+  accepted(await call(teacher, 'PATCH', ['folders', folder.id, 'share'], {members: ''}), 'the owner stops sharing');
+  refused(await call(colleague, 'GET', ['shared', 'sets', setIdShared]), 404, 'NOT_FOUND', 'the colleague loses access at once');
+  same((await call(colleague, 'GET', ['sets', copied.data.set.id])).status, 200, 'a copy already made stays with the colleague');
+}
+sections.sharing = sharingSection;
+const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
 for (const name of chosen) {

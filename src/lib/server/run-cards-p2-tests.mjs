@@ -10,3 +10,5 @@ const transfer = dataUrl(compile('../cards-transfer.ts'));
 await import(dataUrl(compile('../cards-transfer.test.ts').replace("'./cards-transfer'", JSON.stringify(transfer))));
 const planner = dataUrl(compile('../cards-planner.ts').replace("'./cards-logic'", JSON.stringify(logic)));
 await import(dataUrl(compile('../cards-planner.test.ts').replace("'./cards-planner'", JSON.stringify(planner))));
+const sharing = dataUrl(compile('../cards-sharing.ts'));
+await import(dataUrl(compile('../cards-sharing.test.ts').replace("'./cards-sharing'", JSON.stringify(sharing))));

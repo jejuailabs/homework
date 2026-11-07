@@ -25,4 +25,16 @@
 .cards-agenda ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}.cards-agenda ol>li{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 16px}.cards-agenda ol>li.is-today{border-color:var(--accent)}
 .cards-agenda h2{font-size:15px;margin:0 0 6px;display:flex;align-items:center;gap:8px}.cards-agenda ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .cards-agenda-entry{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}.cards-agenda-entry a{font-weight:700;overflow-wrap:anywhere;min-width:0}.cards-agenda-entry.is-due .cs-tag{color:var(--danger)}
+/* 동료 공유 */
+.cards-shared>.cards-muted{margin:-6px 0 12px}
+.cards-shared-folders{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.cards-shared-folders button{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:16px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);cursor:pointer;min-width:0}.cards-shared-folders button:hover{border-color:var(--accent)}.cards-shared-folders svg{color:var(--accent);flex:none}
+.cards-shared-folders span{display:grid;gap:3px;min-width:0}.cards-shared-folders strong{overflow-wrap:anywhere}.cards-shared-folders small{color:var(--muted);font-size:11px}
+.cards-shared-crumb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}.cards-shared-crumb .button{font-size:12px;min-height:34px;padding:6px 12px}.cards-shared-crumb small{color:var(--muted)}
+.cards-shared-row{width:100%;text-align:left;color:var(--text);cursor:pointer;font:inherit}
+.cards-shared-cards{max-height:50dvh;overflow:auto;margin-top:10px}
+.cards-shared-folder-pick{display:flex;align-items:center;gap:8px;font-size:12px;margin:0 auto 0 0}.cards-shared-folder-pick select{width:auto;max-width:200px;font-size:13px}
+.cards-folder-share label{display:grid;gap:6px;font-size:12px}.cards-folder-share textarea{font-size:14px}
+.cards-set-share-copy{margin-left:26px}
+@media(max-width:740px){.cards-shared-folder-pick{width:100%;margin:0}.cards-shared-folder-pick select{flex:1;max-width:none}.cards-set-share-copy{margin-left:0}}
 @media(max-width:740px){.cards-transfer-links{grid-template-columns:1fr}.cards-transfer-sub{margin-left:0}.cards-planner-nav .button{margin-left:0}}
