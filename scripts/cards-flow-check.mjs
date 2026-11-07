@@ -1261,6 +1261,47 @@ async function chunksSection() {
   same([during.data.testActive?.attemptId, during.data.distribution.snapshot.cards[0].chunks, during.data.distribution.snapshot.cards[0].front], [attempt.data.attempt.id, undefined, ''], 'while the test runs the marks leave with the answer side');
 }
 sections.chunks = chunksSection;
+// 구역 drill: 연습문제 다섯 유형. 서버가 정답 표시를 정하고, 필수 학습 없이 배부되며, 테스트는 유형대로 묻고 같은 규칙으로 채점한다. `node scripts/cards-flow-check.mjs drill`
+async function drillSection() {
+  section('drill sets: five question kinds');
+  const passage = 'Yesterday I [went] to school and [saw/met] my friend.';
+  const questions = [
+    {id: 'd1', front: '과일이 아닌 것은?', back: '', example: '', alternatives: [], drill: {kind: 'choice', choices: ['apple', 'desk', 'pear'], answer: 1}},
+    {id: 'd2', front: 'The sun rises in the west.', back: '', example: '', alternatives: [], drill: {kind: 'ox', answer: 1}},
+    {id: 'd3', front: '빈칸에 알맞은 말을 고르세요.', back: '', example: passage, alternatives: [], drill: {kind: 'choice-blank', blanks: [{wrong: ['go', 'goes']}, {wrong: ['see']}]}},
+    {id: 'd4', front: '대한민국의 수도는?', back: 'Seoul', example: '', alternatives: ['서울'], drill: {kind: 'short'}},
+    {id: 'd5', front: '빈칸을 채우세요.', back: '', example: passage, alternatives: [], drill: {kind: 'short-blank'}},
+  ];
+  refused(await call(teacher, 'POST', ['sets'], {title: '빠진 유형', description: '', type: 'drill', folderId: null, cards: [{front: 'q', back: 'a', example: '', alternatives: []}], requestId: 'drill-bad'}), 400, 'DRILL_INVALID', 'a drill set needs a kind on every question');
+  refused(await call(teacher, 'POST', ['sets'], {title: '잘못된 보기', description: '', type: 'drill', folderId: null, cards: [{...questions[0], drill: {kind: 'choice', choices: ['a'], answer: 0}}], requestId: 'drill-bad2'}), 400, 'DRILL_INVALID', 'a choice question needs two options');
+  const word = await call(teacher, 'POST', ['sets'], {title: '단어로 저장', description: '', type: 'word', folderId: null, cards: [{...questions[3]}], requestId: 'drill-word'});
+  same(word.data.set.cards[0].drill, undefined, 'a word set drops drill data');
+  const made = await call(teacher, 'POST', ['sets'], {title: '연습문제 점검', description: '', type: 'drill', folderId: null, cards: questions, requestId: 'drill-set'});
+  same(made.data.set.cards.map(card => card.back), ['desk', 'X', 'went, saw', 'Seoul', 'went, saw'], 'the server works out each answer');
+  const given = await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: made.data.set.id, expectedVersion: 1, requestId: 'drill-dist', requiredModes: {recall: {requiredCount: 5, direction: 'back-front', rangeStart: 1, rangeEnd: 5}}, test: {questionCount: 5, goalScore: 80, maxAttempts: 3, direction: 'back-front', requireStudy: true, answerRelease: 'immediate', format: 'written'}});
+  const dist = given.data.distribution;
+  same([dist.requiredModes.recall.requiredCount, dist.test.direction, dist.test.requireStudy], [0, 'front-back', false], 'no required study; asked front to back; no study gate');
+  const patched = await call(teacher, 'PATCH', ['distributions', dist.id], {requiredModes: {memorize: {requiredCount: 3}}, test: {direction: 'back-front'}});
+  same([patched.data.distribution.requiredModes.memorize.requiredCount, patched.data.distribution.test.direction], [0, 'front-back'], 'editing settings keeps it that way');
+  const attempt = (await start(pupil(4), dist.id, 'drill-test')).data.attempt;
+  const byCard = new Map(attempt.questions.map(question => [question.cardId, question]));
+  same([byCard.get('d1').choices?.length, byCard.get('d2').choices, byCard.get('d3').drill?.blanks?.length, byCard.get('d4').choices, byCard.get('d5').drill?.passage], [3, ['O', 'X'], 2, undefined, 'Yesterday I ( 1 ) to school and ( 2 ) my friend.'], 'each kind is asked its own way');
+  check(!JSON.stringify(attempt).includes('[went]') && !JSON.stringify(attempt).includes('saw/met') && secretsIn(attempt) === null, 'the running attempt carries no answer', attempt);
+  const answerFor = {d1: 'desk', d2: 'x', d3: JSON.stringify(['went', 'saw']), d4: ' 서울 ', d5: JSON.stringify(['Went', 'met'])};
+  const submitted = await submit(pupil(4), dist.id, attempt.id, attempt.questions.map(question => ({questionId: question.id, answer: answerFor[question.cardId]})));
+  same([submitted.data.attempt.score, submitted.data.progress.goalReached], [100, true], 'all five kinds grade right with the shared rule');
+  const second = (await start(pupil(4), dist.id, 'drill-test-2')).data.attempt;
+  const wrong = await submit(pupil(4), dist.id, second.id, second.questions.map(question => ({questionId: question.id, answer: question.cardId === 'd3' ? JSON.stringify(['went', 'met']) : answerFor[question.cardId]})));
+  same(wrong.data.attempt.score, 80, 'a choice blank takes only its marked option');
+  const row = reported(await report(dist.id), 's4');
+  check(row.attempts[0].results.some(result => result.expectedAnswer === 'went, saw' && !result.correct), 'the teacher report shows the expected answer of the missed question', row.attempts[0]);
+  same((await call(pupil(4), 'GET', ['review'], undefined, {query: `?distributionId=${dist.id}`})).data.items, [], 'drill sets have no card review session');
+  const listed = (await call(pupil(4), 'GET', ['student'])).data;
+  check(!JSON.stringify(listed.review ?? {}).includes(dist.id) && (await db().doc('cardMisses/class-a_s4').get()).data()?.misses?.[dist.id], 'the miss is kept but stays out of the review row', listed.review);
+  const room = await roomCall();
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: made.data.set.id, requestId: 'drill-room'}), 409), true, 'a drill set cannot open a team room');
+}
+sections.drill = drillSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

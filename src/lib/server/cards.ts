@@ -8,7 +8,7 @@ import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
 import { CARD_DUE_GRACE_MS, CARD_REVIEW_SESSION, buildCardChoices, buildTestQuestions, cardAfterDue, cardDueState, cardMissList, cardReviewDate, cardReviewStates, dueCardIds, isTestOvertime, nextCardReview, recordCardMisses, summarizeCardMisses, testTimeLimit } from '../cards-logic';
-import { parsePlanDate, parseSpeechRate } from './cards-policy';
+import { drillConsistent, drillDistribution, parsePlanDate, parseSpeechRate } from './cards-policy';
 import { readSharing } from '../cards-sharing';
 import { cardTestActive, redactCardSnapshot, sealedAttempt } from '../cards-guard';
 import { applyStudentPlan, cardClassSettings, classSettingsRef, readClassSettings } from './cards-class-settings';
@@ -199,10 +199,11 @@ async function saveSet(ctx: Context, request: Request, setId?: string, duplicate
     if (old && !duplicate && input.expectedVersion !== old.version) throw new ApiError(409, '다른 화면에서 수정된 세트예요. 새로 열어 확인해 주세요.', 'STALE_VERSION');
     if (old && duplicate) expectedCardVersion(input.expectedVersion, old.version);
     const previousVersion = old ? await tx.get(versionRef(old.versionId)) : null;
-    const cards = duplicate ? parseCards(previousVersion!.data()!.cards.map((card: CardEntry) => ({ ...card, id: randomUUID() }))) : parseCards(input.cards ?? previousVersion?.data()?.cards);
+    let cards = duplicate ? parseCards(previousVersion!.data()!.cards.map((card: CardEntry) => ({ ...card, id: randomUUID() }))) : parseCards(input.cards ?? previousVersion?.data()?.cards);
     const title = text(input.title ?? (duplicate ? `${old!.title} (복사)`.slice(0, 120) : old?.title), '세트 제목', 120);
     const description = text(input.description ?? old?.description, '세트 설명', 2000, true);
     const type = cardType(input.type ?? old?.type);
+    cards = drillConsistent(cards, type);
     const folderId = input.folderId === undefined ? old?.folderId ?? null : input.folderId === null ? null : id(input.folderId);
     await checkFolder(ctx, folderId, tx);
     const version = old && !duplicate ? old.version + 1 : 1;
@@ -256,7 +257,7 @@ async function distributions(ctx: Context, request: Request) {
     const targetStudentIds: string[] = allStudents || !requested.length ? activeIds : requested.map(value => id(value));
     if (!targetStudentIds.length || new Set(targetStudentIds).size !== targetStudentIds.length || targetStudentIds.some(value => !activeIds.includes(value))) throw new ApiError(400, '우리 반의 이용 가능한 학생을 선택해 주세요.', 'DISTRIBUTION_TARGETS');
     const data = version.data()!, snapshot: CardSnapshot = { title: data.title, description: data.description, type: data.type, cards: data.cards };
-    const requiredModes = parseRequirements(input.requiredModes, snapshot.cards.length), test = parseTestSettings(input.test, snapshot.cards.length), dueAt = parseDueAt(input.dueAt), afterDue = parseAfterDue(input.afterDue), speechRate = parseSpeechRate(input.speechRate), planDate = parsePlanDate(input.planDate);
+    const { requiredModes, test } = drillDistribution(snapshot.type, parseRequirements(input.requiredModes, snapshot.cards.length), parseTestSettings(input.test, snapshot.cards.length), () => parseRequirements(undefined, snapshot.cards.length)), dueAt = parseDueAt(input.dueAt), afterDue = parseAfterDue(input.afterDue), speechRate = parseSpeechRate(input.speechRate), planDate = parsePlanDate(input.planDate);
     if (test.answerRelease === 'after-due' && !dueAt) throw new ApiError(400, '마감 후 정답 공개에는 마감 날짜가 필요해요.');
     const stamp = now();
     const targetStudents = roster.docs.filter(pupil => targetStudentIds.includes(pupil.id)).map(pupil => ({ id: pupil.id, name: String(pupil.data().name ?? ''), number: Number(pupil.data().number ?? 0) }));
@@ -274,6 +275,7 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
     const distribution = await db().runTransaction(async tx => {
       const value = await loadDistribution(ctx, distributionId, tx);
       const update: Data = distributionPatch(input, value), updatedAt = now();
+      if (value.type === 'drill') Object.assign(update, drillDistribution('drill', update.requiredModes ?? value.requiredModes, update.test ?? value.test, () => value.requiredModes));
       if (value.allStudents && update.allStudents === false) {
         const roster = await tx.get(db().collection(`classes/${value.classId}/students`));
         Object.assign(update, widenedTargets(value, roster.docs.filter(pupil => !pupil.data().disabled).map(pupil => ({ id: pupil.id, name: String(pupil.data().name ?? ''), number: Number(pupil.data().number ?? 0) }))));
@@ -291,7 +293,7 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
   return json({ distribution: visible, ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} }, cardStates: cardReviewStates(state?.data()?.cardStates), serverTime: now(), ...(testing ? { testActive: { attemptId: testing.id, startedAt: testing.startedAt, timeLimitSeconds: testing.timeLimitSeconds ?? null } } : {}) } : {}) });
 }
 
-const REVIEW_FIELDS = ['classId', 'ownerUid', 'targetStudentIds', 'allStudents', 'active', 'dueAt', 'afterDue'];
+const REVIEW_FIELDS = ['classId', 'ownerUid', 'targetStudentIds', 'allStudents', 'active', 'dueAt', 'afterDue', 'type'];
 /**
  * The sets whose misses this student may review across sets: still meant for them, the class owner's, not closed by a locked
  * deadline, and not hidden by the teacher's lesson order. The list row and the review session both use it, so the count on the
@@ -303,7 +305,8 @@ async function reviewableSets(ctx: Context, ownerUid: unknown, misses: unknown, 
   const snaps = ids.length ? await db().getAll(...ids.map(distributionRef), { fieldMask: REVIEW_FIELDS }) : [];
   return new Set(snaps.filter(snap => {
     const value = snap.data() as (Data & { classId: string; targetStudentIds: string[]; active: boolean; dueAt: string | null }) | undefined;
-    return !!value && Array.isArray(value.targetStudentIds) && canStudyDistribution(ctx, value) && value.ownerUid === ownerUid && cardDueState(value, Date.now(), CARD_DUE_GRACE_MS) !== 'lock';
+    // 연습문제 sets have no card review: their questions need the drill screen, so their misses stay out of the review row.
+    return !!value && value.type !== 'drill' && Array.isArray(value.targetStudentIds) && canStudyDistribution(ctx, value) && value.ownerUid === ownerUid && cardDueState(value, Date.now(), CARD_DUE_GRACE_MS) !== 'lock';
   }).map(snap => snap.id));
 }
 async function studentList(ctx: Context, request: Request) {
@@ -548,6 +551,7 @@ async function reviewCards(ctx: Context, request: Request) {
     assertDueOpen(distribution);
     const ref = progressRef(distribution.id, ctx.studentId), saved = await ref.get(), cards = new Map(distribution.snapshot.cards.map(card => [card.id, card]));
     if (await runningTest(saved.data(), ref)) throw testActive();
+    if (distribution.type === 'drill') return json({ items: [], serverTime: now() });
     return json({ items: dueCardIds([...cards.keys()], cardReviewStates(saved.data()?.cardStates), today).map(cardId => reviewItem(distribution, cards.get(cardId)!, null)), serverTime: now() });
   }
   if (week !== null && !/^\d{4}-\d{2}-\d{2}$/.test(week)) throw new ApiError(400, '복습할 주를 확인해 주세요.');

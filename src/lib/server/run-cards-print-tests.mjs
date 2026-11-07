@@ -4,7 +4,7 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const dataUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
-const logic = dataUrl(compile('../cards-logic.ts'));
+const logic = dataUrl(compile('../cards-logic.ts').replace("'./cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))));
 const print = dataUrl(compile('../cards-print.ts').replace("'./cards-logic'", JSON.stringify(logic)));
 await import(dataUrl(compile('../cards-print.test.ts').replace("'./cards-print'", JSON.stringify(print)).replace("'./cards-logic'", JSON.stringify(logic))));
 const report = dataUrl(compile('../cards-print-report.ts').replace("'./cards-print'", JSON.stringify(print)));

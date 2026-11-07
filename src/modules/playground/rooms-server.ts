@@ -58,6 +58,7 @@ async function cardSource(ctx: Context, setId: string, cls: FirebaseFirestore.Do
   const set = (await tx.get(db().doc(`cardSets/${setId}`))).data();
   if (!set || !ownsCardResource(ctx, set as {ownerUid: string}) || !ownsCardResource(ctx, cls.data() as {ownerUid: string})) throw new ApiError(404, '세트를 찾을 수 없어요.', 'NOT_FOUND');
   if (set.archived) throw new ApiError(409, '보관한 세트는 복구한 뒤 팀전을 열 수 있어요.');
+  if (set.type === 'drill') throw new ApiError(409, '연습문제 세트는 팀전을 열 수 없어요.', 'DRILL_ROOM');
   const version = await tx.get(db().doc(`cardSetVersions/${id(set.versionId)}`));
   if (!version.exists) throw new ApiError(409, '세트 버전을 확인해 주세요.', 'VERSION_MISSING');
   return {cards: version.data()!.cards as CardEntry[], source: {setId, title: String(set.title).slice(0, 120), direction} as RoomCardSource};

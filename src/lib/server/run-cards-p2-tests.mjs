@@ -5,7 +5,7 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
 }).outputText;
 const dataUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
-const logic = dataUrl(compile('../cards-logic.ts'));
+const logic = dataUrl(compile('../cards-logic.ts').replace("'./cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))));
 const transfer = dataUrl(compile('../cards-transfer.ts'));
 await import(dataUrl(compile('../cards-transfer.test.ts').replace("'./cards-transfer'", JSON.stringify(transfer))));
 const planner = dataUrl(compile('../cards-planner.ts').replace("'./cards-logic'", JSON.stringify(logic)));
@@ -14,3 +14,4 @@ const sharing = dataUrl(compile('../cards-sharing.ts'));
 await import(dataUrl(compile('../cards-sharing.test.ts').replace("'./cards-sharing'", JSON.stringify(sharing))));
 const chunks = dataUrl(compile('../cards-chunks.ts'));
 await import(dataUrl(compile('../cards-chunks.test.ts').replace("'./cards-chunks'", JSON.stringify(chunks))));
+await import(dataUrl(compile('../cards-drill.test.ts').replace("'./cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))).replace("'./cards-logic'", JSON.stringify(logic))));

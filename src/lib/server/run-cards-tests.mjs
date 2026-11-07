@@ -7,9 +7,9 @@ const dataUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toStr
 const characters = dataUrl(compile('../characters.ts'));
 const submission = dataUrl(compile('../assignment-submission.ts'));
 const policy = dataUrl(compile('./policy.ts').replace("'../characters'", JSON.stringify(characters)).replace("'../assignment-submission'", JSON.stringify(submission)));
-const logic = dataUrl(compile('../cards-logic.ts'));
+const logic = dataUrl(compile('../cards-logic.ts').replace("'./cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))));
 const planner = dataUrl(compile('../cards-planner.ts').replace("'./cards-logic'", JSON.stringify(logic)));
-const cards = dataUrl(compile('./cards-policy.ts').replace("'./policy'", JSON.stringify(policy)).replace("'../cards-logic'", JSON.stringify(logic)).replace("'../cards-planner'", JSON.stringify(planner)).replace("'../cards-chunks'", JSON.stringify(dataUrl(compile('../cards-chunks.ts')))));
+const cards = dataUrl(compile('./cards-policy.ts').replace("'./policy'", JSON.stringify(policy)).replace("'../cards-logic'", JSON.stringify(logic)).replace("'../cards-planner'", JSON.stringify(planner)).replace("'../cards-chunks'", JSON.stringify(dataUrl(compile('../cards-chunks.ts')))).replace("'../cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))));
 await import(dataUrl(compile('../cards-review.test.ts').replace("'./cards-logic'", JSON.stringify(logic))));
 await import(dataUrl(compile('../cards-summary.test.ts').replace("'./cards-summary'", JSON.stringify(dataUrl(compile('../cards-summary.ts').replace("'./cards-logic'", JSON.stringify(logic)))))));
 await import(dataUrl(compile('./cards-policy.test.ts').replace("'./cards-policy'", JSON.stringify(cards)).replace("'../cards-logic'", JSON.stringify(logic))));

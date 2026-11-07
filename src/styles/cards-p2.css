@@ -43,6 +43,17 @@
 .cards-chunk-feedback{display:flex;gap:6px;align-items:center;justify-content:center;margin:0;font-weight:700}.cards-chunk-feedback.is-right{color:var(--success)}.cards-chunk-feedback.is-wrong{color:var(--danger)}
 .cards-chunk-actions{justify-content:center}
 .cards-chunk-done h2{margin:0}
+/* 연습문제 */
+.cards-drill-row .cards-form-grid{grid-template-columns:minmax(0,180px) minmax(0,1fr)}.cards-drill-passage{display:grid;gap:6px;font-size:12px;margin:4px 0 8px}.cards-drill-passage textarea{font-size:14px}
+.cards-drill-choices{border:1px solid var(--border);border-radius:12px;padding:8px 12px;margin:4px 0;min-width:0}.cards-drill-choices legend{font-size:12px;padding:0 4px}
+.cards-drill-choice{display:flex;align-items:center;gap:8px;margin:4px 0}.cards-drill-choice input[type=radio]{width:18px;height:18px;accent-color:var(--accent);flex:none}.cards-drill-choice>span{font-size:12px;color:var(--muted);width:14px;flex:none}.cards-drill-choice input:not([type=radio]){flex:1;min-width:0;font-size:14px;padding:8px}
+.cards-drill-choices>.button{font-size:12px;min-height:32px;padding:5px 10px;margin-top:4px}.cards-drill-ox{display:flex;gap:20px}
+.cards-drill-blank{display:grid;gap:4px;font-size:12px;margin:6px 0}.cards-drill-blank input{font-size:14px}
+.cards-drill-publish{margin:14px 0}
+.cs-drill-question legend{line-height:1.6}.cs-drill-passage{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-alt);border-radius:12px;padding:10px 14px;margin:6px 0 10px;line-height:1.8}
+.cs-drill-blanks{display:grid;gap:8px}.cs-drill-blanks label{display:flex;align-items:center;gap:10px;min-width:0}.cs-drill-blanks label>span{flex:none;font-weight:700;color:var(--accent)}.cs-drill-blanks select,.cs-drill-blanks input{flex:1;min-width:0}
+.cards-drill-practice{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;display:grid;gap:14px}
+@media(max-width:740px){.cards-drill-row .cards-form-grid{grid-template-columns:1fr}}
 /* 동료 공유 */
 .cards-shared>.cards-muted{margin:-6px 0 12px}
 .cards-shared-folders{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
