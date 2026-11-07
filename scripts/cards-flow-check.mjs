@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -990,6 +990,35 @@ async function countedSection() {
   same(await goalPaid(), false, 'the goal was already reached, so a later full pass pays nothing either');
 }
 sections.counted = countedSection;
+// 구역 pages: 학생 목록 둘째 쪽(200개 넘음)도 숨긴 세트를 빼고 선생님 순서를 따르며, 누적 오답 줄과 복습이 같은 세트를 센다. `node scripts/cards-flow-check.mjs pages`
+async function pagesSection() {
+  section('student list pages and cross-set review agree');
+  const classId = 'class-p', who = 'u20:0', today = logic.cardReviewDate(), stamp = iso(0);
+  await db().doc(`classes/${classId}`).set({ownerUid: teacher, name: '많은 세트 반'});
+  await db().doc(`classes/${classId}/students/s20`).set({name: '학생20', number: 1, authUid: 'u20'});
+  await db().doc('users/u20').set({role: 'student', classId, studentId: 's20', authVersion: 0});
+  const requiredModes = Object.fromEntries(['memorize', 'recall', 'spell'].map(mode => [mode, {requiredCount: 0, direction: 'front-back', rangeStart: 1, rangeEnd: 6}]));
+  const snapshot = {title: '많은 세트', description: '', type: 'word', cards: cards.slice(0, 6)};
+  const ids = Array.from({length: 205}, (_, index) => `p${String(index).padStart(3, '0')}`);
+  for (let start = 0; start < ids.length; start += 100) {
+    const batch = db().batch();
+    for (const docId of ids.slice(start, start + 100)) batch.set(db().doc(`cardClassSets/${docId}`), {ownerUid: teacher, classId, className: '많은 세트 반', setId: `set-${docId}`, setVersion: 1, versionId: `set-${docId}_v1`, title: `세트 ${docId}`, type: 'word', cardCount: 6, cardIds: snapshot.cards.map(card => card.id), targetStudentIds: [], targetCount: 1, allStudents: true, requiredModes, test: {questionCount: 3, goalScore: 80, maxAttempts: 3, requireStudy: false, direction: 'front-back', answerRelease: 'immediate'}, dueAt: null, afterDue: 'open', active: true, snapshot, createdAt: stamp, updatedAt: stamp});
+    await batch.commit();
+  }
+  // The teacher's order puts p204 before p203 and hides p202 (both on the second page) and p005 (first page).
+  await db().doc(`cardClassSettings/${classId}`).set({ownerUid: teacher, revision: 1, plan: [{kind: 'set', id: 'p204'}, {kind: 'set', id: 'p203'}, {kind: 'set', id: 'p202', hidden: true}, {kind: 'set', id: 'p005', hidden: true}, ...ids.filter(docId => !['p202', 'p203', 'p204', 'p005'].includes(docId)).map(docId => ({kind: 'set', id: docId}))]});
+  await db().doc(`cardMisses/${classId}_s20`).set({classId, studentId: 's20', misses: {p202: {card0: today}, p005: {card1: today}, p203: {card2: today}, p001: {card3: today}}, updatedAt: stamp});
+  const first = await call(who, 'GET', ['student']);
+  check(first.status === 200 && !!first.data.nextCursor && !first.data.distributions.some(row => row.id === 'p005'), 'the first page drops its hidden set', first.data.nextCursor);
+  const second = await call(who, 'GET', ['student'], undefined, {query: `?cursor=${encodeURIComponent(first.data.nextCursor)}`});
+  same(second.data.distributions?.map(row => row.id), ['p204', 'p203', 'p200', 'p201'], 'the second page drops its hidden set and keeps the teacher order');
+  same([second.data.layout, first.data.layout?.length > 0], [undefined, true], 'memos and layout come with the first page only');
+  same([first.data.review, second.data.review], [{total: 2, weeks: [{week: logic.cardWeekStart(today), count: 2}]}, {total: 2, weeks: [{week: logic.cardWeekStart(today), count: 2}]}], 'the pinned row counts misses in visible sets on any page, hidden ones never');
+  const session = await call(who, 'GET', ['review']);
+  same(session.data.items?.map(item => item.distributionId).sort(), ['p001', 'p203'], 'the review session holds exactly what the row counts');
+  same((await call(who, 'GET', ['distributions', 'p202'])).status, 200, 'a hidden set still opens by its address');
+}
+sections.pages = pagesSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

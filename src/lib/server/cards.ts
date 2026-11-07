@@ -10,7 +10,7 @@ import { cardsAiDraft } from './cards-ai';
 import { CARD_DUE_GRACE_MS, CARD_REVIEW_SESSION, buildCardChoices, buildTestQuestions, cardAfterDue, cardDueState, cardMissList, cardReviewDate, cardReviewStates, dueCardIds, isTestOvertime, nextCardReview, recordCardMisses, summarizeCardMisses, testTimeLimit } from '../cards-logic';
 import { parseSpeechRate } from './cards-policy';
 import { cardTestActive, redactCardSnapshot, sealedAttempt } from '../cards-guard';
-import { applyStudentPlan, cardClassSettings, classSettingsRef } from './cards-class-settings';
+import { applyStudentPlan, cardClassSettings, classSettingsRef, readClassSettings } from './cards-class-settings';
 import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
 import type { CardDirection, CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardReviewItem, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
 
@@ -287,6 +287,21 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
   return json({ distribution: visible, ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} }, cardStates: cardReviewStates(state?.data()?.cardStates), serverTime: now(), ...(testing ? { testActive: { attemptId: testing.id, startedAt: testing.startedAt, timeLimitSeconds: testing.timeLimitSeconds ?? null } } : {}) } : {}) });
 }
 
+const REVIEW_FIELDS = ['classId', 'ownerUid', 'targetStudentIds', 'allStudents', 'active', 'dueAt', 'afterDue'];
+/**
+ * The sets whose misses this student may review across sets: still meant for them, the class owner's, not closed by a locked
+ * deadline, and not hidden by the teacher's lesson order. The list row and the review session both use it, so the count on the
+ * row is what a session can hold. Reads only those fields of the sets named in the miss index (at most 400 entries).
+ */
+async function reviewableSets(ctx: Context, ownerUid: unknown, misses: unknown, plan: FirebaseFirestore.DocumentSnapshot | undefined) {
+  const hidden = new Set(readClassSettings(plan, ownerUid).plan.filter(item => item.kind === 'set' && item.hidden).map(item => item.id));
+  const ids = Object.keys(misses && typeof misses === 'object' && !Array.isArray(misses) ? misses : {}).filter(key => /^[A-Za-z0-9_-]{1,128}$/.test(key) && !hidden.has(key)).slice(0, 400);
+  const snaps = ids.length ? await db().getAll(...ids.map(distributionRef), { fieldMask: REVIEW_FIELDS }) : [];
+  return new Set(snaps.filter(snap => {
+    const value = snap.data() as (Data & { classId: string; targetStudentIds: string[]; active: boolean; dueAt: string | null }) | undefined;
+    return !!value && Array.isArray(value.targetStudentIds) && canStudyDistribution(ctx, value) && value.ownerUid === ownerUid && cardDueState(value, Date.now(), CARD_DUE_GRACE_MS) !== 'lock';
+  }).map(snap => snap.id));
+}
 async function studentList(ctx: Context, request: Request) {
   student(ctx);
   const selected = new URL(request.url).searchParams.get('classId');
@@ -294,15 +309,15 @@ async function studentList(ctx: Context, request: Request) {
   const cursor = new URL(request.url).searchParams.get('cursor');
   const [result, cls, pupil, missed, plan] = await Promise.all([
     pageQuery('cardClassSets', 'classId', ctx.classId, new URL(request.url).searchParams.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'cardIds', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt', 'speechRate').get(),
-    db().doc(`classes/${ctx.classId}`).get(), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), missRef(ctx.classId, ctx.studentId).get(), cursor ? undefined : classSettingsRef(ctx.classId).get(),
+    db().doc(`classes/${ctx.classId}`).get(), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), missRef(ctx.classId, ctx.studentId).get(), classSettingsRef(ctx.classId).get(),
   ]);
   if (!cls.exists || !pupil.exists || pupil.data()?.disabled || pupil.data()?.authUid !== ctx.uid) throw new ApiError(403, '우리 반 정보를 확인해 주세요.', 'STUDENT_UNAVAILABLE');
   const page = result.docs.slice(0, CARD_LIST_LIMIT);
-  // Hidden rows leave the list only; the distribution and its records stay. Later pages keep server order and no memos.
+  // Hidden rows leave the list only; the distribution and its records stay. Every page drops hidden sets and keeps the teacher's
+  // order among its own sets; memos come with the first page only.
   const visible = page.map(asDistribution).filter(value => canStudyDistribution(ctx, value) && cls.data()!.ownerUid === value.ownerUid);
-  const { distributions: rows, layout } = cursor ? { distributions: visible, layout: undefined } : applyStudentPlan(visible, plan, cls.data()!.ownerUid);
-  const states = rows.length ? await db().getAll(...rows.map(value => progressRef(value.id, ctx.studentId))) : [];
-  const reviewable = new Set(rows.filter(value => cardDueState(value, Date.now(), CARD_DUE_GRACE_MS) !== 'lock').map(value => value.id));
+  const planned = applyStudentPlan(visible, plan, cls.data()!.ownerUid), rows = planned.distributions, layout = cursor ? undefined : planned.layout;
+  const [states, reviewable] = await Promise.all([rows.length ? db().getAll(...rows.map(value => progressRef(value.id, ctx.studentId))) : Promise.resolve([]), reviewableSets(ctx, cls.data()!.ownerUid, missed.data()?.misses, plan)]);
   return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), review: summarizeCardMisses(missed.data()?.misses, cardReviewDate(), reviewable), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, ...(layout ? { layout } : {}), nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null, serverTime: now() });
 }
 function progressPreferences(input: Data, distribution: Distribution) {
@@ -532,9 +547,10 @@ async function reviewCards(ctx: Context, request: Request) {
     return json({ items: dueCardIds([...cards.keys()], cardReviewStates(saved.data()?.cardStates), today).map(cardId => reviewItem(distribution, cards.get(cardId)!, null)), serverTime: now() });
   }
   if (week !== null && !/^\d{4}-\d{2}-\d{2}$/.test(week)) throw new ApiError(400, '복습할 주를 확인해 주세요.');
-  const [cls, pupil, profile, index] = await db().getAll(db().doc(`classes/${ctx.classId}`), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`), db().doc(`users/${ctx.uid}`), missRef(ctx.classId, ctx.studentId));
+  const [cls, pupil, profile, index, plan] = await db().getAll(db().doc(`classes/${ctx.classId}`), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`), db().doc(`users/${ctx.uid}`), missRef(ctx.classId, ctx.studentId), classSettingsRef(ctx.classId));
   if (!cls.exists || !pupil.exists || pupil.data()?.disabled || pupil.data()?.authUid !== ctx.uid || !profile.exists || profile.data()?.disabled || profile.data()?.studentId !== ctx.studentId || profile.data()?.classId !== ctx.classId) throw new ApiError(403, '학생 코드를 선생님께 다시 확인해 주세요.', 'STUDENT_UNAVAILABLE');
-  const rows = cardMissList(index.data()?.misses, today, undefined, week ?? undefined), chosen: typeof rows = [], sets = new Set<string>();
+  // Only sets the list row counts (reviewableSets), so the row and the session agree.
+  const rows = cardMissList(index.data()?.misses, today, await reviewableSets(ctx, cls.data()!.ownerUid, index.data()?.misses, plan), week ?? undefined), chosen: typeof rows = [], sets = new Set<string>();
   // Newest misses first, but from no more than REVIEW_SET_LIMIT sets, so one tap never loads many full snapshots.
   for (const row of rows) {
     if (chosen.length >= CARD_REVIEW_SESSION) break;
