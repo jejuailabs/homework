@@ -1,5 +1,5 @@
 {
-  "open": "가져오기·AI 초안", "title": "카드 가져오기", "words": "단어만 입력", "text": "단어장 텍스트", "table": "표·엑셀", "wordsHint": "단어를 한 줄에 하나씩 넣거나 쉼표로 나눠 주세요. 뜻과 예문 초안을 만들어 드려요. 학생 이름 같은 개인정보는 넣지 말아 주세요.",
+  "vocab": "기본 어휘", "open": "가져오기·AI 초안", "title": "카드 가져오기", "words": "단어만 입력", "text": "단어장 텍스트", "table": "표·엑셀", "wordsHint": "단어를 한 줄에 하나씩 넣거나 쉼표로 나눠 주세요. 뜻과 예문 초안을 만들어 드려요. 학생 이름 같은 개인정보는 넣지 말아 주세요.",
   "wordsPlaceholder": "apple\nlook after\nbeautiful", "textHint": "단어장 내용을 그대로 붙여넣어 주세요. 번호, 단어, 뜻, 예문이 섞여 있어도 카드로 나눠 드려요. 학생 이름 같은 개인정보는 넣지 말아 주세요.", "textPlaceholder": "1. apple 사과\nI ate an apple.\n2. run (v) 달리다", "level": "수준", "elementary": "초등", "middle": "중등",
   "high": "고등", "generate": "초안 만들기", "stop": "멈추기", "retry": "다시 시도", "resume": "이어서 만들기", "progress": "초안을 만들고 있어요. 묶음",
   "notice": "AI 초안이에요. 교재와 맞는지 확인해 주세요.", "draftCards": "초안 카드", "add": "추가", "remove": "이 줄 지우기", "duplicates": "이미 있거나 겹치는 단어라 뺐어요:", "addHint": "추가를 눌러야 편집 화면에 들어가요. 세트 저장은 편집 화면에서 따로 해요.",

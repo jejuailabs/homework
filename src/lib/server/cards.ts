@@ -588,6 +588,7 @@ export async function handleCards(request: Request, segments: string[] = []) {
     const method = request.method;
     if (resource === 'ai-draft' && segments.length === 1 && method === 'POST') return json(await cardsAiDraft(ctx, request));
     if (resource === 'library' && segments.length === 1 && method === 'GET') return await library(ctx, request);
+    if (resource === 'base-vocab' && segments.length === 1 && method === 'GET') return (await import('./cards-base-vocab')).baseVocabRoute(ctx);
     if (resource === 'student' && segments.length === 1 && method === 'GET') return await studentList(ctx, request);
     if (resource === 'review' && segments.length === 1 && method === 'GET') return await reviewCards(ctx, request);
     if (resource === 'classes' && resourceId && operation === 'settings' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await cardClassSettings(ctx, request, resourceId);
