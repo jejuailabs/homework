@@ -82,7 +82,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
   const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
   const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(speechRate || 1);
-  const voiceUsed = useRef(false);
+  const [voiceUsed, setVoiceUsed] = useState(false);
   const [hintIndex, setHintIndex] = useState<number | null>(null), sound = useCardSound();
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
@@ -220,7 +220,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   // 원어민 음성(서버 TTS)이 켜져 있으면 그 소리로, 꺼졌거나 실패하면 기기 목소리로 읽는다.
   function speak(text = content ? (revealed || feedback ? content.expected : content.prompt) : '') {
     if (!text || !canSpeak) return;
-    voiceUsed.current = true; setSpeechFailed(false);
+    setVoiceUsed(true); setSpeechFailed(false);
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     void ttsPlayer().speak(text, {rate: speed, fallback: () => speakWithDevice(text, speed, () => setSpeechFailed(true))});
   }
@@ -228,11 +228,11 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   useEffect(() => {if (sound.autoSpeech && content && !session?.finished) speak(content.prompt);}, [session?.index, session?.direction, session?.finished, sound.autoSpeech, canSpeak]);
   // Once sound is in use, fetch this card's answer and the next card's prompt ahead, so they play at once.
   useEffect(() => {
-    if (!session || session.finished || !content || !(sound.autoSpeech || voiceUsed.current)) return;
+    if (!session || session.finished || !content || !(sound.autoSpeech || voiceUsed)) return;
     const player = ttsPlayer(), upcoming = cards.find(item => item.id === session.queue[session.index + 1]);
     player.prefetch(content.expected);
     if (upcoming) player.prefetch(textFor(upcoming, session.direction).prompt);
-  }, [session?.index, session?.direction, session?.finished, sound.autoSpeech, revealed, feedback]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session?.index, session?.direction, session?.finished, sound.autoSpeech, voiceUsed, revealed, feedback]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     function key(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || !session || session.finished) return;
