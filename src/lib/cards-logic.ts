@@ -113,7 +113,7 @@ export function cardDueState(value: { dueAt: string | null; afterDue?: CardAfter
 // Tests. Distributions published before these settings existed have neither field, so always read them through these helpers.
 export const CARD_CHOICE_COUNT = 4;
 export const CARD_TEST_GRACE_SECONDS = 60;
-export const CARD_CHOICE_BYTES = 400_000; // Attempt documents share Firestore's 1 MiB limit with prompts and later results.
+export const CARD_CHOICE_BYTES = 200_000; // Attempt documents share Firestore's 1 MiB limit with prompts and later results, and answers can be as long as the choices.
 export const testFormat = (settings: Pick<CardTestSettings, 'format'>) => settings.format === 'choice' ? 'choice' as const : 'written' as const;
 export const testTimeLimit = (settings: Pick<CardTestSettings, 'timeLimitSeconds'>) => settings.timeLimitSeconds ?? null;
 export function shuffleWith<T>(values: T[], random: (max: number) => number) {
