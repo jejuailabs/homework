@@ -10,6 +10,7 @@ import { cardsAiDraft } from './cards-ai';
 import { CARD_DUE_GRACE_MS, CARD_REVIEW_SESSION, buildCardChoices, buildTestQuestions, cardAfterDue, cardDueState, cardMissList, cardReviewDate, cardReviewStates, dueCardIds, isTestOvertime, nextCardReview, recordCardMisses, summarizeCardMisses, testTimeLimit } from '../cards-logic';
 import { drillConsistent, drillDistribution, parsePlanDate, parseSpeechRate } from './cards-policy';
 import { readSharing } from '../cards-sharing';
+import { assertTeacherRate } from './cards-rate';
 import { cardTestActive, redactCardSnapshot, sealedAttempt } from '../cards-guard';
 import { applyStudentPlan, cardClassSettings, classSettingsRef, readClassSettings } from './cards-class-settings';
 import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
@@ -161,6 +162,7 @@ async function detailSet(ctx: Context, setId: string) {
 async function saveSet(ctx: Context, request: Request, setId?: string, duplicate = false) {
   teacher(ctx);
   const input = await body(request), ref = duplicate || !setId ? db().collection('cardSets').doc() : setRef(setId);
+  if (setId && !duplicate && input.action === 'share') await assertTeacherRate(ctx.uid, 'share');
   const requestState = mutationRequest(ctx, duplicate ? `sets/${setId}/duplicate` : setId ? `sets/${setId}/save` : 'sets/create', input);
   const result = await db().runTransaction(async tx => {
     if (requestState) {

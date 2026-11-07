@@ -6,6 +6,7 @@ import type { Context } from './auth';
 import { ApiError, canManageClass, id, text } from './policy';
 import { drillDistribution, emptyModeCounts, object, parseRequirements } from './cards-policy';
 import { classSettingsRef, readClassSettings } from './cards-class-settings';
+import { assertTeacherRate } from './cards-rate';
 import { cardReviewStates } from '../cards-logic';
 import { parsePlan } from '../cards-class-plan';
 import { CARD_TRANSFER_SEEDS, CARD_TRANSFER_SETS, carriedCardStates, carriedMisses, checkStudentLinks, remapPlan, suggestStudentLinks, transferredSettings, type CardTransferLink, type CardTransferStudent } from '../cards-transfer';
@@ -168,6 +169,7 @@ export async function runTransfer(ctx: Context, fromClassId: string, input: Tran
 export async function transferClass(ctx: Context, request: Request, fromClassId: string, input: Data) {
   if (request.method === 'GET') return transferPreview(ctx, request, fromClassId);
   const parsed = parseTransferInput(input);
+  await assertTeacherRate(ctx.uid, 'transfer');
   return json({ result: await runTransfer(ctx, fromClassId, parsed) }, 201);
 }
 
@@ -184,6 +186,7 @@ export async function cloneClass(ctx: Context, fromClassId: string, input: Data)
   // Everything is checked before the class exists, so a bad request never leaves an empty class behind.
   const parsed = parseTransferInput({ ...input, links: undefined }, ref.id);
   await sourceSnaps(ctx, from.id, parsed.distributionIds);
+  await assertTeacherRate(ctx.uid, 'clone');
   const made = await db().runTransaction(async tx => {
     const existing = await tx.get(ref);
     if (existing.exists) { if (existing.data()?.ownerUid !== ctx.uid) throw new ApiError(409, '다시 시도해 주세요.', 'REQUEST_CONFLICT'); return false; }

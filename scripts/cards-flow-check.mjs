@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone sharing versus hunt chunks drill notes rate. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1370,6 +1370,31 @@ async function notesSection() {
   same((await call(teacher, 'GET', [...base, 's1'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'back with the old owner, the old conversation is intact');
 }
 sections.notes = notesSection;
+// 구역 rate: 선생님별 시간당 한도(옮기기·복제·공유 변경·공유 세트 복사). 한도에 닿으면 429이고 아무것도 쓰지 않는다. `node scripts/cards-flow-check.mjs rate`
+async function rateSection() {
+  section('per-teacher hourly limits');
+  const full = (action, count) => db().doc(`cardRateLimits/${stranger}_${action}`).set({recent: Array.from({length: count}, (_, i) => Date.now() - 1000 * (i + 1))});
+  await db().doc('classes/class-r').set({ownerUid: stranger, name: '한도 반'});
+  await db().doc('classes/class-r2').set({ownerUid: stranger, name: '한도 반 2'});
+  await full('clone', 10);
+  refused(await call(stranger, 'POST', ['classes', 'class-r', 'clone'], {name: '복제', requestId: 'rate-clone', settings: true}), 429, 'TEACHER_RATE', 'the eleventh clone in an hour waits');
+  same((await db().collection('classes').where('clonedFrom', '==', 'class-r').get()).size, 0, 'a refused clone makes no class');
+  await full('transfer', 20);
+  refused(await call(stranger, 'POST', ['classes', 'class-r', 'transfer'], {toClassId: 'class-r2', settings: true, requestId: 'rate-transfer'}), 429, 'TEACHER_RATE', 'the 21st transfer in an hour waits');
+  const folder = (await call(stranger, 'POST', ['folders'], {name: '한도 폴더'})).data.folder;
+  await full('share', 60);
+  refused(await call(stranger, 'PATCH', ['folders', folder.id, 'share'], {members: 'x@school.kr'}), 429, 'TEACHER_RATE', 'folder sharing changes are limited');
+  same((await db().doc(`cardFolders/${folder.id}`).get()).data().shareMembers, undefined, 'a refused share change writes nothing');
+  await db().doc(`cardRateLimits/${stranger}_share`).delete();
+  accepted(await call(stranger, 'PATCH', ['folders', folder.id, 'share'], {members: `${teacher}@demo.test`}), 'under the limit the share goes through');
+  const shared = await call(stranger, 'POST', ['sets'], {title: '한도 세트', description: '', type: 'word', folderId: folder.id, cards, requestId: 'rate-set'});
+  await call(stranger, 'PATCH', ['sets', shared.data.set.id], {action: 'share', visibility: 'shared', allowCopy: true});
+  await db().doc(`cardRateLimits/${teacher}_copy`).set({recent: Array.from({length: 60}, (_, i) => Date.now() - 1000 * (i + 1))});
+  refused(await call(teacher, 'POST', ['shared', 'sets', shared.data.set.id, 'copy'], {requestId: 'rate-copy'}), 429, 'TEACHER_RATE', 'shared-set copies are limited');
+  await db().doc(`cardRateLimits/${teacher}_copy`).set({recent: [Date.now() - 3600_001]});
+  same((await call(teacher, 'POST', ['shared', 'sets', shared.data.set.id, 'copy'], {requestId: 'rate-copy'})).status, 201, 'an hour later copying works again');
+}
+sections.rate = rateSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

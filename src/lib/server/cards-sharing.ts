@@ -5,6 +5,7 @@ import { db } from './admin';
 import type { Context } from './auth';
 import { ApiError, id } from './policy';
 import { parseCards } from './cards-policy';
+import { assertTeacherRate } from './cards-rate';
 import { CARD_SHARED_FOLDERS, CARD_SHARE_SEARCH_LIMIT, matchesShared, parseShareMembers, readSharing, sharedAccess } from '../cards-sharing';
 import type { CardEntry, CardSetSummary } from '../cards-types';
 
@@ -46,6 +47,7 @@ export async function folderShare(ctx: Context, request: Request, folderId: stri
   if (request.method === 'GET') return json({ members: snap.data()!.shareMembers ?? [], sharedSets: await count() });
   const parsed = parseShareMembers(input.members, ctx.email);
   if ('error' in parsed) throw new ApiError(400, parsed.error, 'SHARE_MEMBERS');
+  await assertTeacherRate(ctx.uid, 'share');
   await ref.update({ shareMembers: parsed.members, ownerName: String(ctx.displayName ?? '').slice(0, 60) || '동료 선생님', shareUpdatedAt: now() });
   return json({ members: parsed.members, sharedSets: await count() });
 }
@@ -82,6 +84,7 @@ async function copyShared(ctx: Context, setId: string, input: Data) {
   const requestId = id(input.requestId, '요청 ID'), folderId = input.folderId === undefined || input.folderId === null ? null : id(input.folderId, '폴더');
   const { set, value, folder, cards, access } = await readShared(ctx, setId);
   if (!access.copy) throw new ApiError(403, '만든 선생님이 복사를 허용하지 않은 세트예요.', 'COPY_NOT_ALLOWED');
+  await assertTeacherRate(ctx.uid, 'copy');
   const ref = db().doc(`cardSets/${digest(ctx.uid, 'shared-copy', requestId).slice(0, 24)}`);
   const result = await db().runTransaction(async tx => {
     const existing = await tx.get(ref);

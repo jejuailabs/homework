@@ -16,3 +16,4 @@ const chunks = dataUrl(compile('../cards-chunks.ts'));
 await import(dataUrl(compile('../cards-chunks.test.ts').replace("'./cards-chunks'", JSON.stringify(chunks))));
 await import(dataUrl(compile('../cards-drill.test.ts').replace("'./cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))).replace("'./cards-logic'", JSON.stringify(logic))));
 await import(dataUrl(compile('../cards-notes.test.ts').replace("'./cards-notes'", JSON.stringify(dataUrl(compile('../cards-notes.ts'))))));
+await import(dataUrl(compile('../cards-rate.test.ts').replace("'./cards-rate'", JSON.stringify(dataUrl(compile('../cards-rate.ts'))))));
