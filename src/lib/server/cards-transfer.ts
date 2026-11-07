@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { db } from './admin';
 import type { Context } from './auth';
 import { ApiError, canManageClass, id, text } from './policy';
-import { emptyModeCounts, object } from './cards-policy';
+import { drillDistribution, emptyModeCounts, object, parseRequirements } from './cards-policy';
 import { classSettingsRef, readClassSettings } from './cards-class-settings';
 import { cardReviewStates } from '../cards-logic';
 import { parsePlan } from '../cards-class-plan';
@@ -91,7 +91,9 @@ export async function runTransfer(ctx: Context, fromClassId: string, input: Tran
   const planned = sources.map(snap => {
     const source = snap.data()!, set = sets.get(source.setId), version = set ? versions.get(set.versionId) : undefined;
     const snapshot: CardSnapshot = version ? { title: version.title, description: version.description, type: version.type, cards: version.cards } : source.snapshot;
-    const settings = transferredSettings(source as Parameters<typeof transferredSettings>[0], snapshot.cards.length, input.keepDue);
+    const carried = transferredSettings(source as Parameters<typeof transferredSettings>[0], snapshot.cards.length, input.keepDue);
+    // A drill set keeps the drill rules (no study modes, front→back tests): a back→front test would hand its answers out through the redacted snapshot.
+    const settings = { ...carried, ...drillDistribution(snapshot.type, carried.requiredModes, carried.test, () => parseRequirements(undefined, snapshot.cards.length)) };
     const newId = digest(ctx.uid, 'transfer', input.requestId, snap.id).slice(0, 24);
     const value: Data = {
       ownerUid: ctx.uid, classId: to.id, className: to.data()!.name, setId: source.setId, setVersion: version ? set!.version : source.setVersion, versionId: version ? set!.versionId : source.versionId,

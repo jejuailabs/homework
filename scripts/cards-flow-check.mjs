@@ -1300,6 +1300,13 @@ async function drillSection() {
   check(!JSON.stringify(listed.review ?? {}).includes(dist.id) && (await db().doc('cardMisses/class-a_s4').get()).data()?.misses?.[dist.id], 'the miss is kept but stays out of the review row', listed.review);
   const room = await roomCall();
   same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: made.data.set.id, requestId: 'drill-room'}), 409), true, 'a drill set cannot open a team room');
+  // A drill distribution moved to another class keeps the drill rules even if its stored settings drifted (older or hand-edited data).
+  await db().doc('classes/class-dt').set({ownerUid: teacher, name: '드릴 받을 반'});
+  await db().doc(`cardClassSets/${dist.id}`).update({'test.direction': 'back-front', 'requiredModes.recall.requiredCount': 5});
+  const movedDrill = await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-dt', distributionIds: [dist.id], requestId: 'drill-move'});
+  check(movedDrill.status === 201, 'the drill set moves', movedDrill.data);
+  const placedDrill = (await db().collection('cardClassSets').where('classId', '==', 'class-dt').get()).docs[0]?.data();
+  same([placedDrill?.type, placedDrill?.test.direction, placedDrill?.test.requireStudy, placedDrill?.requiredModes.recall.requiredCount], ['drill', 'front-back', false, 0], 'a moved drill set is asked front to back with no required study');
 }
 sections.drill = drillSection;
 // 구역 notes: 쪽지. 선생님은 언제든 쓰고 지우며, 학생은 스위치가 켜진 반에서만 선생님께 쓰고, 다른 학생 쪽지는 어떤 경로로도 못 본다. `node scripts/cards-flow-check.mjs notes`
