@@ -524,7 +524,7 @@ async function gamesSection() {
   const play = (who, body, target = path) => call(who, 'POST', target, body), board = who => call(who, 'GET', path);
   const empty = await board(pupil(1));
   accepted(empty, 'student reads the game boards');
-  same([empty.data.games.pair.best, empty.data.games.pair.ranking, empty.data.rankingsShown], [null, [], true], 'no records yet, rankings shown by default');
+  same([empty.data.games.pair.best, empty.data.games.pair.ranking, empty.data.rankingsShown], [null, [], false], 'no records yet, rankings hidden from students by default');
   const first = await play(pupil(1), {requestId: 'g-1', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 2});
   accepted(first, 'a pairs round is saved');
   same([first.data.improved, first.data.best.score, first.data.best.timeMs, first.data.best.plays], [true, 34_000, 30_000, 1], 'the server adds the mistake time itself');
@@ -541,6 +541,17 @@ async function gamesSection() {
   refused(await play(pupil(1), {game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}), 400, undefined, 'a missing requestId is refused');
   const rain = await play(pupil(2), {requestId: 'g-8', game: 'rain', correct: 12, missed: 3, elapsedMs: 60_000, direction: 'back-front', still: true});
   same(rain.data.best?.score, 5 * 10 + 5 * 20 + 2 * 30, 'rain points are counted by the server: ten per word times the level');
+  const closed = await board(pupil(1));
+  same([closed.data.rankingsShown, closed.data.games.rain.ranking, closed.data.games.pair.rank, closed.data.games.pair.best?.score], [false, [], null, 34_000], 'rankings are hidden from students by default; their own best stays');
+  await db().doc('classes/class-a/settings/playground').set({showRankings: true});
+  same((await board(pupil(1))).data.rankingsShown, false, 'the playground ranking switch does not open card game rankings');
+  await db().doc('classes/class-a/settings/playground').delete();
+  const rankings = ['classes', 'class-a', 'game-rankings'];
+  refused(await call(pupil(1), 'PATCH', rankings, {rankingsShown: true}), 403, 'FORBIDDEN', 'a student cannot open the ranking');
+  refused(await call(stranger, 'PATCH', rankings, {rankingsShown: true}), 404, 'NOT_FOUND', 'another teacher cannot open the ranking');
+  refused(await call(teacher, 'PATCH', rankings, {rankingsShown: 1}), 400, 'RANKING_SETTINGS', 'the ranking switch takes a boolean only');
+  same((await call(teacher, 'GET', rankings)).data, {rankingsShown: false}, 'the teacher reads the switch off');
+  same((await call(teacher, 'PATCH', rankings, {rankingsShown: true})).data, {rankingsShown: true}, 'the teacher turns the class ranking on');
   const seen = await board(pupil(1));
   same(seen.data.games.rain.ranking, [{id: '', name: '학생2', score: 210, timeMs: 60_000, rank: 1}], 'classmates appear by name without their ID');
   same(seen.data.games.pair.ranking.map(row => [row.id, row.rank]), [['s1', 1]], 'the student sees their own row with its ID');
@@ -555,11 +566,10 @@ async function gamesSection() {
   refused(await board(stranger), 404, 'NOT_FOUND', 'another teacher cannot read the boards');
   refused(await board('u9:0'), 404, 'NOT_FOUND', 'a student of another class cannot read the boards');
   refused(await play('u9:0', {requestId: 'g-10', game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}), 404, 'NOT_FOUND', 'a student of another class cannot post');
-  await db().doc('classes/class-a/settings/playground').set({showRankings: false});
+  accepted(await call(teacher, 'PATCH', rankings, {rankingsShown: false}), 'the teacher hides the class ranking again');
   const hidden = await board(pupil(1));
   same([hidden.data.rankingsShown, hidden.data.games.pair.ranking, hidden.data.games.pair.rank, hidden.data.games.pair.best?.score], [false, [], null, 34_000], 'with rankings hidden a student sees only their own best');
   same((await board(teacher)).data.games.rain.ranking.length, 1, 'the teacher still sees the ranking');
-  await db().doc('classes/class-a/settings/playground').delete();
   let limited = null;
   for (let index = 0; index < 7; index++) {const result = await play(pupil(3), {requestId: `rate-${index}`, game: 'pair', pairs: 6, elapsedMs: 30_000 + index, mistakes: 0}); if (result.status !== 200) {limited = {index, result}; break;}}
   check(limited?.index === 6 && limited.result.status === 429 && limited.result.data.code === 'GAME_RATE', 'the seventh round in a minute is rate limited', limited);

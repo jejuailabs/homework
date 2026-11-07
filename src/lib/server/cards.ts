@@ -576,6 +576,7 @@ export async function handleCards(request: Request, segments: string[] = []) {
     if (resource === 'distributions' && resourceId && operation === 'shares' && segments.length <= 4) return await (await import('./cards-shares')).cardShares(ctx, request, resourceId, operationId);
     if (resource === 'distributions' && resourceId && operation === 'rewards' && segments.length === 3 && method === 'GET') return await studentCardRewards(ctx, resourceId);
     if (resource === 'classes' && resourceId && operation === 'rewards' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await cardRewardSettings(ctx, request, resourceId);
+    if (resource === 'classes' && resourceId && operation === 'game-rankings' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await (await import('./cards-games')).cardGameRankingSettings(ctx, request, resourceId);
     if (resource === 'distributions') {
       if (!resourceId && ['GET', 'POST'].includes(method)) return await distributions(ctx, request);
       if (resourceId && segments.length === 2 && ['GET', 'PATCH'].includes(method)) return await distributionDetail(ctx, request, resourceId);

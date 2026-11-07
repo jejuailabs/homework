@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useEffect, useState} from 'react';
-import {Gift, RotateCw} from 'lucide-react';
+import {Gift, RotateCw, Trophy} from 'lucide-react';
 import {useCardsFamilyCopy} from '@/lib/cards-family-copy';
 import '@/styles/cards-family.css';
 
@@ -29,6 +29,24 @@ export function CardsRewardToggle({classId}: {classId: string}) {
     <label className="cards-check"><input type="checkbox" checked={!!value?.rewardsEnabled} disabled={!value || busy} onChange={event => void toggle(event.target.checked)}/>{c.rewardToggle}</label>
     <p className="cards-muted">{fill('rewardRule', {study: value?.amounts.study ?? 5, goal: value?.amounts.goal ?? 10})} {c.rewardSeparate}</p>
     {value && value.rewardsEnabled && !value.pointsEnabled && <p className="cards-muted">{c.rewardPointsOff} <Link className="cards-text-link" href="/teacher/points">{c.rewardPointsLink}</Link></p>}
+    {status && <p role="status" className="cards-muted">{status}</p>}{error && <p role="alert" className="cards-error">{error}</p>}
+  </section>;
+}
+
+/** 우리 반 학습 기본값 안의 복습 게임 '반 순위 보이기' 스위치(기본 꺼짐). 보말 스위치처럼 바로 저장된다. */
+export function CardsRankingToggle({classId}: {classId: string}) {
+  const {copy: c} = useCardsFamilyCopy();
+  const [shown, setShown] = useState<boolean | null>(null), [busy, setBusy] = useState(false), [status, setStatus] = useState(''), [error, setError] = useState('');
+  const path = `/api/cards/classes/${encodeURIComponent(classId)}/game-rankings`;
+  useEffect(() => {let alive = true; request<{rankingsShown: boolean}>(path).then(data => {if (alive) setShown(data.rankingsShown);}).catch(() => {if (alive) setError(c.rankError);}); return () => {alive = false;};}, [path, c]);
+  async function toggle(next: boolean) {
+    setBusy(true); setStatus(''); setError('');
+    try {setShown((await request<{rankingsShown: boolean}>(path, {method: 'PATCH', body: JSON.stringify({rankingsShown: next})})).rankingsShown); setStatus(c.rewardSaved);} catch {setError(c.rankError);} finally {setBusy(false);}
+  }
+  return <section className="cards-reward-settings" aria-labelledby={`card-rank-${classId}`}>
+    <h3 id={`card-rank-${classId}`}><Trophy size={17}/>{c.rankTitle}</h3>
+    <label className="cards-check"><input type="checkbox" checked={!!shown} disabled={shown === null || busy} onChange={event => void toggle(event.target.checked)}/>{c.rankToggle}</label>
+    <p className="cards-muted">{c.rankRule}</p>
     {status && <p role="status" className="cards-muted">{status}</p>}{error && <p role="alert" className="cards-error">{error}</p>}
   </section>;
 }

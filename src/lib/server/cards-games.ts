@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { db } from './admin';
 import type { Context } from './auth';
-import { ApiError, id } from './policy';
+import { ApiError, canManageClass, id } from './policy';
 import { assertDueOpen, canStudyDistribution, object } from './cards-policy';
 import { betterRecord, CARD_GAMES, checkGameResult, GAME_RANK_LIMIT, GAME_RATE, isCardGame, rankGameRows, recentPlays, type CardGame, type GameRankRow, type GameRecord } from '../cards-games';
 import type { CardDistribution } from '../cards-types';
@@ -16,6 +16,8 @@ type Best = GameRecord & { at: string; plays: number };
 export type CardGameBoard = { game: CardGame; best: Best | null; rank: number | null; ranking: GameRankRow[] };
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const scoreRef = (distributionId: string, studentId: string) => db().doc(`cardGameScores/${id(distributionId)}_${id(studentId)}`);
+// 카드놀이 반 설정 문서. 보말 스위치(`rewardsEnabled`)와 같은 문서에 게임 순위 스위치(`rankingsShown`, 기본 꺼짐)를 둔다.
+const cardSettingsRef = (classId: string) => db().doc(`classes/${id(classId, '우리 반')}/settings/cards`);
 
 async function input(request: Request): Promise<Data> {
   const raw = await request.text();
@@ -43,17 +45,17 @@ const bestOf = (value: unknown): Best | null => {
   return record && Number.isFinite(record.score) && Number.isFinite(record.timeMs) ? { score: record.score, timeMs: record.timeMs, at: String(record.at ?? ''), plays: Number(record.plays) || 0 } : null;
 };
 /**
- * Class rankings follow the playground rules: classmates only, current active students only, and the class's
- * "순위 보이기" switch in the playground settings hides them from students (a student then sees only their own record).
- * Students get the top ten plus their own row; the teacher gets everyone.
+ * Class rankings: classmates only, current active students only. Students see them only when the teacher turns on
+ * 카드놀이 "반 순위 보이기" (`classes/{classId}/settings/cards.rankingsShown`, off by default); otherwise only their own best.
+ * The playground's own ranking switch is not read here. Students get the top ten plus their own row; the teacher gets everyone.
  */
 async function boards(distribution: Distribution, viewer: string | null) {
   const [roster, settings, scores] = await Promise.all([
     db().collection(`classes/${distribution.classId}/students`).select('name', 'number', 'disabled').limit(500).get(),
-    db().doc(`classes/${distribution.classId}/settings/playground`).get(),
+    cardSettingsRef(distribution.classId).get(),
     db().collection('cardGameScores').where('distributionId', '==', distribution.id).limit(500).get(),
   ]);
-  const shown = !viewer || settings.data()?.showRankings !== false;
+  const shown = !viewer || settings.data()?.rankingsShown === true;
   const rows = new Map(scores.docs.filter(doc => doc.data().classId === distribution.classId).map(doc => [String(doc.data().studentId), doc.data()]));
   const pupils = roster.docs.filter(pupil => !pupil.data().disabled);
   const result = Object.fromEntries(CARD_GAMES.map(game => {
@@ -106,6 +108,20 @@ async function saveRecord(ctx: Context, request: Request, distributionId: string
 }
 
 /** GET a distribution's game records (student: own best and the class top ten; teacher: everyone). POST one finished round. */
+/** GET/PATCH `classes/{classId}/game-rankings`: the class owner's 반 순위 보이기 switch for card games. Saved at once, apart from the class defaults. */
+export async function cardGameRankingSettings(ctx: Context, request: Request, classId: string) {
+  if (ctx.role === 'student') throw new ApiError(403, '선생님만 사용할 수 있어요.', 'FORBIDDEN');
+  const cls = await db().doc(`classes/${id(classId, '우리 반')}`).get();
+  if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(404, '항목을 찾을 수 없어요.', 'NOT_FOUND');
+  let shown = (await cardSettingsRef(classId).get()).data()?.rankingsShown === true;
+  if (request.method === 'PATCH') {
+    const value = await input(request);
+    if (typeof value.rankingsShown !== 'boolean') throw new ApiError(400, '순위 설정을 확인해 주세요.', 'RANKING_SETTINGS');
+    shown = value.rankingsShown;
+    await cardSettingsRef(classId).set({ rankingsShown: shown, updatedAt: new Date().toISOString() }, { merge: true });
+  } else if (request.method !== 'GET') throw new ApiError(404, '카드놀이 기능을 찾을 수 없어요.', 'NOT_FOUND');
+  return json({ rankingsShown: shown });
+}
 export async function cardGames(ctx: Context, request: Request, distributionId: string) {
   if (request.method === 'GET') return readBoards(ctx, distributionId);
   if (request.method === 'POST') return saveRecord(ctx, request, distributionId);
