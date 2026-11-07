@@ -17,6 +17,10 @@ import '@/styles/cards-class.css';
 import {CardRewardMoment} from './cards-rewards';
 import {CardDayLoad, CardMinutes, CardSoundSettings, CardTestWait} from './cards-care';
 import {cardEstimateMinutes} from '@/lib/cards-load';
+import {studentAgenda} from '@/lib/cards-planner';
+import {useCardsP2Copy} from '@/lib/cards-p2-copy';
+import {fillCopy} from '@/lib/cards-class-copy';
+import '@/styles/cards-p2.css';
 
 type StudentCardsData = {distributions: CardStudentDistribution[]; layout?: CardStudentLayout; profile?: {id: string; name: string; character: Character; className: string}; nextCursor?: string | null; serverTime?: string; review?: CardMissSummary};
 /** testActive: this student's test on the set is running, so the cards came without answers and study waits (시험 정답 보호). */
@@ -53,7 +57,7 @@ function CardRoomJoin() {
 }
 export default function StudentCardsList() {
   const {copy: c, locale, points} = useCardCopy(), {data, setData, loading, error, load} = useStudentCards();
-  const [search, setSearch] = useState(''), [moreBusy, setMoreBusy] = useState(false), [moreError, setMoreError] = useState(false);
+  const [search, setSearch] = useState(''), [moreBusy, setMoreBusy] = useState(false), [moreError, setMoreError] = useState(false), [view, setView] = useState<'list' | 'agenda'>('list'), p2 = useCardsP2Copy();
   const filtered = data?.distributions.filter(item => item.title.toLocaleLowerCase(locale).includes(search.trim().toLocaleLowerCase(locale))) || [];
   // The teacher's order and 차시 메모 (hidden rows never reach here). A search shows the matching sets alone.
   const classCopy = useCardsClassCopy(), rows = studentRows(filtered, search.trim() ? null : data?.layout);
@@ -64,10 +68,19 @@ export default function StudentCardsList() {
     <CardRoomJoin/>
     {!!data.review?.total && <MissedReviewRow summary={data.review} today={cardReviewDate(clockOf(data.serverTime))}/>}
     <CardDayLoad rows={data.distributions} time={clockOf(data.serverTime)}/>
+    <div className="cards-view-tabs" role="tablist" aria-label={p2.agendaView}>{(['list', 'agenda'] as const).map(item => <button key={item} type="button" role="tab" aria-selected={view === item} onClick={() => setView(item)}>{item === 'list' ? p2.listView : p2.agendaView}</button>)}</div>
+    {view === 'agenda' ? <StudentAgenda rows={data.distributions} today={cardReviewDate(clockOf(data.serverTime))}/> : <>
     <div className="cs-list-toolbar"><label className="cs-search"><Search size={18}/><span className="cs-sr-only">{c.search}</span><input type="search" placeholder={c.search} value={search} onChange={event => setSearch(event.target.value)}/></label><CardSoundSettings/><button className="icon-button" aria-label={c.refresh} onClick={() => void load()}><RefreshCw size={18}/></button></div>
     {!data.distributions.length ? <div className="cs-state"><Layers size={36}/><h2>{c.empty}</h2><p>{c.emptyBody}</p></div> : !filtered.length ? <div className="cs-state"><Search size={30}/><p>{c.noResults}</p></div> : <div className="cs-distributions">{rows.map(row => row.kind === 'memo' ? <p className={`cs-plan-memo${row.highlight ? ' is-highlight' : ''}`} key={`memo:${row.id}`}><span className="cs-sr-only">{classCopy.memoRole}: </span>{row.text}</p> : (item => <article className={`cs-distribution${row.highlight ? ' is-highlight' : ''}`} key={item.id}><div className="cs-set-icon"><Layers size={26}/></div><div className="cs-set-copy"><div className="cs-meta"><span>{c[item.type]}</span><span>{item.cardCount} {c.cards}</span>{row.highlight && <span className="cs-pick"><Star size={13} fill="currentColor"/>{classCopy.teacherPick}</span>}{item.progress.studyComplete && <span className="cs-tag"><CheckCircle2 size={13}/>{c.requiredComplete}</span>}{cardDueState(item, clockOf(data.serverTime)) === 'lock' && <span className="cs-tag">{c.dueClosedTag}</span>}</div><h2><Link href={`/student/cards/${item.id}`}>{item.title}</Link></h2><div className="cs-mode-summary">{cardModes.map(mode => {const goal = item.requiredModes[mode].requiredCount; return <span key={mode}><b>{c[mode]}</b>{goal > 0 ? <>{studied(item.progress, mode)}/{goal}<small>{c.required}</small></> : <small>{c.optional}</small>}</span>;})}</div><div className="cs-meta"><span><Clock3 size={13}/>{item.dueAt ? `${c.due} ${new Intl.DateTimeFormat(locale, {month: 'short', day: 'numeric'}).format(new Date(item.dueAt))}` : c.noDue}</span><span>{c.testGoal} {points(item.test.goalScore)}</span><CardMinutes minutes={cardEstimateMinutes(item, item.progress)}/></div></div><Link href={`/student/cards/${item.id}`} className="button soft" aria-label={`${item.title} · ${c.open}`}>{c.open}<ArrowRight size={17}/></Link></article>)(row.distribution))}</div>}
     {moreError && <p className="cs-alert" role="alert">{c.error}</p>}{data.nextCursor && <button className="button cs-load-more" disabled={moreBusy} onClick={() => void loadMore()}>{moreBusy ? <LoaderCircle size={17} className="spin"/> : null}{moreError ? c.retry : c.more}</button>}
+    </>}
   </section>;
+}
+/** 학습 일정: the next two weeks of study days and deadlines, from the list the student already has. */
+function StudentAgenda({rows, today}: {rows: CardStudentDistribution[]; today: string}) {
+  const {copy: c, locale} = useCardCopy(), p2 = useCardsP2Copy(), agenda = studentAgenda(rows, today);
+  const label = (date: string) => new Intl.DateTimeFormat(locale, {month: 'long', day: 'numeric', weekday: 'short', timeZone: 'UTC'}).format(new Date(`${date}T00:00:00Z`));
+  return <section className="cards-agenda" aria-label={p2.agendaView}>{agenda.days.length ? <ol>{agenda.days.map(day => <li key={day.date} className={day.today ? 'is-today' : ''}><h2>{label(day.date)}{day.today && <span className="cs-tag">{p2.today}</span>}</h2><ul>{day.entries.map(entry => <li key={`${entry.kind}:${entry.row.id}`} className={`cards-agenda-entry is-${entry.kind}`}><span className="cs-tag">{entry.kind === 'plan' ? p2.planKind : p2.dueKind}</span><Link href={`/student/cards/${entry.row.id}`}>{entry.row.title}</Link>{entry.row.progress.studyComplete && <span className="cs-pick"><CheckCircle2 size={13}/>{c.requiredComplete}</span>}</li>)}</ul></li>)}</ol> : <div className="cs-state"><Clock3 size={30}/><p>{p2.agendaEmpty}</p></div>}{agenda.later > 0 && <p className="cs-muted">{fillCopy(p2.agendaLater, {n: agenda.later})}</p>}</section>;
 }
 
 export function StudentCardsDetail({distributionId}: {distributionId: string}) {

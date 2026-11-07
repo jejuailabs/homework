@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { db } from './admin';
 import type { Context } from './auth';
-import { ApiError, canManageClass, id } from './policy';
+import { ApiError, canManageClass, id, text } from './policy';
 import { emptyModeCounts, object } from './cards-policy';
 import { classSettingsRef, readClassSettings } from './cards-class-settings';
 import { cardReviewStates } from '../cards-logic';
@@ -150,4 +150,23 @@ export async function transferClass(ctx: Context, request: Request, fromClassId:
   if (request.method === 'GET') return transferPreview(ctx, request, fromClassId);
   const parsed = parseTransferInput(input);
   return json({ result: await runTransfer(ctx, fromClassId, parsed) }, 201);
+}
+
+/**
+ * POST classes/{from}/clone: 클래스 복제. Makes a new class for this teacher (the same fields the class dashboard writes, no students)
+ * and places the chosen sets and the class defaults in it. Students are added on the class dashboard as usual; sets given to all
+ * students reach them as they join. The class ID comes from the request, so a retry never makes a second class.
+ */
+export async function cloneClass(ctx: Context, fromClassId: string, input: Data) {
+  const from = await ownedClass(ctx, fromClassId), requestId = id(input.requestId, '요청 ID');
+  const name = text(input.name, '학급 이름', 80), grade = text(String(input.grade ?? from.data()!.grade ?? ''), '학년', 20, true), year = Number(input.year ?? new Date().getFullYear());
+  if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new ApiError(400, '학년도를 확인해 주세요.');
+  const ref = db().doc(`classes/${digest(ctx.uid, 'clone', requestId).slice(0, 20)}`);
+  await db().runTransaction(async tx => {
+    const existing = await tx.get(ref);
+    if (existing.exists) { if (existing.data()?.ownerUid !== ctx.uid) throw new ApiError(409, '다시 시도해 주세요.', 'REQUEST_CONFLICT'); return; }
+    tx.create(ref, { adminStatus: 'active', name, grade, year, ownerUid: ctx.uid, studentCount: 0, createdAt: now(), clonedFrom: from.id });
+  });
+  const parsed = parseTransferInput({ ...input, links: undefined }, ref.id);
+  return json({ result: await runTransfer(ctx, from.id, parsed), classId: ref.id }, 201);
 }

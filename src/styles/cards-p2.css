@@ -8,4 +8,21 @@
 .cards-transfer-notes{margin:4px 0 10px;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.7}
 .cards-transfer-links{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;max-height:320px;overflow:auto}
 .cards-transfer-links li{display:flex;align-items:center;gap:8px;min-width:0}.cards-transfer-links span{flex:0 0 42%;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cards-transfer-links select{flex:1;min-width:0;font-size:13px;padding:7px}
-@media(max-width:740px){.cards-transfer-links{grid-template-columns:1fr}.cards-transfer-sub{margin-left:0}}
+.cards-transfer-clone{margin:4px 0 8px}.cards-transfer-clone>p{grid-column:1/-1;margin:0}
+/* 학습 일정 (teacher planner) */
+.cards-planner h3{font-size:15px;margin:18px 0 6px}.cards-planner h3 small{color:var(--muted);font-weight:500;margin-left:6px}
+.cards-planner-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}.cards-planner-nav strong{font-size:14px;min-width:0}.cards-planner-nav .button{font-size:12px;min-height:34px;padding:6px 12px;margin-left:auto}
+.cards-planner-days{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cards-planner-days>li{border:1px solid var(--border);border-radius:13px;padding:8px 12px;background:var(--surface)}.cards-planner-days>li.is-today{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+.cards-planner-day{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted)}.cards-planner-days>li.is-today .cards-planner-day{color:var(--accent)}
+.cards-planner-days ul,.cards-planner-unscheduled{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.cards-planner-days .cards-muted{margin:2px 0 0}
+.cards-planner-entry,.cards-planner-unscheduled li{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}.cards-planner-entry.is-due .cards-badge{color:var(--danger)}
+.cards-planner-title{flex:1;min-width:120px;font-size:14px;overflow-wrap:anywhere}
+.cards-planner-date{margin:0}.cards-planner-date input{font-size:13px;padding:6px 8px;width:auto;max-width:100%}
+.cards-planner-unscheduled li{padding:6px 0;border-top:1px solid var(--border)}
+/* 학생 세트 목록 ↔ 학습 일정 */
+.cards-view-tabs{display:flex;gap:6px;margin:12px 0;padding:4px;background:var(--surface-alt);border-radius:13px;max-width:360px}.cards-view-tabs button{flex:1;min-height:40px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-weight:600;cursor:pointer}.cards-view-tabs button[aria-selected=true]{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px #0002}
+.cards-agenda ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}.cards-agenda ol>li{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 16px}.cards-agenda ol>li.is-today{border-color:var(--accent)}
+.cards-agenda h2{font-size:15px;margin:0 0 6px;display:flex;align-items:center;gap:8px}.cards-agenda ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cards-agenda-entry{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}.cards-agenda-entry a{font-weight:700;overflow-wrap:anywhere;min-width:0}.cards-agenda-entry.is-due .cs-tag{color:var(--danger)}
+@media(max-width:740px){.cards-transfer-links{grid-template-columns:1fr}.cards-transfer-sub{margin-left:0}.cards-planner-nav .button{margin-left:0}}

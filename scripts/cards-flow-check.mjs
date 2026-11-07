@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1088,6 +1088,35 @@ async function transferSection() {
   same((await callClassroomTool('list_card_sets', {distribution_id: copy.id}, bearerOf(teacher))).card_sets[0].carried_from, '3-2', 'Berry sees where the set came from');
 }
 sections.transfer = transferSection;
+// 구역 clone: 클래스 복제(학생 없는 새 반 + 세트·기본값)와 학습 일정(학습할 날). `node scripts/cards-flow-check.mjs clone`
+async function cloneSection() {
+  section('clone a class and plan study days');
+  const given = await distribute({dueAt: iso(2 * 24 * HOUR)}), base = given.id;
+  refused(await call(teacher, 'PATCH', ['distributions', base], {planDate: '2026-02-30'}), 400, undefined, 'a day that does not exist is refused');
+  const planned = await call(teacher, 'PATCH', ['distributions', base], {planDate: '2027-03-04'});
+  same([planned.status, planned.data.distribution?.planDate], [200, '2027-03-04'], 'the teacher sets a study day');
+  const listed = (await call(teacher, 'GET', ['distributions'], undefined, {query: '?classId=class-a'})).data.distributions.find(row => row.id === base);
+  same(listed?.planDate, '2027-03-04', 'the class list carries the study day');
+  const studentRow = (await call(pupil(1), 'GET', ['student'])).data.distributions.find(row => row.id === base);
+  same(studentRow?.planDate, '2027-03-04', 'the student list carries the study day for the agenda');
+  refused(await call(pupil(1), 'PATCH', ['distributions', base], {planDate: null}), 403, 'FORBIDDEN', 'a student cannot plan');
+  refused(await call(stranger, 'POST', ['classes', 'class-a', 'clone'], {name: '복제', requestId: 'cl-x'}), 404, 'NOT_FOUND', 'another teacher cannot clone the class');
+  refused(await call(pupil(1), 'POST', ['classes', 'class-a', 'clone'], {name: '복제', requestId: 'cl-y'}), 403, 'FORBIDDEN', 'a student cannot clone');
+  const input = {name: '5-1', year: 2027, distributionIds: [base], settings: true, keepDue: true, requestId: 'cl-run'};
+  const made = await call(teacher, 'POST', ['classes', 'class-a', 'clone'], input);
+  check(made.status === 201 && !!made.data.classId && made.data.result.distributions === 1, 'the clone makes a class and places the set', made.data);
+  const cls = (await db().doc(`classes/${made.data.classId}`).get()).data();
+  same([cls.ownerUid, cls.name, cls.year, cls.studentCount, cls.clonedFrom], [teacher, '5-1', 2027, 0, 'class-a'], 'the new class is the teacher\'s, empty, and says where it came from');
+  const placed = (await db().collection('cardClassSets').where('classId', '==', made.data.classId).get()).docs.map(doc => doc.data());
+  same([placed.length, placed[0]?.allStudents, placed[0]?.targetStudentIds, placed[0]?.planDate, placed[0]?.dueAt], [1, true, [], '2027-03-04', given.dueAt], 'the set reaches every student who joins later; kept dates stay');
+  const again = await call(teacher, 'POST', ['classes', 'class-a', 'clone'], input);
+  same([again.data.classId, again.data.result?.created, (await db().collection('classes').where('clonedFrom', '==', 'class-a').get()).size], [made.data.classId, 0, 1], 'a retry makes no second class and no second set');
+  await db().doc(`classes/${made.data.classId}/students/s41`).set({name: '새 학생', number: 1, authUid: 'u41'});
+  await db().doc('users/u41').set({role: 'student', classId: made.data.classId, studentId: 's41', authVersion: 0});
+  same((await call('u41:0', 'GET', ['student'])).data.distributions?.length, 1, 'a student added afterwards sees the cloned set');
+  same((await callClassroomTool('list_card_sets', {distribution_id: base}, bearerOf(teacher))).card_sets[0].plan_date, '2027-03-04', 'Berry reads the study day');
+}
+sections.clone = cloneSection;
 const chosen =process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

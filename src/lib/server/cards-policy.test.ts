@@ -370,3 +370,11 @@ test('speech rate default is 0.5-1.5 in tenths, null for the student choice, and
   assert.deepEqual(distributionPatch({ speechRate: 0.5 }, current), { speechRate: 0.5 });
   assert.deepEqual(distributionPatch({ speechRate: null }, current), { speechRate: null });
 });
+
+test('학습 일정: the plan date is a real Seoul calendar date or nothing', () => {
+  const current = { cardCount: 4, requiredModes: parseRequirements(undefined, 4), test: parseTestSettings(undefined, 4), dueAt: null };
+  assert.deepEqual(distributionPatch({ planDate: '2026-11-20' }, current), { planDate: '2026-11-20' });
+  assert.deepEqual(distributionPatch({ planDate: null }, current), { planDate: null });
+  assert.deepEqual(distributionPatch({ planDate: '' }, current), { planDate: null });
+  for (const bad of ['2026-02-30', '2026/11/20', '2026-11-20T00:00:00Z', 20261120]) assert.throws(() => distributionPatch({ planDate: bad }, current));
+});
