@@ -371,6 +371,13 @@ test('speech rate default is 0.5-1.5 in tenths, null for the student choice, and
   assert.deepEqual(distributionPatch({ speechRate: null }, current), { speechRate: null });
 });
 
+test('끊어읽기: chunk marks are kept only between words of the front and left out when empty', () => {
+  const [cut, plain] = parseCards([{ id: 'c1', front: 'I went to the park', back: '공원에 갔다', chunks: [2, 2, 9, 0] }, { id: 'c2', front: 'Hello there', back: '안녕', chunks: [] }]);
+  assert.deepEqual(cut.chunks, [2]);
+  assert.equal('chunks' in plain, false, 'Firestore never gets an empty or undefined field');
+  assert.throws(() => parseCards([{ front: 'a b', back: 'b', chunks: '1' }]));
+});
+
 test('학습 일정: the plan date is a real Seoul calendar date or nothing', () => {
   const current = { cardCount: 4, requiredModes: parseRequirements(undefined, 4), test: parseTestSettings(undefined, 4), dueAt: null };
   assert.deepEqual(distributionPatch({ planDate: '2026-11-20' }, current), { planDate: '2026-11-20' });

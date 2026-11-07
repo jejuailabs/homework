@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
 import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, cardMastery, cardReviewDate, cardReviewStates, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
 import { validPlanDate } from '../cards-planner';
+import { fitChunks } from '../cards-chunks';
 import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
 
 export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
@@ -50,7 +51,11 @@ export function parseCards(value: unknown): CardEntry[] {
     if (!Array.isArray(alternatives) || alternatives.length > CARD_ALTERNATIVE_LIMIT) throw new ApiError(400, `${label}의 대체 정답은 ${CARD_ALTERNATIVE_LIMIT}개까지 입력해 주세요.`);
     const cardId = raw.id === undefined ? randomUUID() : id(raw.id, `${label} ID`);
     if (['__proto__', 'constructor', 'prototype'].includes(cardId)) throw new ApiError(400, `${label} ID를 확인해 주세요.`);
-    return { id: cardId, front: text(raw.front, `${label} 앞면`, CARD_TEXT_LIMIT), back: text(raw.back, `${label} 뒷면`, CARD_TEXT_LIMIT), example: text(raw.example, `${label} 예문`, CARD_EXAMPLE_LIMIT, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, CARD_TEXT_LIMIT)))] };
+    const front = text(raw.front, `${label} 앞면`, CARD_TEXT_LIMIT);
+    // 끊어읽기 marks are kept only where they fall between two words of the front; an edited sentence simply drops the ones that no longer fit.
+    if (raw.chunks !== undefined && !Array.isArray(raw.chunks)) throw new ApiError(400, `${label}의 끊어읽기 표시를 확인해 주세요.`);
+    const chunks = fitChunks(raw.chunks, front);
+    return { id: cardId, front, back: text(raw.back, `${label} 뒷면`, CARD_TEXT_LIMIT), example: text(raw.example, `${label} 예문`, CARD_EXAMPLE_LIMIT, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, CARD_TEXT_LIMIT)))], ...(chunks.length ? { chunks } : {}) };
   });
   if (new Set(cards.map(card => card.id)).size !== cards.length) throw new ApiError(400, '중복된 카드 ID가 있어요.');
   // Leave room for distribution settings and Firestore's document size overhead.

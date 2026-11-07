@@ -12,3 +12,5 @@ const planner = dataUrl(compile('../cards-planner.ts').replace("'./cards-logic'"
 await import(dataUrl(compile('../cards-planner.test.ts').replace("'./cards-planner'", JSON.stringify(planner))));
 const sharing = dataUrl(compile('../cards-sharing.ts'));
 await import(dataUrl(compile('../cards-sharing.test.ts').replace("'./cards-sharing'", JSON.stringify(sharing))));
+const chunks = dataUrl(compile('../cards-chunks.ts'));
+await import(dataUrl(compile('../cards-chunks.test.ts').replace("'./cards-chunks'", JSON.stringify(chunks))));

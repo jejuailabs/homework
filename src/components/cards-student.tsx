@@ -18,6 +18,9 @@ import {CardRewardMoment} from './cards-rewards';
 import {CardDayLoad, CardMinutes, CardSoundSettings, CardTestWait} from './cards-care';
 import {cardEstimateMinutes} from '@/lib/cards-load';
 import {studentAgenda} from '@/lib/cards-planner';
+import {chunkCards} from '@/lib/cards-chunks';
+import {StudentChunkPractice} from './cards-chunks';
+import {Scissors} from 'lucide-react';
 import {useCardsP2Copy} from '@/lib/cards-p2-copy';
 import {fillCopy} from '@/lib/cards-class-copy';
 import '@/styles/cards-p2.css';
@@ -84,7 +87,7 @@ function StudentAgenda({rows, today}: {rows: CardStudentDistribution[]; today: s
 }
 
 export function StudentCardsDetail({distributionId}: {distributionId: string}) {
-  const {copy: c, locale, points} = useCardCopy(); const [data, setData] = useState<StudentDetail | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(false), [sectionSize, setSectionSize] = useState(CARD_SECTION_SIZE);
+  const {copy: c, locale, points} = useCardCopy(), p2 = useCardsP2Copy(); const [data, setData] = useState<StudentDetail | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(false), [sectionSize, setSectionSize] = useState(CARD_SECTION_SIZE);
   const load = useCallback(async () => {setLoading(true); setError(false); try {setData(await cardRequest<StudentDetail>(`/api/cards/distributions/${distributionId}`));} catch {setError(true);} finally {setLoading(false);}}, [distributionId]);
   useEffect(() => {void load();}, [load]);
   const refresh = useCallback(() => {void cardRequest<StudentDetail>(`/api/cards/distributions/${distributionId}`).then(setData).catch(() => {});}, [distributionId]);
@@ -97,6 +100,7 @@ export function StudentCardsDetail({distributionId}: {distributionId: string}) {
     {testing ? <CardTestWait distributionId={distributionId}/> : <CardMasteryPanel distributionId={distributionId} cards={d.snapshot.cards} states={data.cardStates ?? {}} today={cardReviewDate(clockOf(data.serverTime))} closed={closed}/>}
     <section aria-labelledby="card-tools-heading"><h2 id="card-tools-heading" className="cs-section-title">{c.studyTools}</h2><div className="cs-mode-grid">{[...cardModes, 'test' as const].map(mode => {const Icon = modeIcons[mode], required = mode === 'test' ? d.test.goalScore : d.requiredModes[mode].requiredCount, amount = mode === 'test' ? progress.bestScore || 0 : studied(progress, mode); const body = <><span className="cs-mode-icon"><Icon size={25}/></span><h3>{c[mode]}<ArrowRight size={17}/></h3><p>{mode === 'test' ? `${c.goal} ${points(required)}` : required > 0 ? `${c.required} ${amount} / ${required}` : c.optional}</p>{required > 0 && <progress max={required} value={Math.min(required, amount)} aria-label={`${c[mode]} ${c.practiceCounts}`}/>}</>; /* A locked test page stays reachable after an attempt: it finishes a started test and shows past results. */ return (closed && !(mode === 'test' && progress.attempts > 0)) || (testing && mode !== 'test') ? <div className={`cs-mode cs-mode-${mode} is-disabled`} key={mode} aria-disabled="true">{body}</div> : <Link className={`cs-mode cs-mode-${mode}`} key={mode} href={`/student/cards/${distributionId}/${mode}`}>{body}</Link>;})}</div></section>
     <CardGamesEntry distributionId={distributionId} closed={closed} testing={testing}/>
+    {d.type === 'sentence' && chunkCards(d.snapshot.cards).length > 0 && !testing && !closed && <Link className="cards-chunk-entry" href={`/student/cards/${distributionId}/chunk`}><Scissors size={22}/><span><strong>{p2.chunk}</strong><small>{p2.chunkEntryHint}</small></span><ArrowRight size={17}/></Link>}
     {!testing && <><section aria-labelledby="card-sections-heading" className="cs-sections-wrap"><div className="cs-card-list-title"><h2 id="card-sections-heading">{c.sections}</h2><label className="cs-section-size">{c.sectionSize}<select value={sectionSize} onChange={event => setSectionSize(Number(event.target.value))}>{CARD_SECTION_SIZES.map(value => <option key={value} value={value}>{value} {c.cards}</option>)}</select></label></div><ol className="cs-sections">{sections.map(section => <li key={section.from}><div className="cs-section-copy"><b>{c.sectionLabel.replace('{number}', String(section.number))}</b><span>{section.from}–{section.to}</span></div><CardSectionProgress steps={cardModes.filter(mode => section.modes[mode]).map(mode => ({label: c[mode], percent: section.modes[mode]!.percent}))}/><div className="cs-section-modes">{cardModes.map(mode => {const value = section.modes[mode]; if (value && closed) return <span key={mode} className="cs-section-mode is-disabled" aria-disabled="true">{c[mode]}</span>; return value && <Link key={mode} className={`cs-section-mode ${value.done ? 'is-done' : ''}`} href={`/student/cards/${distributionId}/${mode}?from=${value.from}&to=${value.to}`} aria-label={`${c.sectionLabel.replace('{number}', String(section.number))} ${c[mode]}${value.done ? ` · ${c.complete}` : ''}`}>{value.done && <CheckCircle2 size={13}/>}{c[mode]}</Link>;})}</div></li>)}</ol></section>
     <div className="cs-goal-strip"><span><ClipboardCheck size={19}/>{c.testGoal}{" "}<b>{points(d.test.goalScore)}</b></span><span>{c.attempts} {progress.attempts} / {d.test.maxAttempts || c.unlimited}</span><span>{c.best}{" "}<b>{progress.bestScore === null ? '—' : points(progress.bestScore)}</b></span><span>{c.latest}{" "}<b>{progress.latestScore === null ? '—' : points(progress.latestScore)}</b></span></div>
     <section aria-labelledby="card-list-heading"><div className="cs-card-list-title"><h2 id="card-list-heading">{c.cardList}</h2><span>{d.cardCount} {c.cards}</span></div><div className="cs-card-table"><div className="cs-card-table-head" aria-hidden="true"><span>#</span><span>{c.front}</span><span>{c.backSide}</span></div><ol>{d.snapshot.cards.map((card, index) => <li key={card.id}><span className="cs-card-number">{progress.starredCardIds.includes(card.id) ? <Star size={15} fill="currentColor" aria-label={c.star}/> : index + 1}</span><p>{card.front}</p><div><p>{card.back}</p>{card.example && <small>{card.example}</small>}<CardLevelTag level={data.cardStates?.[card.id]?.l ?? 0}/></div></li>)}</ol></div></section></>}
@@ -104,8 +108,9 @@ export function StudentCardsDetail({distributionId}: {distributionId: string}) {
   </section>;
 }
 
-export function StudentCardsStudy({distributionId, mode, from, to}: {distributionId: string; mode: CardStudyMode | 'test'; from?: string; to?: string}) {
+export function StudentCardsStudy({distributionId, mode, from, to}: {distributionId: string; mode: CardStudyMode | 'test' | 'chunk'; from?: string; to?: string}) {
   if (mode === 'test') return <StudentCardsTest distributionId={distributionId}/>;
+  if (mode === 'chunk') return <StudentChunkPractice distributionId={distributionId}/>;
   return <StudentPracticeLoader distributionId={distributionId} mode={mode} from={from} to={to}/>;
 }
 function LockedNotice({distributionId, studentId}: {distributionId: string; studentId?: string}) {const {copy: c} = useCardCopy(); return <div className="cs-state" role="status"><Clock3 size={32}/><p>{c.dueLocked}</p><OutboxFlush distributionId={distributionId} studentId={studentId}/><Link className="button" href={`/student/cards/${distributionId}`}><ArrowLeft size={16}/>{c.back}</Link></div>;}

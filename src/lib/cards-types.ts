@@ -1,7 +1,8 @@
 export type CardSetType = 'word' | 'sentence';
 export type CardStudyMode = 'memorize' | 'recall' | 'spell';
 export type CardDirection = 'front-back' | 'back-front';
-export type CardEntry = { id: string; front: string; back: string; example: string; alternatives: string[] };
+/** chunks: 끊어읽기 breaks a teacher marked on a sentence, as word positions (3 = after the third word). Absent when none. */
+export type CardEntry = { id: string; front: string; back: string; example: string; alternatives: string[]; chunks?: number[] };
 export type CardFolder = { id: string; name: string; createdAt: string; updatedAt: string };
 export type CardSetSummary = { id: string; title: string; description: string; type: CardSetType; cardCount: number; folderId: string | null; version: number; versionId: string; archived: boolean; createdAt: string; updatedAt: string; sharing?: { visibility: 'private' | 'shared'; allowCopy: boolean }; copiedFrom?: { title: string; ownerName: string } };
 export type CardSet = CardSetSummary & { cards: CardEntry[] };

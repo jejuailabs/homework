@@ -1243,6 +1243,24 @@ async function huntSection() {
   same((await room(hostCtx, 'GET', ['rooms', roomId, 'review'])).review, [], 'typed rounds stay out of the choice review');
 }
 sections.hunt = huntSection;
+// 구역 chunks: 끊어읽기 조각 표시. 문장 카드의 끊는 자리가 저장·배부·학생 화면까지 가고, 테스트 중에는 빠진다. `node scripts/cards-flow-check.mjs chunks`
+async function chunksSection() {
+  section('chunk marks on sentence cards');
+  const sentences = [{id: 'k1', front: 'I went to the park after school', back: '나는 방과 후 공원에 갔다', example: '', alternatives: [], chunks: [2, 5, 9]}, {id: 'k2', front: 'She reads books', back: '그녀는 책을 읽는다', example: '', alternatives: []}];
+  const made = await call(teacher, 'POST', ['sets'], {title: '끊어읽기 문장', description: '', type: 'sentence', folderId: null, cards: sentences, requestId: 'chunk-set'});
+  same(made.data.set.cards.map(card => card.chunks), [[2, 5], undefined], 'only marks between words are saved; none is no field');
+  refused(await call(teacher, 'POST', ['sets'], {title: '잘못', description: '', type: 'sentence', folderId: null, cards: [{...sentences[0], chunks: 'x'}], requestId: 'chunk-bad'}), 400, undefined, 'a broken mark list is refused');
+  const edited = await call(teacher, 'PATCH', ['sets', made.data.set.id], {expectedVersion: 1, cards: [{...made.data.set.cards[0], front: 'I went to the park'}, made.data.set.cards[1]]});
+  same(edited.data.set.cards[0].chunks, [2], 'a shorter sentence keeps the marks that still fit');
+  const given = await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: made.data.set.id, expectedVersion: 2, requestId: 'chunk-dist', test: {questionCount: 2, goalScore: 80, maxAttempts: 3, direction: 'back-front', answerRelease: 'immediate', format: 'written'}});
+  const seen = await call(pupil(3), 'GET', ['distributions', given.data.distribution.id]);
+  same(seen.data.distribution.snapshot.cards[0].chunks, [2], 'the student gets the marks for chunk practice');
+  const attempt = await start(pupil(3), given.data.distribution.id, 'chunk-test');
+  check(attempt.status === 201, 'the student starts a test', attempt.data);
+  const during = await call(pupil(3), 'GET', ['distributions', given.data.distribution.id]);
+  same([during.data.testActive?.attemptId, during.data.distribution.snapshot.cards[0].chunks, during.data.distribution.snapshot.cards[0].front], [attempt.data.attempt.id, undefined, ''], 'while the test runs the marks leave with the answer side');
+}
+sections.chunks = chunksSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
