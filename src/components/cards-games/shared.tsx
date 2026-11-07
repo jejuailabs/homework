@@ -6,6 +6,7 @@ import {ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, RotateCcw, Trophy, Vol
 import {usePreferences} from '../providers';
 import {cardRequest, CardBuddy} from '../cards-study';
 import {CardModeIcon} from '../cards-visuals';
+import {setCardSound, useCardSound} from '../cards-care';
 import {cardDueState} from '@/lib/cards-logic';
 import {formatGameTime, lowerIsBetter, type CardGame, type GameRecord} from '@/lib/cards-games';
 import type {CardDistribution} from '@/lib/cards-types';
@@ -15,7 +16,7 @@ import en from '@/messages/cards-games-en.json';
 import '@/styles/cards-games.css';
 
 export type GameBoards = {games: Record<CardGame, CardGameBoard>; rankingsShown: boolean};
-type Detail = {distribution: CardDistribution; serverTime?: string};
+type Detail = {distribution: CardDistribution; serverTime?: string; testActive?: unknown};
 export const gameRandom = (max: number) => Math.floor(Math.random() * max);
 export function useGameCopy() {
   const {locale} = usePreferences(), c = locale === 'ko' ? ko : en;
@@ -36,7 +37,7 @@ export function useGameData(distributionId: string) {
   }, [distributionId]);
   useEffect(() => {void load();}, [load]);
   const time = Date.parse(detail?.serverTime ?? ''), closed = !!detail && cardDueState(detail.distribution, Number.isFinite(time) ? time : Date.now()) === 'lock';
-  return {distribution: detail?.distribution ?? null, boards, setBoards, loading, error, load, closed};
+  return {distribution: detail?.distribution ?? null, boards, setBoards, loading, error, load, closed, testing: !!detail?.testActive};
 }
 export function GameLoading() {const {c} = useGameCopy(); return <div className="cg-state" role="status"><CardBuddy/><LoaderCircle className="spin" size={22}/><p>{c.loading}</p></div>;}
 export function GameError({retry}: {retry: () => void}) {const {c} = useGameCopy(); return <div className="cg-state" role="alert"><p>{c.error}</p><button className="button" onClick={retry}><RefreshCw size={16}/>{c.retry}</button></div>;}
@@ -89,26 +90,10 @@ export function GameResult({game, stats, save, board, shown, onAgain}: {game: Ca
     {board && <GameRanking game={game} board={board} shown={shown}/>}</div>;
 }
 
-/** Short tones made on the spot. Nothing plays until the student turns sound on, and the choice is remembered on this device. */
+/** Effects follow the one 카드놀이 sound setting (off until turned on, remembered on this device); the button here flips it. */
 export function useGameSound() {
-  const [on, setOn] = useState(false), context = useRef<AudioContext | null>(null);
-  useEffect(() => {try {setOn(localStorage.getItem('cards-games-sound') === 'on');} catch {}}, []);
-  const toggle = useCallback(() => setOn(value => {const next = !value; try {localStorage.setItem('cards-games-sound', next ? 'on' : 'off');} catch {} return next;}), []);
-  const play = useCallback((kind: 'good' | 'bad' | 'end') => {
-    if (!on || typeof window === 'undefined' || !('AudioContext' in window)) return;
-    try {
-      const audio = context.current ?? (context.current = new AudioContext()), now = audio.currentTime;
-      const notes = kind === 'good' ? [660, 880] : kind === 'bad' ? [220] : [523, 659, 784];
-      notes.forEach((frequency, index) => {
-        const tone = audio.createOscillator(), gain = audio.createGain(), start = now + index * .09;
-        tone.type = kind === 'bad' ? 'triangle' : 'sine'; tone.frequency.value = frequency;
-        gain.gain.setValueAtTime(.0001, start); gain.gain.exponentialRampToValueAtTime(.12, start + .015); gain.gain.exponentialRampToValueAtTime(.0001, start + .14);
-        tone.connect(gain).connect(audio.destination); tone.start(start); tone.stop(start + .16);
-      });
-    } catch {}
-  }, [on]);
-  useEffect(() => () => {void context.current?.close().catch(() => {});}, []);
-  return {on, toggle, play};
+  const sound = useCardSound(), toggle = useCallback(() => setCardSound({effects: !sound.effects}), [sound.effects]);
+  return {on: sound.effects, toggle, play: sound.play};
 }
 export function SoundToggle({sound}: {sound: ReturnType<typeof useGameSound>}) {
   const {c} = useGameCopy();

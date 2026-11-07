@@ -8,6 +8,7 @@ import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
 import { CARD_DUE_GRACE_MS, CARD_REVIEW_SESSION, buildCardChoices, buildTestQuestions, cardAfterDue, cardDueState, cardMissList, cardReviewDate, cardReviewStates, dueCardIds, isTestOvertime, nextCardReview, recordCardMisses, summarizeCardMisses, testTimeLimit } from '../cards-logic';
 import { parseSpeechRate } from './cards-policy';
+import { cardTestActive, redactCardSnapshot, sealedAttempt } from '../cards-guard';
 import { applyStudentPlan, cardClassSettings, classSettingsRef } from './cards-class-settings';
 import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
 import type { CardDirection, CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardReviewItem, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
@@ -28,6 +29,13 @@ const missRef = (classId: string, studentId: string) => db().doc(`cardMisses/${i
 const REVIEW_SET_LIMIT = 5; // One review tap loads at most this many full set snapshots.
 const asDistribution = (snap: FirebaseFirestore.DocumentSnapshot) => ({ ...snap.data(), id: snap.id }) as Distribution;
 const asAttempt = (snap: FirebaseFirestore.DocumentSnapshot) => ({ ...snap.data(), id: snap.id }) as Attempt;
+/** 시험 정답 보호: the student's running test on this distribution. One extra read, only when the record names an open attempt. */
+async function runningTest(state: Data | undefined, ref: FirebaseFirestore.DocumentReference, tx?: FirebaseFirestore.Transaction) {
+  if (!state?.activeAttemptId) return null;
+  const attemptRef = ref.collection('tests').doc(String(state.activeAttemptId)), snap = tx ? await tx.get(attemptRef) : await attemptRef.get();
+  return snap.exists && cardTestActive(snap.data()) ? asAttempt(snap) : null;
+}
+const testActive = () => new ApiError(409, '테스트를 마치면 다시 학습할 수 있어요.', 'TEST_ACTIVE');
 function mutationRequest(ctx: Context, operation: string, input: Data) {
   if (input.requestId === undefined) return null;
   const requestId = id(input.requestId, '저장 요청 ID'), { requestId: _requestId, ...payload } = input;
@@ -271,8 +279,11 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
     return json({ distribution: visibleDistribution((await liveTargetCounts(distribution.classId, [distribution]))[0], ctx) });
   }
   const loaded = await loadDistribution(ctx, distributionId), distribution = ctx.role === 'student' ? loaded : (await liveTargetCounts(loaded.classId, [loaded]))[0];
-  const state = ctx.role === 'student' ? await progressRef(distributionId, ctx.studentId!).get() : null;
-  return json({ distribution: visibleDistribution(distribution, ctx), ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} }, cardStates: cardReviewStates(state?.data()?.cardStates), serverTime: now() } : {}) });
+  const ref = ctx.role === 'student' ? progressRef(distributionId, ctx.studentId!) : null, state = ref ? await ref.get() : null;
+  // While this student's test runs, the cards come back with only the prompt side; study waits until it is submitted. Teachers are unaffected.
+  const testing = ref ? await runningTest(state?.data(), ref) : null, visible = visibleDistribution(distribution, ctx);
+  if (testing) visible.snapshot = redactCardSnapshot(visible.snapshot, testing.direction ?? distribution.test.direction);
+  return json({ distribution: visible, ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} }, cardStates: cardReviewStates(state?.data()?.cardStates), serverTime: now(), ...(testing ? { testActive: { attemptId: testing.id, startedAt: testing.startedAt, timeLimitSeconds: testing.timeLimitSeconds ?? null } } : {}) } : {}) });
 }
 
 async function studentList(ctx: Context, request: Request) {
@@ -344,12 +355,15 @@ async function study(ctx: Context, request: Request, distributionId: string) {
       preferences.lastPosition = { mode, cardId };
     }
     const fingerprint = digest({ mode, direction, responses: responses.map(({ cardId, answer }) => ({ cardId, answer })), preferences, ...(review ? { review } : {}) });
+    const testing = await runningTest(saved.data(), ref, tx);
     if (batch.exists) {
       if (batch.data()!.fingerprint !== fingerprint) throw new ApiError(409, '같은 요청 ID에 다른 답을 저장할 수 없어요.', 'REQUEST_CONFLICT');
-      return json({ progress: progress(saved.data(), distribution), results: responses.map(({ cardId, correct, expectedAnswer }) => ({ cardId, correct, expectedAnswer })), duplicate: true });
+      return json({ progress: progress(saved.data(), distribution), results: responses.map(({ cardId, correct, expectedAnswer }) => testing ? { cardId, correct } : { cardId, correct, expectedAnswer }), duplicate: true });
     }
     // Checked after the receipt, so a retry of an answer batch that already landed still gets its result.
     assertDueOpen(distribution);
+    // New answers wait for the test: grading them now would answer the test's questions. The browser keeps them and sends them again later.
+    if (testing) throw testActive();
     const state = saved.data() ?? emptyProgress(ctx, distribution);
     const coverage = state.coverage as CardCoverage, today = cardReviewDate(), cardStates = cardReviewStates(state.cardStates);
     for (const response of responses) {
@@ -393,7 +407,9 @@ async function tests(ctx: Context, request: Request, distributionId: string) {
   if (request.method === 'GET') {
     const distribution = await loadDistribution(ctx, distributionId);
     const result = await progressRef(distributionId, ctx.studentId).collection('tests').get();
-    return json({ attempts: result.docs.map(asAttempt).sort((a, b) => b.number - a.number).map(value => visibleAttempt(value, distribution)), serverTime: now() });
+    const attempts = result.docs.map(asAttempt), running = attempts.some(value => cardTestActive(value));
+    // While one attempt runs, earlier results (answers, own right answers too) wait; scores stay.
+    return json({ attempts: attempts.sort((a, b) => b.number - a.number).map(value => running && value.status === 'submitted' ? sealedAttempt(visibleAttempt(value, distribution)) : visibleAttempt(value, distribution)), serverTime: now() });
   }
   const input = await body(request), requestId = id(input.requestId, '응시 요청 ID');
   if (input.retryWrong !== undefined && typeof input.retryWrong !== 'boolean') throw new ApiError(400, '오답 재시험 설정을 확인해 주세요.');
@@ -501,7 +517,8 @@ async function reviewCards(ctx: Context, request: Request) {
   if (selected) {
     const distribution = await loadDistribution(ctx, id(selected, '세트'));
     assertDueOpen(distribution);
-    const saved = await progressRef(distribution.id, ctx.studentId).get(), cards = new Map(distribution.snapshot.cards.map(card => [card.id, card]));
+    const ref = progressRef(distribution.id, ctx.studentId), saved = await ref.get(), cards = new Map(distribution.snapshot.cards.map(card => [card.id, card]));
+    if (await runningTest(saved.data(), ref)) throw testActive();
     return json({ items: dueCardIds([...cards.keys()], cardReviewStates(saved.data()?.cardStates), today).map(cardId => reviewItem(distribution, cards.get(cardId)!, null)), serverTime: now() });
   }
   if (week !== null && !/^\d{4}-\d{2}-\d{2}$/.test(week)) throw new ApiError(400, '복습할 주를 확인해 주세요.');
@@ -516,6 +533,11 @@ async function reviewCards(ctx: Context, request: Request) {
   }
   const snaps = sets.size ? await db().getAll(...[...sets].map(distributionRef)) : [];
   const usable = new Map(snaps.filter(snap => snap.exists).map(asDistribution).filter(value => canStudyDistribution(ctx, value) && value.ownerUid === cls.data()!.ownerUid && cardDueState(value, Date.now(), CARD_DUE_GRACE_MS) !== 'lock').map(value => [value.id, value]));
+  // A set whose test this student is taking right now sits out of the session (시험 정답 보호).
+  const keys = [...usable.keys()], states = keys.length ? await db().getAll(...keys.map(key => progressRef(key, ctx.studentId))) : [];
+  const open = states.flatMap((state, index) => state.data()?.activeAttemptId ? [{ key: keys[index], ref: state.ref.collection('tests').doc(String(state.data()!.activeAttemptId)) }] : []);
+  const running = open.length ? await db().getAll(...open.map(item => item.ref)) : [];
+  running.forEach((snap, index) => { if (snap.exists && cardTestActive(snap.data())) usable.delete(open[index].key); });
   const items = chosen.flatMap(row => { const distribution = usable.get(row.distributionId), card = distribution?.snapshot.cards.find(entry => entry.id === row.cardId); return distribution && card ? [reviewItem(distribution, card, row.missedOn)] : []; });
   return json({ items, serverTime: now() });
 }

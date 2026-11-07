@@ -10,6 +10,7 @@ import {GameError, GameFrame, GameLoading, GameRanking, gameIcon, useGameCopy, u
 import {PairGame} from './pair';
 import {RainGame} from './rain';
 import {PuzzleGame} from './puzzle';
+import {CardTestWait} from '../cards-care';
 
 export const gamePlayable = (game: CardGame, distribution: CardDistribution) => {
   const {cards, type} = distribution.snapshot;
@@ -18,10 +19,12 @@ export const gamePlayable = (game: CardGame, distribution: CardDistribution) => 
 
 /** /student/cards/[id]/games: the three games, each student's own best, and the class ranking. */
 export function StudentCardGames({distributionId}: {distributionId: string}) {
-  const {c, record} = useGameCopy(), {distribution, boards, loading, error, load, closed} = useGameData(distributionId), [tab, setTab] = useState<CardGame>('pair');
+  const {c, record} = useGameCopy(), {distribution, boards, loading, error, load, closed, testing} = useGameData(distributionId), [tab, setTab] = useState<CardGame>('pair');
   if (loading) return <GameLoading/>;
   if (error || !distribution || !boards) return <GameError retry={() => void load()}/>;
   const unavailable = {pair: c.unavailablePair, rain: c.unavailableRain, puzzle: c.unavailablePuzzle};
+  // 시험 정답 보호: the cards came back without answers, so the games wait for the test.
+  if (testing) return <GameFrame distributionId={distributionId} title={distribution.title}><CardTestWait distributionId={distributionId}/></GameFrame>;
   return <GameFrame distributionId={distributionId} title={distribution.title}><p className="cg-muted cg-intro">{c.homeIntro}</p>
     {closed && <p className="cs-alert" role="status"><Clock3 size={15}/> {c.locked}</p>}
     <div className="cg-games">{CARD_GAMES.map(game => {
@@ -41,6 +44,7 @@ export function StudentCardGame({distributionId, game}: {distributionId: string;
   if (data.loading) return <GameLoading/>;
   if (data.error || !data.distribution || !data.boards) return <GameError retry={() => void data.load()}/>;
   const props = {distributionId, distribution: data.distribution, boards: data.boards, setBoards: data.setBoards};
+  if (data.testing) return <GameFrame distributionId={distributionId} game={game} title={data.distribution.title}><CardTestWait distributionId={distributionId}/></GameFrame>;
   if (data.closed || !gamePlayable(game, data.distribution)) return <GameFrame distributionId={distributionId} game={game} title={data.distribution.title}><p className="cs-alert" role="status">{data.closed ? c.locked : {pair: c.unavailablePair, rain: c.unavailableRain, puzzle: c.unavailablePuzzle}[game]}</p></GameFrame>;
   return game === 'pair' ? <PairGame {...props}/> : game === 'rain' ? <RainGame {...props}/> : <PuzzleGame {...props}/>;
 }

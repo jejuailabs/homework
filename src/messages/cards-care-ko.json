@@ -1,0 +1,18 @@
+{
+  "testWait": "테스트를 마치면 다시 학습할 수 있어요.",
+  "testWaitBody": "테스트를 푸는 동안에는 카드 뒷면과 학습·복습·게임이 잠시 쉬어요. 테스트를 내면 바로 다시 열려요.",
+  "testGo": "테스트로 가기",
+  "minutesLeft": "남은 학습 약 {minutes}분",
+  "minutesNone": "남은 필수 학습 없음",
+  "dayTotal": "오늘 남은 학습 약 {minutes}분",
+  "dayHeavy": "오늘은 조금 많아요. 마감이 가까운 것부터 해 볼까요?",
+  "dayOrder": "마감 가까운 순서",
+  "minutesShort": "약 {minutes}분",
+  "estimateNote": "어림값이에요. 카드 한 장에 암기 4초·리콜 6초·스펠 10초, 테스트 한 문제 15초로 셌어요.",
+  "publishEstimate": "학생 한 명이 다 하려면 약 {minutes}분 걸려요.",
+  "publishHeavy": "30분이 넘어요. 며칠에 나누거나 학습량을 조금 줄여도 좋아요.",
+  "sound": "소리",
+  "soundEffects": "효과음",
+  "autoSpeech": "카드 자동 읽기",
+  "soundHint": "이 기기에만 기억해요. 카드의 소리 버튼은 언제든 눌러서 들을 수 있어요."
+}

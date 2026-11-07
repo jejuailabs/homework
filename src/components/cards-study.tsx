@@ -14,6 +14,7 @@ import reviewKo from '@/messages/cards-review-ko.json';
 import reviewEn from '@/messages/cards-review-en.json';
 import '@/styles/cards-study.css';
 import '@/styles/cards-review.css';
+import {CardSoundSettings, useCardSound} from './cards-care';
 
 export const cardModes = ['memorize', 'recall', 'spell'] as const;
 export function useCardCopy() {const {locale} = usePreferences(); return {copy: locale === 'ko' ? ko : en, locale, points: (value: number) => locale === 'ko' ? `${value}${ko.score}` : `${value} ${en.score}`};}
@@ -80,7 +81,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
   const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
   const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(speechRate || 1);
-  const [hintIndex, setHintIndex] = useState<number | null>(null);
+  const [hintIndex, setHintIndex] = useState<number | null>(null), sound = useCardSound();
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
   const sessionRef = useRef<PracticeSession | null>(null), resumeRef = useRef<PracticeSession | null>(null), outboxRef = useRef<StudyOutbox>(emptyStudyOutbox()), flushing = useRef<Promise<void> | null>(null), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), failures = useRef(0), progressCallback = useRef(onProgress);
@@ -182,6 +183,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     if (!current || !card || current.feedback) return;
     if (mode !== 'memorize' && !value.trim()) return;
     const {correct, expected} = gradeCardAnswer(card, mode, current.direction, value);
+    if (mode !== 'memorize') sound.play(correct ? 'good' : 'bad');
     if (isPreview) {updateSession({...current, feedback: {correct, expected}, outcomes: [...current.outcomes, {cardId: card.id, correct}]}); return;}
     const outbox = addStudyResponse(outboxRef.current, {cardId: card.id, answer: value, direction: current.direction}, mode, newRequestId);
     outboxRef.current = outbox; setUnsaved(studyOutboxSize(outbox));
@@ -194,6 +196,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     if (!current?.feedback) return;
     const finished = current.index >= current.queue.length - 1;
     updateSession({...current, index: finished ? current.index : current.index + 1, finished, feedback: undefined});
+    if (finished) sound.play('end');
     if (finished && !isPreview) void drain();
     setAnswer(''); setRevealed(false); setSelectedTokens([]); setError('');
   }
@@ -212,13 +215,15 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     try {const result = await cardRequest<{progress: CardProgress}>(`/api/cards/distributions/${distributionId}/progress`, {method: 'PATCH', body: JSON.stringify({starredCardIds: nextStars})}); onProgress?.(result.progress);}
     catch {setStars(previous); setStarError(true);} finally {setStarBusy(false);}
   }
-  function speak() {
-    if (!content || !canSpeak) return;
+  function speak(text = content ? (revealed || feedback ? content.expected : content.prompt) : '') {
+    if (!text || !canSpeak) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(revealed || feedback ? content.expected : content.prompt);
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = /[가-힣]/.test(utterance.text) ? 'ko-KR' : 'en-US'; utterance.rate = speed;
     utterance.onerror = () => setSpeechFailed(true); setSpeechFailed(false); window.speechSynthesis.speak(utterance);
   }
+  // 카드 자동 읽기 (소리 설정, 기본 꺼짐): each new card's prompt once. The speaker button works either way.
+  useEffect(() => {if (sound.autoSpeech && content && !session?.finished) speak(content.prompt);}, [session?.index, session?.direction, session?.finished, sound.autoSpeech, canSpeak]);
   useEffect(() => {
     function key(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || !session || session.finished) return;
@@ -243,7 +248,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   if (session.finished) {const correctCount = session.outcomes.filter(item => item.correct).length, wrongCount = session.outcomes.length - correctCount; const nextMode = mode === 'memorize' ? 'recall' : mode === 'recall' ? 'spell' : 'test', nextHref = `/student/cards/${distributionId}/${nextMode}${from && nextMode !== 'test' ? `?from=${encodeURIComponent(from)}${to ? `&to=${encodeURIComponent(to)}` : ''}` : ''}`; return <section className="cs-study"><div className="cs-study-top">{exit}</div><div className="cs-finish"><CardBuddy character={character} happy/><CheckCircle2 size={34}/><h1>{c.doneTitle}</h1><p>{c.doneBody}</p>{isPreview ? <p className="cs-preview-note">{c.preview}</p> : answersLost || saveFailed ? saveNotice : <p className="cs-save-status" role="status">{unsaved ? <><LoaderCircle className="spin" size={16}/>{c.saving}</> : <><Check size={16}/>{c.saved}</>}</p>}<dl className="cs-result-grid"><div><dt>{c.answered}</dt><dd>{session.outcomes.length}</dd></div><div><dt>{c.correctCount}</dt><dd>{correctCount}</dd></div><div><dt>{c.wrongCount}</dt><dd>{wrongCount}</dd></div></dl><div className="cs-actions"><button className="button" onClick={closeSession}><RotateCcw size={16}/>{c.restart}</button>{wrongCount > 0 && <button className="button" onClick={() => start(false, true)}>{c.retryWrong}</button>}{!isPreview && <Link className="button primary" href={nextHref} onClick={event => leave(event, nextHref)}>{c[nextMode]}<ArrowRight size={17}/></Link>}</div></div></section>;}
   if (!card || !content) return <CardError retry={() => setSession(null)}/>;
   return <section className="cs-study"><div className="cs-study-top">{exit}<span>{c[mode]} <strong>{session.index + 1} / {session.queue.length}</strong></span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<progress className="cs-progress" value={session.index} max={session.queue.length} aria-label={c.progress}/><header className="cs-session-title"><h1>{title}</h1><CardBuddy character={character} happy={feedback?.correct}/></header>
-    <div className="cs-flashcard"><div className="cs-card-toolbar"><span className="cs-tag">{c[mode]}</span><div><button className="icon-button" aria-label={stars.includes(card.id) ? c.unstar : c.star} aria-pressed={stars.includes(card.id)} onClick={() => void toggleStar()} disabled={starBusy}><Star size={21} fill={stars.includes(card.id) ? 'currentColor' : 'none'}/></button>{canSpeak && <button className="icon-button" aria-label={c.listen} onClick={speak}><Volume2 size={22}/></button>}</div></div>
+    <div className="cs-flashcard"><div className="cs-card-toolbar"><span className="cs-tag">{c[mode]}</span><div><button className="icon-button" aria-label={stars.includes(card.id) ? c.unstar : c.star} aria-pressed={stars.includes(card.id)} onClick={() => void toggleStar()} disabled={starBusy}><Star size={21} fill={stars.includes(card.id) ? 'currentColor' : 'none'}/></button>{canSpeak && <button className="icon-button" aria-label={c.listen} onClick={() => speak()}><Volume2 size={22}/></button>}</div></div>
       <p className="cs-prompt" lang={/[가-힣]/.test(content.prompt) ? 'ko' : 'en'}>{content.prompt}</p>
       {mode === 'memorize' && <div className={`cs-card-back ${revealed || feedback ? 'is-revealed' : ''}`}>{revealed || feedback ? <><p className="cs-expected">{content.expected}</p>{card.example && <p className="cs-example">{card.example}</p>}</> : <button className="cs-reveal" onClick={() => setRevealed(true)}><BookOpen size={23}/>{c.reveal}<small>Space</small></button>}</div>}
       {mode === 'recall' && !sentenceRecall && <><p className="cs-instruction">{c.choose}</p><div className="cs-choices">{choices.map((choice, index) => <button key={choice} className={`cs-choice ${feedback && normalize(choice) === normalize(feedback.expected) ? 'is-correct' : ''}`} disabled={!!feedback} onClick={() => {setAnswer(choice); check(choice);}}><kbd>{index + 1}</kbd><span>{choice}</span></button>)}</div></>}
@@ -253,7 +258,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     </div>
     {(error || starError) && <div className="cs-alert" role="alert"><p>{error || c.saveError}</p></div>}{saveNotice}
     <div className="cs-study-controls">{feedback ? <><span className="cs-muted">{!answersLost && <><Check size={16}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</>}</span><button className="button primary" autoFocus onKeyDown={event => {if (event.repeat) event.preventDefault();}} onClick={next}>{c.next}<ChevronRight size={18}/></button></> : mode === 'memorize' ? revealed ? <><button className="button" onClick={again}><RotateCcw size={17}/>{c.again}</button><button className="button primary" onClick={() => check('')}><Check size={17}/>{c.remember}</button></> : <button className="button primary" onClick={() => setRevealed(true)}>{c.reveal}</button> : (mode === 'spell' || sentenceRecall) ? <button className="button primary" disabled={sentenceRecall ? selectedTokens.length !== tokens.length : !answer.trim()} onClick={() => check(sentenceRecall ? selectedTokens.map(id => tokens.find(item => item.id === id)?.text).join(' ') : answer)}>{c.check}<Check size={17}/></button> : null}</div>
-    <div className="cs-study-foot"><p><Keyboard size={16}/>{c.keyboard}</p>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}>{[...new Set([0.5, 0.7, 1, 1.2, 1.5, speed])].sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
+    <div className="cs-study-foot"><p><Keyboard size={16}/>{c.keyboard}</p><CardSoundSettings/>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}>{[...new Set([0.5, 0.7, 1, 1.2, 1.5, speed])].sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
   </section>;
 }
 
@@ -271,7 +276,7 @@ export function CardsReviewSession({items, title, intro, backHref, onReload}: {i
   const {copy: c} = useCardCopy(), r = useReviewCopy();
   const [index, setIndex] = useState(0), [answer, setAnswer] = useState(''), [feedback, setFeedback] = useState<{correct: boolean; expected: string} | null>(null), [outcomes, setOutcomes] = useState<boolean[]>([]);
   const [unsaved, setUnsaved] = useState(0), [saving, setSaving] = useState(false), [failed, setFailed] = useState(false), [dropped, setDropped] = useState(false);
-  const outboxes = useRef(new Map<string, StudyOutbox>()), flushing = useRef<Promise<void> | null>(null), inputRef = useRef<HTMLInputElement>(null);
+  const outboxes = useRef(new Map<string, StudyOutbox>()), flushing = useRef<Promise<void> | null>(null), inputRef = useRef<HTMLInputElement>(null), sound = useCardSound();
   const item = items[index] as CardReviewItem | undefined, finished = index >= items.length;
   const content = item ? textFor(item.card, item.direction) : null;
   const size = () => [...outboxes.current.values()].reduce((total, outbox) => total + studyOutboxSize(outbox), 0);
@@ -305,7 +310,7 @@ export function CardsReviewSession({items, title, intro, backHref, onReload}: {i
     const {correct, expected} = gradeCardAnswer(item.card, 'recall', item.direction, value);
     const outbox = addStudyResponse(outboxes.current.get(item.distributionId) ?? emptyStudyOutbox(), {cardId: item.card.id, answer: value, direction: item.direction}, 'recall', newRequestId);
     outboxes.current.set(item.distributionId, outbox); setUnsaved(size());
-    setFeedback({correct, expected}); setOutcomes(previous => [...previous, correct]);
+    setFeedback({correct, expected}); setOutcomes(previous => [...previous, correct]); sound.play(correct ? 'good' : 'bad');
     if (outbox.sealed.length) void pump();
   }
   function next() {

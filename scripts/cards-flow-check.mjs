@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -451,13 +451,15 @@ async function oldSection() {
   same((await call('u7:0', 'GET', ['distributions', 'old-dist'])).status, 200, 'student detail reads it');
   const tests = await call('u7:0', 'GET', ['distributions', 'old-dist', 'tests']);
   check(tests.status === 200 && tests.data.attempts.length === 2 && tests.data.attempts[0].timeLimitSeconds === null, 'student reads old attempts', tests);
-  const saved = await call('u7:0', 'POST', ['distributions', 'old-dist', 'study'], {requestId: 'old-1', mode: 'memorize', direction: 'front-back', responses: right(1)});
-  check(saved.status === 200 && saved.data.progress.lateAt === null, 'old progress keeps taking study', saved);
-  check(!('lateAt' in saved.data.progress) || saved.data.progress.lateAt === null, 'no late mark from an open-by-default deadline');
+  // An old open attempt has no time limit, so it counts as running until handed in (시험 정답 보호): study waits for it.
+  refused(await call('u7:0', 'POST', ['distributions', 'old-dist', 'study'], {requestId: 'old-1', mode: 'memorize', direction: 'front-back', responses: right(1)}), 409, 'TEST_ACTIVE', 'an old open attempt without a limit holds study');
   const opened = await start('u7:0', 'old-dist', 'old-2');
   same(opened.data.attempt?.id, 'old-open', 'old open attempt resumes');
   const graded = await submit('u7:0', 'old-dist', 'old-open', [{questionId: 'q1', answer: '뜻 0'}, {questionId: 'q2', answer: '뜻 1'}]);
   check(graded.status === 200 && graded.data.attempt.score === 100, 'an old attempt without a direction grades by the distribution', graded);
+  const saved = await call('u7:0', 'POST', ['distributions', 'old-dist', 'study'], {requestId: 'old-1', mode: 'memorize', direction: 'front-back', responses: right(1)});
+  check(saved.status === 200 && saved.data.progress.lateAt === null, 'old progress keeps taking study once the old attempt is in', saved);
+  check(!('lateAt' in (saved.data.progress ?? {})) || saved.data.progress.lateAt === null, 'no late mark from an open-by-default deadline');
   const fresh = await start('u8:0', 'old-dist', 'old-3');
   check(fresh.status === 201 && fresh.data.attempt.questions.every(question => question.choices === undefined) && fresh.data.attempt.timeLimitSeconds === null, 'a new test on an old distribution is written and untimed', fresh);
   const stored = (await db().doc(`cardProgress/old-dist_s8/tests/${fresh.data.attempt.id}`).get()).data();
@@ -772,7 +774,58 @@ async function classSection() {
   } catch (error) {check(false, 'manage_cards planning ran', String(error.stack ?? error).slice(0, 300));}
 }
 
-const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, games: gamesSection, mastery: masterySection, class: classSection};
+async function guardSection() {
+  section('test answer protection and time estimate');
+  // Written test, word → meaning: while it runs nothing a student can fetch may carry a meaning (뜻 n), an alternative (의미 0) or an expected answer.
+  const me = pupil(2), given = await distribute({requiredModes: {recall: {requiredCount: 12, direction: 'front-back', rangeStart: 1, rangeEnd: 12}}, test: {questionCount: 4, format: 'written', direction: 'front-back', answerRelease: 'immediate', maxAttempts: 5}}), base = given.id;
+  const other = (await distribute()).id;
+  const secret = value => /뜻 \d|의미 0|expectedAnswer/.test(JSON.stringify(value));
+  accepted(await study(me, base, 'recall', 'gd-1', [...right(0), {cardId: 'card2', answer: 'x'}]), 'study before the test is open');
+  accepted(await study(me, other, 'recall', 'gh-1', [{cardId: 'card3', answer: 'x'}], {direction: 'back-front'}), 'a miss in another set');
+  const first = await start(me, base, 'gs-1');
+  accepted(await submit(me, base, first.data.attempt.id, first.data.attempt.questions.map(question => answerFor(question, 'front-back'))), 'first attempt handed in');
+  check(secret((await call(me, 'GET', ['distributions', base, 'tests'])).data), 'with no test running, released results show answers (by design)');
+  const running = await start(me, base, 'gs-2'), attempt = running.data.attempt;
+  check(running.status === 201 && !secret(running.data), 'the new attempt carries prompts only', running.data);
+  const detail = await call(me, 'GET', ['distributions', base]);
+  check(detail.status === 200 && detail.data.testActive?.attemptId === attempt.id && !secret(detail.data), 'detail during the test: no meanings, alternatives or answers', detail.data.distribution?.snapshot?.cards?.slice(0, 2));
+  same(detail.data.distribution.snapshot.cards.map(card => card.front), cards.map(card => card.front), 'the prompt side and card order stay');
+  check(!secret((await call(me, 'GET', ['distributions', base, 'tests'])).data), 'test history hides earlier results while one runs');
+  check(!secret((await start(me, base, 'gs-2b')).data), 'resuming the attempt shows prompts only');
+  refused(await study(me, base, 'recall', 'gd-2', right(4)), 409, 'TEST_ACTIVE', 'new study answers wait for the test');
+  refused(await study(me, base, 'recall', 'gd-3', right(5), {review: true}), 409, 'TEST_ACTIVE', 'review answers wait too');
+  same((await db().doc(`cardProgress/${base}_s2`).get()).data().counts.recall, 2, 'nothing was graded or stored');
+  const replay = await study(me, base, 'recall', 'gd-1', [...right(0), {cardId: 'card2', answer: 'x'}]);
+  check(replay.status === 200 && replay.data.duplicate && !secret(replay.data), 'a replayed old batch returns no expected answers', replay.data);
+  refused(await call(me, 'GET', ['review'], undefined, {query: `?distributionId=${base}`}), 409, 'TEST_ACTIVE', 'the set review waits');
+  const missed = await call(me, 'GET', ['review']);
+  check(missed.status === 200 && !missed.data.items.some(item => item.distributionId === base) && missed.data.items.some(item => item.distributionId === other), 'missed-card review skips the set under test, keeps the others', missed.data.items?.map(item => item.distributionId));
+  check(!secret((await call(me, 'GET', ['distributions', base, 'games'])).data) && !secret((await call(me, 'GET', ['student'])).data), 'games and the set list carry no card text');
+  check(secret((await call(teacher, 'GET', ['distributions', base])).data), 'the teacher still sees the whole set');
+  const otherStudent = await call(pupil(3), 'GET', ['distributions', base]);
+  check(otherStudent.data.testActive === undefined && secret(otherStudent.data), 'a classmate without a running test studies as usual');
+  const done = await submit(me, base, attempt.id, attempt.questions.map(question => answerFor(question, 'front-back')));
+  accepted(done, 'the test is handed in');
+  const after = await call(me, 'GET', ['distributions', base]);
+  check(after.data.testActive === undefined && after.data.distribution.snapshot.cards[0].back === '뜻 0' && after.data.distribution.snapshot.cards[0].alternatives[0] === '의미 0', 'after the test the cards come back whole');
+  accepted(await study(me, base, 'recall', 'gd-2', right(4)), 'study resumes after the test');
+  check((await call(me, 'GET', ['review'], undefined, {query: `?distributionId=${base}`})).status === 200, 'the set review opens again');
+  check(secret((await call(me, 'GET', ['distributions', base, 'tests'])).data), 'released results show again');
+  // A timed attempt past its limit and grace no longer holds study (the late hand-in is marked overtime for the teacher).
+  const timed = (await distribute({test: {questionCount: 2, format: 'written', timeLimitSeconds: 60, direction: 'front-back'}})).id, clock = await start(me, timed, 'gt-1');
+  check(secret((await call(me, 'GET', ['distributions', timed])).data) === false, 'a timed attempt within time hides answers');
+  await db().doc(`cardProgress/${timed}_s2/tests/${clock.data.attempt.id}`).update({startedAt: iso(-3 * MIN)});
+  const late = await call(me, 'GET', ['distributions', timed]);
+  check(late.data.testActive === undefined && secret(late.data), 'past time and grace the set opens again', late.data.testActive);
+  accepted(await study(me, timed, 'memorize', 'gt-2', right(0)), 'and takes study');
+  // Berry: estimated minutes per set from counts only.
+  const {cardEstimateMinutes} = await import('@/lib/cards-load');
+  const stored = (await db().doc(`cardClassSets/${base}`).get()).data();
+  const berry = await callClassroomTool('list_card_sets', {class_id: 'class-a', distribution_id: base}, {uid: teacher, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read']});
+  same([berry.card_sets[0].minutes, cardEstimateMinutes(stored)], [Math.ceil((12 * 6 + 4 * 15) / 60), Math.ceil((12 * 6 + 4 * 15) / 60)], 'list_card_sets gives the estimated minutes');
+}
+
+const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, games: gamesSection, mastery: masterySection, class: classSection, guard: guardSection};
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
