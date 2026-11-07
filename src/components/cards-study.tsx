@@ -6,7 +6,7 @@ import {useRouter} from 'next/navigation';
 import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyboard, Lightbulb, LoaderCircle, RefreshCw, RotateCcw, Shuffle, Star, Volume2, X} from 'lucide-react';
 import {usePreferences} from './providers';
 import {characterFiles, type Character} from '@/lib/characters';
-import {addStudyResponse, cardAnswer, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
+import {addStudyResponse, cardAnswer, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
 import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardSetType, CardStudyMode} from '@/lib/cards-types';
 import ko from '@/messages/cards-study-ko.json';
 import en from '@/messages/cards-study-en.json';
@@ -49,7 +49,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [stars, setStars] = useState(progress?.starredCardIds || []), [starBusy, setStarBusy] = useState(false);
   const [session, setSession] = useState<PracticeSession | null>(null), [resume, setResume] = useState<PracticeSession | null>(null);
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
-  const [dueClosed, setDueClosed] = useState(false);
+  const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
   const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(1);
   const [hintIndex, setHintIndex] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
@@ -81,7 +81,10 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     flushing.current = (async () => {
       setSaving(true);
       try {
-        while (outboxRef.current.sealed[0]) await sendBatch(outboxRef.current.sealed[0]);
+        for (let batch = outboxRef.current.sealed[0]; batch; batch = outboxRef.current.sealed[0]) {
+          // Answered under settings the teacher has since changed: the server will never take this batch, and it must not hold up the ones behind it.
+          await sendBatch(batch).catch(cause => {if (!(cause instanceof Error && staleStudyBatch(cause.message))) throw cause; writeOutbox(settleStudyBatch(outboxRef.current, batch.requestId)); setRulesChanged(true);});
+        }
         failures.current = 0; setSaveFailed(false);
       } catch (cause) {
         // The server will never take these answers, so stop retrying and say why instead of showing a save error forever.
@@ -200,7 +203,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   });
   const exit = isPreview ? <button className="button" onClick={onClose || closeSession}><X size={16}/>{c.closePreview}</button> : <Link className="cs-back" href={`/student/cards/${distributionId}`} onClick={event => leave(event, `/student/cards/${distributionId}`)}><ArrowLeft size={16}/>{c.exit}</Link>;
-  const saveNotice = dueClosed ? <div className="cs-alert" role="alert"><p>{c.dueLockedSave}</p></div> : saveFailed && <div className="cs-alert" role="alert"><p>{c.saveError} {c.saveKeepGoing}</p><button className="button" disabled={saving} onClick={() => void drain()}><RefreshCw size={16}/>{c.retrySave}</button></div>;
+  const saveNotice = dueClosed ? <div className="cs-alert" role="alert"><p>{c.dueLockedSave}</p></div> : rulesChanged ? <div className="cs-alert" role="alert"><p>{c.rulesChangedSave}</p></div> : saveFailed && <div className="cs-alert" role="alert"><p>{c.saveError} {c.saveKeepGoing}</p><button className="button" disabled={saving} onClick={() => void drain()}><RefreshCw size={16}/>{c.retrySave}</button></div>;
   if (!session) return <section className="cs-study"><div className="cs-study-top">{exit}<span className="cs-tag">{c[mode]}</span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<header className="cs-heading"><div><h1>{title}</h1><p>{c.settings}</p></div><CardBuddy character={character}/></header>
     <div className="cs-options"><h2>{c[mode]}</h2>{resume && <div className="cs-resume"><p>{c.savedResume} <strong>{resume.index + 1} / {resume.queue.length}</strong></p><button className="button primary" onClick={() => {resumeRef.current = null; setResume(null); updateSession(resume); setDirection(resume.direction); setAnswer(resume.feedback?.answer || ''); setRevealed(!!resume.feedback);}}><ArrowRight size={16}/>{c.continue}</button></div>}
       <div className="cs-option-grid"><label>{c.direction}<select value={direction} disabled={fixed} onChange={event => setDirection(event.target.value as CardDirection)}><option value="front-back">{c.frontBack}</option><option value="back-front">{c.backFront}</option></select></label><label>{c.repeat}<select value={repeat} onChange={event => setRepeat(Number(event.target.value))}>{[1, 2, 3, 5, 10].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>{c.rangeStart}<input type="number" min={min} max={max} value={rangeStart} onChange={event => setRangeStart(Number(event.target.value))}/></label><label>{c.rangeEnd}<input type="number" min={min} max={max} value={rangeEnd} onChange={event => setRangeEnd(Number(event.target.value))}/></label></div>

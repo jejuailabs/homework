@@ -307,7 +307,10 @@ async function study(ctx: Context, request: Request, distributionId: string) {
   const input = await body(request), requestId = id(input.requestId, '저장 요청 ID'), mode = cardMode(input.mode), direction = cardDirection(input.direction);
   return db().runTransaction(async tx => {
     const distribution = await loadDistribution(ctx, distributionId, tx), ref = progressRef(distributionId, ctx.studentId), batchRef = ref.collection('batches').doc(requestId);
-    const responses = studyResponses(input.responses, distribution.snapshot, mode, direction, distribution.requiredModes);
+    const [saved, batch] = await Promise.all([tx.get(ref), tx.get(batchRef)]);
+    // A batch that already landed keeps its receipt even if the teacher has since changed the range or direction.
+    const requirements = batch.exists ? { ...distribution.requiredModes, [mode]: { requiredCount: 0, direction, rangeStart: 1, rangeEnd: distribution.snapshot.cards.length } } : distribution.requiredModes;
+    const responses = studyResponses(input.responses, distribution.snapshot, mode, direction, requirements);
     const preferences = progressPreferences(input, distribution);
     if (input.lastCardId !== undefined) {
       const cardId = id(input.lastCardId);
@@ -315,7 +318,6 @@ async function study(ctx: Context, request: Request, distributionId: string) {
       preferences.lastPosition = { mode, cardId };
     }
     const fingerprint = digest({ mode, direction, responses: responses.map(({ cardId, answer }) => ({ cardId, answer })), preferences });
-    const [saved, batch] = await Promise.all([tx.get(ref), tx.get(batchRef)]);
     if (batch.exists) {
       if (batch.data()!.fingerprint !== fingerprint) throw new ApiError(409, '같은 요청 ID에 다른 답을 저장할 수 없어요.', 'REQUEST_CONFLICT');
       return json({ progress: progress(saved.data(), distribution), results: responses.map(({ cardId, correct, expectedAnswer }) => ({ cardId, correct, expectedAnswer })), duplicate: true });
