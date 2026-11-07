@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answersReleased, canStudyDistribution, cardMutationFingerprint, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
-import { addStudyResponse, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
+import { addStudyResponse, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -187,4 +187,12 @@ test('keepalive sends stop before the browser body allowance', () => {
   const big = (requestId: string): StudyBatch => ({ requestId, mode: 'spell', direction: 'front-back', responses: [{ cardId: 'card-0', answer: '가'.repeat(1000) }], lastCardId: 'card-0' });
   assert.deepEqual(keepaliveStudyBatches({ buffer: [], sealed: [big('a'), big('b'), big('c')] }, 7000).map(batch => batch.requestId), ['a', 'b']);
   assert.deepEqual(keepaliveStudyBatches(emptyStudyOutbox()), []);
+});
+test('spell hint gives the first letter and the letter count, matching normalization of spaces', () => {
+  assert.deepEqual(spellHint('  Apple '), { first: 'A', length: 5, words: 1 });
+  assert.deepEqual(spellHint('ice   cream'), { first: 'i', length: 8, words: 2 });
+  assert.deepEqual(spellHint('사과'), { first: '사', length: 2, words: 1 });
+  // The note says internal spaces collapse but are not removed: one space is still required.
+  assert.equal(normalizeCardAnswer('ICE    cream'), normalizeCardAnswer('ice cream'));
+  assert.notEqual(normalizeCardAnswer('icecream'), normalizeCardAnswer('ice cream'));
 });

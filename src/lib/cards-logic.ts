@@ -60,3 +60,9 @@ export function restoreStudyOutbox(stored: unknown, mode: CardStudyMode, legacyP
   const sealed = Array.isArray(value?.sealed) ? value.sealed.filter(batch => validStudyBatch(batch, mode)) : [];
   return { buffer, sealed: validStudyBatch(legacyPending, mode) ? [...sealed, legacyPending] : sealed };
 }
+
+/** First letter and length of the expected answer. Spaces are left out of the count, matching what a student actually types as letters. */
+export function spellHint(expected: string) {
+  const clean = expected.normalize('NFKC').trim().replace(/\s+/gu, ' ');
+  return { first: Array.from(clean)[0] ?? '', length: Array.from(clean.replace(/ /g, '')).length, words: clean ? clean.split(' ').length : 0 };
+}
