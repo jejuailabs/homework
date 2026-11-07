@@ -118,7 +118,7 @@ async function liveRooms(classId: string) {
   const rooms = await db().collection('playRooms').where('classId', '==', classId).limit(20).get();
   const open = rooms.docs.map(doc => doc.data()).filter(room => (room.expiresAtMs ?? 0) > Date.now() && room.status !== 'finished');
   const students = open.some(room => room.cards) ? await roster(classId) : [];
-  return open.map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0, ...(room.cards ? {card_set: maskNames(String(room.cards.title ?? ''), students)} : {})}));
+  return open.map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0, ...(room.cards ? {card_set: maskNames(String(room.cards.title ?? ''), students)} : {}), ...(Array.isArray(room.classIds) && room.classIds.length > 1 ? {versus_classes: room.classNames ?? room.classIds.length} : {})}));
 }
 
 async function signals(ctx: BearerContext) {

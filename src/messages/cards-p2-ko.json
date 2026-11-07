@@ -80,5 +80,12 @@
   "shareNeedsFolder": "공개해도 폴더에 넣고 그 폴더를 공유해야 동료에게 보여요.",
   "shareInFolder": "'{name}' 폴더를 공유받은 선생님에게 보여요.",
   "sharedBadge": "공유",
-  "copiedFrom": "{name} 선생님의 '{title}'에서 복사"
+  "copiedFrom": "{name} 선생님의 '{title}'에서 복사",
+  "versus": "반대항전",
+  "versusPick": "반대항전으로 열기 · 함께할 반",
+  "versusHint": "고른 반 학생들이 같은 방 코드로 들어와요. 반마다 한 팀이고, 팀 점수는 반 평균이라 인원이 달라도 공정해요. 반대항전 보말은 반마다 따로 지급해요.",
+  "versusTeams": "팀: 반 {n}개",
+  "versusLobby": "반마다 한 팀이에요. 팀 점수는 반 평균이에요.",
+  "versusNoReward": "반대항전은 보말 지급을 지원하지 않아요. 필요하면 반마다 보말 화면에서 지급해 주세요.",
+  "classAverage": "{n}명 평균"
 }

@@ -1,8 +1,9 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {cardRoomCapacity, cardRoomItems} from './cards-room';
+import {cardRoomCapacity, cardRoomItems, versusClassIds} from './cards-room';
 import {choicesFor, isItemAnswer, normalizeAnswer} from './engine';
-import {missedRounds} from './room-machine';
+import {missedRounds, namedTeams, teamScores} from './room-machine';
+import {isVersusRoom, roomHasClass} from './room-types';
 import type {CardEntry} from '../../lib/cards-types';
 import type {PublicRoomRound} from './room-types';
 
@@ -79,4 +80,19 @@ test('ties prefer the higher wrong share, then the earlier round', () => {
 test('skipped and unrevealed rounds stay out of the review and the limit holds', () => {
   assert.deepEqual(missedRounds([round(0, {x: 3}, {skipped: true}), round(1, {x: 3}, {correctChoiceId: undefined}), round(2, {}, {distribution: undefined}), round(3, {r: 0})]), []);
   assert.equal(missedRounds(Array.from({length: 9}, (_, index) => round(index, {x: 1 + index}))).length, 5);
+});
+
+test('반대항전: two to six classes, the host first; teams carry class names and class averages', () => {
+  assert.equal(versusClassIds('a', undefined), null, 'no list, no versus room');
+  assert.deepEqual(versusClassIds('a', ['b', 'a', 'b']), ['a', 'b']);
+  assert.deepEqual(versusClassIds('a', []), [], 'one class alone is not a versus room');
+  assert.deepEqual(versusClassIds('a', ['b', 'c', 'd', 'e', 'f', 'g']), [], 'seven classes is too many');
+  assert.deepEqual(versusClassIds('a', [3]), []);
+  const room = {classId: 'a', classIds: ['a', 'b'], classNames: ['3-1', '3-2']};
+  assert.equal(roomHasClass(room, 'b'), true); assert.equal(roomHasClass(room, 'c'), false); assert.equal(roomHasClass({classId: 'a'}, 'b'), false);
+  assert.equal(isVersusRoom(room), true); assert.equal(isVersusRoom({classIds: undefined}), false);
+  const player = (team: number, score: number) => ({team, score}) as Parameters<typeof teamScores>[0][number];
+  const teams = namedTeams(teamScores([player(0, 900), player(0, 300), player(1, 500)], 2), room);
+  assert.deepEqual(teams.map(team => [team.name, team.score, team.count]), [['3-1', 600, 2], ['3-2', 500, 1]], 'a class of two and a class of one compare by average');
+  assert.equal(namedTeams(teamScores([player(0, 1)], 2), {})[0].name, '햇살', 'other rooms keep the usual names');
 });

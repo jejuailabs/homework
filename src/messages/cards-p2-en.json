@@ -80,5 +80,12 @@
   "shareNeedsFolder": "Put the set in a folder and share the folder so colleagues can see it.",
   "shareInFolder": "Visible to colleagues of the '{name}' folder.",
   "sharedBadge": "Shared",
-  "copiedFrom": "Copied from '{title}' by {name}"
+  "copiedFrom": "Copied from '{title}' by {name}",
+  "versus": "Class vs class",
+  "versusPick": "Open as class vs class · classes",
+  "versusHint": "Students of the chosen classes join with the same code. Each class is a team scored by its average, so class sizes may differ.",
+  "versusTeams": "Teams: {n} classes",
+  "versusLobby": "One team per class, scored by the class average.",
+  "versusNoReward": "Class vs class rooms do not pay points. Give points per class instead.",
+  "classAverage": "{n} students, average"
 }

@@ -8,9 +8,9 @@ export const teamSticker = (team: number) => `/cards/v1/cards-team-${roomTeamSti
 const fill = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (_, key: string) => String(values[key]));
 
 /** Teams arrive sorted by average score. Teams on the same score share a place. */
-export function CardTeamPodium({teams}: {teams: RoomTeam[]}) {
+export function CardTeamPodium({teams, versus = false}: {teams: RoomTeam[]; versus?: boolean}) {
   const {t} = useCardsCopy();
-  return <section className="play-room-podium" aria-label={t('teamPodium')}><img src="/cards/v1/cards-team-podium.svg" width={132} height={132} alt=""/><ol>{teams.map(team => <li key={team.id}><b>{fill(t('teamPlace'), {n: teams.findIndex(other => other.score === team.score) + 1})}</b><img src={teamSticker(team.id)} width={56} height={56} alt=""/><strong style={{color: team.color}}>{team.name} 팀</strong><span>{team.score.toLocaleString('ko-KR', {maximumFractionDigits: 1})}</span></li>)}</ol></section>;
+  return <section className="play-room-podium" aria-label={t('teamPodium')}><img src="/cards/v1/cards-team-podium.svg" width={132} height={132} alt=""/><ol>{teams.map(team => <li key={team.id}><b>{fill(t('teamPlace'), {n: teams.findIndex(other => other.score === team.score) + 1})}</b><img src={teamSticker(team.id)} width={56} height={56} alt=""/><strong style={{color: team.color}}>{versus ? team.name : `${team.name} 팀`}</strong><span>{team.score.toLocaleString('ko-KR', {maximumFractionDigits: 1})}</span></li>)}</ol></section>;
 }
 /** The review is for the teacher to talk through together, so it stays on the host screen and is never stored or sent anywhere. */
 export function CardRoomReview({roomId}: {roomId: string}) {

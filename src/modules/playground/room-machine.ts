@@ -57,6 +57,10 @@ export function teamScores(players: RoomPlayer[], teamCount: number): RoomTeam[]
     return {id, name: roomTeamNames[id], color: roomTeamColors[id], count: members.length, score: members.length ? members.reduce((sum, player) => sum + player.score, 0) / members.length : 0};
   });
 }
+/** Teams of a versus room are named after their classes; other rooms keep the usual team names. */
+export function namedTeams(teams: RoomTeam[], room: Pick<PlayRoom, 'classNames'>): RoomTeam[] {
+  return room.classNames?.length ? teams.map(team => ({...team, name: room.classNames![team.id] ?? team.name})) : teams;
+}
 export function snakeTeams(players: {key: string; previousScore: number}[], count: number): Record<string, number> {
   return Object.fromEntries([...players].sort((a, b) => b.previousScore - a.previousScore || a.key.localeCompare(b.key)).map((player, i) => [player.key, Math.floor(i / count) % 2 ? count - 1 - i % count : i % count]));
 }

@@ -42,7 +42,9 @@ service cloud.firestore {
           && value.status != 'closed' && permission.expiresAt > request.time
           && ((permission.role == 'teacher' && value.ownerUid == request.auth.uid)
             || (permission.role == 'student' && user.role == 'student'
-              && user.classId == value.classId && permission.classId == value.classId
+              && permission.classId == user.classId
+              && (user.classId == value.classId
+                || (value.get('cards', null) != null && user.classId in value.get('classIds', [])))
               && permission.playerKey == user.studentId && user.studentId in value.playerKeys
               && permission.authVersion == user.authVersion && request.auth.token.authVersion == user.authVersion
               && (value.get('cards', null) != null

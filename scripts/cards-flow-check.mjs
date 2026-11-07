@@ -1154,6 +1154,58 @@ async function sharingSection() {
   same((await call(colleague, 'GET', ['sets', copied.data.set.id])).status, 200, 'a copy already made stays with the colleague');
 }
 sections.sharing = sharingSection;
+// The emulator evaluates firestore.rules for a request carrying an unsigned ID token; this reads one document as a web client would.
+async function rulesRead(uid, docPath, claims = {}) {
+  const part = value => Buffer.from(JSON.stringify(value)).toString('base64url'), at = Math.floor(Date.now() / 1000);
+  const token = `${part({alg: 'none', typ: 'JWT'})}.${part({iss: `https://securetoken.google.com/${projectId}`, aud: projectId, sub: uid, user_id: uid, auth_time: at, iat: at, exp: at + 3600, firebase: {sign_in_provider: 'custom'}, ...claims})}.`;
+  return (await fetch(`http://${host}/v1/projects/${projectId}/databases/(default)/documents/${docPath}`, {headers: {Authorization: `Bearer ${token}`}})).status;
+}
+const roomCall = async () => {
+  const {handleRoomRequest} = await import('@/modules/playground/rooms-server');
+  return (ctx, method, segments, data = {}) => handleRoomRequest(new Request(`http://cards.test/api/playground/${segments.join('/')}`, {method}), ctx, segments, data);
+};
+const roomRefused = async (run, status) => {try {await run(); return null;} catch (error) {return error.status === status ? true : error.message;}};
+const studentCtx = (n, classId) => ({uid: `u${n}`, email: null, displayName: null, role: 'student', classId, studentId: `s${n}`, authVersion: 0});
+const hostCtx = {uid: teacher, email: null, displayName: null, role: 'teacher'};
+async function versusStudent(n, classId, name) {
+  await db().doc(`classes/${classId}/students/s${n}`).set({name, number: n, authUid: `u${n}`, character: 'cat', wardrobeOwned: [], spaceOwned: []});
+  await db().doc(`users/u${n}`).set({role: 'student', classId, studentId: `s${n}`, authVersion: 0});
+}
+// 구역 versus: 반대항전. 같은 선생님의 두 반이 한 방 코드로 들어오고, 반마다 한 팀(반 평균)이며 다른 선생님 반은 고를 수 없다. `node scripts/cards-flow-check.mjs versus`
+async function versusSection() {
+  section('class vs class card room');
+  const room = await roomCall();
+  await db().doc('classes/class-v2').set({ownerUid: teacher, name: '3-5', grade: 3});
+  for (const n of [1, 2]) await db().doc(`classes/class-a/students/s${n}`).update({character: 'cat', wardrobeOwned: [], spaceOwned: []});
+  await versusStudent(51, 'class-v2', '오반'); await versusStudent(52, 'class-v2', '오반둘');
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', versusClassIds: ['class-b'], direction: 'front-back', rounds: 1, seconds: 10, cardSetId: setId, requestId: 'vs-x'}), 403), true, 'another teacher\'s class cannot join a versus room');
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', versusClassIds: Array.from({length: 6}, (_, i) => `c${i}`), direction: 'front-back', rounds: 1, seconds: 10, cardSetId: setId, requestId: 'vs-y'}), 400), true, 'seven classes are too many');
+  const opened = await room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', versusClassIds: ['class-v2'], direction: 'front-back', rounds: 1, seconds: 10, cardSetId: setId, requestId: 'vs-1'}), roomId = opened.roomId;
+  const made = (await db().doc(`playRooms/${roomId}`).get()).data();
+  same([made.classIds, made.classNames, made.teamCount], [['class-a', 'class-v2'], ['3-2', '3-5'], 2], 'the room lists both classes, one team each');
+  same([(await db().doc(`classes/class-a/playRoomCodes/${opened.code}`).get()).exists, (await db().doc(`classes/class-v2/playRoomCodes/${opened.code}`).get()).exists], [true, true], 'the code works in both classes');
+  for (const [n, classId] of [[1, 'class-a'], [2, 'class-a'], [51, 'class-v2'], [52, 'class-v2']]) await room(studentCtx(n, classId), 'POST', ['rooms', 'join'], {code: opened.code});
+  const players = Object.fromEntries((await db().collection(`playRooms/${roomId}/players`).get()).docs.map(doc => [doc.id, [doc.data().team, doc.data().classId]]));
+  same(players, {s1: [0, 'class-a'], s2: [0, 'class-a'], s51: [1, 'class-v2'], s52: [1, 'class-v2']}, 'each student lands on their class team');
+  same(await roomRefused(() => room(studentCtx(9, 'class-b'), 'POST', ['rooms', 'join'], {code: opened.code}), 404), true, 'a student of a class outside the room cannot join');
+  same(await rulesRead('u1', `playRooms/${roomId}`, {authVersion: 0}), 200, 'firestore.rules let a student of the host class read the room');
+  same(await rulesRead('u51', `playRooms/${roomId}`, {authVersion: 0}), 200, 'firestore.rules let a student of the second class read the room (rules change)');
+  same(await rulesRead('u9', `playRooms/${roomId}`, {authVersion: 0}), 403, 'firestore.rules still refuse a student outside the room');
+  await room(hostCtx, 'POST', ['rooms', roomId, 'start'], {status: 'lobby', round: -1});
+  same((await db().doc(`playRooms/${roomId}`).get()).data().teams.map(team => team.name), ['3-2', '3-5'], 'teams carry the class names');
+  await new Promise(resolve => setTimeout(resolve, 3100));
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const asked = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data(), secret = (await db().doc(`playRooms/${roomId}/secrets/0`).get()).data().item;
+  const right = asked.choices.find(choice => secret.answers.includes(choice.label)), wrong = asked.choices.find(choice => !secret.answers.includes(choice.label));
+  for (const [n, classId, choice] of [[1, 'class-a', right], [2, 'class-a', wrong], [51, 'class-v2', right], [52, 'class-v2', right]]) await room(studentCtx(n, classId), 'POST', ['rooms', roomId, 'answer'], {round: 0, choiceId: choice.id});
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const revealed = (await db().doc(`playRooms/${roomId}`).get()).data();
+  check(revealed.teams[1].score > revealed.teams[0].score && revealed.teams.every(team => team.count === 2), 'the class with more right answers leads on its average', revealed.teams);
+  await room(hostCtx, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 0});
+  same((await room(studentCtx(51, 'class-v2'), 'GET', ['rooms', roomId])).room.status, 'finished', 'a student of the second class sees the result');
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms', roomId, 'reward'], {amount: 1}), 403), true, 'a versus room pays no team reward');
+}
+sections.versus = versusSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
