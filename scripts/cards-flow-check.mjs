@@ -1080,7 +1080,10 @@ async function transferSection() {
   const learner = await call('u31:0', 'GET', ['distributions', copy.id]);
   check(learner.status === 200 && learner.data.progress.mastery > 0 && learner.data.progress.counts.recall === 0, 'the student sees the carried mastery in the new class', learner.data.progress);
   accepted(await call('u31:0', 'POST', ['distributions', copy.id, 'study'], {requestId: 'tr-new', mode: 'recall', direction: 'front-back', responses: right(3)}), 'the student keeps studying in the new class');
+  // The student misses the same card again in the new class later; a retry must not put the older carried date back.
+  await db().doc('cardMisses/class-n_s31').update({[`misses.${copy.id}.${cards[2].id}`]: '2099-01-01', [`misses.${copy.id}.${cards[5].id}`]: '2099-01-02'});
   const again = await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], input);
+  same((await db().doc('cardMisses/class-n_s31').get()).data().misses[copy.id], {[cards[2].id]: '2099-01-01', [cards[5].id]: '2099-01-02'}, 'a retry keeps the misses the student made in the new class');
   same([again.status, again.data.result?.created, again.data.result?.seeded], [201, 0, 0], 'a retry with the same request writes nothing new');
   same((await db().doc(`cardProgress/${copy.id}_s31`).get()).data().counts.recall, 1, 'the retry never overwrites what the student did in the new class');
   const oldReport = reported(await report(base), 's1');

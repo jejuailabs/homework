@@ -24,6 +24,7 @@ type Data = Record<string, any>;
 const json = (value: unknown, status = 200) => NextResponse.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const digest = (...parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 const now = () => new Date().toISOString();
+const ALREADY_EXISTS = 6; // gRPC status of create() on an existing document
 
 async function ownedClass(ctx: Context, classId: unknown) {
   if (ctx.role === 'student') throw new ApiError(403, '선생님만 사용할 수 있어요.', 'FORBIDDEN');
@@ -107,44 +108,55 @@ export async function runTransfer(ctx: Context, fromClassId: string, input: Tran
   const idMap = new Map(planned.map(row => [row.sourceId, row.newId]));
   const cardMap = new Map(planned.map(row => [row.sourceId, { id: row.newId, cardIds: row.value.cardIds as string[] }]));
 
-  const writes: { ref: FirebaseFirestore.DocumentReference; data: Data; merge?: boolean }[] = [];
-  const newRefs = planned.map(row => db().doc(`cardClassSets/${row.newId}`)), existing = newRefs.length ? await db().getAll(...newRefs) : [];
-  planned.forEach((row, index) => { if (!existing[index].exists) writes.push({ ref: newRefs[index], data: row.value }); });
-
-  let seeded = 0;
+  // New distributions and progress seeds are created, never set: a document that already exists (a retry, or a record the student
+  // started in the new class meanwhile) is left exactly as it is. Settings and links are plain writes; misses merge below.
+  const creates: { ref: FirebaseFirestore.DocumentReference; data: Data; kind: 'distribution' | 'seed' }[] = [], writes: { ref: FirebaseFirestore.DocumentReference; data: Data }[] = [];
+  planned.forEach(row => creates.push({ ref: db().doc(`cardClassSets/${row.newId}`), data: row.value, kind: 'distribution' }));
+  const carriedMissesFor: { ref: FirebaseFirestore.DocumentReference; studentId: string; misses: Record<string, Record<string, string>> }[] = [];
   if (input.links.length) {
     const progressPairs = planned.flatMap(row => input.links.map(link => ({ row, link })));
-    const oldRefs = progressPairs.map(pair => db().doc(`cardProgress/${pair.row.sourceId}_${pair.link.from}`)), newProgressRefs = progressPairs.map(pair => db().doc(`cardProgress/${pair.row.newId}_${pair.link.to}`));
-    const [oldStates, newStates] = await Promise.all([oldRefs.length ? db().getAll(...oldRefs) : [], newProgressRefs.length ? db().getAll(...newProgressRefs) : []]);
+    const oldStates = progressPairs.length ? await db().getAll(...progressPairs.map(pair => db().doc(`cardProgress/${pair.row.sourceId}_${pair.link.from}`))) : [];
     progressPairs.forEach((pair, index) => {
       const old = oldStates[index].data();
-      // Only a student with something to carry gets a record, and one they already started in the new class is never overwritten.
-      if (!old || newStates[index].exists || old.classId !== from.id) return;
+      // Only a student with something to carry gets a record.
+      if (!old || old.classId !== from.id) return;
       const cards = pair.row.value.cardIds as string[], states = carriedCardStates(cardReviewStates(old.cardStates), cards), starred = (Array.isArray(old.starredCardIds) ? old.starredCardIds : []).filter((cardId: string) => cards.includes(cardId));
       if (!Object.keys(states).length && !starred.length) return;
-      writes.push({ ref: newProgressRefs[index], data: { distributionId: pair.row.newId, ownerUid: ctx.uid, classId: to.id, studentId: pair.link.to, counts: emptyModeCounts(), correctCounts: emptyModeCounts(), coverage: { memorize: {}, recall: {}, spell: {} }, cardStates: states, mistakes: {}, attempts: 0, bestScore: null, latestScore: null, starredCardIds: starred, lastPosition: null, activeAttemptId: null, lastSubmittedAttemptId: null, updatedAt: null, lateAt: null, carriedFrom: { distributionId: pair.row.sourceId, classId: from.id, studentId: pair.link.from } } });
-      seeded++;
+      creates.push({ ref: db().doc(`cardProgress/${pair.row.newId}_${pair.link.to}`), kind: 'seed', data: { distributionId: pair.row.newId, ownerUid: ctx.uid, classId: to.id, studentId: pair.link.to, counts: emptyModeCounts(), correctCounts: emptyModeCounts(), coverage: { memorize: {}, recall: {}, spell: {} }, cardStates: states, mistakes: {}, attempts: 0, bestScore: null, latestScore: null, starredCardIds: starred, lastPosition: null, activeAttemptId: null, lastSubmittedAttemptId: null, updatedAt: null, lateAt: null, carriedFrom: { distributionId: pair.row.sourceId, classId: from.id, studentId: pair.link.from } } });
     });
-    const missRefs = input.links.flatMap(link => [db().doc(`cardMisses/${from.id}_${link.from}`), db().doc(`cardMisses/${to.id}_${link.to}`)]);
-    const missDocs = await db().getAll(...missRefs);
+    const oldMisses = await db().getAll(...input.links.map(link => db().doc(`cardMisses/${from.id}_${link.from}`)));
     input.links.forEach((link, index) => {
-      const old = missDocs[index * 2].data(), current = missDocs[index * 2 + 1].data(), carried = carriedMisses(old?.misses ?? {}, cardMap);
-      if (Object.keys(carried).length) writes.push({ ref: missRefs[index * 2 + 1], data: { classId: to.id, studentId: link.to, misses: { ...(current?.misses ?? {}), ...carried }, updatedAt: stamp } });
+      const carried = carriedMisses(oldMisses[index].data()?.misses ?? {}, cardMap);
+      if (Object.keys(carried).length) carriedMissesFor.push({ ref: db().doc(`cardMisses/${to.id}_${link.to}`), studentId: link.to, misses: carried });
       writes.push({ ref: db().doc(`cardStudentLinks/${to.id}_${link.to}`), data: { ownerUid: ctx.uid, classId: to.id, studentId: link.to, fromClassId: from.id, fromStudentId: link.from, linkedAt: stamp } });
     });
   }
-
   if (input.settings) {
     const [source, target] = await db().getAll(classSettingsRef(from.id), classSettingsRef(to.id));
     const read = readClassSettings(source, ctx.uid), current = readClassSettings(target, ctx.uid);
     writes.push({ ref: classSettingsRef(to.id), data: { ownerUid: ctx.uid, classId: to.id, defaults: read.defaults, plan: parsePlan(remapPlan(read.plan, idMap, current.plan)), revision: current.revision + 1, updatedAt: stamp } });
   }
-  for (let start = 0; start < writes.length; start += 400) {
-    const batch = db().batch();
-    for (const write of writes.slice(start, start + 400)) batch.set(write.ref, write.data);
-    await batch.commit();
+  const writer = db().bulkWriter();
+  writer.onWriteError(error => error.code !== ALREADY_EXISTS && error.failedAttempts < 3);
+  const made = creates.map(write => writer.create(write.ref, write.data).then(() => write.kind, (error: { code?: number }) => { if (error.code === ALREADY_EXISTS) return 'kept' as const; throw error; }));
+  const plain = writes.map(write => writer.set(write.ref, write.data));
+  await writer.close();
+  const outcomes = await Promise.all(made);
+  await Promise.all(plain);
+  // Carried misses are added entry by entry inside a transaction: a newer miss the student made in the new class (or one an earlier
+  // run already added) is never replaced.
+  for (const item of carriedMissesFor) {
+    await db().runTransaction(async tx => {
+      const snap = await tx.get(item.ref), merged: Record<string, Record<string, string>> = structuredClone(snap.data()?.misses ?? {});
+      let added = 0;
+      for (const [distributionId, cards] of Object.entries(item.misses)) for (const [cardId, date] of Object.entries(cards)) {
+        if (merged[distributionId]?.[cardId]) continue;
+        (merged[distributionId] ??= {})[cardId] = date; added++;
+      }
+      if (added) tx.set(item.ref, { classId: to.id, studentId: item.studentId, misses: merged, updatedAt: stamp }, { merge: true });
+    });
   }
-  return { distributions: planned.length, created: planned.filter((_, index) => !existing[index].exists).length, students: input.links.length, seeded, settings: input.settings, toClassId: to.id, toClassName: String(to.data()!.name ?? '') };
+  return { distributions: planned.length, created: outcomes.filter(kind => kind === 'distribution').length, students: input.links.length, seeded: outcomes.filter(kind => kind === 'seed').length, settings: input.settings, toClassId: to.id, toClassName: String(to.data()!.name ?? '') };
 }
 
 /** POST classes/{from}/transfer. */
