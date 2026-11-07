@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {cardClassStatus, cardHardWords, cardSetUnfinished, filterCardReport, summarizeStudentCards} from './cards-summary';
+import {cardClassStatus, cardHardWords, cardSetUnfinished, cardUnmastered, filterCardReport, summarizeStudentCards} from './cards-summary';
 import type {CardRequiredModes} from './cards-types';
 
 const rule = (requiredCount: number) => ({requiredCount, direction: 'front-back' as const, rangeStart: 1, rangeEnd: 10});
@@ -38,3 +38,10 @@ assert.deepEqual(cardHardWords([idle], [{id: 'a', front: 'apple'}]), [], 'no act
 const twin = [pupil({attempts: 1}, [{cardId: 'a', count: 1}, {cardId: 'b', count: 1}, {cardId: 'c', count: 1}])];
 assert.deepEqual(cardHardWords(twin, [{id: 'a', front: 'same'}, {id: 'b', front: 'same'}, {id: 'c', front: '가'.repeat(30)}]).map(word => word.word), ['same', 'same (2)', `${'가'.repeat(11)}…`], 'chart labels stay short and unique');
 console.log('cards summary tests ok');
+
+const learned = [{id: 'a', front: 'apple'}, {id: 'b', front: 'banana'}, {id: 'c', front: 'cherry'}];
+assert.deepEqual(cardUnmastered([{...done, levels: {a: 4, b: 3, c: 1}}, {...working, levels: {a: 2}}, {...idle, levels: {}}], learned), [{word: 'cherry', wrongRate: 100, wrongCount: 2}, {word: 'apple', wrongRate: 50, wrongCount: 1}, {word: 'banana', wrongRate: 50, wrongCount: 1}], 'below 잎 counts students with activity only; ties keep set order');
+assert.deepEqual(cardUnmastered([{...done, levels: {a: 3, b: 4, c: 3}}], learned), [], 'every card at 잎 or above leaves nothing');
+assert.deepEqual(cardUnmastered([{...idle}], learned), [], 'no activity, no list');
+assert.deepEqual(cardUnmastered([{...working}], learned).length, 3, 'old reports without levels read as not learned');
+console.log('cards mastery summary tests ok');

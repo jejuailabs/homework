@@ -1,0 +1,8 @@
+{
+  "mastery": "숙련도", "levels": ["아직", "씨앗", "새싹", "잎", "꽃"], "masteryHint": "리콜·스펠·테스트에서 맞힌 카드가 씨앗에서 꽃으로 자라요. 잎과 꽃은 다음 날 이후 복습에서 맞혀야 피고, 다시 공부해도 줄지 않아요.",
+  "dueToday": "오늘 복습할 카드 {count}장", "dueNone": "오늘 복습할 카드는 없어요. 맞힌 카드는 1·3·7·14·30일 뒤에 다시 찾아와요.", "dueClosed": "마감이 지나 복습도 닫혔어요.", "review": "복습하기",
+  "missedTitle": "누적 오답 복습", "missedBody": "최근 4주 동안 틀린 카드 {count}장을 모았어요. 복습에서 맞히면 빠져요.", "missedStart": "모두 복습", "thisWeek": "이번 주", "lastWeek": "지난주", "weekOf": "{date} 주",
+  "dueTitle": "오늘의 복습", "dueIntro": "복습 날짜가 된 카드예요. 맞히면 다음 복습 날짜가 멀어지고, 틀리면 내일 다시 만나요.", "missedIntro": "예전에 틀린 카드예요. 맞힌 카드는 목록에서 빠져요.", "noReview": "지금 복습할 카드가 없어요.", "noReviewBody": "새로 틀린 카드나 날짜가 된 카드가 생기면 여기에 모여요.",
+  "reviewDone": "복습을 마쳤어요!", "reviewDoneBody": "다시 꺼내 본 만큼 오래 기억해요.", "reviewAgain": "남은 카드 불러오기", "reviewDropped": "일부 답은 저장하지 못했어요. 세트가 닫혔거나 마감이 지났을 수 있어요.", "reviewSet": "세트", "typeAnswer": "답을 입력해 주세요",
+  "averageMastery": "평균 숙련도", "unmastered": "아직 숙련 안 된 카드", "unmasteredRate": "잎 전 비율", "unmasteredHint": "학습을 시작한 학생 중 이 카드가 아직 잎(다음 날 이후 다시 맞힘)에 이르지 못한 학생의 비율이에요. 예전 기록은 숙련도에 들어가지 않아요.", "noUnmastered": "아직 학습 기록이 없거나 모든 카드가 잎 이상이에요.", "cardLevels": "카드별 숙련", "dueStudents": "날짜 복습이 남은 학생"
+}

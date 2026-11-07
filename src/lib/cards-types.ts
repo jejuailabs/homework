@@ -27,10 +27,21 @@ export type CardProgress = {
   lateAt: string | null;
   studyComplete: boolean;
   goalReached: boolean;
+  /** Set mastery 0-100: the average card level out of 4. Old records without card states read 0. */
+  mastery: number;
+  /** Cards whose review date has come (Seoul date). */
+  reviewDue: number;
 };
+/** One card's mastery and next review, kept on the progress record. l: level 0-4 that never goes down; b: step in CARD_REVIEW_DAYS, reset by a miss; d: next review date (YYYY-MM-DD, Seoul). */
+export type CardReviewState = { l: number; b: number; d: string };
+export type CardReviewStates = Record<string, CardReviewState>;
+/** Missed cards across a student's sets: distributionId → cardId → the Seoul date of the latest miss. */
+export type CardMisses = Record<string, Record<string, string>>;
+export type CardMissSummary = { total: number; weeks: { week: string; count: number }[] };
+export type CardReviewItem = { distributionId: string; title: string; direction: CardDirection; card: CardEntry; choices: string[] | null; missedOn: string | null };
 export type CardStudentDistribution = CardDistributionSummary & { progress: CardProgress };
 export type CardStudyResult = { cardId: string; correct: boolean; expectedAnswer: string };
 export type CardTestQuestion = { id: string; cardId: string; prompt: string; choices?: string[] };
 export type CardTestResult = { questionId: string; answer: string; correct: boolean; expectedAnswer?: string };
 export type CardTestAttempt = { id: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; answersVisible: boolean; results?: CardTestResult[]; startedAt: string; submittedAt: string | null; timeLimitSeconds?: number | null; overtime?: boolean };
-export type CardReportStudent = { id: string; name: string; number: number; disabled: boolean; progress: CardProgress; attempts: CardTestAttempt[]; mistakes: { cardId: string; count: number }[] };
+export type CardReportStudent = { id: string; name: string; number: number; disabled: boolean; progress: CardProgress; attempts: CardTestAttempt[]; mistakes: { cardId: string; count: number }[]; levels: Record<string, number> };

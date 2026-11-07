@@ -1,4 +1,5 @@
 import type {CardEntry, CardProgress, CardReportStudent, CardRequiredModes, CardStudentDistribution} from './cards-types';
+import {CARD_LEARNED_LEVEL} from './cards-logic';
 
 /**
  * One meaning of "not finished yet", shared by the student home and Berry so the two never disagree.
@@ -54,4 +55,17 @@ export function cardHardWords(rows: ReportRow[], cards: Pick<CardEntry, 'id' | '
     seen.add(word);
     return {word, wrongRate: students / learners * 100, wrongCount: total};
   }) : [];
+}
+/** Cards the class has not learned yet: the share of students with any activity still below 잎 on each card. Same shape as cardHardWords so the same chart draws it. */
+export function cardUnmastered(rows: (ReportRow & {levels?: Record<string, number>})[], cards: Pick<CardEntry, 'id' | 'front'>[], limit = HARD_WORD_LIMIT) {
+  const learners = rows.filter(row => hasActivity(row.progress));
+  if (!learners.length) return [];
+  const seen = new Set<string>();
+  return cards.map((card, index) => ({card, index, below: learners.filter(row => (row.levels?.[card.id] ?? 0) < CARD_LEARNED_LEVEL).length})).filter(row => row.below > 0)
+    .sort((a, b) => b.below - a.below || a.index - b.index).slice(0, limit).map(({card, index, below}) => {
+      const front = Array.from(card.front), short = front.length > HARD_WORD_LABEL ? `${front.slice(0, HARD_WORD_LABEL - 1).join('')}…` : card.front;
+      const word = seen.has(short) ? `${short} (${index + 1})` : short;
+      seen.add(word);
+      return {word, wrongRate: below / learners.length * 100, wrongCount: below};
+    });
 }

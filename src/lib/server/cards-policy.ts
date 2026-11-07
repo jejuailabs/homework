@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
-import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
+import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, cardMastery, cardReviewDate, cardReviewStates, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
 import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
 
 export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
@@ -143,9 +143,11 @@ export function completedCounts(snapshot: CardSnapshot, requirements: CardRequir
     return [mode, wholeRounds + partialRound];
   })) as Record<CardStudyMode, number>;
 }
-export function publicProgress(raw: Record<string, any> | undefined, snapshot: CardSnapshot, requirements: CardRequiredModes, test: CardTestSettings, deadline?: Deadline): CardProgress {
+export function publicProgress(raw: Record<string, any> | undefined, snapshot: CardSnapshot, requirements: CardRequiredModes, test: CardTestSettings, deadline?: Deadline, today = cardReviewDate()): CardProgress {
   const credited = completedCounts(snapshot, requirements, raw?.coverage ?? { memorize: {}, recall: {}, spell: {} });
-  return { counts: raw?.counts ?? emptyModeCounts(), correctCounts: raw?.correctCounts ?? emptyModeCounts(), completedCounts: credited, attempts: raw?.attempts ?? 0, bestScore: raw?.bestScore ?? null, latestScore: raw?.latestScore ?? null, starredCardIds: raw?.starredCardIds ?? [], lastPosition: raw?.lastPosition ?? null, updatedAt: raw?.updatedAt ?? null, lateAt: deadline?.afterDue === 'late' && afterDeadline(raw?.lateAt, deadline.dueAt) ? raw!.lateAt : null, studyComplete: CARD_MODES.every(mode => credited[mode] >= requirements[mode].requiredCount), goalReached: typeof raw?.bestScore === 'number' && raw.bestScore >= test.goalScore };
+  // Records from before mastery have no cardStates and read as 0%, nothing due.
+  const mastery = cardMastery(snapshot.cards.map(card => card.id), cardReviewStates(raw?.cardStates), today);
+  return { counts: raw?.counts ?? emptyModeCounts(), correctCounts: raw?.correctCounts ?? emptyModeCounts(), completedCounts: credited, attempts: raw?.attempts ?? 0, bestScore: raw?.bestScore ?? null, latestScore: raw?.latestScore ?? null, starredCardIds: raw?.starredCardIds ?? [], lastPosition: raw?.lastPosition ?? null, updatedAt: raw?.updatedAt ?? null, lateAt: deadline?.afterDue === 'late' && afterDeadline(raw?.lateAt, deadline.dueAt) ? raw!.lateAt : null, studyComplete: CARD_MODES.every(mode => credited[mode] >= requirements[mode].requiredCount), goalReached: typeof raw?.bestScore === 'number' && raw.bestScore >= test.goalScore, mastery: mastery.percent, reviewDue: mastery.due };
 }
 export function answersReleased(settings: CardTestSettings, dueAt: string | null, time = Date.now()) {
   return settings.answerRelease === 'immediate' || (settings.answerRelease === 'after-due' && dueAt !== null && Date.parse(dueAt) <= time);

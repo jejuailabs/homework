@@ -7,13 +7,17 @@ import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyb
 import {usePreferences} from './providers';
 import {characterFiles, type Character} from '@/lib/characters';
 import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
-import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardSetType, CardStudyMode} from '@/lib/cards-types';
+import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardReviewItem, CardSetType, CardStudyMode} from '@/lib/cards-types';
 import ko from '@/messages/cards-study-ko.json';
 import en from '@/messages/cards-study-en.json';
+import reviewKo from '@/messages/cards-review-ko.json';
+import reviewEn from '@/messages/cards-review-en.json';
 import '@/styles/cards-study.css';
+import '@/styles/cards-review.css';
 
 export const cardModes = ['memorize', 'recall', 'spell'] as const;
 export function useCardCopy() {const {locale} = usePreferences(); return {copy: locale === 'ko' ? ko : en, locale, points: (value: number) => locale === 'ko' ? `${value}${ko.score}` : `${value} ${en.score}`};}
+export function useReviewCopy() {const {locale} = usePreferences(); return locale === 'ko' ? reviewKo : reviewEn;}
 export async function cardRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {cache: 'no-store', ...init, headers: {'Content-Type': 'application/json', ...init?.headers}});
   const body = await response.json().catch(() => ({}));
@@ -257,4 +261,81 @@ function CardsLocalTestPreview({title, cards, onClose}: {title: string; cards: C
   const {copy: c} = useCardCopy(); const [answers, setAnswers] = useState<Record<string, string>>({}), [submitted, setSubmitted] = useState(false);
   const correct = cards.filter(card => [card.back, ...card.alternatives].some(value => normalize(value) === normalize(answers[card.id] || ''))).length;
   return <section className="cs-study"><div className="cs-study-top"><h2>{title} · {c.test}</h2>{onClose && <button className="button" onClick={onClose}><X size={16}/>{c.closePreview}</button>}</div><p className="cs-preview-note">{c.preview}</p><form onSubmit={event => {event.preventDefault(); setSubmitted(true);}}>{cards.map((card, index) => <div className="cs-test-question" key={card.id}><label htmlFor={`preview-${card.id}`}>{index + 1}. {card.front}</label><input id={`preview-${card.id}`} required disabled={submitted} value={answers[card.id] || ''} onChange={event => setAnswers(value => ({...value, [card.id]: event.target.value}))} autoComplete="off"/>{submitted && <p>{c.correctAnswer}: {card.back}</p>}</div>)}{submitted ? <div className="cs-finish"><h3>{Math.round(correct / Math.max(1, cards.length) * 100)} {c.score}</h3><p>{c.testPreview}</p><button type="button" className="button" onClick={() => {setSubmitted(false); setAnswers({});}}>{c.restart}</button></div> : <button className="button primary" type="submit" disabled={!cards.length}>{c.testSubmit}</button>}</form></section>;
+}
+
+/**
+ * One review session: today's due cards in one set, or missed cards gathered from several sets. Answers grade here at once and go to each set's
+ * study endpoint with review:true in batches, so the server re-grades them, moves the review dates and clears reviewed misses. Nothing counts toward required study.
+ */
+export function CardsReviewSession({items, title, intro, backHref, onReload}: {items: CardReviewItem[]; title: string; intro: string; backHref: string; onReload?: () => void}) {
+  const {copy: c} = useCardCopy(), r = useReviewCopy();
+  const [index, setIndex] = useState(0), [answer, setAnswer] = useState(''), [feedback, setFeedback] = useState<{correct: boolean; expected: string} | null>(null), [outcomes, setOutcomes] = useState<boolean[]>([]);
+  const [unsaved, setUnsaved] = useState(0), [saving, setSaving] = useState(false), [failed, setFailed] = useState(false), [dropped, setDropped] = useState(false);
+  const outboxes = useRef(new Map<string, StudyOutbox>()), flushing = useRef<Promise<void> | null>(null), inputRef = useRef<HTMLInputElement>(null);
+  const item = items[index] as CardReviewItem | undefined, finished = index >= items.length;
+  const content = item ? textFor(item.card, item.direction) : null;
+  const size = () => [...outboxes.current.values()].reduce((total, outbox) => total + studyOutboxSize(outbox), 0);
+  const post = (distributionId: string, batch: StudyBatch, keepalive = false) => cardRequest(`/api/cards/distributions/${distributionId}/study`, {method: 'POST', keepalive, body: JSON.stringify({...batch, review: true})});
+  const pump = useCallback(() => {
+    if (flushing.current) return flushing.current;
+    flushing.current = (async () => {
+      setSaving(true); setFailed(false);
+      try {
+        for (const [distributionId, outbox] of outboxes.current) for (const batch of outbox.sealed) {
+          // A closed set, a passed deadline or changed cards will never take these answers; drop them and say so instead of retrying forever.
+          await post(distributionId, batch).catch(cause => {if (!(cause instanceof Error && (cause.message === 'DUE_CLOSED' || cause.message === 'NOT_FOUND' || staleStudyBatch(cause.message)))) throw cause; setDropped(true);});
+          outboxes.current.set(distributionId, settleStudyBatch(outboxes.current.get(distributionId)!, batch.requestId));
+        }
+      } catch {setFailed(true);} finally {flushing.current = null; setSaving(false); setUnsaved(size());}
+    })();
+    return flushing.current;
+  }, []);
+  const sealAll = useCallback(() => {for (const [distributionId, outbox] of outboxes.current) outboxes.current.set(distributionId, sealStudyBuffer(outbox, 'recall', newRequestId));}, []);
+  useEffect(() => {
+    const sendNow = () => {if (!size()) return; sealAll(); for (const [distributionId, outbox] of outboxes.current) for (const batch of keepaliveStudyBatches(outbox)) void post(distributionId, batch, true).catch(() => {});};
+    const hidden = () => {if (document.visibilityState === 'hidden') sendNow();};
+    window.addEventListener('pagehide', sendNow); document.addEventListener('visibilitychange', hidden);
+    return () => {window.removeEventListener('pagehide', sendNow); document.removeEventListener('visibilitychange', hidden); sendNow();};
+  }, [sealAll]);
+  useEffect(() => {inputRef.current?.focus();}, [index]);
+  function check(value: string) {
+    if (!item || feedback || !value.trim()) return;
+    const {correct, expected} = gradeCardAnswer(item.card, 'recall', item.direction, value);
+    const outbox = addStudyResponse(outboxes.current.get(item.distributionId) ?? emptyStudyOutbox(), {cardId: item.card.id, answer: value, direction: item.direction}, 'recall', newRequestId);
+    outboxes.current.set(item.distributionId, outbox); setUnsaved(size());
+    setFeedback({correct, expected}); setOutcomes(previous => [...previous, correct]);
+    if (outbox.sealed.length) void pump();
+  }
+  function next() {
+    if (!feedback) return;
+    setFeedback(null); setAnswer(''); setIndex(value => value + 1);
+    if (index + 1 >= items.length) {sealAll(); void pump();}
+  }
+  useEffect(() => {
+    function key(event: KeyboardEvent) {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || finished || !item) return;
+      const target = event.target as HTMLElement;
+      if (target.closest('button,a,select,textarea') || target.tagName === 'INPUT' && event.key !== 'Enter') return;
+      if (event.key === 'Enter' && feedback) {event.preventDefault(); next();}
+      if (/^[1-9]$/.test(event.key) && !feedback && item.choices?.[Number(event.key) - 1]) check(item.choices[Number(event.key) - 1]);
+    }
+    window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
+  });
+  const exit = <Link className="cs-back" href={backHref}><ArrowLeft size={16}/>{c.exit}</Link>;
+  const status = dropped ? <p className="cs-alert" role="alert">{r.reviewDropped}</p> : failed ? <div className="cs-alert" role="alert"><p>{c.saveError}</p><button className="button" disabled={saving} onClick={() => {sealAll(); void pump();}}><RefreshCw size={16}/>{c.retrySave}</button></div> : null;
+  if (finished) {
+    const right = outcomes.filter(Boolean).length;
+    return <section className="cs-study"><div className="cs-study-top">{exit}</div><div className="cs-finish"><CardBuddy happy/><CheckCircle2 size={34}/><h1>{r.reviewDone}</h1><p>{r.reviewDoneBody}</p>{status ?? <p className="cs-save-status" role="status">{unsaved || saving ? <><LoaderCircle className="spin" size={16}/>{c.saving}</> : <><Check size={16}/>{c.saved}</>}</p>}<dl className="cs-result-grid"><div><dt>{c.answered}</dt><dd>{outcomes.length}</dd></div><div><dt>{c.correctCount}</dt><dd>{right}</dd></div><div><dt>{c.wrongCount}</dt><dd>{outcomes.length - right}</dd></div></dl><div className="cs-actions"><Link className="button" href={backHref}><ArrowLeft size={16}/>{c.back}</Link>{onReload && <button className="button primary" disabled={!!unsaved || saving} onClick={onReload}><RotateCcw size={16}/>{r.reviewAgain}</button>}</div></div></section>;
+  }
+  if (!item || !content) return null;
+  return <section className="cs-study"><div className="cs-study-top">{exit}<span>{title} <strong>{index + 1} / {items.length}</strong></span></div><progress className="cs-progress" value={index} max={items.length} aria-label={c.progress}/><header className="cs-session-title"><div><h1>{title}</h1>{index === 0 && <p className="cs-muted">{intro}</p>}</div><CardBuddy happy={feedback?.correct}/></header>
+    <div className="cs-flashcard"><div className="cs-card-toolbar"><span className="cs-tag">{c.recall}</span><span className="cs-review-from">{r.reviewSet} · {item.title}</span></div>
+      <p className="cs-prompt" lang={/[가-힣]/.test(content.prompt) ? 'ko' : 'en'}>{content.prompt}</p>
+      {item.choices ? <><p className="cs-instruction">{c.choose}</p><div className="cs-choices">{item.choices.map((choice, position) => <button key={choice} className={`cs-choice ${feedback && normalize(choice) === normalize(feedback.expected) ? 'is-correct' : ''}`} disabled={!!feedback} onClick={() => {setAnswer(choice); check(choice);}}><kbd>{position + 1}</kbd><span>{choice}</span></button>)}</div></>
+        : <form onSubmit={event => {event.preventDefault(); check(answer);}}><label htmlFor="card-review-answer">{c.answer}</label><input id="card-review-answer" ref={inputRef} className="cs-answer" value={answer} maxLength={STUDY_ANSWER_LIMIT} onChange={event => setAnswer(event.target.value)} disabled={!!feedback} placeholder={r.typeAnswer} autoComplete="off" autoCapitalize="none" spellCheck={false}/></form>}
+      {feedback && <div className={`cs-feedback ${feedback.correct ? 'is-correct' : 'is-incorrect'}`} role="status"><strong>{feedback.correct ? <CheckCircle2 size={20}/> : <RotateCcw size={20}/>} {feedback.correct ? c.correct : c.incorrect}</strong><p>{c.correctAnswer}: <b>{feedback.expected}</b></p></div>}
+    </div>
+    {status}
+    <div className="cs-study-controls">{feedback ? <><span className="cs-muted"><Check size={16}/>{unsaved ? c.saveQueued : c.saved}</span><button className="button primary" autoFocus onClick={next}>{c.next}<ChevronRight size={18}/></button></> : !item.choices && <button className="button primary" disabled={!answer.trim()} onClick={() => check(answer)}>{c.check}<Check size={17}/></button>}</div>
+  </section>;
 }

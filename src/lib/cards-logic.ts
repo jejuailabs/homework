@@ -1,5 +1,5 @@
 // Pure card rules shared by the browser and the server, so instant practice feedback can never drift from server grading.
-import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardRequiredModes, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
+import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardMisses, CardMissSummary, CardRequiredModes, CardReviewState, CardReviewStates, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
 
 // One set of card size limits for the server, the editor and bulk import.
 export const CARD_TEXT_LIMIT = 1000;
@@ -153,4 +153,86 @@ export const isTestOvertime = (startedAt: string, limitSeconds: number | null | 
 export function formatCountdown(milliseconds: number) {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+// Mastery and date review. A small Leitner schedule, not FSRS: a level a student can read (씨앗·새싹·잎·꽃) and an interval a teacher can explain.
+// Levels never go down, so restudying never shrinks progress. A miss only brings the card back for review tomorrow.
+export const CARD_REVIEW_DAYS = [1, 3, 7, 14, 30];
+export const CARD_MASTERY_MAX = 4;
+/** Correct answers on one day raise a card to 새싹 at most; 잎 and 꽃 need a correct answer on a later day, when the card is due. */
+export const CARD_SAME_DAY_LEVEL = 2;
+/** A card counts as learned for the class view from 잎 up: it was answered right again on a later day. */
+export const CARD_LEARNED_LEVEL = 3;
+export const CARD_MISS_WEEKS = 4;
+export const CARD_MISS_LIMIT = 400; // Keeps the per-student miss index far below Firestore's 1 MiB.
+export const CARD_REVIEW_SESSION = 20;
+export function cardReviewDate(time = Date.now()) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(time)); }
+const validDate = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`));
+export function cardAddDays(date: string, days: number) { const at = new Date(`${date}T00:00:00Z`); at.setUTCDate(at.getUTCDate() + days); return at.toISOString().slice(0, 10); }
+/** Monday of the date's week. */
+export function cardWeekStart(date: string) { return cardAddDays(date, -((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7)); }
+/** Reads one stored state defensively; anything malformed counts as never answered. */
+export function cardReviewState(value: unknown): CardReviewState | null {
+  const raw = value as Partial<CardReviewState> | null;
+  if (!raw || typeof raw !== 'object' || !validDate(raw.d)) return null;
+  const level = Number.isInteger(raw.l) ? Math.min(CARD_MASTERY_MAX, Math.max(0, raw.l!)) : 0, step = Number.isInteger(raw.b) ? Math.min(CARD_REVIEW_DAYS.length - 1, Math.max(0, raw.b!)) : 0;
+  return { l: level, b: step, d: raw.d };
+}
+export function cardReviewStates(value: unknown): CardReviewStates {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).flatMap(([cardId, state]) => { const read = cardReviewState(state); return read ? [[cardId, read]] : []; }));
+}
+export const cardReviewIsDue = (state: CardReviewState | null | undefined, today: string) => !!state && state.d <= today;
+/** The next state after one graded answer in recall, spell, a test or a review. Memorize answers never come here. */
+export function nextCardReview(previous: CardReviewState | null | undefined, correct: boolean, today: string): CardReviewState {
+  const state = cardReviewState(previous);
+  if (!correct) return { l: state?.l ?? 0, b: 0, d: cardAddDays(today, CARD_REVIEW_DAYS[0]) };
+  if (!state) return { l: 1, b: 0, d: cardAddDays(today, CARD_REVIEW_DAYS[0]) };
+  if (cardReviewIsDue(state, today)) {
+    const step = Math.min(CARD_REVIEW_DAYS.length - 1, state.b + 1);
+    return { l: Math.min(CARD_MASTERY_MAX, state.l + 1), b: step, d: cardAddDays(today, CARD_REVIEW_DAYS[step]) };
+  }
+  return { ...state, l: state.l < CARD_SAME_DAY_LEVEL ? state.l + 1 : state.l };
+}
+/** Set mastery for the given cards: percent (average level out of 4), how many cards sit at each level 0-4, and how many are due today. */
+export function cardMastery(cardIds: string[], states: CardReviewStates, today: string) {
+  const levels = [0, 0, 0, 0, 0];
+  let total = 0, due = 0;
+  for (const cardId of cardIds) {
+    const state = states[cardId], level = state?.l ?? 0;
+    levels[level]++; total += level;
+    if (cardReviewIsDue(state, today)) due++;
+  }
+  return { percent: cardIds.length ? Math.round(total / (cardIds.length * CARD_MASTERY_MAX) * 100) : 0, levels, due };
+}
+/** Cards due today, oldest review date first, then set order. */
+export function dueCardIds(cardIds: string[], states: CardReviewStates, today: string, limit = CARD_REVIEW_SESSION) {
+  const order = new Map(cardIds.map((cardId, index) => [cardId, index]));
+  return cardIds.filter(cardId => cardReviewIsDue(states[cardId], today)).sort((a, b) => states[a].d.localeCompare(states[b].d) || order.get(a)! - order.get(b)!).slice(0, limit);
+}
+/** Adds this answer batch to the student's miss index. Misses stay for CARD_MISS_WEEKS; a correct answer in a review session clears its card. */
+export function recordCardMisses(current: unknown, distributionId: string, missed: string[], cleared: string[], today: string): CardMisses {
+  const oldest = cardAddDays(today, -CARD_MISS_WEEKS * 7), rows: [string, string, string][] = [];
+  if (current && typeof current === 'object' && !Array.isArray(current)) for (const [setId, cards] of Object.entries(current)) {
+    if (!cards || typeof cards !== 'object') continue;
+    for (const [cardId, date] of Object.entries(cards)) if (validDate(date) && date >= oldest && !(setId === distributionId && (cleared.includes(cardId) || missed.includes(cardId)))) rows.push([setId, cardId, date]);
+  }
+  for (const cardId of new Set(missed)) rows.push([distributionId, cardId, today]);
+  const kept = rows.sort((a, b) => b[2].localeCompare(a[2])).slice(0, CARD_MISS_LIMIT), misses: CardMisses = {};
+  for (const [setId, cardId, date] of kept) (misses[setId] ??= {})[cardId] = date;
+  return misses;
+}
+/** Every miss still inside the window, newest first. `allowed` limits the list to the sets this student can still open; `week` to one Monday-start week. */
+export function cardMissList(misses: unknown, today: string, allowed?: Set<string>, week?: string) {
+  const oldest = cardAddDays(today, -CARD_MISS_WEEKS * 7), rows: { distributionId: string; cardId: string; missedOn: string }[] = [];
+  if (misses && typeof misses === 'object' && !Array.isArray(misses)) for (const [distributionId, cards] of Object.entries(misses)) {
+    if (allowed && !allowed.has(distributionId) || !cards || typeof cards !== 'object') continue;
+    for (const [cardId, missedOn] of Object.entries(cards)) if (validDate(missedOn) && missedOn >= oldest && (!week || cardWeekStart(missedOn) === week)) rows.push({ distributionId, cardId, missedOn });
+  }
+  return rows.sort((a, b) => b.missedOn.localeCompare(a.missedOn) || a.distributionId.localeCompare(b.distributionId) || a.cardId.localeCompare(b.cardId));
+}
+export function summarizeCardMisses(misses: unknown, today: string, allowed?: Set<string>): CardMissSummary {
+  const rows = cardMissList(misses, today, allowed), weeks = new Map<string, number>();
+  for (const row of rows) { const week = cardWeekStart(row.missedOn); weeks.set(week, (weeks.get(week) ?? 0) + 1); }
+  return { total: rows.length, weeks: [...weeks].sort(([a], [b]) => b.localeCompare(a)).map(([week, count]) => ({ week, count })) };
 }

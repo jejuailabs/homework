@@ -554,7 +554,101 @@ async function aiSection() {
   } finally {globalThis.fetch = original; process.env.OPENAI_API_KEY = 'stub-not-a-key';}
 }
 
-const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection};
+async function masterySection() {
+  section('mastery, date review and missed-card review');
+  await addStudent(5); await addStudent(6);
+  const me = pupil(5), today = logic.cardReviewDate(), tomorrow = logic.cardAddDays(today, 1), yesterday = logic.cardAddDays(today, -1);
+  const rule = {requiredCount: 6, direction: 'front-back', rangeStart: 1, rangeEnd: 6};
+  const base = await distribute({requiredModes: {recall: rule}, test: {questionCount: 2, maxAttempts: 5}}), progressDoc = () => db().doc(`cardProgress/${base.id}_s5`).get(), missesDoc = () => db().doc('cardMisses/class-a_s5').get();
+  const wrong = index => ({cardId: cards[index].id, answer: '모르겠어요'});
+
+  const first = await study(me, base.id, 'recall', 'm-1', [...right(0, 1), wrong(2)]);
+  accepted(first, 'recall batch with a miss saved');
+  same([first.data.progress.mastery, first.data.progress.reviewDue], [Math.round(2 / 48 * 100), 0], 'two seeds out of twelve cards; nothing due until tomorrow');
+  let saved = (await progressDoc()).data();
+  same(saved.cardStates, {card0: {l: 1, b: 0, d: tomorrow}, card1: {l: 1, b: 0, d: tomorrow}, card2: {l: 0, b: 0, d: tomorrow}}, 'card states are stored compactly, a miss due tomorrow too');
+  same((await missesDoc()).data().misses, {[base.id]: {card2: today}}, 'the miss lands in the student index in the same transaction');
+  await study(me, base.id, 'recall', 'm-2', right(0));
+  same((await progressDoc()).data().cardStates.card0.l, 2, 'a second right answer the same day is 새싹');
+  await study(me, base.id, 'recall', 'm-3', right(0));
+  same((await progressDoc()).data().cardStates.card0.l, 2, 'cramming the same day stops at 새싹');
+  await study(me, base.id, 'memorize', 'm-4', right(3));
+  check(!(await progressDoc()).data().cardStates.card3, 'memorize never moves mastery');
+  same((await study(me, base.id, 'recall', 'm-1', [...right(0, 1), wrong(2)])).data.duplicate, true, 'a replayed batch is not graded twice');
+  same((await progressDoc()).data().cardStates.card0.l, 2, 'and leaves mastery alone');
+
+  // A day passes: move the stored dates back instead of the clock.
+  saved = (await progressDoc()).data();
+  await db().doc(`cardProgress/${base.id}_s5`).update({cardStates: {...saved.cardStates, card0: {...saved.cardStates.card0, d: yesterday}, card2: {...saved.cardStates.card2, d: yesterday}}});
+  const detail = await call(me, 'GET', ['distributions', base.id]);
+  same([detail.data.progress.reviewDue, Object.keys(detail.data.cardStates).sort()], [2, ['card0', 'card1', 'card2']], 'the set page shows two cards due and the student own states');
+  check(!JSON.stringify((await call(pupil(6), 'GET', ['distributions', base.id])).data.cardStates ?? {}).includes('card0'), 'another student never sees these states');
+  const due = await call(me, 'GET', ['review'], undefined, {query: `?distributionId=${base.id}`});
+  same(due.data.items?.map(item => item.card.id).sort(), ['card0', 'card2'], 'today\'s review holds exactly the due cards');
+  check(due.data.items.every(item => item.choices?.length === 4 && item.choices.includes(item.card.back) && item.direction === 'front-back'), 'each review card has four choices with the answer', due.data.items);
+  refused(await study(me, base.id, 'memorize', 'm-r0', right(0), {review: true}), 400, undefined, 'a memorize review is refused');
+  refused(await study(me, base.id, 'recall', 'm-r0', right(0), {review: 'yes'}), 400, undefined, 'a non-boolean review flag is refused');
+  const reviewed = await study(me, base.id, 'recall', 'm-r1', [...right(0), wrong(2), ...right(10)], {review: true});
+  accepted(reviewed, 'a review batch is saved, even for a card outside the required range');
+  saved = (await progressDoc()).data();
+  same([saved.cardStates.card0, saved.cardStates.card2.d, saved.cardStates.card10], [{l: 3, b: 1, d: logic.cardAddDays(today, 3)}, tomorrow, {l: 1, b: 0, d: tomorrow}], 'a due review answered right is 잎 for three days; a miss comes back tomorrow');
+  same([saved.counts.recall, saved.coverage.recall.card10], [first.data.progress.counts.recall + 2, undefined], 'review answers give no required-study credit');
+  same(reviewed.data.progress.reviewDue, 0, 'nothing left due');
+  refused(await study(me, base.id, 'recall', 'm-r1', [...right(0), wrong(2), ...right(10)]), 409, 'REQUEST_CONFLICT', 'the same request id without the review flag is a different request');
+
+  // Missed cards across sets.
+  const other = await distribute({test: {questionCount: 12, maxAttempts: 5, direction: 'front-back'}});
+  const begun = await start(me, other.id, 'm-t1');
+  const answers = begun.data.attempt.questions.map(question => answerFor(question, 'front-back', ['word 4', 'word 5'].includes(question.prompt)));
+  accepted(await submit(me, other.id, begun.data.attempt.id, answers), 'a test with two misses is submitted');
+  const tested = (await db().doc(`cardProgress/${other.id}_s5`).get()).data();
+  same([tested.cardStates.card4.l, tested.cardStates.card7.l, Object.keys(tested.cardStates).length], [0, 1, 12], 'test answers move mastery for every question');
+  same(Object.keys((await missesDoc()).data().misses[other.id]).sort(), ['card4', 'card5'], 'test misses join the index');
+  const list = await call(me, 'GET', ['student']);
+  same(list.data.review, {total: 3, weeks: [{week: logic.cardWeekStart(today), count: 3}]}, 'the set list carries the missed-card count by week');
+  same((await call(pupil(6), 'GET', ['student'])).data.review, {total: 0, weeks: []}, 'a student without misses gets an empty review row');
+  const missedItems = (await call(me, 'GET', ['review'])).data.items;
+  same(missedItems?.map(item => `${item.distributionId === base.id ? 'a' : 'b'}:${item.card.id}`).sort(), ['a:card2', 'b:card4', 'b:card5'], 'the missed-card review gathers misses from both sets');
+  check(missedItems.every(item => item.missedOn === today && item.title), 'each carries its date and set title');
+  same((await call(me, 'GET', ['review'], undefined, {query: `?week=${logic.cardAddDays(logic.cardWeekStart(today), -7)}`})).data.items, [], 'an older week is empty');
+  refused(await call(me, 'GET', ['review'], undefined, {query: '?week=soon'}), 400, undefined, 'a malformed week is refused');
+  accepted(await study(me, other.id, 'recall', 'm-r2', right(4, 5), {review: true}), 'reviewing the two test misses');
+  same((await missesDoc()).data().misses, {[base.id]: {card2: today}}, 'cards answered right in review leave the index');
+  same((await call(me, 'GET', ['student'])).data.review.total, 1, 'and the list count drops');
+  accepted(await call(teacher, 'PATCH', ['distributions', base.id], {active: false}), 'teacher closes the first set');
+  same([(await call(me, 'GET', ['student'])).data.review.total, (await call(me, 'GET', ['review'])).data.items.length], [0, 0], 'a closed set drops out of the row and the session');
+  accepted(await call(teacher, 'PATCH', ['distributions', base.id], {active: true}), 'and reopens it');
+  accepted(await call(teacher, 'PATCH', ['distributions', base.id], {dueAt: iso(-HOUR), afterDue: 'lock'}), 'teacher locks it after a deadline');
+  same((await call(me, 'GET', ['review'])).data.items.length, 0, 'a locked set is left out of the missed-card review');
+  refused(await call(me, 'GET', ['review'], undefined, {query: `?distributionId=${base.id}`}), 403, 'DUE_CLOSED', 'and its date review is closed');
+  refused(await study(me, base.id, 'recall', 'm-r3', right(2), {review: true}), 403, 'DUE_CLOSED', 'a review answer after the lock is refused');
+  refused(await call('u9:0', 'GET', ['review'], undefined, {query: `?distributionId=${other.id}`}), 404, 'NOT_FOUND', 'a student from another class cannot review it');
+  refused(await call(teacher, 'GET', ['review']), 403, 'FORBIDDEN', 'a teacher has no review session');
+
+  // Teacher report and Berry.
+  const data = await report(other.id), row = reported(data, 's5');
+  same([row.progress.mastery, row.levels.card4, row.levels.card7], [Math.round((10 + 2) / 48 * 100), 1, 1], 'the report carries mastery and card levels');
+  same(reported(data, 's6').levels, {}, 'a student with no answers has no levels');
+  const bearer = {uid: teacher, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read']};
+  const berry = (await callClassroomTool('list_card_sets', {distribution_id: other.id}, bearer)).card_sets[0].progress;
+  check(typeof berry.average_mastery === 'number' && berry.review_due_students === 0 && berry.review_due_cards === 0, 'Berry reads class mastery and due counts', berry);
+  check(!JSON.stringify(berry).includes('학생5'), 'without names');
+
+  // Old records: no cardStates, no miss index.
+  const old = await distribute({test: {questionCount: 2, maxAttempts: 5}});
+  await db().doc(`cardProgress/${old.id}_s6`).set({distributionId: old.id, ownerUid: teacher, classId: 'class-a', studentId: 's6', counts: {memorize: 0, recall: 3, spell: 0}, correctCounts: {memorize: 0, recall: 3, spell: 0}, coverage: {memorize: {}, recall: {card0: 1}, spell: {}}, mistakes: {card1: 2}, attempts: 0, bestScore: null, latestScore: null, starredCardIds: [], lastPosition: null, activeAttemptId: null, lastSubmittedAttemptId: null, updatedAt: iso(-HOUR)});
+  const oldDetail = await call(pupil(6), 'GET', ['distributions', old.id]);
+  same([oldDetail.status, oldDetail.data.progress.mastery, oldDetail.data.progress.reviewDue, oldDetail.data.cardStates], [200, 0, 0, {}], 'an old record reads as 0% with nothing due');
+  same(reported(await report(old.id), 's6').levels, {}, 'the report reads it with no levels');
+  same((await call(pupil(6), 'GET', ['review'])).data.items, [], 'no miss index means an empty review');
+  const oldStudy = await study(pupil(6), old.id, 'recall', 'm-o1', [...right(0), wrong(1)]);
+  same([oldStudy.status, oldStudy.data.progress.counts.recall], [200, 5], 'an old record keeps taking study');
+  const upgraded = (await db().doc(`cardProgress/${old.id}_s6`).get()).data();
+  same([upgraded.cardStates.card0.l, upgraded.mistakes.card1], [1, 3], 'and gains card states while keeping its old counts');
+  same((await db().doc('cardMisses/class-a_s6').get()).data().misses, {[old.id]: {card1: today}}, 'the first miss creates the index');
+}
+
+const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, room: roomSection, berry: berrySection, ai: aiSection, mastery: masterySection};
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
