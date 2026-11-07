@@ -7,7 +7,7 @@ import { assertOrigin, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
 import { buildTestQuestions, cardAfterDue, isTestOvertime, testTimeLimit } from '../cards-logic';
-import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
+import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
 import type { CardDirection, CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
 
 type Data = Record<string, any>;
@@ -199,14 +199,20 @@ async function saveSet(ctx: Context, request: Request, setId?: string, duplicate
   return json({ set }, duplicate || !setId ? 201 : 200);
 }
 
+/** targetCount is the count at distribution. While a set is open to all students the real number moves with the roster, so it is worked out on read. */
+async function liveTargetCounts<T extends Pick<Distribution, 'allStudents' | 'targetStudentIds' | 'targetCount'>>(classId: string, rows: T[]) {
+  if (!rows.some(row => row.allStudents)) return rows;
+  const roster = await db().collection(`classes/${classId}/students`).select('disabled').get(), activeIds = roster.docs.filter(pupil => !pupil.data().disabled).map(pupil => pupil.id);
+  return rows.map(row => row.allStudents ? { ...row, targetCount: reportStudentIds(row, activeIds).length } : row);
+}
 async function distributions(ctx: Context, request: Request) {
   teacher(ctx);
   if (request.method === 'GET') {
     const params = new URL(request.url).searchParams, classId = id(params.get('classId'), '우리 반');
     await managedClass(ctx, classId);
-    const result = await pageQuery('cardClassSets', 'classId', classId, params.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'targetCount', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt').get();
+    const result = await pageQuery('cardClassSets', 'classId', classId, params.get('cursor')).select('classId', 'className', 'setId', 'setVersion', 'versionId', 'ownerUid', 'title', 'type', 'cardCount', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'dueAt', 'afterDue', 'allStudents', 'active', 'createdAt', 'updatedAt').get();
     const rows = result.docs.slice(0, CARD_LIST_LIMIT).map(asDistribution).filter(value => value.ownerUid === ctx.uid);
-    return json({ distributions: rows.map(distributionSummary), nextCursor: result.size > CARD_LIST_LIMIT ? rows.at(-1)?.id ?? null : null });
+    return json({ distributions: (await liveTargetCounts(classId, rows)).map(distributionSummary), nextCursor: result.size > CARD_LIST_LIMIT ? rows.at(-1)?.id ?? null : null });
   }
   const input = await body(request), classId = id(input.classId), ref = db().collection('cardClassSets').doc();
   const requestState = mutationRequest(ctx, 'distributions/create', input);
@@ -249,13 +255,17 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
     const input = await body(request);
     const distribution = await db().runTransaction(async tx => {
       const value = await loadDistribution(ctx, distributionId, tx);
-      const update = distributionPatch(input, value), updatedAt = now();
+      const update: Data = distributionPatch(input, value), updatedAt = now();
+      if (value.allStudents && update.allStudents === false) {
+        const roster = await tx.get(db().collection(`classes/${value.classId}/students`));
+        Object.assign(update, widenedTargets(value, roster.docs.filter(pupil => !pupil.data().disabled).map(pupil => ({ id: pupil.id, name: String(pupil.data().name ?? ''), number: Number(pupil.data().number ?? 0) }))));
+      }
       tx.update(distributionRef(distributionId), { ...update, updatedAt });
       return { ...value, ...update, updatedAt };
     });
-    return json({ distribution: visibleDistribution(distribution, ctx) });
+    return json({ distribution: visibleDistribution((await liveTargetCounts(distribution.classId, [distribution]))[0], ctx) });
   }
-  const distribution = await loadDistribution(ctx, distributionId);
+  const loaded = await loadDistribution(ctx, distributionId), distribution = ctx.role === 'student' ? loaded : (await liveTargetCounts(loaded.classId, [loaded]))[0];
   const state = ctx.role === 'student' ? await progressRef(distributionId, ctx.studentId!).get() : null;
   return json({ distribution: visibleDistribution(distribution, ctx), ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} }, serverTime: now() } : {}) });
 }
@@ -446,7 +456,7 @@ async function report(ctx: Context, distributionId: string) {
     const attempts = record ? await record.ref.collection('tests').get() : null;
     return { id: studentId, name: pupil?.name ?? original?.name ?? '삭제된 학생', number: pupil?.number ?? original?.number ?? 0, disabled: !pupil || !!pupil.disabled, progress: progress(record?.data(), distribution), attempts: (attempts?.docs ?? []).map(asAttempt).sort((a, b) => b.number - a.number).map(value => visibleAttempt(value, distribution, true)), mistakes: Object.entries(record?.data()?.mistakes ?? {}).map(([cardId, count]) => ({ cardId, count: count as number })).sort((a, b) => b.count - a.count) };
   }));
-  return json({ distribution: visibleDistribution(distribution, ctx), students: students.sort((a, b) => a.number - b.number) });
+  return json({ distribution: visibleDistribution({ ...distribution, targetCount: students.length }, ctx), students: students.sort((a, b) => a.number - b.number) });
 }
 
 export async function handleCards(request: Request, segments: string[] = []) {

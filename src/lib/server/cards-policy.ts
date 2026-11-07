@@ -107,6 +107,12 @@ export function canStudyDistribution(ctx: { role: Role; classId?: string; studen
 export function reportStudentIds(distribution: { targetStudentIds: string[]; allStudents?: boolean }, activeIds: string[]) {
   return distribution.allStudents ? [...new Set([...distribution.targetStudentIds, ...activeIds])] : distribution.targetStudentIds;
 }
+/** Turning all-students off keeps everyone who could study until now, later joiners included, instead of stranding them. */
+export function widenedTargets<T extends { id: string; name: string; number: number }>(distribution: { targetStudentIds: string[]; targetStudents?: T[] }, active: T[]) {
+  const known = new Map([...(distribution.targetStudents ?? []), ...active].map(student => [student.id, student]));
+  const targetStudentIds = [...new Set([...distribution.targetStudentIds, ...active.map(student => student.id)])];
+  return { targetStudentIds, targetStudents: targetStudentIds.flatMap(studentId => known.get(studentId) ?? []), targetCount: targetStudentIds.length };
+}
 type EditableDistribution = { cardCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null };
 /** The fields a PATCH may change, each through the validator used at creation. Nested settings merge over the saved ones, so a partial edit never resets the rest. */
 export function distributionPatch(input: Value, current: EditableDistribution) {
