@@ -1,8 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {cardRoomCapacity, cardRoomItems, versusClassIds} from './cards-room';
+import {cardHuntCapacity, cardHuntItems, cardRoomCapacity, cardRoomItems, versusClassIds} from './cards-room';
 import {choicesFor, isItemAnswer, normalizeAnswer} from './engine';
-import {missedRounds, namedTeams, teamScores} from './room-machine';
+import {huntResults, missedRounds, namedTeams, teamScores} from './room-machine';
 import {isVersusRoom, roomHasClass} from './room-types';
 import type {CardEntry} from '../../lib/cards-types';
 import type {PublicRoomRound} from './room-types';
@@ -95,4 +95,21 @@ test('반대항전: two to six classes, the host first; teams carry class names 
   const teams = namedTeams(teamScores([player(0, 900), player(0, 300), player(1, 500)], 2), room);
   assert.deepEqual(teams.map(team => [team.name, team.score, team.count]), [['3-1', 600, 2], ['3-2', 500, 1]], 'a class of two and a class of one compare by average');
   assert.equal(namedTeams(teamScores([player(0, 1)], 2), {})[0].name, '햇살', 'other rooms keep the usual names');
+});
+
+test('먼저 쓰기: any card with an answer can be asked; the secret keeps the card for the study grading rule', () => {
+  const deck = [{id: 'a', front: 'big', back: '크다', example: '', alternatives: ['커다랗다']}, {id: 'b', front: 'large', back: '크다', example: '', alternatives: []}, {id: 'c', front: 'blank', back: ' ', example: '', alternatives: []}] as CardEntry[];
+  assert.equal(cardHuntCapacity(deck, 'front-back'), 2, 'two cards sharing an answer still run; a blank answer does not');
+  const items = cardHuntItems(deck, 'front-back', 5, () => 0);
+  assert.equal(items.length, 2);
+  const big = items.find(row => row.card.id === 'a')!;
+  assert.deepEqual([big.item.prompt, big.item.answers, big.item.choices], ['big', ['크다', '커다랗다'], []]);
+  assert.equal(cardHuntItems(deck, 'back-front', 1, () => 0)[0].item.answers.length, 1, 'back to front asks for the front only');
+});
+test('먼저 쓰기: only the first right answer scores, and a skipped question scores nothing', () => {
+  const room = {playerKeys: ['s1', 's2', 's3'], skippedRounds: [] as number[], round: 0} as unknown as Parameters<typeof huntResults>[0];
+  const answers = [{key: 's2', round: 0, choiceId: '', receivedAt: 2, correct: true, first: true}, {key: 's2', round: 0, choiceId: '', receivedAt: 2, correct: true, tries: 2}, {key: 's1', round: 0, choiceId: '', receivedAt: 1, correct: false, tries: 1}];
+  assert.deepEqual(huntResults(room, answers, 1000), [{key: 's1', points: 0, rank: 0, correct: false}, {key: 's2', points: 1000, rank: 1, correct: true}, {key: 's3', points: 0, rank: 0, correct: false}]);
+  assert.ok(huntResults({...room, skippedRounds: [0]}, answers, 1000).every(row => row.points === 0));
+  assert.deepEqual(missedRounds([{round: 0, kind: 'vocab', prompt: 'p', choices: [], correctChoiceId: 'x', distribution: {}}]), [], 'typed rounds stay out of the choice review');
 });

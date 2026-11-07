@@ -87,5 +87,19 @@
   "versusTeams": "팀: 반 {n}개",
   "versusLobby": "반마다 한 팀이에요. 팀 점수는 반 평균이에요.",
   "versusNoReward": "반대항전은 보말 지급을 지원하지 않아요. 필요하면 반마다 보말 화면에서 지급해 주세요.",
-  "classAverage": "{n}명 평균"
+  "classAverage": "{n}명 평균",
+  "answerMode": "답하는 방식",
+  "answerChoice": "보기 고르기",
+  "answerTyped": "먼저 쓰기 (직접 입력)",
+  "huntHint": "학생이 답을 직접 써요. 가장 먼저 맞힌 학생만 1,000점을 받고 그 문제는 바로 정답을 보여 줘요. 한 문제에 세 번까지 쓸 수 있고, 카드의 대체 정답도 맞음으로 쳐요.",
+  "huntTitle": "먼저 쓰기",
+  "huntInput": "답 쓰기",
+  "huntSend": "보내기",
+  "huntWrong": "아니에요. {n}번 더 쓸 수 있어요.",
+  "huntOut": "세 번 모두 썼어요. 친구들을 기다려요.",
+  "huntRight": "먼저 맞혔어요!",
+  "huntWaiting": "가장 먼저 맞히는 친구가 점수를 받아요.",
+  "huntWinner": "{name}이(가) 먼저 맞혔어요",
+  "huntNobody": "아무도 맞히지 못했어요. 정답을 확인해요.",
+  "huntAnswered": "{n}명이 다 썼어요"
 }

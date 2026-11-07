@@ -27,6 +27,7 @@
 .cards-agenda-entry{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}.cards-agenda-entry a{font-weight:700;overflow-wrap:anywhere;min-width:0}.cards-agenda-entry.is-due .cs-tag{color:var(--danger)}
 /* 반대항전 (team setup) */
 .cards-team-versus{border:1px solid var(--border);border-radius:13px;padding:10px 14px;margin:12px 0}.cards-team-versus>strong{font-size:13px;color:var(--accent)}.cards-team-versus>div{display:flex;flex-wrap:wrap;gap:0 16px}.cards-team-versus-count{align-self:end;font-size:13px;font-weight:700;color:var(--accent);margin:0 0 14px}
+.cards-team-answer{display:flex;align-items:center;gap:4px 16px;flex-wrap:wrap;margin:6px 0 4px}.cards-team-answer>strong{font-size:13px;flex-basis:100%}
 /* 동료 공유 */
 .cards-shared>.cards-muted{margin:-6px 0 12px}
 .cards-shared-folders{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}

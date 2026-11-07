@@ -87,5 +87,19 @@
   "versusTeams": "Teams: {n} classes",
   "versusLobby": "One team per class, scored by the class average.",
   "versusNoReward": "Class vs class rooms do not pay points. Give points per class instead.",
-  "classAverage": "{n} students, average"
+  "classAverage": "{n} students, average",
+  "answerMode": "How students answer",
+  "answerChoice": "Choose an option",
+  "answerTyped": "First to type (typed answer)",
+  "huntHint": "Students type the answer. Only the first right answer scores 1,000 and the answer is shown at once. Three tries a question; card alternatives count.",
+  "huntTitle": "First to type",
+  "huntInput": "Your answer",
+  "huntSend": "Send",
+  "huntWrong": "Not quite. {n} tries left.",
+  "huntOut": "No tries left. Wait for your friends.",
+  "huntRight": "You got it first!",
+  "huntWaiting": "The first right answer scores.",
+  "huntWinner": "{name} got it first",
+  "huntNobody": "Nobody got it. Here is the answer.",
+  "huntAnswered": "{n} done"
 }

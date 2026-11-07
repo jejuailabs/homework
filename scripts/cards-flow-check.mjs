@@ -1206,6 +1206,43 @@ async function versusSection() {
   same(await roomRefused(() => room(hostCtx, 'POST', ['rooms', roomId, 'reward'], {amount: 1}), 403), true, 'a versus room pays no team reward');
 }
 sections.versus = versusSection;
+// 구역 hunt: 먼저 쓰기. 직접 쓴 답을 카드 학습 채점(대체 정답 포함)으로 보고, 가장 먼저 맞힌 학생만 점수를 받으며 한 문제 세 번까지다. `node scripts/cards-flow-check.mjs hunt`
+async function huntSection() {
+  section('first-to-type card room');
+  const room = await roomCall();
+  for (const n of [1, 2]) await db().doc(`classes/class-a/students/s${n}`).update({character: 'cat', wardrobeOwned: [], spaceOwned: []});
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', answer: 'shout', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: setId, requestId: 'hunt-x'}), 400), true, 'an unknown answer mode is refused');
+  const opened = await room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', answer: 'typed', direction: 'front-back', rounds: 2, seconds: 30, teamCount: 2, cardSetId: setId, requestId: 'hunt-1'}), roomId = opened.roomId;
+  same((await db().doc(`playRooms/${roomId}`).get()).data().cards.answer, 'typed', 'the room is a first-to-type room');
+  for (const n of [1, 2]) await room(studentCtx(n, 'class-a'), 'POST', ['rooms', 'join'], {code: opened.code});
+  await room(hostCtx, 'POST', ['rooms', roomId, 'start'], {status: 'lobby', round: -1});
+  await new Promise(resolve => setTimeout(resolve, 3100));
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const asked = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data(), secret = (await db().doc(`playRooms/${roomId}/secrets/0`).get()).data();
+  same([asked.choices, typeof asked.prompt], [[], 'string'], 'the public round has a prompt and no choices');
+  check(!JSON.stringify(asked).includes(secret.card.back), 'the public round does not carry the answer');
+  same(await roomRefused(() => room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'answer'], {round: 0, choiceId: 'c_x'}), 400), true, 'a choice answer is refused in a typed room');
+  const miss = await room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 0, text: '모르겠어요'});
+  same([miss.correct, miss.triesLeft], [false, 2], 'a wrong answer leaves two tries');
+  const answer = secret.card.alternatives[0] ?? secret.card.back;
+  const hit = await room(studentCtx(2, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 0, text: ` ${answer.toUpperCase()} `});
+  same([hit.correct, hit.first], [true, true], 'the first right answer wins (graded like card study: spacing, case, alternatives)');
+  const revealed = (await db().doc(`playRooms/${roomId}`).get()).data();
+  same(revealed.status, 'reveal', 'the question reveals at once');
+  const results = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data().results;
+  same(results.map(row => [row.key, row.points]).sort(), [['s1', 0], ['s2', 1000]], 'only the winner scores');
+  same(await roomRefused(() => room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 0, text: answer}), 409), true, 'a late right answer does not score');
+  await room(hostCtx, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 0});
+  for (let i = 0; i < 3; i++) await room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 1, text: `틀림${i}`});
+  same(await roomRefused(() => room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 1, text: 'again'}), 409), true, 'three tries a question');
+  for (let i = 0; i < 3; i++) await room(studentCtx(2, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 1, text: `틀림${i}`});
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const second = (await db().doc(`playRooms/${roomId}/rounds/1`).get()).data();
+  same([(await db().doc(`playRooms/${roomId}`).get()).data().status, second.results.every(row => row.points === 0)], ['reveal', true], 'when everyone is out of tries the question reveals with no winner');
+  await room(hostCtx, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 1});
+  same((await room(hostCtx, 'GET', ['rooms', roomId, 'review'])).review, [], 'typed rounds stay out of the choice review');
+}
+sections.hunt = huntSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

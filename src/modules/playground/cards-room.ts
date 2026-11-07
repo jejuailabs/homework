@@ -6,6 +6,14 @@ import type {PlayItem} from './types';
 export const CARD_ROOM_MAX_QUESTIONS = 30;
 export const CARD_ROOM_SECONDS = {min: 10, max: 30, initial: 15};
 export const CARD_ROOM_TEAMS = {min: 2, max: 6, initial: 2};
+/** 먼저 쓰기 asks any card with an answer: no choices are needed, so a set of one card can run. */
+export function cardHuntCapacity(cards: CardEntry[], direction: CardDirection) {
+  return Math.min(CARD_ROOM_MAX_QUESTIONS, cards.filter(card => normalizeCardAnswer(cardAnswer(card, direction))).length);
+}
+/** Typed questions keep the card itself in the secret, so the server grades with the same isCorrectCardAnswer as card study (alternatives count). */
+export function cardHuntItems(cards: CardEntry[], direction: CardDirection, rounds: number, random: (max: number) => number): {item: PlayItem; card: CardEntry}[] {
+  return shuffleWith(cards.filter(card => normalizeCardAnswer(cardAnswer(card, direction))), random).slice(0, rounds).map(card => ({card, item: {id: `card_${card.id}`, version: 'cards-hunt-v1', kind: 'vocab', gradeBand: 'mid', prompt: direction === 'front-back' ? card.front : card.back, answers: direction === 'front-back' ? [card.back, ...card.alternatives] : [card.front], choices: [], hints: [], reveal: [`${card.front} = ${card.back}`, card.example].filter(Boolean).join('\n'), source: 'cards'}}));
+}
 /** 반대항전: two to six classes of the same teacher in one room, each class one team. */
 export const CARD_ROOM_VERSUS = {min: 2, max: 6};
 /** The classes of a versus room: the host class first, no repeats, two to six. Returns null when the list is not a versus room. */
