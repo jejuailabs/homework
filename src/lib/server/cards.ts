@@ -68,7 +68,7 @@ function emptyProgress(ctx: Context & { classId: string; studentId: string }, di
 }
 async function loadDistribution(ctx: Context, distributionId: string, tx?: FirebaseFirestore.Transaction, allowClosed = false): Promise<Distribution> {
   const ref = distributionRef(distributionId), snap = tx ? await tx.get(ref) : await ref.get();
-  if (!snap.exists) throw new ApiError(404, '배포한 세트를 찾을 수 없어요.', 'NOT_FOUND');
+  if (!snap.exists) throw new ApiError(404, '배부한 세트를 찾을 수 없어요.', 'NOT_FOUND');
   const value = asDistribution(snap);
   if (ctx.role !== 'student') {
     owner(ctx, value);
@@ -76,7 +76,7 @@ async function loadDistribution(ctx: Context, distributionId: string, tx?: Fireb
     return value;
   }
   student(ctx);
-  if (!canStudyDistribution(ctx, { ...value, active: allowClosed || value.active })) throw new ApiError(404, '우리 반에 배포한 세트를 찾을 수 없어요.', 'NOT_FOUND');
+  if (!canStudyDistribution(ctx, { ...value, active: allowClosed || value.active })) throw new ApiError(404, '우리 반에 나눠 준 세트를 찾을 수 없어요.', 'NOT_FOUND');
   const refs = [db().doc(`classes/${ctx.classId}`), db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`), db().doc(`users/${ctx.uid}`)];
   const [cls, pupil, profile] = await Promise.all(refs.map(reference => tx ? tx.get(reference) : reference.get()));
   if (!cls.exists || cls.data()?.ownerUid !== value.ownerUid || !pupil.exists || pupil.data()?.disabled || pupil.data()?.authUid !== ctx.uid || !profile.exists || profile.data()?.disabled || profile.data()?.studentId !== ctx.studentId || profile.data()?.classId !== ctx.classId || profile.data()?.role !== 'student') throw new ApiError(403, '학생 코드를 선생님께 다시 확인해 주세요.', 'STUDENT_UNAVAILABLE');
@@ -223,7 +223,7 @@ async function distributions(ctx: Context, request: Request) {
     if (!version.exists) throw new ApiError(409, '세트 버전을 확인해 주세요.', 'VERSION_MISSING');
     const activeIds = roster.docs.filter(pupil => !pupil.data().disabled).map(pupil => pupil.id);
     const requested = input.targetStudentIds ?? [];
-    if (!Array.isArray(requested) || requested.length > 300) throw new ApiError(400, '배포할 학생을 확인해 주세요.');
+    if (!Array.isArray(requested) || requested.length > 300) throw new ApiError(400, '배부할 학생을 확인해 주세요.');
     const targetStudentIds: string[] = requested.length ? requested.map(value => id(value)) : activeIds;
     if (!targetStudentIds.length || new Set(targetStudentIds).size !== targetStudentIds.length || targetStudentIds.some(value => !activeIds.includes(value))) throw new ApiError(400, '우리 반의 이용 가능한 학생을 선택해 주세요.', 'DISTRIBUTION_TARGETS');
     const data = version.data()!, snapshot: CardSnapshot = { title: data.title, description: data.description, type: data.type, cards: data.cards };
@@ -242,7 +242,7 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
   if (request.method === 'PATCH') {
     teacher(ctx);
     const input = await body(request);
-    if (typeof input.active !== 'boolean') throw new ApiError(400, '배포 상태를 확인해 주세요.');
+    if (typeof input.active !== 'boolean') throw new ApiError(400, '배부 상태를 확인해 주세요.');
     const distribution = await db().runTransaction(async tx => {
       const value = await loadDistribution(ctx, distributionId, tx);
       const updatedAt = now();

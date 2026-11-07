@@ -101,7 +101,7 @@ export default function TeacherDashboard() {
       <Link className="thd-shortcut thd-peach" href={exhibitionHref}><span className="thd-icon"><Images size={24}/></span><span><strong>{t("exhibitions")}</strong><small>{t("exhibitionsHint")}</small></span><img src="/characters/otter-moa.webp" alt=""/><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-sky" href={`/teacher/boards${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`}><span className="thd-icon"><PanelsTopLeft size={24}/></span><span><strong>{t("boards")}</strong><small>{t("boardsHint")}</small></span><img src="/characters/rabbit-tori.webp" alt=""/><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-lilac" href="/teacher/tools"><span className="thd-icon"><Sparkles size={24}/></span><span><strong>{t("tools")}</strong><small>{t("toolsHint")}</small></span><ArrowRight size={20}/></Link>
-      <Link className="thd-shortcut thd-peach" href={`/teacher/cards${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`}><span className="thd-icon"><Layers size={24}/></span><span><strong>{locale === 'ko' ? '카드놀이' : 'Card Play'}</strong><small>{locale === 'ko' ? '세트 만들기 · 학습 · 테스트' : 'Create sets · learn · test'}</small></span><ArrowRight size={20}/></Link>
+      <Link className="thd-shortcut thd-peach" href={`/teacher/cards${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`}><span className="thd-icon"><Layers size={24}/></span><span><strong>{locale === 'ko' ? '카드놀이' : 'Card Play'}</strong><small>{locale === 'ko' ? '단어·문장 익히기' : 'Learn words and sentences'}</small></span><ArrowRight size={20}/></Link>
     </nav>
     <StorageGuide/>
 
