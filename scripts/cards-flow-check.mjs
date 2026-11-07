@@ -516,6 +516,13 @@ async function berrySection() {
   check(!JSON.stringify(listed).includes('학생1') && !JSON.stringify(one).includes('학생1'), 'list_card_sets never carries a child name', {listed, one});
   check(listed.card_sets.find(row => row.id === given.data.distribution.id)?.title?.includes('보충 단어'), 'the rest of the title stays');
   same(one.card_sets[0].students, (await db().collection('classes/class-a/students').get()).docs.filter(doc => !doc.data().disabled).length, 'all_students sets report the live class size');
+  // A teacher often types the given name alone (하준이 보충 단어): that is masked too.
+  await db().doc('classes/class-m').set({ownerUid: teacher, name: '이름 반'});
+  await db().doc('classes/class-m/students/s30').set({name: '김하준', number: 3, authUid: 'u30'});
+  const alone = await call(teacher, 'POST', ['sets'], {title: '하준이 보충 단어', description: '', type: 'word', folderId: null, cards, requestId: 'set-given'});
+  const givenDist = await call(teacher, 'POST', ['distributions'], {classId: 'class-m', setId: alone.data.set.id, expectedVersion: 1, requestId: 'dist-given'});
+  const masked = await callClassroomTool('list_card_sets', {distribution_id: givenDist.data.distribution.id}, bearer);
+  same(masked.card_sets[0]?.title, '학생 03이 보충 단어', 'list_card_sets masks a given name typed alone');
 }
 
 async function gamesSection() {
