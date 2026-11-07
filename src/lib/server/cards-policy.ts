@@ -1,6 +1,22 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
 import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, cardMastery, cardReviewDate, cardReviewStates, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
+import { validPlanDate } from '../cards-planner';
+import { fitChunks } from '../cards-chunks';
+import { parseDrill, type CardDrill } from '../cards-drill';
+/** A drill set needs every card to be a question; any other set drops drill data it was sent. */
+export function drillConsistent<T extends { drill?: CardDrill }>(cards: T[], type: CardSetType): T[] {
+  if (type === 'drill') {
+    const missing = cards.findIndex(card => !card.drill);
+    if (missing >= 0) throw new ApiError(400, `${missing + 1}번 문항의 유형을 골라 주세요.`, 'DRILL_INVALID');
+    return cards;
+  }
+  return cards.map(card => { if (!card.drill) return card; const { drill: _drill, ...rest } = card; return rest as T; });
+}
+/** Drill sets have no study modes and are asked front to back; nothing a client sends changes that. */
+export function drillDistribution<R, T extends { direction: CardDirection; requireStudy: boolean }>(type: CardSetType, requiredModes: R, test: T, empty: () => R): { requiredModes: R; test: T } {
+  return type === 'drill' ? { requiredModes: empty(), test: { ...test, direction: 'front-back', requireStudy: false } } : { requiredModes, test };
+}
 import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardProgress, CardRequiredModes, CardSetType, CardSnapshot, CardStudyMode, CardTestSettings } from '../cards-types';
 
 export { cardAnswer, isCorrectCardAnswer, normalizeCardAnswer };
@@ -38,7 +54,7 @@ export function cardMode(value: unknown): CardStudyMode {
   return value as CardStudyMode;
 }
 export function cardType(value: unknown): CardSetType {
-  if (value !== 'word' && value !== 'sentence') throw new ApiError(400, '단어 또는 문장 세트를 선택해 주세요.');
+  if (value !== 'word' && value !== 'sentence' && value !== 'drill') throw new ApiError(400, '단어·문장·연습문제 세트 가운데 골라 주세요.');
   return value;
 }
 export function parseCards(value: unknown): CardEntry[] {
@@ -49,7 +65,18 @@ export function parseCards(value: unknown): CardEntry[] {
     if (!Array.isArray(alternatives) || alternatives.length > CARD_ALTERNATIVE_LIMIT) throw new ApiError(400, `${label}의 대체 정답은 ${CARD_ALTERNATIVE_LIMIT}개까지 입력해 주세요.`);
     const cardId = raw.id === undefined ? randomUUID() : id(raw.id, `${label} ID`);
     if (['__proto__', 'constructor', 'prototype'].includes(cardId)) throw new ApiError(400, `${label} ID를 확인해 주세요.`);
-    return { id: cardId, front: text(raw.front, `${label} 앞면`, CARD_TEXT_LIMIT), back: text(raw.back, `${label} 뒷면`, CARD_TEXT_LIMIT), example: text(raw.example, `${label} 예문`, CARD_EXAMPLE_LIMIT, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, CARD_TEXT_LIMIT)))] };
+    const front = text(raw.front, `${label} 앞면`, CARD_TEXT_LIMIT);
+    // 연습문제: the back is the answer the drill data names, worked out here so the editor never has to repeat it.
+    let drillData: { drill: CardDrill; back: string } | null = null;
+    if (raw.drill !== undefined) {
+      const parsed = parseDrill(raw.drill, { front, example: text(raw.example, `${label} 지문`, CARD_EXAMPLE_LIMIT, true), back: text(raw.back, `${label} 정답`, CARD_TEXT_LIMIT, true), alternatives: (Array.isArray(alternatives) ? alternatives : []).filter((answer): answer is string => typeof answer === 'string').map(answer => answer.trim()).filter(Boolean) });
+      if ('error' in parsed) throw new ApiError(400, `${index + 1}번 문항: ${parsed.error}`, 'DRILL_INVALID');
+      drillData = parsed;
+    }
+    // 끊어읽기 marks are kept only where they fall between two words of the front; an edited sentence simply drops the ones that no longer fit.
+    if (raw.chunks !== undefined && !Array.isArray(raw.chunks)) throw new ApiError(400, `${label}의 끊어읽기 표시를 확인해 주세요.`);
+    const chunks = fitChunks(raw.chunks, front);
+    return { id: cardId, front, back: drillData ? text(drillData.back, `${index + 1}번 문항 정답`, CARD_TEXT_LIMIT) : text(raw.back, `${label} 뒷면`, CARD_TEXT_LIMIT), example: text(raw.example, `${label} 예문`, CARD_EXAMPLE_LIMIT, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, CARD_TEXT_LIMIT)))], ...(chunks.length ? { chunks } : {}), ...(drillData ? { drill: drillData.drill } : {}) };
   });
   if (new Set(cards.map(card => card.id)).size !== cards.length) throw new ApiError(400, '중복된 카드 ID가 있어요.');
   // Leave room for distribution settings and Firestore's document size overhead.
@@ -84,6 +111,12 @@ export function parseDueAt(value: unknown): string | null {
 export function parseAfterDue(value: unknown): CardAfterDue {
   if (value === undefined || value === null) return 'open';
   if (value !== 'open' && value !== 'late' && value !== 'lock') throw new ApiError(400, '마감 후 처리 방법을 확인해 주세요.');
+  return value;
+}
+/** 학습 일정의 학습할 날: a Seoul calendar date or null. It only places the set on the planner; it never opens or closes study. */
+export function parsePlanDate(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  if (!validPlanDate(value)) throw new ApiError(400, '학습할 날을 확인해 주세요.');
   return value;
 }
 /** 읽어 주기 기본 속도 (0.5~1.5배, 0.1 단위). null means the student's own choice, starting at 1×. */
@@ -122,7 +155,7 @@ export function widenedTargets<T extends { id: string; name: string; number: num
 type EditableDistribution = { cardCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null };
 /** The fields a PATCH may change, each through the validator used at creation. Nested settings merge over the saved ones, so a partial edit never resets the rest. */
 export function distributionPatch(input: Value, current: EditableDistribution) {
-  const update: { active?: boolean; allStudents?: boolean; requiredModes?: CardRequiredModes; test?: CardTestSettings; dueAt?: string | null; afterDue?: CardAfterDue; speechRate?: number | null } = {};
+  const update: { active?: boolean; allStudents?: boolean; requiredModes?: CardRequiredModes; test?: CardTestSettings; dueAt?: string | null; afterDue?: CardAfterDue; speechRate?: number | null; planDate?: string | null } = {};
   for (const key of ['active', 'allStudents'] as const) {
     if (input[key] === undefined) continue;
     if (typeof input[key] !== 'boolean') throw new ApiError(400, '배부 상태를 확인해 주세요.');
@@ -136,6 +169,7 @@ export function distributionPatch(input: Value, current: EditableDistribution) {
   if (input.dueAt !== undefined) update.dueAt = parseDueAt(input.dueAt);
   if (input.afterDue !== undefined) update.afterDue = parseAfterDue(input.afterDue);
   if (input.speechRate !== undefined) update.speechRate = parseSpeechRate(input.speechRate);
+  if (input.planDate !== undefined) update.planDate = parsePlanDate(input.planDate);
   if (!Object.keys(update).length) throw new ApiError(400, '바꿀 배부 설정을 확인해 주세요.');
   if ((update.test ?? current.test).answerRelease === 'after-due' && !(update.dueAt === undefined ? current.dueAt : update.dueAt)) throw new ApiError(400, '마감 후 정답 공개에는 마감 날짜가 필요해요.');
   return update;

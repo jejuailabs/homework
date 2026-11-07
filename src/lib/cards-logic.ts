@@ -1,4 +1,5 @@
 // Pure card rules shared by the browser and the server, so instant practice feedback can never drift from server grading.
+import { drillAnswerText, drillQuestion, gradeDrill } from './cards-drill';
 import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardMisses, CardMissSummary, CardRequiredModes, CardReviewState, CardReviewStates, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
 
 // One set of card size limits for the server, the editor and bulk import.
@@ -9,8 +10,10 @@ export const CARD_ALTERNATIVE_LIMIT = 10;
 export function normalizeCardAnswer(value: string) {
   return value.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
 }
-export function cardAnswer(card: CardEntry, direction: CardDirection) { return direction === 'front-back' ? card.back : card.front; }
+// 연습문제 cards carry their own question kind: they are always asked front to back and graded by the drill rule.
+export function cardAnswer(card: CardEntry, direction: CardDirection) { return card.drill ? drillAnswerText(card) : direction === 'front-back' ? card.back : card.front; }
 export function isCorrectCardAnswer(card: CardEntry, direction: CardDirection, answer: string) {
+  if (card.drill) return gradeDrill(card, answer);
   const expected = direction === 'front-back' ? [card.back, ...card.alternatives] : [card.front];
   return expected.some(value => normalizeCardAnswer(value) === normalizeCardAnswer(answer));
 }
@@ -121,7 +124,7 @@ export function shuffleWith<T>(values: T[], random: (max: number) => number) {
   for (let index = result.length - 1; index > 0; index--) { const other = random(index + 1); [result[index], result[other]] = [result[other], result[index]]; }
   return result;
 }
-const cardPrompt = (card: CardEntry, direction: CardDirection) => direction === 'front-back' ? card.front : card.back;
+const cardPrompt = (card: CardEntry, direction: CardDirection) => card.drill || direction === 'front-back' ? card.front : card.back;
 /** Wrong answers for this card. Different answers only, nothing that would be graded correct, and nothing from a card sharing this prompt: big and large both meaning 크다 are each a right answer to 크다. */
 export function cardDistractors(card: CardEntry, pool: CardEntry[], direction: CardDirection) {
   const prompt = normalizeCardAnswer(cardPrompt(card, direction)), seen = new Set([normalizeCardAnswer(cardAnswer(card, direction))]), distractors: string[] = [];
@@ -142,6 +145,10 @@ export function buildTestQuestions(cards: CardEntry[], pool: CardEntry[], settin
   let bytes = 0;
   return cards.map(card => {
     const question: CardTestQuestion = { id: newId(), cardId: card.id, prompt: cardPrompt(card, settings.direction) };
+    if (card.drill) {
+      const drill = drillQuestion(card, random), { choices: drillChoices, ...rest } = drill;
+      return { ...question, drill: rest, ...(drillChoices ? { choices: drillChoices } : {}) };
+    }
     const choices = testFormat(settings) === 'choice' ? buildCardChoices(card, pool, settings.direction, random) : null;
     bytes += choices ? encoder.encode(choices.join('')).length : 0;
     return choices && bytes <= CARD_CHOICE_BYTES ? { ...question, choices } : question;

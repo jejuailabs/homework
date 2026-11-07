@@ -1,0 +1,84 @@
+/* 카드놀이 P2: 다른 반 옮기기·클래스 복제·학습 일정·동료 공유·쪽지 (teacher and student). Global tokens only, so every palette and dark mode follow. */
+.cards-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.cards-transfer h3{font-size:15px;margin:18px 0 6px}.cards-transfer h3 small{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
+.cards-transfer-target{display:grid;gap:6px;font-size:12px;margin:10px 0}.cards-transfer-target select{max-width:420px}
+.cards-transfer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.cards-transfer-sets{list-style:none;margin:0 0 8px;padding:6px 12px;background:var(--surface-alt);border-radius:12px;max-height:240px;overflow:auto}
+.cards-transfer-sets li+li{border-top:1px solid var(--border)}.cards-transfer-sets .cards-check{align-items:flex-start}.cards-transfer-sets span{display:grid;gap:2px;min-width:0}.cards-transfer-sets strong{overflow-wrap:anywhere}.cards-transfer-sets small{color:var(--muted);font-size:11px;font-weight:400}
+.cards-transfer-sub{margin:-6px 0 6px 26px}
+.cards-transfer-notes{margin:4px 0 10px;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.7}
+.cards-transfer-links{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 14px;max-height:320px;overflow:auto}
+.cards-transfer-links li{display:flex;align-items:center;gap:8px;min-width:0}.cards-transfer-links span{flex:0 0 42%;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cards-transfer-links select{flex:1;min-width:0;font-size:13px;padding:7px}
+.cards-transfer-clone{margin:4px 0 8px}.cards-transfer-clone>p{grid-column:1/-1;margin:0}
+/* 학습 일정 (teacher planner) */
+.cards-planner h3{font-size:15px;margin:18px 0 6px}.cards-planner h3 small{color:var(--muted);font-weight:500;margin-left:6px}
+.cards-planner-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0}.cards-planner-nav strong{font-size:14px;min-width:0}.cards-planner-nav .button{font-size:12px;min-height:34px;padding:6px 12px;margin-left:auto}
+.cards-planner-days{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cards-planner-days>li{border:1px solid var(--border);border-radius:13px;padding:8px 12px;background:var(--surface)}.cards-planner-days>li.is-today{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+.cards-planner-day{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted)}.cards-planner-days>li.is-today .cards-planner-day{color:var(--accent)}
+.cards-planner-days ul,.cards-planner-unscheduled{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.cards-planner-days .cards-muted{margin:2px 0 0}
+.cards-planner-entry,.cards-planner-unscheduled li{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}.cards-planner-entry.is-due .cards-badge{color:var(--danger)}
+.cards-planner-title{flex:1;min-width:120px;font-size:14px;overflow-wrap:anywhere}
+.cards-planner-date{margin:0}.cards-planner-date input{font-size:13px;padding:6px 8px;width:auto;max-width:100%}
+.cards-planner-unscheduled li{padding:6px 0;border-top:1px solid var(--border)}
+/* 학생 세트 목록 ↔ 학습 일정 */
+.cards-view-tabs{display:flex;gap:6px;margin:12px 0;padding:4px;background:var(--surface-alt);border-radius:13px;max-width:360px}.cards-view-tabs button{flex:1;min-height:40px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-weight:600;cursor:pointer}.cards-view-tabs button[aria-selected=true]{background:var(--surface);color:var(--accent);box-shadow:0 1px 3px #0002}
+.cards-agenda ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}.cards-agenda ol>li{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 16px}.cards-agenda ol>li.is-today{border-color:var(--accent)}
+.cards-agenda h2{font-size:15px;margin:0 0 6px;display:flex;align-items:center;gap:8px}.cards-agenda ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.cards-agenda-entry{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}.cards-agenda-entry a{font-weight:700;overflow-wrap:anywhere;min-width:0}.cards-agenda-entry.is-due .cs-tag{color:var(--danger)}
+/* 반대항전 (team setup) */
+.cards-team-versus{border:1px solid var(--border);border-radius:13px;padding:10px 14px;margin:12px 0}.cards-team-versus>strong{font-size:13px;color:var(--accent)}.cards-team-versus>div{display:flex;flex-wrap:wrap;gap:0 16px}.cards-team-versus-count{align-self:end;font-size:13px;font-weight:700;color:var(--accent);margin:0 0 14px}
+.cards-team-answer{display:flex;align-items:center;gap:4px 16px;flex-wrap:wrap;margin:6px 0 4px}.cards-team-answer>strong{font-size:13px;flex-basis:100%}
+/* 끊어읽기 */
+.cards-chunk-toggle{margin:2px 0 8px}.cards-chunk-toggle>.button{font-size:12px;min-height:32px;padding:5px 10px}
+.cards-chunk-editor{margin-top:8px;padding:10px 12px;border:1px dashed var(--border);border-radius:12px;background:var(--surface-alt)}.cards-chunk-editor .cards-muted{margin:0 0 6px}.cards-chunk-editor .cards-actions .button{font-size:12px;min-height:32px;padding:5px 10px}
+.cards-chunk-words{display:flex;flex-wrap:wrap;align-items:center;row-gap:6px;margin-bottom:8px;font-size:16px;line-height:1.5}
+.cards-chunk-word{display:inline-flex;align-items:center}.cards-chunk-gap{min-width:28px;min-height:32px;margin:0 2px;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font-weight:800;cursor:pointer}.cards-chunk-gap:hover{border-color:var(--border)}.cards-chunk-gap.is-cut{color:var(--accent);background:var(--accent-soft);border-color:var(--accent)}
+.cards-chunk-entry{display:flex;align-items:center;gap:12px;margin:12px 0;padding:14px 16px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text)}.cards-chunk-entry:hover{border-color:var(--accent)}.cards-chunk-entry>svg:first-child{color:var(--accent);flex:none}.cards-chunk-entry span{display:grid;gap:2px;flex:1;min-width:0}.cards-chunk-entry small{color:var(--muted);font-size:12px}
+.cards-chunk-practice{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;display:grid;gap:14px}
+.cards-chunk-progress{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px}
+.cards-chunk-line{font-size:clamp(20px,4vw,30px);line-height:1.6;margin:0;text-align:center;overflow-wrap:anywhere}.cards-chunk-line span{color:var(--muted)}.cards-chunk-line span.is-shown{color:var(--text)}.cards-chunk-line b{color:var(--accent)}
+.cards-chunk-meaning{text-align:center;color:var(--muted);margin:0;font-size:15px;overflow-wrap:anywhere}
+.cards-chunk-answer,.cards-chunk-bank{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:52px;padding:8px;border-radius:14px}.cards-chunk-answer{background:var(--surface-alt)}
+.cards-chunk-piece{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:12px;padding:10px 14px;font-size:16px;min-height:44px;cursor:pointer;max-width:100%;overflow-wrap:anywhere}.cards-chunk-piece.is-picked{border-color:var(--accent);background:var(--accent-soft)}.cards-chunk-piece:disabled{opacity:.45;cursor:default}
+.cards-chunk-feedback{display:flex;gap:6px;align-items:center;justify-content:center;margin:0;font-weight:700}.cards-chunk-feedback.is-right{color:var(--success)}.cards-chunk-feedback.is-wrong{color:var(--danger)}
+.cards-chunk-actions{justify-content:center}
+.cards-chunk-done h2{margin:0}
+/* 연습문제 */
+.cards-drill-row .cards-form-grid{grid-template-columns:minmax(0,180px) minmax(0,1fr)}.cards-drill-passage{display:grid;gap:6px;font-size:12px;margin:4px 0 8px}.cards-drill-passage textarea{font-size:14px}
+.cards-drill-choices{border:1px solid var(--border);border-radius:12px;padding:8px 12px;margin:4px 0;min-width:0}.cards-drill-choices legend{font-size:12px;padding:0 4px}
+.cards-drill-choice{display:flex;align-items:center;gap:8px;margin:4px 0}.cards-drill-choice input[type=radio]{width:18px;height:18px;accent-color:var(--accent);flex:none}.cards-drill-choice>span{font-size:12px;color:var(--muted);width:14px;flex:none}.cards-drill-choice input:not([type=radio]){flex:1;min-width:0;font-size:14px;padding:8px}
+.cards-drill-choices>.button{font-size:12px;min-height:32px;padding:5px 10px;margin-top:4px}.cards-drill-ox{display:flex;gap:20px}
+.cards-drill-blank{display:grid;gap:4px;font-size:12px;margin:6px 0}.cards-drill-blank input{font-size:14px}
+.cards-drill-publish{margin:14px 0}
+.cs-drill-question legend{line-height:1.6}.cs-drill-passage{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-alt);border-radius:12px;padding:10px 14px;margin:14px 0 10px;line-height:1.8;clear:both}.cs-drill-question>legend{float:left;width:100%;margin-bottom:4px}
+.cs-drill-blanks{display:grid;gap:8px}.cs-drill-blanks label{display:flex;align-items:center;gap:10px;min-width:0}.cs-drill-blanks label>span{flex:none;font-weight:700;color:var(--accent)}.cs-drill-blanks select,.cs-drill-blanks input{flex:1;min-width:0}
+.cards-drill-practice{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;display:grid;gap:14px}
+@media(max-width:740px){.cards-drill-row .cards-form-grid{grid-template-columns:1fr}}
+/* 쪽지 */
+.cards-notes{display:grid;gap:10px}.cards-notes>.cards-muted{margin:0}
+.cards-notes-switch{align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:13px;margin:0}.cards-notes-switch span{display:grid;gap:2px}.cards-notes-switch small{color:var(--muted);font-weight:400;font-size:12px}
+.cards-notes-threads{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:55dvh;overflow:auto}
+.cards-notes-threads button{width:100%;display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);cursor:pointer;min-width:0}.cards-notes-threads button:hover{border-color:var(--accent)}
+.cards-notes-who{font-weight:700;flex:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cards-notes-preview{flex:1;min-width:0;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cards-notes-thread{display:grid;gap:10px}.cards-notes-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.cards-notes-head .button{font-size:12px;min-height:34px;padding:6px 12px}
+.cards-notes-list{list-style:none;margin:0;padding:10px;display:grid;gap:8px;max-height:45dvh;overflow:auto;background:var(--surface-alt);border-radius:14px}
+.cards-notes-list li{max-width:85%;justify-self:start;background:var(--surface);border:1px solid var(--border);border-radius:14px 14px 14px 4px;padding:8px 12px}.cards-notes-list li.is-mine{justify-self:end;background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 30%,var(--border));border-radius:14px 14px 4px 14px}
+.cards-notes-list li p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.6}.cards-notes-list li small{display:flex;align-items:center;gap:4px;justify-content:flex-end;color:var(--muted);font-size:11px;margin-top:2px}.cards-notes-list li small .icon-button{min-width:28px;min-height:28px;padding:4px}
+.cards-notes-list .cards-notes-end{padding:0;border:0;background:none;height:1px}
+.cards-notes-compose{display:flex;gap:8px;align-items:flex-end}.cards-notes-compose textarea{flex:1;min-width:0;font-size:14px}.cards-notes-compose .button{flex:none}
+.cards-notes-row{display:flex;justify-content:flex-end;margin:0 0 10px}.cards-notes-row:empty{display:none}.cards-notes-student-button{gap:8px}
+@media(max-width:740px){.cards-notes-compose{flex-direction:column;align-items:stretch}.cards-notes-list li{max-width:92%}}
+/* 동료 공유 */
+.cards-shared>.cards-muted{margin:-6px 0 12px}
+.cards-shared-folders{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.cards-shared-folders button{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:16px;border:1px solid var(--border);border-radius:16px;background:var(--surface);color:var(--text);cursor:pointer;min-width:0}.cards-shared-folders button:hover{border-color:var(--accent)}.cards-shared-folders svg{color:var(--accent);flex:none}
+.cards-shared-folders span{display:grid;gap:3px;min-width:0}.cards-shared-folders strong{overflow-wrap:anywhere}.cards-shared-folders small{color:var(--muted);font-size:11px}
+.cards-shared-crumb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}.cards-shared-crumb .button{font-size:12px;min-height:34px;padding:6px 12px}.cards-shared-crumb small{color:var(--muted)}
+.cards-shared-row{width:100%;text-align:left;color:var(--text);cursor:pointer;font:inherit}
+.cards-shared-cards{max-height:50dvh;overflow:auto;margin-top:10px}
+.cards-shared-folder-pick{display:flex;align-items:center;gap:8px;font-size:12px;margin:0 auto 0 0}.cards-shared-folder-pick select{width:auto;max-width:200px;font-size:13px}
+.cards-folder-share label{display:grid;gap:6px;font-size:12px}.cards-folder-share textarea{font-size:14px}
+.cards-set-share-copy{margin-left:26px}
+@media(max-width:740px){.cards-shared-folder-pick{width:100%;margin:0}.cards-shared-folder-pick select{flex:1;max-width:none}.cards-set-share-copy{margin-left:0}}
+@media(max-width:740px){.cards-transfer-links{grid-template-columns:1fr}.cards-transfer-sub{margin-left:0}.cards-planner-nav .button{margin-left:0}}

@@ -81,6 +81,7 @@ await import('./run-cards-classroom-tests.mjs');
 await import('./run-cards-class-tests.mjs');
 await import('./run-cards-share-tests.mjs');
 await import('./run-cards-load-tests.mjs');
+await import('./run-cards-p2-tests.mjs');
 await import('./run-points-tests.mjs');
 await import('../run-matching-tests.mjs');
 await import('../run-classroom-tools-tests.mjs');

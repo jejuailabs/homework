@@ -1,7 +1,7 @@
 'use client';
 import {useEffect, useState, type FormEvent} from 'react';
 import type {CardAfterDue, CardDirection, CardDistributionSummary, CardSetType, CardTestFormat, CardTestSettings} from '@/lib/cards-types';
-import {CARD_CLASS_MODES, CARD_CLASS_TYPES, CARD_PERCENTS, CARD_SPEECH_RATES, classSettingsPath, patchFromDefaults, type CardClassDefaults, type CardClassDefaultsByType, type CardClassSettings} from '@/lib/cards-class-plan';
+import {type CardClassType, CARD_CLASS_MODES, CARD_CLASS_TYPES, CARD_PERCENTS, CARD_SPEECH_RATES, classSettingsPath, patchFromDefaults, type CardClassDefaults, type CardClassDefaultsByType, type CardClassSettings} from '@/lib/cards-class-plan';
 import {useCardsCopy} from '@/lib/cards-copy';
 import {fillCopy, useCardsClassCopy} from '@/lib/cards-class-copy';
 import {cardsRequest, CardsDialog, CardsLoading} from './cards-shared';
@@ -11,7 +11,7 @@ import '@/styles/cards-class.css';
 /** 우리 반 학습 기본값: per set type, what a new distribution starts from. Saving never touches distributions already given out. */
 export default function CardsClassDefaults({classId, className, distributions, onClose, onChanged}: {classId: string; className: string; distributions: CardDistributionSummary[]; onClose: () => void; onChanged: (notice: string) => void}) {
   const {t, locale} = useCardsCopy(), c = useCardsClassCopy();
-  const [settings, setSettings] = useState<CardClassSettings | null>(null), [draft, setDraft] = useState<CardClassDefaultsByType | null>(null), [type, setType] = useState<CardSetType>('word');
+  const [settings, setSettings] = useState<CardClassSettings | null>(null), [draft, setDraft] = useState<CardClassDefaultsByType | null>(null), [type, setType] = useState<CardClassType>('word');
   const [allClasses, setAllClasses] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState(''), [confirming, setConfirming] = useState(false), [revision, setRevision] = useState(0);
   useEffect(() => {let alive = true; setError(''); cardsRequest<{settings: CardClassSettings}>(classSettingsPath(classId)).then(data => {if (alive) {setSettings(data.settings); setDraft(data.settings.defaults);}}).catch(() => {if (alive) setError(t('error'));}); return () => {alive = false;};}, [classId, revision]);
   const failure = (cause: unknown) => setError(locale === 'ko' && cause instanceof Error ? cause.message : t('error'));

@@ -2,7 +2,9 @@
 import type {CardAfterDue, CardDirection, CardRequiredModes, CardSetType, CardStudyMode, CardTestFormat, CardTestSettings} from './cards-types';
 
 export const CARD_CLASS_MODES: CardStudyMode[] = ['memorize', 'recall', 'spell'];
-export const CARD_CLASS_TYPES: CardSetType[] = ['word', 'sentence'];
+/** 연습문제(drill) sets have no study modes, so the class defaults stay per word and sentence sets. */
+export type CardClassType = Exclude<CardSetType, 'drill'>;
+export const CARD_CLASS_TYPES: CardClassType[] = ['word', 'sentence'];
 /** Required study as a share of the cards in range: 100 is one round. */
 export const CARD_PERCENTS = [50, 100, 150, 200, 300];
 export const CARD_SPEECH_RATES = [0.5, 0.7, 1, 1.2, 1.5];
@@ -11,7 +13,7 @@ export const CARD_PLAN_MEMOS = 100, CARD_PLAN_MEMO_CHARS = 200, CARD_PLAN_SETS =
 export type CardModeDefault = {on: boolean; percent: number; direction: CardDirection};
 export type CardClassTest = {questionCount: number; goalScore: number; maxAttempts: number; requireStudy: boolean; direction: CardDirection; answerRelease: CardTestSettings['answerRelease']; format: CardTestFormat; timeLimitMinutes: number | null};
 export type CardClassDefaults = {modes: Record<CardStudyMode, CardModeDefault>; speechRate: number; test: CardClassTest; afterDue: CardAfterDue};
-export type CardClassDefaultsByType = Record<CardSetType, CardClassDefaults>;
+export type CardClassDefaultsByType = Record<CardClassType, CardClassDefaults>;
 /** One row of a class's list. A set row names a distribution; a memo row is the teacher's own short note between rows. */
 export type CardPlanItem = {kind: 'set'; id: string; highlight?: boolean; hidden?: boolean} | {kind: 'memo'; id: string; text: string; highlight?: boolean; hidden?: boolean};
 export type CardClassSettings = {defaults: CardClassDefaultsByType; plan: CardPlanItem[]; revision: number; updatedAt: string | null; saved: boolean};

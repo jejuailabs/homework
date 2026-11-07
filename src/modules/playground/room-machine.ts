@@ -51,11 +51,20 @@ export function roundResults(room: PlayRoom, answers: RoomAnswer[]): RoomRoundRe
   }));
   return room.playerKeys.map(key => points.get(key) || {key, correct: false, rank: 0, points: 0});
 }
+/** 먼저 쓰기: only the first right answer scores. Everyone else gets nothing for the question, right or not. */
+export function huntResults(room: PlayRoom, answers: RoomAnswer[], points = 1000): RoomRoundResult[] {
+  const first = answers.find(answer => answer.first), skipped = room.skippedRounds.includes(room.round);
+  return room.playerKeys.map(key => key === first?.key && !skipped ? {key, points, rank: 1, correct: true} : {key, points: 0, rank: 0, correct: false});
+}
 export function teamScores(players: RoomPlayer[], teamCount: number): RoomTeam[] {
   return Array.from({length: teamCount}, (_, id) => {
     const members = players.filter(player => player.team === id);
     return {id, name: roomTeamNames[id], color: roomTeamColors[id], count: members.length, score: members.length ? members.reduce((sum, player) => sum + player.score, 0) / members.length : 0};
   });
+}
+/** Teams of a versus room are named after their classes; other rooms keep the usual team names. */
+export function namedTeams(teams: RoomTeam[], room: Pick<PlayRoom, 'classNames'>): RoomTeam[] {
+  return room.classNames?.length ? teams.map(team => ({...team, name: room.classNames![team.id] ?? team.name})) : teams;
 }
 export function snakeTeams(players: {key: string; previousScore: number}[], count: number): Record<string, number> {
   return Object.fromEntries([...players].sort((a, b) => b.previousScore - a.previousScore || a.key.localeCompare(b.key)).map((player, i) => [player.key, Math.floor(i / count) % 2 ? count - 1 - i % count : i % count]));
@@ -64,7 +73,7 @@ export function snakeTeams(players: {key: string; previousScore: number}[], coun
 export function missedRounds(rounds: PublicRoomRound[], limit = 5): RoomReviewItem[] {
   return rounds.flatMap(round => {
     const counts = round.distribution, correctId = round.correctChoiceId;
-    if (round.skipped || !counts || !correctId) return [];
+    if (round.skipped || !counts || !correctId || !round.choices.length) return [];
     const total = round.choices.reduce((sum, choice) => sum + (counts[choice.id] || 0), 0), wrong = total - (counts[correctId] || 0);
     if (!wrong) return [];
     const common = round.choices.filter(choice => choice.id !== correctId).reduce((best, choice) => (counts[choice.id] || 0) > (counts[best.id] || 0) ? choice : best);

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {chunkCards, chunkOrderCorrect, chunkPieces, fitChunks, suggestChunks, toggleChunk} from './cards-chunks';
+
+const sentence = 'I went to the park after school with my friends.';
+assert.deepEqual(fitChunks([5, 2, 2, 0, 9, 10, 1.5, '3'], sentence), [2, 5, 9], 'whole positions between two words, in order, once');
+assert.deepEqual(fitChunks('2', sentence), [], 'anything but a list is dropped');
+assert.deepEqual(chunkPieces(sentence, [2, 5, 7]), ['I went', 'to the park', 'after school', 'with my friends.']);
+assert.deepEqual(chunkPieces(sentence, undefined), [sentence], 'unmarked is one chunk');
+assert.deepEqual(chunkPieces('  spaced   out  words ', [1]), ['spaced', 'out words']);
+assert.deepEqual(toggleChunk([2, 5], 5, sentence), [2]);
+assert.deepEqual(toggleChunk([2], 7, sentence), [2, 7]);
+assert.deepEqual(fitChunks([2, 5, 9], 'I went to the park.'), [2], 'editing the sentence drops marks that no longer fit');
+assert.deepEqual(suggestChunks('When it rains, we stay home and read books.'), [3, 6]);
+assert.deepEqual(suggestChunks('Hello.'), []);
+const cards = [{id: 'a', front: sentence, chunks: [2]}, {id: 'b', front: 'No marks here.'}, {id: 'c', front: 'One', chunks: [1]}];
+assert.deepEqual(chunkCards(cards).map(card => card.id), ['a'], 'only sentences cut into two pieces or more');
+assert.equal(chunkOrderCorrect(['a b', 'c'], ['a b', 'c']), true);
+assert.equal(chunkOrderCorrect(['a b', 'c'], ['c', 'a b']), false);
+assert.equal(chunkOrderCorrect(['the', 'cat', 'the'], ['the', 'cat', 'the']), true, 'pieces that read the same are interchangeable');
+console.log('cards chunk tests ok');

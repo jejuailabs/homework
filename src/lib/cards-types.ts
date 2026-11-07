@@ -1,9 +1,12 @@
-export type CardSetType = 'word' | 'sentence';
+import type { CardDrill, CardDrillQuestion } from './cards-drill';
+/** drill: 연습문제 세트 (객관식·O/X·객관식 빈칸·주관식·주관식 빈칸). Its cards carry `drill`; study modes are off and the test asks the drill questions. */
+export type CardSetType = 'word' | 'sentence' | 'drill';
 export type CardStudyMode = 'memorize' | 'recall' | 'spell';
 export type CardDirection = 'front-back' | 'back-front';
-export type CardEntry = { id: string; front: string; back: string; example: string; alternatives: string[] };
+/** chunks: 끊어읽기 breaks a teacher marked on a sentence, as word positions (3 = after the third word). Absent when none. */
+export type CardEntry = { id: string; front: string; back: string; example: string; alternatives: string[]; chunks?: number[]; drill?: CardDrill };
 export type CardFolder = { id: string; name: string; createdAt: string; updatedAt: string };
-export type CardSetSummary = { id: string; title: string; description: string; type: CardSetType; cardCount: number; folderId: string | null; version: number; versionId: string; archived: boolean; createdAt: string; updatedAt: string };
+export type CardSetSummary = { id: string; title: string; description: string; type: CardSetType; cardCount: number; folderId: string | null; version: number; versionId: string; archived: boolean; createdAt: string; updatedAt: string; sharing?: { visibility: 'private' | 'shared'; allowCopy: boolean }; copiedFrom?: { title: string; ownerName: string } };
 export type CardSet = CardSetSummary & { cards: CardEntry[] };
 export type CardModeRequirement = { requiredCount: number; direction: CardDirection; rangeStart: number; rangeEnd: number };
 export type CardRequiredModes = Record<CardStudyMode, CardModeRequirement>;
@@ -11,7 +14,7 @@ export type CardTestFormat = 'written' | 'choice';
 export type CardTestSettings = { questionCount: number; goalScore: number; maxAttempts: number; requireStudy: boolean; direction: CardDirection; answerRelease: 'immediate' | 'after-due' | 'never'; format?: CardTestFormat; timeLimitSeconds?: number | null };
 export type CardAfterDue = 'open' | 'late' | 'lock';
 export type CardSnapshot = { title: string; description: string; type: CardSetType; cards: CardEntry[] };
-export type CardDistributionSummary = { id: string; classId: string; className: string; setId: string; setVersion: number; versionId: string; title: string; type: CardSetType; cardCount: number; targetCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; afterDue: CardAfterDue; allStudents: boolean; active: boolean; createdAt: string; updatedAt: string; speechRate?: number | null };
+export type CardDistributionSummary = { id: string; classId: string; className: string; setId: string; setVersion: number; versionId: string; title: string; type: CardSetType; cardCount: number; targetCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; afterDue: CardAfterDue; allStudents: boolean; active: boolean; createdAt: string; updatedAt: string; speechRate?: number | null; carriedFrom?: { className: string } | null; planDate?: string | null };
 export type CardDistribution = CardDistributionSummary & { snapshot: CardSnapshot; targetStudentIds: string[] };
 export type CardCoverage = Record<CardStudyMode, Record<string, number>>;
 export type CardProgress = {
@@ -41,7 +44,7 @@ export type CardMissSummary = { total: number; weeks: { week: string; count: num
 export type CardReviewItem = { distributionId: string; title: string; direction: CardDirection; card: CardEntry; choices: string[] | null; missedOn: string | null };
 export type CardStudentDistribution = CardDistributionSummary & { progress: CardProgress };
 export type CardStudyResult = { cardId: string; correct: boolean; expectedAnswer: string };
-export type CardTestQuestion = { id: string; cardId: string; prompt: string; choices?: string[] };
+export type CardTestQuestion = { id: string; cardId: string; prompt: string; choices?: string[]; drill?: Omit<CardDrillQuestion, 'choices'> };
 export type CardTestResult = { questionId: string; answer: string; correct: boolean; expectedAnswer?: string };
 export type CardTestAttempt = { id: string; status: 'started' | 'submitted'; number: number; retryWrong: boolean; questions: CardTestQuestion[]; score: number | null; answersVisible: boolean; results?: CardTestResult[]; startedAt: string; submittedAt: string | null; timeLimitSeconds?: number | null; overtime?: boolean };
 export type CardReportStudent = { id: string; name: string; number: number; disabled: boolean; progress: CardProgress; attempts: CardTestAttempt[]; mistakes: { cardId: string; count: number }[]; levels: Record<string, number> };

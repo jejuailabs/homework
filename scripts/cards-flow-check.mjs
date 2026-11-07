@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone sharing versus hunt chunks drill notes rate. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1045,6 +1045,356 @@ async function pagesSection() {
   same((await call(who, 'GET', ['distributions', 'p202'])).status, 200, 'a hidden set still opens by its address');
 }
 sections.pages = pagesSection;
+const bearerOf = uid => ({uid, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read']});
+// 구역 transfer: 다른 반으로 옮기기·학기말 이월. 세트와 학습 기본값이 새 반에 배부되고, 이은 학생의 숙련도·별표·오답만 따라가며 원래 반은 그대로다. `node scripts/cards-flow-check.mjs transfer`
+async function transferSection() {
+  section('transfer sets and carry student records to another class');
+  await db().doc('classes/class-n').set({ownerUid: teacher, name: '4-1', grade: 4, year: 2027});
+  await db().doc('classes/class-n/students/s31').set({name: '학생1', number: 1, authUid: 'u31'});
+  await db().doc('classes/class-n/students/s32').set({name: '새친구', number: 2, authUid: 'u32'});
+  await db().doc('classes/class-n/students/s33').set({name: '전학', number: 3, authUid: 'u33', disabled: true});
+  await db().doc('users/u31').set({role: 'student', classId: 'class-n', studentId: 's31', authVersion: 0});
+  const given = await distribute({dueAt: iso(3 * 24 * HOUR), afterDue: 'lock', requiredModes: {recall: {requiredCount: 6, direction: 'front-back', rangeStart: 1, rangeEnd: 6}}, test: {questionCount: 5, goalScore: 80, maxAttempts: 3, direction: 'front-back', answerRelease: 'after-due', format: 'written'}}), base = given.id;
+  accepted(await study(pupil(1), base, 'recall', 'tr-1', [...right(0, 1), {cardId: cards[2].id, answer: '틀림'}], {starredCardIds: [cards[1].id]}), 'a student builds mastery, a star and a miss in the old class');
+  await call(teacher, 'PATCH', ['classes', 'class-a', 'settings'], {plan: [{kind: 'memo', id: 'memo-tr', text: '1단원 복습'}, {kind: 'set', id: base, highlight: true}]});
+  const preview = await call(teacher, 'GET', ['classes', 'class-a', 'transfer'], undefined, {query: '?toClassId=class-n'});
+  same(preview.data.links, [{from: 's1', to: 's31'}], 'the preview suggests the one student with the same name');
+  check(preview.data.distributions.some(row => row.id === base) && preview.data.to.length === 3, 'the preview lists the class sets and the target roster', preview.data);
+  refused(await call(stranger, 'GET', ['classes', 'class-a', 'transfer']), 404, 'NOT_FOUND', 'another teacher cannot see the transfer');
+  refused(await call(pupil(1), 'GET', ['classes', 'class-a', 'transfer']), 403, 'FORBIDDEN', 'a student cannot transfer');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-b', distributionIds: [base], requestId: 'tr-x'}), 404, 'NOT_FOUND', 'a class of another teacher cannot receive sets');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-n', distributionIds: [base], links: [{from: 's1', to: 's33'}], requestId: 'tr-y'}), 400, 'TRANSFER_LINKS', 'a disabled target student cannot take a record');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-n', distributionIds: [base], links: [{from: 's1', to: 's31'}, {from: 's1', to: 's32'}], requestId: 'tr-z'}), 400, 'TRANSFER_LINKS', 'one record goes to one student only');
+  const input = {toClassId: 'class-n', distributionIds: [base], settings: true, keepDue: false, links: [{from: 's1', to: 's31'}, {from: 's2', to: 's32'}], requestId: 'tr-run'};
+  const moved = await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], input);
+  same([moved.status, moved.data.result?.distributions, moved.data.result?.created, moved.data.result?.seeded, moved.data.result?.students], [201, 1, 1, 1, 2], 'one set moved; only the student with something to carry gets a record');
+  const placed = (await db().collection('cardClassSets').where('classId', '==', 'class-n').get()).docs.map(doc => ({...doc.data(), id: doc.id}));
+  const copy = placed.find(row => row.carriedFrom?.distributionId === base);
+  same([placed.length, copy?.allStudents, copy?.targetStudentIds, copy?.dueAt, copy?.test.answerRelease, copy?.carriedFrom?.className, copy?.requiredModes.recall.requiredCount], [1, true, ['s31', 's32'], null, 'immediate', '3-2', 6], 'the new class gets the set for all its students, without the old deadline');
+  const oldState = (await db().doc(`cardProgress/${base}_s1`).get()).data(), carried = (await db().doc(`cardProgress/${copy.id}_s31`).get()).data();
+  same([carried.cardStates, carried.starredCardIds, carried.counts.recall, carried.attempts, carried.bestScore, carried.classId], [oldState.cardStates, [cards[1].id], 0, 0, null, 'class-n'], 'mastery and stars carry; study counts and scores start fresh');
+  same((await db().doc('cardMisses/class-n_s31').get()).data()?.misses, {[copy.id]: {[cards[2].id]: logic.cardReviewDate()}}, 'the recent miss follows under the new set');
+  same((await db().doc('cardStudentLinks/class-n_s31').get()).data()?.fromStudentId, 's1', 'the link is kept for the next transfer');
+  const settings = (await call(teacher, 'GET', ['classes', 'class-n', 'settings'])).data.settings;
+  same(settings.plan, [{kind: 'memo', id: 'memo-tr-c', text: '1단원 복습'}, {kind: 'set', id: copy.id, highlight: true}], 'the lesson order and memos move with the set');
+  const learner = await call('u31:0', 'GET', ['distributions', copy.id]);
+  check(learner.status === 200 && learner.data.progress.mastery > 0 && learner.data.progress.counts.recall === 0, 'the student sees the carried mastery in the new class', learner.data.progress);
+  accepted(await call('u31:0', 'POST', ['distributions', copy.id, 'study'], {requestId: 'tr-new', mode: 'recall', direction: 'front-back', responses: right(3)}), 'the student keeps studying in the new class');
+  // The student misses the same card again in the new class later; a retry must not put the older carried date back.
+  await db().doc('cardMisses/class-n_s31').update({[`misses.${copy.id}.${cards[2].id}`]: '2099-01-01', [`misses.${copy.id}.${cards[5].id}`]: '2099-01-02'});
+  const again = await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], input);
+  same((await db().doc('cardMisses/class-n_s31').get()).data().misses[copy.id], {[cards[2].id]: '2099-01-01', [cards[5].id]: '2099-01-02'}, 'a retry keeps the misses the student made in the new class');
+  same([again.status, again.data.result?.created, again.data.result?.seeded], [201, 0, 0], 'a retry with the same request writes nothing new');
+  same((await db().doc(`cardProgress/${copy.id}_s31`).get()).data().counts.recall, 1, 'the retry never overwrites what the student did in the new class');
+  const oldReport = reported(await report(base), 's1');
+  same([oldReport.progress.counts.recall, oldReport.progress.starredCardIds], [3, [cards[1].id]], 'the old class report is unchanged');
+  same((await callClassroomTool('list_card_sets', {distribution_id: copy.id}, bearerOf(teacher))).card_sets[0].carried_from, '3-2', 'Berry sees where the set came from');
+}
+sections.transfer = transferSection;
+// 구역 clone: 클래스 복제(학생 없는 새 반 + 세트·기본값)와 학습 일정(학습할 날). `node scripts/cards-flow-check.mjs clone`
+async function cloneSection() {
+  section('clone a class and plan study days');
+  const given = await distribute({dueAt: iso(2 * 24 * HOUR)}), base = given.id;
+  refused(await call(teacher, 'PATCH', ['distributions', base], {planDate: '2026-02-30'}), 400, undefined, 'a day that does not exist is refused');
+  const planned = await call(teacher, 'PATCH', ['distributions', base], {planDate: '2027-03-04'});
+  same([planned.status, planned.data.distribution?.planDate], [200, '2027-03-04'], 'the teacher sets a study day');
+  const listed = (await call(teacher, 'GET', ['distributions'], undefined, {query: '?classId=class-a'})).data.distributions.find(row => row.id === base);
+  same(listed?.planDate, '2027-03-04', 'the class list carries the study day');
+  const studentRow = (await call(pupil(1), 'GET', ['student'])).data.distributions.find(row => row.id === base);
+  same(studentRow?.planDate, '2027-03-04', 'the student list carries the study day for the agenda');
+  refused(await call(pupil(1), 'PATCH', ['distributions', base], {planDate: null}), 403, 'FORBIDDEN', 'a student cannot plan');
+  refused(await call(stranger, 'POST', ['classes', 'class-a', 'clone'], {name: '복제', requestId: 'cl-x'}), 404, 'NOT_FOUND', 'another teacher cannot clone the class');
+  refused(await call(pupil(1), 'POST', ['classes', 'class-a', 'clone'], {name: '복제', requestId: 'cl-y'}), 403, 'FORBIDDEN', 'a student cannot clone');
+  const classesBefore = (await db().collection('classes').where('ownerUid', '==', teacher).get()).size;
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'clone'], {name: '실패', distributionIds: ['missing-dist'], requestId: 'cl-bad'}), 404, 'NOT_FOUND', 'a clone with an unknown set is refused');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'clone'], {name: '실패', distributionIds: 'x', requestId: 'cl-bad2'}), 400, undefined, 'a clone with a broken set list is refused');
+  same((await db().collection('classes').where('ownerUid', '==', teacher).get()).size, classesBefore, 'a refused clone leaves no empty class');
+  const input = {name: '5-1', year: 2027, distributionIds: [base], settings: true, keepDue: true, requestId: 'cl-run'};
+  const made = await call(teacher, 'POST', ['classes', 'class-a', 'clone'], input);
+  check(made.status === 201 && !!made.data.classId && made.data.result.distributions === 1, 'the clone makes a class and places the set', made.data);
+  const cls = (await db().doc(`classes/${made.data.classId}`).get()).data();
+  same([cls.ownerUid, cls.name, cls.year, cls.studentCount, cls.clonedFrom], [teacher, '5-1', 2027, 0, 'class-a'], 'the new class is the teacher\'s, empty, and says where it came from');
+  const placed = (await db().collection('cardClassSets').where('classId', '==', made.data.classId).get()).docs.map(doc => doc.data());
+  same([placed.length, placed[0]?.allStudents, placed[0]?.targetStudentIds, placed[0]?.planDate, placed[0]?.dueAt], [1, true, [], '2027-03-04', given.dueAt], 'the set reaches every student who joins later; kept dates stay');
+  const again = await call(teacher, 'POST', ['classes', 'class-a', 'clone'], input);
+  same([again.data.classId, again.data.result?.created, (await db().collection('classes').where('clonedFrom', '==', 'class-a').get()).size], [made.data.classId, 0, 1], 'a retry makes no second class and no second set');
+  await db().doc(`classes/${made.data.classId}/students/s41`).set({name: '새 학생', number: 1, authUid: 'u41'});
+  await db().doc('users/u41').set({role: 'student', classId: made.data.classId, studentId: 's41', authVersion: 0});
+  same((await call('u41:0', 'GET', ['student'])).data.distributions?.length, 1, 'a student added afterwards sees the cloned set');
+  same((await callClassroomTool('list_card_sets', {distribution_id: base}, bearerOf(teacher))).card_sets[0].plan_date, '2027-03-04', 'Berry reads the study day');
+}
+sections.clone = cloneSection;
+// 구역 sharing: 동료 공유. 공유한 폴더의 '공유' 세트만 보이고, 복제 허용일 때만 복사되며, 이메일을 지우면 바로 못 본다. `node scripts/cards-flow-check.mjs sharing`
+async function sharingSection() {
+  section('share a folder with colleagues, search and copy');
+  const colleague = 'teacher-c', email = `${colleague}@demo.test`;
+  await db().doc(`users/${colleague}`).set({role: 'teacher'});
+  const folder = (await call(teacher, 'POST', ['folders'], {name: '3학년 공유'})).data.folder;
+  const made = await call(teacher, 'POST', ['sets'], {title: '공유 점검 단어', description: '교과서 3과', type: 'word', folderId: folder.id, cards, requestId: 'sh-set'});
+  const setIdShared = made.data.set.id;
+  same((await call(teacher, 'GET', ['sets', setIdShared])).data.set.sharing, {visibility: 'private', allowCopy: false}, 'a new set is private');
+  refused(await call(stranger, 'PATCH', ['folders', folder.id, 'share'], {members: email}), 404, 'NOT_FOUND', 'only the owner shares the folder');
+  refused(await call(pupil(1), 'GET', ['shared']), 403, 'FORBIDDEN', 'students have no shared library');
+  refused(await call(teacher, 'PATCH', ['folders', folder.id, 'share'], {members: 'not-an-email'}), 400, 'SHARE_MEMBERS', 'a broken email is refused');
+  const shared = await call(teacher, 'PATCH', ['folders', folder.id, 'share'], {members: `${email.toUpperCase()}\n${teacher}@demo.test`});
+  same([shared.data.members, shared.data.sharedSets], [[email], 0], 'the colleague is listed (lower-cased, owner left out); no set is visible yet');
+  const before = await call(colleague, 'GET', ['shared']);
+  same(before.data.folders?.map(row => [row.name, row.sets]), [['3학년 공유', 0]], 'the colleague sees the folder but not the private set');
+  refused(await call(colleague, 'GET', ['shared', 'sets', setIdShared]), 404, 'NOT_FOUND', 'a private set cannot be opened');
+  accepted(await call(teacher, 'PATCH', ['sets', setIdShared], {action: 'share', visibility: 'shared', allowCopy: false}), 'the owner shares the set, view only');
+  same((await call(colleague, 'GET', ['shared'], undefined, {query: `?q=${encodeURIComponent('교과서 단어')}`})).data.sets?.map(row => [row.id, row.allowCopy]), [[setIdShared, false]], 'search finds it within the shared scope');
+  same((await call(colleague, 'GET', ['shared'], undefined, {query: '?q=수학'})).data.sets, [], 'search finds nothing that is not there');
+  const opened = await call(colleague, 'GET', ['shared', 'sets', setIdShared]);
+  same([opened.status, opened.data.set?.cards.length, opened.data.set?.ownerName], [200, cards.length, teacher], 'the colleague previews the cards');
+  refused(await call(colleague, 'POST', ['shared', 'sets', setIdShared, 'copy'], {requestId: 'sh-copy-0'}), 403, 'COPY_NOT_ALLOWED', 'no copy without the owner\'s permission');
+  refused(await call(stranger, 'GET', ['shared', 'sets', setIdShared]), 404, 'NOT_FOUND', 'a teacher who is not listed cannot open it');
+  accepted(await call(teacher, 'PATCH', ['sets', setIdShared], {action: 'share', visibility: 'shared', allowCopy: true}), 'the owner allows copies');
+  const copied = await call(colleague, 'POST', ['shared', 'sets', setIdShared, 'copy'], {requestId: 'sh-copy-1'});
+  check(copied.status === 201 && copied.data.set.copiedFrom?.setId === setIdShared && copied.data.set.folderId === null, 'the colleague copies it into their own sets', copied.data);
+  const mine = (await call(colleague, 'GET', ['sets', copied.data.set.id])).data.set;
+  check(mine.cards.length === cards.length && mine.cards.every(card => !cards.some(source => source.id === card.id)) && mine.copiedFrom?.ownerName === teacher, 'the copy has its own card IDs and says where it came from', mine.copiedFrom);
+  same((await call(colleague, 'POST', ['shared', 'sets', setIdShared, 'copy'], {requestId: 'sh-copy-1'})).data.set?.id, copied.data.set.id, 'a retry returns the same copy');
+  refused(await call(teacher, 'GET', ['sets', copied.data.set.id]), 404, 'NOT_FOUND', 'the owner cannot open the colleague\'s copy');
+  same((await callClassroomTool('list_card_sets', {}, bearerOf(teacher))).sharing, {shared_folders: 1, colleagues: 1, shared_sets: 1, copied_sets: 0}, 'Berry reads sharing as counts');
+  accepted(await call(teacher, 'PATCH', ['folders', folder.id, 'share'], {members: ''}), 'the owner stops sharing');
+  refused(await call(colleague, 'GET', ['shared', 'sets', setIdShared]), 404, 'NOT_FOUND', 'the colleague loses access at once');
+  same((await call(colleague, 'GET', ['sets', copied.data.set.id])).status, 200, 'a copy already made stays with the colleague');
+}
+sections.sharing = sharingSection;
+// The emulator evaluates firestore.rules for a request carrying an unsigned ID token; this reads one document as a web client would.
+async function rulesRead(uid, docPath, claims = {}) {
+  const part = value => Buffer.from(JSON.stringify(value)).toString('base64url'), at = Math.floor(Date.now() / 1000);
+  const token = `${part({alg: 'none', typ: 'JWT'})}.${part({iss: `https://securetoken.google.com/${projectId}`, aud: projectId, sub: uid, user_id: uid, auth_time: at, iat: at, exp: at + 3600, firebase: {sign_in_provider: 'custom'}, ...claims})}.`;
+  return (await fetch(`http://${host}/v1/projects/${projectId}/databases/(default)/documents/${docPath}`, {headers: {Authorization: `Bearer ${token}`}})).status;
+}
+const roomCall = async () => {
+  const {handleRoomRequest} = await import('@/modules/playground/rooms-server');
+  return (ctx, method, segments, data = {}) => handleRoomRequest(new Request(`http://cards.test/api/playground/${segments.join('/')}`, {method}), ctx, segments, data);
+};
+const roomRefused = async (run, status) => {try {await run(); return null;} catch (error) {return error.status === status ? true : error.message;}};
+const studentCtx = (n, classId) => ({uid: `u${n}`, email: null, displayName: null, role: 'student', classId, studentId: `s${n}`, authVersion: 0});
+const hostCtx = {uid: teacher, email: null, displayName: null, role: 'teacher'};
+async function versusStudent(n, classId, name) {
+  await db().doc(`classes/${classId}/students/s${n}`).set({name, number: n, authUid: `u${n}`, character: 'cat', wardrobeOwned: [], spaceOwned: []});
+  await db().doc(`users/u${n}`).set({role: 'student', classId, studentId: `s${n}`, authVersion: 0});
+}
+// 구역 versus: 반대항전. 같은 선생님의 두 반이 한 방 코드로 들어오고, 반마다 한 팀(반 평균)이며 다른 선생님 반은 고를 수 없다. `node scripts/cards-flow-check.mjs versus`
+async function versusSection() {
+  section('class vs class card room');
+  const room = await roomCall();
+  await db().doc('classes/class-v2').set({ownerUid: teacher, name: '3-5', grade: 3});
+  for (const n of [1, 2]) await db().doc(`classes/class-a/students/s${n}`).update({character: 'cat', wardrobeOwned: [], spaceOwned: []});
+  await versusStudent(51, 'class-v2', '오반'); await versusStudent(52, 'class-v2', '오반둘');
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', versusClassIds: ['class-b'], direction: 'front-back', rounds: 1, seconds: 10, cardSetId: setId, requestId: 'vs-x'}), 403), true, 'another teacher\'s class cannot join a versus room');
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', versusClassIds: Array.from({length: 6}, (_, i) => `c${i}`), direction: 'front-back', rounds: 1, seconds: 10, cardSetId: setId, requestId: 'vs-y'}), 400), true, 'seven classes are too many');
+  const opened = await room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', versusClassIds: ['class-v2'], direction: 'front-back', rounds: 1, seconds: 10, cardSetId: setId, requestId: 'vs-1'}), roomId = opened.roomId;
+  const made = (await db().doc(`playRooms/${roomId}`).get()).data();
+  same([made.classIds, made.classNames, made.teamCount], [['class-a', 'class-v2'], ['3-2', '3-5'], 2], 'the room lists both classes, one team each');
+  same([(await db().doc(`classes/class-a/playRoomCodes/${opened.code}`).get()).exists, (await db().doc(`classes/class-v2/playRoomCodes/${opened.code}`).get()).exists], [true, true], 'the code works in both classes');
+  for (const [n, classId] of [[1, 'class-a'], [2, 'class-a'], [51, 'class-v2'], [52, 'class-v2']]) await room(studentCtx(n, classId), 'POST', ['rooms', 'join'], {code: opened.code});
+  const players = Object.fromEntries((await db().collection(`playRooms/${roomId}/players`).get()).docs.map(doc => [doc.id, [doc.data().team, doc.data().classId]]));
+  same(players, {s1: [0, 'class-a'], s2: [0, 'class-a'], s51: [1, 'class-v2'], s52: [1, 'class-v2']}, 'each student lands on their class team');
+  same(await roomRefused(() => room(studentCtx(9, 'class-b'), 'POST', ['rooms', 'join'], {code: opened.code}), 404), true, 'a student of a class outside the room cannot join');
+  same(await rulesRead('u1', `playRooms/${roomId}`, {authVersion: 0}), 200, 'firestore.rules let a student of the host class read the room');
+  same(await rulesRead('u51', `playRooms/${roomId}`, {authVersion: 0}), 200, 'firestore.rules let a student of the second class read the room (rules change)');
+  same(await rulesRead('u9', `playRooms/${roomId}`, {authVersion: 0}), 403, 'firestore.rules still refuse a student outside the room');
+  await room(hostCtx, 'POST', ['rooms', roomId, 'start'], {status: 'lobby', round: -1});
+  same((await db().doc(`playRooms/${roomId}`).get()).data().teams.map(team => team.name), ['3-2', '3-5'], 'teams carry the class names');
+  await new Promise(resolve => setTimeout(resolve, 3100));
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const asked = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data(), secret = (await db().doc(`playRooms/${roomId}/secrets/0`).get()).data().item;
+  const right = asked.choices.find(choice => secret.answers.includes(choice.label)), wrong = asked.choices.find(choice => !secret.answers.includes(choice.label));
+  for (const [n, classId, choice] of [[1, 'class-a', right], [2, 'class-a', wrong], [51, 'class-v2', right], [52, 'class-v2', right]]) await room(studentCtx(n, classId), 'POST', ['rooms', roomId, 'answer'], {round: 0, choiceId: choice.id});
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const revealed = (await db().doc(`playRooms/${roomId}`).get()).data();
+  check(revealed.teams[1].score > revealed.teams[0].score && revealed.teams.every(team => team.count === 2), 'the class with more right answers leads on its average', revealed.teams);
+  await room(hostCtx, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 0});
+  same((await room(studentCtx(51, 'class-v2'), 'GET', ['rooms', roomId])).room.status, 'finished', 'a student of the second class sees the result');
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms', roomId, 'reward'], {amount: 1}), 403), true, 'a versus room pays no team reward');
+}
+sections.versus = versusSection;
+// 구역 hunt: 먼저 쓰기. 직접 쓴 답을 카드 학습 채점(대체 정답 포함)으로 보고, 가장 먼저 맞힌 학생만 점수를 받으며 한 문제 세 번까지다. `node scripts/cards-flow-check.mjs hunt`
+async function huntSection() {
+  section('first-to-type card room');
+  const room = await roomCall();
+  for (const n of [1, 2]) await db().doc(`classes/class-a/students/s${n}`).update({character: 'cat', wardrobeOwned: [], spaceOwned: []});
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', answer: 'shout', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: setId, requestId: 'hunt-x'}), 400), true, 'an unknown answer mode is refused');
+  const opened = await room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', answer: 'typed', direction: 'front-back', rounds: 2, seconds: 30, teamCount: 2, cardSetId: setId, requestId: 'hunt-1'}), roomId = opened.roomId;
+  same((await db().doc(`playRooms/${roomId}`).get()).data().cards.answer, 'typed', 'the room is a first-to-type room');
+  for (const n of [1, 2]) await room(studentCtx(n, 'class-a'), 'POST', ['rooms', 'join'], {code: opened.code});
+  await room(hostCtx, 'POST', ['rooms', roomId, 'start'], {status: 'lobby', round: -1});
+  await new Promise(resolve => setTimeout(resolve, 3100));
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const asked = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data(), secret = (await db().doc(`playRooms/${roomId}/secrets/0`).get()).data();
+  same([asked.choices, typeof asked.prompt], [[], 'string'], 'the public round has a prompt and no choices');
+  check(!JSON.stringify(asked).includes(secret.card.back), 'the public round does not carry the answer');
+  same(await roomRefused(() => room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'answer'], {round: 0, choiceId: 'c_x'}), 400), true, 'a choice answer is refused in a typed room');
+  const miss = await room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 0, text: '모르겠어요'});
+  same([miss.correct, miss.triesLeft], [false, 2], 'a wrong answer leaves two tries');
+  const answer = secret.card.alternatives[0] ?? secret.card.back;
+  const hit = await room(studentCtx(2, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 0, text: ` ${answer.toUpperCase()} `});
+  same([hit.correct, hit.first], [true, true], 'the first right answer wins (graded like card study: spacing, case, alternatives)');
+  const revealed = (await db().doc(`playRooms/${roomId}`).get()).data();
+  same(revealed.status, 'reveal', 'the question reveals at once');
+  const results = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data().results;
+  same(results.map(row => [row.key, row.points]).sort(), [['s1', 0], ['s2', 1000]], 'only the winner scores');
+  same(await roomRefused(() => room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 0, text: answer}), 409), true, 'a late right answer does not score');
+  await room(hostCtx, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 0});
+  for (let i = 0; i < 3; i++) await room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 1, text: `틀림${i}`});
+  same(await roomRefused(() => room(studentCtx(1, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 1, text: 'again'}), 409), true, 'three tries a question');
+  for (let i = 0; i < 3; i++) await room(studentCtx(2, 'class-a'), 'POST', ['rooms', roomId, 'type'], {round: 1, text: `틀림${i}`});
+  await room(hostCtx, 'POST', ['rooms', roomId, 'tick']);
+  const second = (await db().doc(`playRooms/${roomId}/rounds/1`).get()).data();
+  same([(await db().doc(`playRooms/${roomId}`).get()).data().status, second.results.every(row => row.points === 0)], ['reveal', true], 'when everyone is out of tries the question reveals with no winner');
+  await room(hostCtx, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 1});
+  same((await room(hostCtx, 'GET', ['rooms', roomId, 'review'])).review, [], 'typed rounds stay out of the choice review');
+}
+sections.hunt = huntSection;
+// 구역 chunks: 끊어읽기 조각 표시. 문장 카드의 끊는 자리가 저장·배부·학생 화면까지 가고, 테스트 중에는 빠진다. `node scripts/cards-flow-check.mjs chunks`
+async function chunksSection() {
+  section('chunk marks on sentence cards');
+  const sentences = [{id: 'k1', front: 'I went to the park after school', back: '나는 방과 후 공원에 갔다', example: '', alternatives: [], chunks: [2, 5, 9]}, {id: 'k2', front: 'She reads books', back: '그녀는 책을 읽는다', example: '', alternatives: []}];
+  const made = await call(teacher, 'POST', ['sets'], {title: '끊어읽기 문장', description: '', type: 'sentence', folderId: null, cards: sentences, requestId: 'chunk-set'});
+  same(made.data.set.cards.map(card => card.chunks), [[2, 5], undefined], 'only marks between words are saved; none is no field');
+  refused(await call(teacher, 'POST', ['sets'], {title: '잘못', description: '', type: 'sentence', folderId: null, cards: [{...sentences[0], chunks: 'x'}], requestId: 'chunk-bad'}), 400, undefined, 'a broken mark list is refused');
+  const edited = await call(teacher, 'PATCH', ['sets', made.data.set.id], {expectedVersion: 1, cards: [{...made.data.set.cards[0], front: 'I went to the park'}, made.data.set.cards[1]]});
+  same(edited.data.set.cards[0].chunks, [2], 'a shorter sentence keeps the marks that still fit');
+  const given = await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: made.data.set.id, expectedVersion: 2, requestId: 'chunk-dist', test: {questionCount: 2, goalScore: 80, maxAttempts: 3, direction: 'back-front', answerRelease: 'immediate', format: 'written'}});
+  const seen = await call(pupil(3), 'GET', ['distributions', given.data.distribution.id]);
+  same(seen.data.distribution.snapshot.cards[0].chunks, [2], 'the student gets the marks for chunk practice');
+  const attempt = await start(pupil(3), given.data.distribution.id, 'chunk-test');
+  check(attempt.status === 201, 'the student starts a test', attempt.data);
+  const during = await call(pupil(3), 'GET', ['distributions', given.data.distribution.id]);
+  same([during.data.testActive?.attemptId, during.data.distribution.snapshot.cards[0].chunks, during.data.distribution.snapshot.cards[0].front], [attempt.data.attempt.id, undefined, ''], 'while the test runs the marks leave with the answer side');
+}
+sections.chunks = chunksSection;
+// 구역 drill: 연습문제 다섯 유형. 서버가 정답 표시를 정하고, 필수 학습 없이 배부되며, 테스트는 유형대로 묻고 같은 규칙으로 채점한다. `node scripts/cards-flow-check.mjs drill`
+async function drillSection() {
+  section('drill sets: five question kinds');
+  const passage = 'Yesterday I [went] to school and [saw/met] my friend.';
+  const questions = [
+    {id: 'd1', front: '과일이 아닌 것은?', back: '', example: '', alternatives: [], drill: {kind: 'choice', choices: ['apple', 'desk', 'pear'], answer: 1}},
+    {id: 'd2', front: 'The sun rises in the west.', back: '', example: '', alternatives: [], drill: {kind: 'ox', answer: 1}},
+    {id: 'd3', front: '빈칸에 알맞은 말을 고르세요.', back: '', example: passage, alternatives: [], drill: {kind: 'choice-blank', blanks: [{wrong: ['go', 'goes']}, {wrong: ['see']}]}},
+    {id: 'd4', front: '대한민국의 수도는?', back: 'Seoul', example: '', alternatives: ['서울'], drill: {kind: 'short'}},
+    {id: 'd5', front: '빈칸을 채우세요.', back: '', example: passage, alternatives: [], drill: {kind: 'short-blank'}},
+  ];
+  refused(await call(teacher, 'POST', ['sets'], {title: '빠진 유형', description: '', type: 'drill', folderId: null, cards: [{front: 'q', back: 'a', example: '', alternatives: []}], requestId: 'drill-bad'}), 400, 'DRILL_INVALID', 'a drill set needs a kind on every question');
+  refused(await call(teacher, 'POST', ['sets'], {title: '잘못된 보기', description: '', type: 'drill', folderId: null, cards: [{...questions[0], drill: {kind: 'choice', choices: ['a'], answer: 0}}], requestId: 'drill-bad2'}), 400, 'DRILL_INVALID', 'a choice question needs two options');
+  const word = await call(teacher, 'POST', ['sets'], {title: '단어로 저장', description: '', type: 'word', folderId: null, cards: [{...questions[3]}], requestId: 'drill-word'});
+  same(word.data.set.cards[0].drill, undefined, 'a word set drops drill data');
+  const made = await call(teacher, 'POST', ['sets'], {title: '연습문제 점검', description: '', type: 'drill', folderId: null, cards: questions, requestId: 'drill-set'});
+  same(made.data.set.cards.map(card => card.back), ['desk', 'X', 'went, saw', 'Seoul', 'went, saw'], 'the server works out each answer');
+  const given = await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: made.data.set.id, expectedVersion: 1, requestId: 'drill-dist', requiredModes: {recall: {requiredCount: 5, direction: 'back-front', rangeStart: 1, rangeEnd: 5}}, test: {questionCount: 5, goalScore: 80, maxAttempts: 3, direction: 'back-front', requireStudy: true, answerRelease: 'immediate', format: 'written'}});
+  const dist = given.data.distribution;
+  same([dist.requiredModes.recall.requiredCount, dist.test.direction, dist.test.requireStudy], [0, 'front-back', false], 'no required study; asked front to back; no study gate');
+  const patched = await call(teacher, 'PATCH', ['distributions', dist.id], {requiredModes: {memorize: {requiredCount: 3}}, test: {direction: 'back-front'}});
+  same([patched.data.distribution.requiredModes.memorize.requiredCount, patched.data.distribution.test.direction], [0, 'front-back'], 'editing settings keeps it that way');
+  const attempt = (await start(pupil(4), dist.id, 'drill-test')).data.attempt;
+  const byCard = new Map(attempt.questions.map(question => [question.cardId, question]));
+  same([byCard.get('d1').choices?.length, byCard.get('d2').choices, byCard.get('d3').drill?.blanks?.length, byCard.get('d4').choices, byCard.get('d5').drill?.passage], [3, ['O', 'X'], 2, undefined, 'Yesterday I ( 1 ) to school and ( 2 ) my friend.'], 'each kind is asked its own way');
+  check(!JSON.stringify(attempt).includes('[went]') && !JSON.stringify(attempt).includes('saw/met') && secretsIn(attempt) === null, 'the running attempt carries no answer', attempt);
+  const answerFor = {d1: 'desk', d2: 'x', d3: JSON.stringify(['went', 'saw']), d4: ' 서울 ', d5: JSON.stringify(['Went', 'met'])};
+  const submitted = await submit(pupil(4), dist.id, attempt.id, attempt.questions.map(question => ({questionId: question.id, answer: answerFor[question.cardId]})));
+  same([submitted.data.attempt.score, submitted.data.progress.goalReached], [100, true], 'all five kinds grade right with the shared rule');
+  const second = (await start(pupil(4), dist.id, 'drill-test-2')).data.attempt;
+  const wrong = await submit(pupil(4), dist.id, second.id, second.questions.map(question => ({questionId: question.id, answer: question.cardId === 'd3' ? JSON.stringify(['went', 'met']) : answerFor[question.cardId]})));
+  same(wrong.data.attempt.score, 80, 'a choice blank takes only its marked option');
+  const row = reported(await report(dist.id), 's4');
+  check(row.attempts[0].results.some(result => result.expectedAnswer === 'went, saw' && !result.correct), 'the teacher report shows the expected answer of the missed question', row.attempts[0]);
+  same((await call(pupil(4), 'GET', ['review'], undefined, {query: `?distributionId=${dist.id}`})).data.items, [], 'drill sets have no card review session');
+  const listed = (await call(pupil(4), 'GET', ['student'])).data;
+  check(!JSON.stringify(listed.review ?? {}).includes(dist.id) && (await db().doc('cardMisses/class-a_s4').get()).data()?.misses?.[dist.id], 'the miss is kept but stays out of the review row', listed.review);
+  const room = await roomCall();
+  same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: made.data.set.id, requestId: 'drill-room'}), 409), true, 'a drill set cannot open a team room');
+  // A drill distribution moved to another class keeps the drill rules even if its stored settings drifted (older or hand-edited data).
+  await db().doc('classes/class-dt').set({ownerUid: teacher, name: '드릴 받을 반'});
+  await db().doc(`cardClassSets/${dist.id}`).update({'test.direction': 'back-front', 'requiredModes.recall.requiredCount': 5});
+  const movedDrill = await call(teacher, 'POST', ['classes', 'class-a', 'transfer'], {toClassId: 'class-dt', distributionIds: [dist.id], requestId: 'drill-move'});
+  check(movedDrill.status === 201, 'the drill set moves', movedDrill.data);
+  const placedDrill = (await db().collection('cardClassSets').where('classId', '==', 'class-dt').get()).docs[0]?.data();
+  same([placedDrill?.type, placedDrill?.test.direction, placedDrill?.test.requireStudy, placedDrill?.requiredModes.recall.requiredCount], ['drill', 'front-back', false, 0], 'a moved drill set is asked front to back with no required study');
+}
+sections.drill = drillSection;
+// 구역 notes: 쪽지. 선생님은 언제든 쓰고 지우며, 학생은 스위치가 켜진 반에서만 선생님께 쓰고, 다른 학생 쪽지는 어떤 경로로도 못 본다. `node scripts/cards-flow-check.mjs notes`
+async function notesSection() {
+  section('teacher-student notes');
+  const base = ['classes', 'class-a', 'notes'];
+  same((await call(teacher, 'GET', base, undefined, {query: '?summary=1'})).data, {enabled: false, unread: 0}, 'notes start off with nothing unread');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '선생님 안녕하세요', requestId: 'n-0'}), 403, 'NOTES_OFF', 'a student cannot write while notes are off');
+  refused(await call(stranger, 'GET', base), 404, 'NOT_FOUND', 'another teacher cannot open the class notes');
+  refused(await call(pupil(1), 'GET', base), 403, 'FORBIDDEN', 'a student cannot open the class notes');
+  const told = await call(teacher, 'POST', [...base, 's1'], {text: '숙제 잘했어요!', requestId: 'n-t1'});
+  same(told.status, 201, 'the teacher writes even while student notes are off');
+  const listed = (await call(pupil(1), 'GET', ['student'])).data.notes;
+  same(listed, {enabled: false, unread: 1, any: true}, 'the student list shows one unread note');
+  const read = await call(pupil(1), 'GET', ['notes']);
+  same([read.data.enabled, read.data.notes.map(note => [note.from, note.text])], [false, [['teacher', '숙제 잘했어요!']]], 'the student reads it');
+  same((await call(pupil(1), 'GET', ['student'])).data.notes.unread, 0, 'reading clears the badge');
+  same((await call(pupil(2), 'GET', ['notes'])).data.notes, [], 'another student sees none of it');
+  accepted(await call(teacher, 'PATCH', base, {enabled: true}), 'the teacher turns notes on');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '   ', requestId: 'n-1'}), 400, 'NOTE_TEXT', 'an empty note is refused');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '가'.repeat(501), requestId: 'n-2'}), 400, 'NOTE_TEXT', 'a note over 500 characters is refused');
+  const sent = await call(pupil(1), 'POST', ['notes'], {text: '감사합니다', requestId: 'n-3'});
+  same((await call(pupil(1), 'POST', ['notes'], {text: '감사합니다', requestId: 'n-3'})).data.note?.id, sent.data.note.id, 'a retry sends one note');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '다른 내용', requestId: 'n-3'}), 409, 'REQUEST_CONFLICT', 'the same request cannot carry another note');
+  const threads = (await call(teacher, 'GET', base)).data;
+  same([threads.unread, threads.threads[0].studentId, threads.threads[0].unread, threads.threads[0].preview], [1, 's1', 1, '감사합니다'], 'the teacher sees the unread thread first');
+  const thread = await call(teacher, 'GET', [...base, 's1']);
+  same(thread.data.notes.map(note => note.from), ['teacher', 'student'], 'the thread holds both notes in order');
+  same((await call(teacher, 'GET', base, undefined, {query: '?summary=1'})).data.unread, 0, 'opening the thread marks it read');
+  same((await callClassroomTool('list_card_sets', {class_id: 'class-a'}, bearerOf(teacher))).notes, [{class: '3-2', enabled: true, unread: 0, students_waiting: 0}], 'Berry reads only the switch and counts');
+  for (let i = 0; i < 9; i++) await call(pupil(2), 'POST', ['notes'], {text: `질문 ${i}`, requestId: `n-r${i}`});
+  same((await call(pupil(2), 'POST', ['notes'], {text: '열한 번째?', requestId: 'n-r9'})).status, 201, 'ten notes an hour go through');
+  refused(await call(pupil(2), 'POST', ['notes'], {text: '하나 더', requestId: 'n-r10'}), 429, 'NOTE_RATE', 'the eleventh in an hour waits');
+  const berry = (await callClassroomTool('list_card_sets', {class_id: 'class-a'}, bearerOf(teacher))).notes[0];
+  check(berry.unread === 10 && berry.students_waiting === 1 && !JSON.stringify(berry).includes('질문'), 'Berry gets counts without text', berry);
+  refused(await call(pupil(1), 'DELETE', [...base, 's1', sent.data.note.id]), 403, 'FORBIDDEN', 'a student cannot delete');
+  accepted(await call(teacher, 'DELETE', [...base, 's1', sent.data.note.id]), 'the teacher deletes a student note');
+  same((await call(pupil(1), 'GET', ['notes'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'the deleted note is gone for the student too');
+  const s2 = (await call(teacher, 'GET', [...base, 's2'])).data.notes;
+  accepted(await call(teacher, 'DELETE', [...base, 's2', s2[0].id]), 'deleting one of several');
+  same((await db().collection('cardNotes').where('classId', '==', 'class-a').where('studentId', '==', 's2').get()).docs[0].data().unreadTeacher, 0, 'counts are recounted after a delete');
+  refused(await call(teacher, 'DELETE', [...base, 's2', 'missing']), 404, 'NOT_FOUND', 'an unknown note cannot be deleted');
+  // The class moves to another teacher (§34): the old conversation stays with the old owner and the student no longer sees it.
+  await db().doc('classes/class-a').update({ownerUid: stranger});
+  try {
+    same((await call(stranger, 'GET', base, undefined, {query: '?summary=1'})).data.unread, 0, 'the new owner sees no unread notes of the old owner');
+    same((await call(stranger, 'GET', [...base, 's1'])).data.notes, [], 'the new owner cannot open the old conversation');
+    same((await call(pupil(1), 'GET', ['notes'])).data.notes, [], 'the student no longer sees the old conversation');
+    accepted(await call(stranger, 'POST', [...base, 's1'], {text: '새 담임이에요', requestId: 'n-owner'}), 'the new owner starts a new conversation');
+    const threads = (await db().collection('cardNotes').where('classId', '==', 'class-a').where('studentId', '==', 's1').get()).docs.map(doc => doc.data().ownerUid).sort();
+    same(threads, [stranger, teacher].sort(), 'the old thread keeps its owner; the new owner has a thread of their own');
+    same((await call(pupil(1), 'GET', ['notes'])).data.notes.map(note => note.text), ['새 담임이에요'], 'the student sees only the new conversation');
+  } finally {await db().doc('classes/class-a').update({ownerUid: teacher});}
+  same((await call(teacher, 'GET', [...base, 's1'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'back with the old owner, the old conversation is intact');
+}
+sections.notes = notesSection;
+// 구역 rate: 선생님별 시간당 한도(옮기기·복제·공유 변경·공유 세트 복사). 한도에 닿으면 429이고 아무것도 쓰지 않는다. `node scripts/cards-flow-check.mjs rate`
+async function rateSection() {
+  section('per-teacher hourly limits');
+  const full = (action, count) => db().doc(`cardRateLimits/${stranger}_${action}`).set({recent: Array.from({length: count}, (_, i) => Date.now() - 1000 * (i + 1))});
+  await db().doc('classes/class-r').set({ownerUid: stranger, name: '한도 반'});
+  await db().doc('classes/class-r2').set({ownerUid: stranger, name: '한도 반 2'});
+  await full('clone', 10);
+  refused(await call(stranger, 'POST', ['classes', 'class-r', 'clone'], {name: '복제', requestId: 'rate-clone', settings: true}), 429, 'TEACHER_RATE', 'the eleventh clone in an hour waits');
+  same((await db().collection('classes').where('clonedFrom', '==', 'class-r').get()).size, 0, 'a refused clone makes no class');
+  await full('transfer', 20);
+  refused(await call(stranger, 'POST', ['classes', 'class-r', 'transfer'], {toClassId: 'class-r2', settings: true, requestId: 'rate-transfer'}), 429, 'TEACHER_RATE', 'the 21st transfer in an hour waits');
+  const folder = (await call(stranger, 'POST', ['folders'], {name: '한도 폴더'})).data.folder;
+  await full('share', 60);
+  refused(await call(stranger, 'PATCH', ['folders', folder.id, 'share'], {members: 'x@school.kr'}), 429, 'TEACHER_RATE', 'folder sharing changes are limited');
+  same((await db().doc(`cardFolders/${folder.id}`).get()).data().shareMembers, undefined, 'a refused share change writes nothing');
+  await db().doc(`cardRateLimits/${stranger}_share`).delete();
+  accepted(await call(stranger, 'PATCH', ['folders', folder.id, 'share'], {members: `${teacher}@demo.test`}), 'under the limit the share goes through');
+  const shared = await call(stranger, 'POST', ['sets'], {title: '한도 세트', description: '', type: 'word', folderId: folder.id, cards, requestId: 'rate-set'});
+  await call(stranger, 'PATCH', ['sets', shared.data.set.id], {action: 'share', visibility: 'shared', allowCopy: true});
+  await db().doc(`cardRateLimits/${teacher}_copy`).set({recent: Array.from({length: 60}, (_, i) => Date.now() - 1000 * (i + 1))});
+  refused(await call(teacher, 'POST', ['shared', 'sets', shared.data.set.id, 'copy'], {requestId: 'rate-copy'}), 429, 'TEACHER_RATE', 'shared-set copies are limited');
+  await db().doc(`cardRateLimits/${teacher}_copy`).set({recent: [Date.now() - 3600_001]});
+  same((await call(teacher, 'POST', ['shared', 'sets', shared.data.set.id, 'copy'], {requestId: 'rate-copy'})).status, 201, 'an hour later copying works again');
+}
+sections.rate = rateSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
