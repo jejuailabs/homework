@@ -74,6 +74,7 @@
   "rainWrong": "화면에 그 답인 카드가 없어요",
   "rainHit": "맞혔어요",
   "rainLost": "놓쳤어요: {prompt} → {answer}",
+  "rainCapped": "정말 오래 했어요! 한 판은 {words}장 또는 {minutes}분까지라 여기서 마쳤어요.",
   "timeLeft": "남은 시간",
   "puzzleProgress": "{current} / {total}",
   "puzzleHint": "뜻",

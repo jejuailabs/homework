@@ -548,6 +548,10 @@ async function gamesSection() {
   refused(await play(pupil(1), {game: 'pair', pairs: 6, elapsedMs: 30_000, mistakes: 0}), 400, undefined, 'a missing requestId is refused');
   const rain = await play(pupil(2), {requestId: 'g-8', game: 'rain', correct: 12, missed: 3, elapsedMs: 60_000, direction: 'back-front', still: true});
   same(rain.data.best?.score, 5 * 10 + 5 * 20 + 2 * 30, 'rain points are counted by the server: ten per word times the level');
+  // The rain screen ends a round itself at the limits (rainCap): a round of exactly GAME_MAX_MS is saved, one millisecond more is not.
+  const capped = (await import('@/lib/cards-games')).GAME_MAX_MS, capPath = ['distributions', (await distribute()).id, 'games'];
+  same((await play(pupil(4), {requestId: 'g-cap', game: 'rain', correct: 40, missed: 3, elapsedMs: capped}, capPath)).status, 200, 'a rain round ended at the time limit is saved');
+  refused(await play(pupil(4), {requestId: 'g-over', game: 'rain', correct: 40, missed: 3, elapsedMs: capped + 1}, capPath), 400, 'GAME_RESULT', 'a round past the time limit would be refused');
   const closed = await board(pupil(1));
   same([closed.data.rankingsShown, closed.data.games.rain.ranking, closed.data.games.pair.rank, closed.data.games.pair.best?.score], [false, [], null, 34_000], 'rankings are hidden from students by default; their own best stays');
   await db().doc('classes/class-a/settings/playground').set({showRankings: true});

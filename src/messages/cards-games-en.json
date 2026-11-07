@@ -74,6 +74,7 @@
   "rainWrong": "No card on screen takes that answer",
   "rainHit": "Caught it",
   "rainLost": "Missed: {prompt} → {answer}",
+  "rainCapped": "What a long round! One round goes up to {words} words or {minutes} minutes, so it ended here.",
   "timeLeft": "Time left",
   "puzzleProgress": "{current} / {total}",
   "puzzleHint": "Meaning",

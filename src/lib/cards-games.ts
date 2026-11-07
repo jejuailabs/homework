@@ -74,6 +74,12 @@ export function rainStep(state: RainState, dt: number, allIds: string[], random:
   return {...state, time, nextSpawn, serial, deck, drops, lives, missed, missedCards: [...state.missedCards, ...expired.map(drop => drop.cardId)], over};
 }
 /** The lowest matching drop is caught. Returns null when nothing on screen takes this answer. */
+/** True once a round reaches what the server accepts for one record: RAIN_MAX_WORDS words or GAME_MAX_MS of play. */
+export const rainCapped = (state: RainState) => state.correct >= RAIN_MAX_WORDS || state.time >= GAME_MAX_MS;
+/** Ends the round at the cap, so a very long round finishes kindly and saves instead of being refused as GAME_RESULT. */
+export function rainCap(state: RainState): RainState {
+  return !state.over && rainCapped(state) ? {...state, time: Math.min(state.time, GAME_MAX_MS), drops: [], over: true} : state;
+}
 export function rainCatch(state: RainState, matches: (cardId: string) => boolean): RainState | null {
   const hit = [...state.drops].sort((a, b) => a.born - b.born).find(drop => matches(drop.cardId));
   return hit && !state.over ? {...state, correct: state.correct + 1, drops: state.drops.filter(drop => drop.id !== hit.id)} : null;

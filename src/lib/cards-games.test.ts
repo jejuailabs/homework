@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {betterRecord, buildPairTiles, buildPuzzles, checkGameResult, formatGameTime, isPair, newRain, PAIR_MAX, PAIR_PENALTY_MS, pairCount, pairEligible, pairTime, puzzleCount, puzzleEligible, puzzlePrefix, puzzleScore, puzzleSolved, puzzleStart, rainCatch, rainFallMs, rainLevel, rainScore, rainSpawnMs, rainStep, RAIN_LIVES, RAIN_MAX_DROPS, rankGameRows, recentPlays, sentenceChunks} from './cards-games';
+import {rainCap, rainCapped, RAIN_MAX_WORDS, GAME_MAX_MS, betterRecord, buildPairTiles, buildPuzzles, checkGameResult, formatGameTime, isPair, newRain, PAIR_MAX, PAIR_PENALTY_MS, pairCount, pairEligible, pairTime, puzzleCount, puzzleEligible, puzzlePrefix, puzzleScore, puzzleSolved, puzzleStart, rainCatch, rainFallMs, rainLevel, rainScore, rainSpawnMs, rainStep, RAIN_LIVES, RAIN_MAX_DROPS, rankGameRows, recentPlays, sentenceChunks} from './cards-games';
 import type {CardEntry} from './cards-types';
 
 const card = (index: number, extra: Partial<CardEntry> = {}): CardEntry => ({id: `c${index}`, front: `word ${index}`, back: `뜻 ${index}`, example: '', alternatives: [], ...extra});
@@ -94,4 +94,12 @@ assert.deepEqual(ranked.map(row => `${row.id}${row.rank}`), ['c1', 'd2', 'a3', '
 assert.deepEqual(rankGameRows('pair', [{id: 'x', name: 'X', score: 30, timeMs: 30}, {id: 'y', name: 'Y', score: 20, timeMs: 20}]).map(row => row.id), ['y', 'x'], 'the fastest pairs time ranks first');
 assert.deepEqual(recentPlays([1000, 50_000, 70_000, 'x', 999_999], 70_000), [50_000, 70_000], 'the rate window keeps the last minute only');
 assert.deepEqual([formatGameTime(38_449), formatGameTime(61_000), formatGameTime(0)], ['38.4', '1:01.0', '0.0'], 'times read as seconds with one decimal');
+// A very long rain round ends itself at the record limits, so the save is never refused.
+const longRain = {...newRain(['a', 'b', 'c'], random), correct: RAIN_MAX_WORDS - 1, time: 1000};
+assert.equal(rainCap(longRain).over, false, 'below the limits the round goes on');
+const capped = rainCap({...longRain, correct: RAIN_MAX_WORDS});
+assert.deepEqual([capped.over, capped.drops, rainCapped(capped)], [true, [], true], 'the word limit ends the round');
+const timed = rainCap({...longRain, correct: 3, time: GAME_MAX_MS + 80});
+assert.deepEqual([timed.over, timed.time], [true, GAME_MAX_MS], 'the time limit ends the round at the limit');
+assert.equal(checkGameResult('rain', {correct: 3, missed: 0, elapsedMs: timed.time}, cards, 'word').ok, true, 'and the capped record passes the server check');
 console.log('cards games tests passed');

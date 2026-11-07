@@ -3,7 +3,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent} from 'react';
 import {Heart, Pause, Play, Square} from 'lucide-react';
 import {isCorrectCardAnswer} from '@/lib/cards-logic';
-import {newRain, rainCatch, rainLevel, rainPlayable, rainScore, rainStep, RAIN_LANES, RAIN_LIVES, type RainState} from '@/lib/cards-games';
+import {GAME_MAX_MS, newRain, rainCap, rainCapped, rainCatch, rainLevel, rainPlayable, rainScore, rainStep, RAIN_LANES, RAIN_LIVES, RAIN_MAX_WORDS, type RainState} from '@/lib/cards-games';
 import type {CardDirection, CardEntry} from '@/lib/cards-types';
 import type {GameProps} from './home';
 import {GameFrame, GameResult, gameRandom, SoundToggle, useGameCopy, useGameSound, useReducedMotion, useRecordSave} from './shared';
@@ -33,7 +33,7 @@ export function RainGame(props: GameProps) {
     const loop = (stamp: number) => {
       const {finish, play, lostText, staticMode, ids, byId} = live.current, before = state.current!, dt = last.current === null ? 0 : Math.min(STEP_MAX, stamp - last.current);
       last.current = stamp;
-      const after = rainStep(before, dt, ids, gameRandom);
+      const after = rainCap(rainStep(before, dt, ids, gameRandom));
       state.current = after;
       if (after.missedCards.length > before.missedCards.length) {const card = byId.get(after.missedCards[after.missedCards.length - 1]); play('bad'); if (card) setLost(lostText(card));}
       if (after.over) {finish(after); return;}
@@ -60,7 +60,10 @@ export function RainGame(props: GameProps) {
     if (!current || paused || !text) return;
     const caught = rainCatch(current, cardId => {const card = byId.get(cardId); return !!card && isCorrectCardAnswer(card, direction, text);});
     if (!caught) {setFlash('wrong'); sound.play('bad'); return;}
-    state.current = caught; setGame(caught); setAnswer(''); setFlash('hit'); sound.play('good');
+    const next = rainCap(caught);
+    setAnswer(''); setFlash('hit'); sound.play('good');
+    if (next.over) {finish(next); return;}
+    state.current = next; setGame(next);
   }
   const tools = <SoundToggle sound={sound}/>;
   if (phase === 'setup') return <GameFrame distributionId={distributionId} game="rain" title={distribution.title} tools={tools}><div className="cg-setup">
@@ -72,6 +75,7 @@ export function RainGame(props: GameProps) {
   const value = game!, missedCards = [...new Set(value.missedCards)].map(cardId => byId.get(cardId)).filter((card): card is CardEntry => !!card);
   if (phase === 'done') return <GameFrame distributionId={distributionId} game="rain" title={distribution.title} tools={tools}>
     <GameResult game="rain" save={save} board={boards.games.rain} shown={boards.rankingsShown} onAgain={() => setPhase('setup')} stats={[{label: c.score, value: `${rainScore(value.correct)}${c.points}`}, {label: c.caught, value: String(value.correct)}, {label: c.missed, value: String(value.missed)}]}/>
+    {rainCapped(value) && <p className="cg-muted" role="status">{fill(c.rainCapped, {words: RAIN_MAX_WORDS, minutes: GAME_MAX_MS / 60_000})}</p>}
     {missedCards.length > 0 && <section className="cg-missed"><h3>{c.missedList}</h3><ul>{missedCards.map(card => <li key={card.id}><b>{prompt(card)}</b><span>{expected(card)}</span></li>)}</ul></section>}
   </GameFrame>;
   return <GameFrame distributionId={distributionId} game="rain" title={distribution.title} tools={<>{tools}<button type="button" className="icon-button" aria-label={paused ? c.resume : c.pause} title={paused ? c.resume : c.pause} onClick={() => setPaused(!paused)}>{paused ? <Play size={18}/> : <Pause size={18}/>}</button></>}>
