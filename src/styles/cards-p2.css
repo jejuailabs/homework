@@ -1,4 +1,5 @@
 /* 카드놀이 P2: 다른 반 옮기기·클래스 복제·학습 일정·동료 공유·쪽지 (teacher and student). Global tokens only, so every palette and dark mode follow. */
+.cards-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 .cards-transfer h3{font-size:15px;margin:18px 0 6px}.cards-transfer h3 small{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
 .cards-transfer-target{display:grid;gap:6px;font-size:12px;margin:10px 0}.cards-transfer-target select{max-width:420px}
 .cards-transfer-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
@@ -50,7 +51,7 @@
 .cards-drill-choices>.button{font-size:12px;min-height:32px;padding:5px 10px;margin-top:4px}.cards-drill-ox{display:flex;gap:20px}
 .cards-drill-blank{display:grid;gap:4px;font-size:12px;margin:6px 0}.cards-drill-blank input{font-size:14px}
 .cards-drill-publish{margin:14px 0}
-.cs-drill-question legend{line-height:1.6}.cs-drill-passage{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-alt);border-radius:12px;padding:10px 14px;margin:6px 0 10px;line-height:1.8}
+.cs-drill-question legend{line-height:1.6}.cs-drill-passage{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface-alt);border-radius:12px;padding:10px 14px;margin:14px 0 10px;line-height:1.8;clear:both}.cs-drill-question>legend{float:left;width:100%;margin-bottom:4px}
 .cs-drill-blanks{display:grid;gap:8px}.cs-drill-blanks label{display:flex;align-items:center;gap:10px;min-width:0}.cs-drill-blanks label>span{flex:none;font-weight:700;color:var(--accent)}.cs-drill-blanks select,.cs-drill-blanks input{flex:1;min-width:0}
 .cards-drill-practice{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px;display:grid;gap:14px}
 @media(max-width:740px){.cards-drill-row .cards-form-grid{grid-template-columns:1fr}}
