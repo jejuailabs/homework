@@ -1105,6 +1105,10 @@ async function cloneSection() {
   refused(await call(pupil(1), 'PATCH', ['distributions', base], {planDate: null}), 403, 'FORBIDDEN', 'a student cannot plan');
   refused(await call(stranger, 'POST', ['classes', 'class-a', 'clone'], {name: '복제', requestId: 'cl-x'}), 404, 'NOT_FOUND', 'another teacher cannot clone the class');
   refused(await call(pupil(1), 'POST', ['classes', 'class-a', 'clone'], {name: '복제', requestId: 'cl-y'}), 403, 'FORBIDDEN', 'a student cannot clone');
+  const classesBefore = (await db().collection('classes').where('ownerUid', '==', teacher).get()).size;
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'clone'], {name: '실패', distributionIds: ['missing-dist'], requestId: 'cl-bad'}), 404, 'NOT_FOUND', 'a clone with an unknown set is refused');
+  refused(await call(teacher, 'POST', ['classes', 'class-a', 'clone'], {name: '실패', distributionIds: 'x', requestId: 'cl-bad2'}), 400, undefined, 'a clone with a broken set list is refused');
+  same((await db().collection('classes').where('ownerUid', '==', teacher).get()).size, classesBefore, 'a refused clone leaves no empty class');
   const input = {name: '5-1', year: 2027, distributionIds: [base], settings: true, keepDue: true, requestId: 'cl-run'};
   const made = await call(teacher, 'POST', ['classes', 'class-a', 'clone'], input);
   check(made.status === 201 && !!made.data.classId && made.data.result.distributions === 1, 'the clone makes a class and places the set', made.data);

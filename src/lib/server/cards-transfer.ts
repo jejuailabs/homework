@@ -71,6 +71,12 @@ export function parseTransferInput(input: Data, toClassId?: string): TransferInp
   return { toClassId: toClassId ?? id(input.toClassId, '받을 반'), distributionIds, settings: input.settings === true, keepDue: input.keepDue === true, links: parseLinks(input.links), requestId: id(input.requestId, '요청 ID') };
 }
 
+/** The chosen distributions, each this teacher's and from this class; anything else refuses the whole request before a write. */
+async function sourceSnaps(ctx: Context, fromClassId: string, ids: string[]) {
+  const sources = ids.length ? await db().getAll(...ids.map(value => db().doc(`cardClassSets/${value}`))) : [];
+  if (sources.some(snap => !snap.exists || snap.data()?.ownerUid !== ctx.uid || snap.data()?.classId !== fromClassId)) throw new ApiError(404, '옮길 세트를 다시 골라 주세요.', 'NOT_FOUND');
+  return sources;
+}
 /** Runs one transfer into a class this teacher owns. Used by the transfer dialog and by 클래스 복제 (into the class it just made). */
 export async function runTransfer(ctx: Context, fromClassId: string, input: TransferInput) {
   const [from, to] = await Promise.all([ownedClass(ctx, fromClassId), ownedClass(ctx, input.toClassId)]);
@@ -80,8 +86,7 @@ export async function runTransfer(ctx: Context, fromClassId: string, input: Tran
   if (problem) throw new ApiError(400, problem, 'TRANSFER_LINKS');
   if (input.distributionIds.length * input.links.length > CARD_TRANSFER_SEEDS) throw new ApiError(400, '한 번에 옮기기에 너무 많아요. 세트를 나누어 옮겨 주세요.', 'TRANSFER_TOO_MANY');
 
-  const sources = input.distributionIds.length ? await db().getAll(...input.distributionIds.map(value => db().doc(`cardClassSets/${value}`))) : [];
-  if (sources.some(snap => !snap.exists || snap.data()?.ownerUid !== ctx.uid || snap.data()?.classId !== from.id)) throw new ApiError(404, '옮길 세트를 다시 골라 주세요.', 'NOT_FOUND');
+  const sources = await sourceSnaps(ctx, from.id, input.distributionIds);
   // The set's current version when the teacher still has it and it is not archived; the old snapshot otherwise.
   const setIds = [...new Set(sources.map(snap => String(snap.data()!.setId ?? '')).filter(Boolean))];
   const sets = new Map((setIds.length ? await db().getAll(...setIds.map(value => db().doc(`cardSets/${value}`))) : []).filter(snap => snap.exists && snap.data()?.ownerUid === ctx.uid && !snap.data()?.archived).map(snap => [snap.id, snap.data()!]));
@@ -176,11 +181,23 @@ export async function cloneClass(ctx: Context, fromClassId: string, input: Data)
   const name = text(input.name, '학급 이름', 80), grade = text(String(input.grade ?? from.data()!.grade ?? ''), '학년', 20, true), year = Number(input.year ?? new Date().getFullYear());
   if (!Number.isInteger(year) || year < 2020 || year > 2100) throw new ApiError(400, '학년도를 확인해 주세요.');
   const ref = db().doc(`classes/${digest(ctx.uid, 'clone', requestId).slice(0, 20)}`);
-  await db().runTransaction(async tx => {
-    const existing = await tx.get(ref);
-    if (existing.exists) { if (existing.data()?.ownerUid !== ctx.uid) throw new ApiError(409, '다시 시도해 주세요.', 'REQUEST_CONFLICT'); return; }
-    tx.create(ref, { adminStatus: 'active', name, grade, year, ownerUid: ctx.uid, studentCount: 0, createdAt: now(), clonedFrom: from.id });
-  });
+  // Everything is checked before the class exists, so a bad request never leaves an empty class behind.
   const parsed = parseTransferInput({ ...input, links: undefined }, ref.id);
-  return json({ result: await runTransfer(ctx, from.id, parsed), classId: ref.id }, 201);
+  await sourceSnaps(ctx, from.id, parsed.distributionIds);
+  const made = await db().runTransaction(async tx => {
+    const existing = await tx.get(ref);
+    if (existing.exists) { if (existing.data()?.ownerUid !== ctx.uid) throw new ApiError(409, '다시 시도해 주세요.', 'REQUEST_CONFLICT'); return false; }
+    tx.create(ref, { adminStatus: 'active', name, grade, year, ownerUid: ctx.uid, studentCount: 0, createdAt: now(), clonedFrom: from.id });
+    return true;
+  });
+  try {
+    return json({ result: await runTransfer(ctx, from.id, parsed), classId: ref.id }, 201);
+  } catch (error) {
+    // A class this call just made and nobody has used yet is taken back, so a failed clone leaves nothing behind.
+    if (made) {
+      const pupils = await ref.collection('students').limit(1).get(), placed = await db().collection('cardClassSets').where('classId', '==', ref.id).limit(1).get();
+      if (pupils.empty && placed.empty) await ref.delete();
+    }
+    throw error;
+  }
 }
