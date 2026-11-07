@@ -253,7 +253,7 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
   }
   const distribution = await loadDistribution(ctx, distributionId);
   const state = ctx.role === 'student' ? await progressRef(distributionId, ctx.studentId!).get() : null;
-  return json({ distribution: visibleDistribution(distribution, ctx), ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution) } : {}) });
+  return json({ distribution: visibleDistribution(distribution, ctx), ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} } } : {}) });
 }
 
 async function studentList(ctx: Context, request: Request) {

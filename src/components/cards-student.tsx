@@ -3,12 +3,14 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import Link from 'next/link';
 import {ArrowLeft, ArrowRight, BookOpen, CheckCircle2, ClipboardCheck, Clock3, Layers, ListChecks, LoaderCircle, RefreshCw, Search, Star, Type} from 'lucide-react';
-import type {CardDistribution, CardProgress, CardStudentDistribution, CardStudyMode, CardTestAttempt} from '@/lib/cards-types';
+import {buildCardSections, CARD_SECTION_SIZE, CARD_SECTION_SIZES} from '@/lib/cards-logic';
+import type {CardCoverage, CardDistribution, CardProgress, CardStudentDistribution, CardStudyMode, CardTestAttempt} from '@/lib/cards-types';
 import type {Character} from '@/lib/characters';
 import {CardBuddy, CardError, CardLoading, CardsPractice, cardModes, cardRequest, useCardCopy} from './cards-study';
+import {CardSectionProgress} from './cards-visuals';
 
 type StudentCardsData = {distributions: CardStudentDistribution[]; profile?: {id: string; name: string; character: Character; className: string}; nextCursor?: string | null};
-type StudentDetail = {distribution: CardDistribution; progress: CardProgress};
+type StudentDetail = {distribution: CardDistribution; progress: CardProgress; coverage?: Partial<CardCoverage>};
 const modeIcons = {memorize: BookOpen, recall: ListChecks, spell: Type, test: ClipboardCheck};
 function studied(progress: CardProgress, mode: CardStudyMode) {return progress.completedCounts?.[mode] || 0;}
 function useStudentCards() {
@@ -32,30 +34,32 @@ export default function StudentCardsList() {
 }
 
 export function StudentCardsDetail({distributionId}: {distributionId: string}) {
-  const {copy: c, locale, points} = useCardCopy(); const [data, setData] = useState<StudentDetail | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(false);
+  const {copy: c, locale, points} = useCardCopy(); const [data, setData] = useState<StudentDetail | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(false), [sectionSize, setSectionSize] = useState(CARD_SECTION_SIZE);
   const load = useCallback(async () => {setLoading(true); setError(false); try {setData(await cardRequest<StudentDetail>(`/api/cards/distributions/${distributionId}`));} catch {setError(true);} finally {setLoading(false);}}, [distributionId]);
   useEffect(() => {void load();}, [load]);
   if (loading) return <CardLoading/>;
   if (error || !data) return <CardError retry={() => void load()}/>;
-  const {distribution: d, progress} = data;
+  const {distribution: d, progress, coverage} = data;
+  const sections = buildCardSections(d.snapshot.cards, d.requiredModes, coverage, sectionSize);
   return <section className="cs-workspace"><Link className="cs-back" href="/student/cards"><ArrowLeft size={16}/>{c.back}</Link><header className="cs-heading"><div><div className="cs-meta"><span className="cs-tag">{c[d.type]}</span><span>{d.cardCount} {c.cards}</span><span>{d.className}</span></div><h1>{d.title}</h1>{d.snapshot.description && <p>{d.snapshot.description}</p>}<p className="cs-muted">{d.dueAt ? `${c.due} ${new Intl.DateTimeFormat(locale, {dateStyle: 'medium', timeStyle: 'short'}).format(new Date(d.dueAt))}` : c.noDue}</p></div><CardBuddy/></header>
     <section aria-labelledby="card-tools-heading"><h2 id="card-tools-heading" className="cs-section-title">{c.studyTools}</h2><div className="cs-mode-grid">{[...cardModes, 'test' as const].map(mode => {const Icon = modeIcons[mode], required = mode === 'test' ? d.test.goalScore : d.requiredModes[mode].requiredCount, amount = mode === 'test' ? progress.bestScore || 0 : studied(progress, mode); return <Link className={`cs-mode cs-mode-${mode}`} key={mode} href={`/student/cards/${distributionId}/${mode}`}><span className="cs-mode-icon"><Icon size={25}/></span><h3>{c[mode]}<ArrowRight size={17}/></h3><p>{mode === 'test' ? `${c.goal} ${points(required)}` : required > 0 ? `${c.required} ${amount} / ${required}` : c.optional}</p>{required > 0 && <progress max={required} value={Math.min(required, amount)} aria-label={`${c[mode]} ${c.practiceCounts}`}/>}</Link>;})}</div></section>
+    <section aria-labelledby="card-sections-heading" className="cs-sections-wrap"><div className="cs-card-list-title"><h2 id="card-sections-heading">{c.sections}</h2><label className="cs-section-size">{c.sectionSize}<select value={sectionSize} onChange={event => setSectionSize(Number(event.target.value))}>{CARD_SECTION_SIZES.map(value => <option key={value} value={value}>{value} {c.cards}</option>)}</select></label></div><ol className="cs-sections">{sections.map(section => <li key={section.from}><div className="cs-section-copy"><b>{c.sectionLabel.replace('{number}', String(section.number))}</b><span>{section.from}–{section.to}</span></div><CardSectionProgress steps={cardModes.filter(mode => section.modes[mode]).map(mode => ({label: c[mode], percent: section.modes[mode]!.percent}))}/><div className="cs-section-modes">{cardModes.map(mode => {const value = section.modes[mode]; return value && <Link key={mode} className={`cs-section-mode ${value.done ? 'is-done' : ''}`} href={`/student/cards/${distributionId}/${mode}?from=${value.from}&to=${value.to}`} aria-label={`${c.sectionLabel.replace('{number}', String(section.number))} ${c[mode]}${value.done ? ` · ${c.complete}` : ''}`}>{value.done && <CheckCircle2 size={13}/>}{c[mode]}</Link>;})}</div></li>)}</ol></section>
     <div className="cs-goal-strip"><span><ClipboardCheck size={19}/>{c.testGoal}{" "}<b>{points(d.test.goalScore)}</b></span><span>{c.attempts} {progress.attempts} / {d.test.maxAttempts || c.unlimited}</span><span>{c.best}{" "}<b>{progress.bestScore === null ? '—' : points(progress.bestScore)}</b></span><span>{c.latest}{" "}<b>{progress.latestScore === null ? '—' : points(progress.latestScore)}</b></span></div>
     <section aria-labelledby="card-list-heading"><div className="cs-card-list-title"><h2 id="card-list-heading">{c.cardList}</h2><span>{d.cardCount} {c.cards}</span></div><div className="cs-card-table"><div className="cs-card-table-head" aria-hidden="true"><span>#</span><span>{c.front}</span><span>{c.backSide}</span></div><ol>{d.snapshot.cards.map((card, index) => <li key={card.id}><span className="cs-card-number">{progress.starredCardIds.includes(card.id) ? <Star size={15} fill="currentColor" aria-label={c.star}/> : index + 1}</span><p>{card.front}</p><div><p>{card.back}</p>{card.example && <small>{card.example}</small>}</div></li>)}</ol></div></section>
   </section>;
 }
 
-export function StudentCardsStudy({distributionId, mode}: {distributionId: string; mode: CardStudyMode | 'test'}) {
+export function StudentCardsStudy({distributionId, mode, from, to}: {distributionId: string; mode: CardStudyMode | 'test'; from?: string; to?: string}) {
   if (mode === 'test') return <StudentCardsTest distributionId={distributionId}/>;
-  return <StudentPracticeLoader distributionId={distributionId} mode={mode}/>;
+  return <StudentPracticeLoader distributionId={distributionId} mode={mode} from={from} to={to}/>;
 }
-function StudentPracticeLoader({distributionId, mode}: {distributionId: string; mode: CardStudyMode}) {
+function StudentPracticeLoader({distributionId, mode, from, to}: {distributionId: string; mode: CardStudyMode; from?: string; to?: string}) {
   const [data, setData] = useState<StudentDetail | null>(null), [character, setCharacter] = useState<Character>('cat'), [loading, setLoading] = useState(true), [error, setError] = useState(false);
   const load = useCallback(async () => {setLoading(true); setError(false); try {const result = await cardRequest<StudentDetail>(`/api/cards/distributions/${distributionId}`); setData(result); const profile = await cardRequest<StudentCardsData>('/api/cards/student').catch(() => null); if (profile?.profile) setCharacter(profile.profile.character);} catch {setError(true);} finally {setLoading(false);}}, [distributionId]);
   useEffect(() => {void load();}, [load]);
   if (loading) return <CardLoading/>;
   if (error || !data) return <CardError retry={() => void load()}/>;
-  return <CardsPractice key={`${distributionId}:${mode}`} title={data.distribution.title} cards={data.distribution.snapshot.cards} type={data.distribution.type} mode={mode} distributionId={distributionId} studentId={data.distribution.targetStudentIds[0]} requirement={data.distribution.requiredModes[mode]} progress={data.progress} character={character} onProgress={progress => setData(previous => previous ? {...previous, progress} : previous)}/>;
+  return <CardsPractice key={`${distributionId}:${mode}:${from}:${to}`} from={from} to={to} title={data.distribution.title} cards={data.distribution.snapshot.cards} type={data.distribution.type} mode={mode} distributionId={distributionId} studentId={data.distribution.targetStudentIds[0]} requirement={data.distribution.requiredModes[mode]} progress={data.progress} character={character} onProgress={progress => setData(previous => previous ? {...previous, progress} : previous)}/>;
 }
 
 function StudentCardsTest({distributionId}: {distributionId: string}) {

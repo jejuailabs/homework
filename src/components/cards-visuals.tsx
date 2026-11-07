@@ -1,7 +1,7 @@
 /**
  * 카드놀이 인라인 SVG 모음. 팔레트 6종과 다크 모드를 따라가도록 CSS 토큰으로 그린다.
  * 파일로 쓰는 스티커·안내 그림은 public/cards/v1/ 에 있다.
- * 아직 어느 화면에도 연결하지 않았다.
+ * 학생 세트 상세의 구간 행이 CardSectionProgress를 쓴다. 나머지는 아직 어느 화면에도 연결하지 않았다.
  */
 import type {ReactNode} from 'react';
 

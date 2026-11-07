@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answersReleased, canStudyDistribution, cardMutationFingerprint, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
-import { addStudyResponse, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
+import { addStudyResponse, buildCardSections, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -195,4 +195,29 @@ test('spell hint gives the first letter and the letter count, matching normaliza
   // The note says internal spaces collapse but are not removed: one space is still required.
   assert.equal(normalizeCardAnswer('ICE    cream'), normalizeCardAnswer('ice cream'));
   assert.notEqual(normalizeCardAnswer('icecream'), normalizeCardAnswer('ice cream'));
+});
+test('section rows cut the set into N cards with a shorter last row and read per-mode coverage', () => {
+  const twentyThree = cards.slice(0, 23), rules = parseRequirements({ spell: { rangeStart: 5, rangeEnd: 12, requiredCount: 8 } }, 23);
+  const coverage = emptyCoverage();
+  twentyThree.slice(0, 10).forEach(card => { coverage.memorize[card.id] = 1; });
+  twentyThree.slice(10, 13).forEach(card => { coverage.recall[card.id] = 3; });
+  const rows = buildCardSections(twentyThree, rules, coverage);
+  assert.deepEqual(rows.map(row => [row.from, row.to]), [[1, 10], [11, 20], [21, 23]]);
+  assert.deepEqual(rows[0].modes.memorize, { from: 1, to: 10, total: 10, covered: 10, percent: 100, done: true });
+  assert.equal(rows[1].modes.recall!.percent, 30);
+  assert.equal(rows[1].modes.recall!.done, false);
+  assert.deepEqual([rows[0].modes.spell!.from, rows[0].modes.spell!.to], [5, 10]);
+  assert.deepEqual([rows[1].modes.spell!.from, rows[1].modes.spell!.to], [11, 12]);
+  assert.equal(rows[2].modes.spell, null);
+});
+test('sections default safely when a progress document has no coverage', () => {
+  for (const coverage of [undefined, null, {}, { memorize: {} }]) assert.equal(buildCardSections(cards, requirements, coverage)[0].modes.memorize!.covered, 0);
+  assert.equal(buildCardSections(cards, requirements, undefined).length, 5);
+  assert.equal(buildCardSections(cards, requirements, undefined, 0).length, 5);
+});
+test('section links preset the range only inside the requirement', () => {
+  assert.deepEqual(cardRangePreset('11', '20', 1, 50), { start: 11, end: 20 });
+  assert.deepEqual(cardRangePreset('5', '30', 10, 20), { start: 10, end: 20 });
+  assert.deepEqual(cardRangePreset(undefined, undefined, 1, 50), { start: 1, end: 50 });
+  for (const [from, to] of [['abc', '5'], ['20', '10'], ['60', '70'], ['1.5', '3'], ['1', '5']]) assert.deepEqual(cardRangePreset(from, to, 10, 50), { start: 10, end: 50 });
 });
