@@ -1302,6 +1302,48 @@ async function drillSection() {
   same(await roomRefused(() => room(hostCtx, 'POST', ['rooms'], {mode: 'team', classId: 'class-a', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: made.data.set.id, requestId: 'drill-room'}), 409), true, 'a drill set cannot open a team room');
 }
 sections.drill = drillSection;
+// 구역 notes: 쪽지. 선생님은 언제든 쓰고 지우며, 학생은 스위치가 켜진 반에서만 선생님께 쓰고, 다른 학생 쪽지는 어떤 경로로도 못 본다. `node scripts/cards-flow-check.mjs notes`
+async function notesSection() {
+  section('teacher-student notes');
+  const base = ['classes', 'class-a', 'notes'];
+  same((await call(teacher, 'GET', base, undefined, {query: '?summary=1'})).data, {enabled: false, unread: 0}, 'notes start off with nothing unread');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '선생님 안녕하세요', requestId: 'n-0'}), 403, 'NOTES_OFF', 'a student cannot write while notes are off');
+  refused(await call(stranger, 'GET', base), 404, 'NOT_FOUND', 'another teacher cannot open the class notes');
+  refused(await call(pupil(1), 'GET', base), 403, 'FORBIDDEN', 'a student cannot open the class notes');
+  const told = await call(teacher, 'POST', [...base, 's1'], {text: '숙제 잘했어요!', requestId: 'n-t1'});
+  same(told.status, 201, 'the teacher writes even while student notes are off');
+  const listed = (await call(pupil(1), 'GET', ['student'])).data.notes;
+  same(listed, {enabled: false, unread: 1, any: true}, 'the student list shows one unread note');
+  const read = await call(pupil(1), 'GET', ['notes']);
+  same([read.data.enabled, read.data.notes.map(note => [note.from, note.text])], [false, [['teacher', '숙제 잘했어요!']]], 'the student reads it');
+  same((await call(pupil(1), 'GET', ['student'])).data.notes.unread, 0, 'reading clears the badge');
+  same((await call(pupil(2), 'GET', ['notes'])).data.notes, [], 'another student sees none of it');
+  accepted(await call(teacher, 'PATCH', base, {enabled: true}), 'the teacher turns notes on');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '   ', requestId: 'n-1'}), 400, 'NOTE_TEXT', 'an empty note is refused');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '가'.repeat(501), requestId: 'n-2'}), 400, 'NOTE_TEXT', 'a note over 500 characters is refused');
+  const sent = await call(pupil(1), 'POST', ['notes'], {text: '감사합니다', requestId: 'n-3'});
+  same((await call(pupil(1), 'POST', ['notes'], {text: '감사합니다', requestId: 'n-3'})).data.note?.id, sent.data.note.id, 'a retry sends one note');
+  refused(await call(pupil(1), 'POST', ['notes'], {text: '다른 내용', requestId: 'n-3'}), 409, 'REQUEST_CONFLICT', 'the same request cannot carry another note');
+  const threads = (await call(teacher, 'GET', base)).data;
+  same([threads.unread, threads.threads[0].studentId, threads.threads[0].unread, threads.threads[0].preview], [1, 's1', 1, '감사합니다'], 'the teacher sees the unread thread first');
+  const thread = await call(teacher, 'GET', [...base, 's1']);
+  same(thread.data.notes.map(note => note.from), ['teacher', 'student'], 'the thread holds both notes in order');
+  same((await call(teacher, 'GET', base, undefined, {query: '?summary=1'})).data.unread, 0, 'opening the thread marks it read');
+  same((await callClassroomTool('list_card_sets', {class_id: 'class-a'}, bearerOf(teacher))).notes, [{class: '3-2', enabled: true, unread: 0, students_waiting: 0}], 'Berry reads only the switch and counts');
+  for (let i = 0; i < 9; i++) await call(pupil(2), 'POST', ['notes'], {text: `질문 ${i}`, requestId: `n-r${i}`});
+  same((await call(pupil(2), 'POST', ['notes'], {text: '열한 번째?', requestId: 'n-r9'})).status, 201, 'ten notes an hour go through');
+  refused(await call(pupil(2), 'POST', ['notes'], {text: '하나 더', requestId: 'n-r10'}), 429, 'NOTE_RATE', 'the eleventh in an hour waits');
+  const berry = (await callClassroomTool('list_card_sets', {class_id: 'class-a'}, bearerOf(teacher))).notes[0];
+  check(berry.unread === 10 && berry.students_waiting === 1 && !JSON.stringify(berry).includes('질문'), 'Berry gets counts without text', berry);
+  refused(await call(pupil(1), 'DELETE', [...base, 's1', sent.data.note.id]), 403, 'FORBIDDEN', 'a student cannot delete');
+  accepted(await call(teacher, 'DELETE', [...base, 's1', sent.data.note.id]), 'the teacher deletes a student note');
+  same((await call(pupil(1), 'GET', ['notes'])).data.notes.map(note => note.text), ['숙제 잘했어요!'], 'the deleted note is gone for the student too');
+  const s2 = (await call(teacher, 'GET', [...base, 's2'])).data.notes;
+  accepted(await call(teacher, 'DELETE', [...base, 's2', s2[0].id]), 'deleting one of several');
+  same((await db().doc('cardNotes/class-a_s2').get()).data().unreadTeacher, 0, 'counts are recounted after a delete');
+  refused(await call(teacher, 'DELETE', [...base, 's2', 'missing']), 404, 'NOT_FOUND', 'an unknown note cannot be deleted');
+}
+sections.notes = notesSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

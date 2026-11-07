@@ -1,4 +1,4 @@
-// 카드놀이 P2 순수 규칙 테스트: 다른 반 옮기기·이월, 학습 일정.
+// 카드놀이 P2 순수 규칙 테스트: 다른 반 옮기기·이월, 학습 일정, 동료 공유, 끊어읽기, 연습문제, 쪽지.
 import fs from 'node:fs';
 import ts from 'typescript';
 const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename, import.meta.url), 'utf8'), {
@@ -15,3 +15,4 @@ await import(dataUrl(compile('../cards-sharing.test.ts').replace("'./cards-shari
 const chunks = dataUrl(compile('../cards-chunks.ts'));
 await import(dataUrl(compile('../cards-chunks.test.ts').replace("'./cards-chunks'", JSON.stringify(chunks))));
 await import(dataUrl(compile('../cards-drill.test.ts').replace("'./cards-drill'", JSON.stringify(dataUrl(compile('../cards-drill.ts')))).replace("'./cards-logic'", JSON.stringify(logic))));
+await import(dataUrl(compile('../cards-notes.test.ts').replace("'./cards-notes'", JSON.stringify(dataUrl(compile('../cards-notes.ts'))))));

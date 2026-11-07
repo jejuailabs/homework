@@ -20,13 +20,14 @@ import {cardEstimateMinutes} from '@/lib/cards-load';
 import {studentAgenda} from '@/lib/cards-planner';
 import {chunkCards} from '@/lib/cards-chunks';
 import {StudentChunkPractice} from './cards-chunks';
+import {StudentNotesButton} from './cards-notes';
 import {DrillQuestionView, StudentDrillPractice, drillAnswerLabel, drillKindLabel} from './cards-drill';
 import {Scissors} from 'lucide-react';
 import {useCardsP2Copy} from '@/lib/cards-p2-copy';
 import {fillCopy} from '@/lib/cards-class-copy';
 import '@/styles/cards-p2.css';
 
-type StudentCardsData = {distributions: CardStudentDistribution[]; layout?: CardStudentLayout; profile?: {id: string; name: string; character: Character; className: string}; nextCursor?: string | null; serverTime?: string; review?: CardMissSummary};
+type StudentCardsData = {notes?: {enabled: boolean; unread: number; any: boolean}; distributions: CardStudentDistribution[]; layout?: CardStudentLayout; profile?: {id: string; name: string; character: Character; className: string}; nextCursor?: string | null; serverTime?: string; review?: CardMissSummary};
 /** testActive: this student's test on the set is running, so the cards came without answers and study waits (시험 정답 보호). */
 type StudentDetail = {distribution: CardDistribution; progress: CardProgress; coverage?: Partial<CardCoverage>; cardStates?: CardReviewStates; serverTime?: string; testActive?: {attemptId: string}};
 /** The server's clock as of the last load, so a wrong device clock can neither close a set early nor keep it open. */
@@ -69,6 +70,7 @@ export default function StudentCardsList() {
   if (loading) return <CardLoading/>;
   if (error || !data) return <CardError retry={() => void load()}/>;
   return <section className="cs-workspace"><header className="cs-heading"><div><p className="cs-eyebrow"><Layers size={17}/>{c.title}{data.profile?.className && <span> / {data.profile.className}</span>}</p><h1>{c.ourSets}</h1><p>{c.listIntro}</p></div><CardBuddy character={data.profile?.character}/></header>
+    <div className="cards-notes-row"><StudentNotesButton summary={data.notes}/></div>
     <CardRoomJoin/>
     {!!data.review?.total && <MissedReviewRow summary={data.review} today={cardReviewDate(clockOf(data.serverTime))}/>}
     <CardDayLoad rows={data.distributions} time={clockOf(data.serverTime)}/>

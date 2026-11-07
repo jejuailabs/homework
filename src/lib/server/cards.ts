@@ -324,8 +324,8 @@ async function studentList(ctx: Context, request: Request) {
   // order among its own sets; memos come with the first page only.
   const visible = page.map(asDistribution).filter(value => canStudyDistribution(ctx, value) && cls.data()!.ownerUid === value.ownerUid);
   const planned = applyStudentPlan(visible, plan, cls.data()!.ownerUid), rows = planned.distributions, layout = cursor ? undefined : planned.layout;
-  const [states, reviewable] = await Promise.all([rows.length ? db().getAll(...rows.map(value => progressRef(value.id, ctx.studentId))) : Promise.resolve([]), reviewableSets(ctx, cls.data()!.ownerUid, missed.data()?.misses, plan)]);
-  return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), review: summarizeCardMisses(missed.data()?.misses, cardReviewDate(), reviewable), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, ...(layout ? { layout } : {}), nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null, serverTime: now() });
+  const [states, reviewable, notes] = await Promise.all([rows.length ? db().getAll(...rows.map(value => progressRef(value.id, ctx.studentId))) : Promise.resolve([]), reviewableSets(ctx, cls.data()!.ownerUid, missed.data()?.misses, plan), cursor ? Promise.resolve(undefined) : (await import('./cards-notes')).studentNoteSummary(ctx.classId, ctx.studentId, String(cls.data()!.ownerUid))]);
+  return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), review: summarizeCardMisses(missed.data()?.misses, cardReviewDate(), reviewable), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, ...(layout ? { layout } : {}), ...(notes ? { notes } : {}), nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null, serverTime: now() });
 }
 function progressPreferences(input: Data, distribution: Distribution) {
   const update: Data = {}, ids = new Set(distribution.snapshot.cards.map(card => card.id));
@@ -592,6 +592,8 @@ export async function handleCards(request: Request, segments: string[] = []) {
     if (resource === 'classes' && resourceId && operation === 'transfer' && segments.length === 3 && ['GET', 'POST'].includes(method)) return await (await import('./cards-transfer')).transferClass(ctx, request, resourceId, method === 'POST' ? await body(request) : {});
     if (resource === 'classes' && resourceId && operation === 'clone' && segments.length === 3 && method === 'POST') return await (await import('./cards-transfer')).cloneClass(ctx, resourceId, await body(request));
     if (resource === 'folders' && resourceId && operation === 'share' && segments.length === 3 && ['GET', 'PATCH'].includes(method)) return await (await import('./cards-sharing')).folderShare(ctx, request, resourceId, method === 'PATCH' ? await body(request) : {});
+    if (resource === 'classes' && resourceId && operation === 'notes' && ['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return await (await import('./cards-notes')).teacherNotes(ctx, request, resourceId, operationId, action, ['POST', 'PATCH'].includes(method) ? await body(request) : {});
+    if (resource === 'notes' && segments.length === 1 && ['GET', 'POST'].includes(method)) return await (await import('./cards-notes')).studentNotes(ctx, request, method === 'POST' ? await body(request) : {});
     if (resource === 'shared' && segments.length <= 4) return await (await import('./cards-sharing')).handleShared(ctx, request, segments, method === 'POST' ? await body(request) : {});
     if (resource === 'folders' && segments.length <= 2 && ['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return await folders(ctx, request, resourceId);
     if (resource === 'sets') {
