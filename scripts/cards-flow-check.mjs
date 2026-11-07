@@ -421,14 +421,14 @@ async function patchSection() {
 
 async function oldSection() {
   section('old documents');
-  const stamp = iso(-30 * 24 * HOUR), classId = 'class-old', snapshot = {title: '예전 세트', description: '', type: 'word', cards: cards.slice(0, 6)};
+  const stamp = iso(-30 * 24 * HOUR), created = iso(-60 * MIN), classId = 'class-old', snapshot = {title: '예전 세트', description: '', type: 'word', cards: cards.slice(0, 6)};
   await db().doc(`classes/${classId}`).set({ownerUid: teacher, name: '예전 반'});
   await db().doc(`classes/${classId}/students/s7`).set({name: '학생7', number: 7, authUid: 'u7'});
   await db().doc(`classes/${classId}/students/s8`).set({name: '학생8', number: 8, authUid: 'u8'});
   for (const n of [7, 8]) await db().doc(`users/u${n}`).set({role: 'student', classId, studentId: `s${n}`, authVersion: 0});
   const requiredModes = Object.fromEntries(['memorize', 'recall', 'spell'].map(mode => [mode, {requiredCount: 0, direction: 'front-back', rangeStart: 1, rangeEnd: 6}]));
   // No afterDue, allStudents, test.format, test.timeLimitSeconds, as stored before this work.
-  await db().doc('cardClassSets/old-dist').set({ownerUid: teacher, classId, className: '예전 반', setId: 'old-set', setVersion: 1, versionId: 'old-set_v1', title: '예전 세트', type: 'word', cardCount: 6, cardIds: snapshot.cards.map(card => card.id), targetStudentIds: ['s7', 's8'], targetStudents: [{id: 's7', name: '학생7', number: 7}, {id: 's8', name: '학생8', number: 8}], targetCount: 2, requiredModes, test: {questionCount: 3, goalScore: 80, maxAttempts: 5, requireStudy: false, direction: 'front-back', answerRelease: 'immediate'}, dueAt: stamp, active: true, snapshot, createdAt: iso(-60 * MIN), updatedAt: stamp});
+  await db().doc('cardClassSets/old-dist').set({ownerUid: teacher, classId, className: '예전 반', setId: 'old-set', setVersion: 1, versionId: 'old-set_v1', title: '예전 세트', type: 'word', cardCount: 6, cardIds: snapshot.cards.map(card => card.id), targetStudentIds: ['s7', 's8'], targetStudents: [{id: 's7', name: '학생7', number: 7}, {id: 's8', name: '학생8', number: 8}], targetCount: 2, requiredModes, test: {questionCount: 3, goalScore: 80, maxAttempts: 5, requireStudy: false, direction: 'front-back', answerRelease: 'immediate'}, dueAt: stamp, active: true, snapshot, createdAt: created, updatedAt: stamp});
   // No lateAt. The attempt has neither direction nor timeLimitSeconds.
   const questions = [{id: 'q1', cardId: 'card0', prompt: 'word 0'}, {id: 'q2', cardId: 'card1', prompt: 'word 1'}];
   await db().doc('cardProgress/old-dist_s7').set({distributionId: 'old-dist', ownerUid: teacher, classId, studentId: 's7', counts: {memorize: 3, recall: 1, spell: 0}, correctCounts: {memorize: 3, recall: 1, spell: 0}, coverage: {memorize: {card0: 1}, recall: {}, spell: {}}, mistakes: {card1: 1}, attempts: 2, bestScore: 50, latestScore: 50, starredCardIds: [], lastPosition: null, activeAttemptId: 'old-open', lastSubmittedAttemptId: 'old-done', updatedAt: stamp});
@@ -468,11 +468,12 @@ async function oldSection() {
   same((await db().doc('cardClassSets/old-dist').get()).data().test.questionCount, 3, 'PATCH leaves the test alone');
 
   const lesson = (input, cookie = teacher) => lessonReports(new Request('http://cards.test/api/lesson-reports', {method: 'POST', headers: {'content-type': 'application/json', cookie: `__session=${cookie}`}, body: JSON.stringify(input)}), []);
-  const seoul = new Date(Date.now() + 9 * HOUR).toISOString().slice(0, 10);
-  const response = await lesson({classId, from: seoul, to: seoul, title: '이번 달', teacherNotes: '', requestId: 'lesson-1'}), body = await response.json();
+  // The report picks distributions by their Seoul creation day. The old one was made an hour ago, which is yesterday between 00:00 and 01:00 Seoul, so the range starts on its day.
+  const seoulDay = value => new Date(Date.parse(value) + 9 * HOUR).toISOString().slice(0, 10), from = seoulDay(created), seoul = seoulDay(iso(0));
+  const response = await lesson({classId, from, to: seoul, title: '이번 달', teacherNotes: '', requestId: 'lesson-1'}), body = await response.json();
   check(response.status === 201, 'lesson report captures old documents', body);
   check(body.report?.cards?.[0]?.targetCount === 2 && body.report.cards[0].attempts === 2, 'lesson report counts submitted attempts only', body.report?.cards);
-  const allSet = await lesson({classId: 'class-a', from: seoul, to: seoul, title: '새 반', teacherNotes: '', requestId: 'lesson-2'}), allBody = await allSet.json();
+  const allSet = await lesson({classId: 'class-a', from, to: seoul, title: '새 반', teacherNotes: '', requestId: 'lesson-2'}), allBody = await allSet.json();
   check(allSet.status === 201 && allBody.report.cards.length > 0, 'lesson report captures new allStudents distributions', allBody);
   const union = allBody.report?.cards?.find(row => row.targetCount >= 6);
   check(!!union && (await db().collection('cardClassSets').where('classId', '==', 'class-a').get()).docs.some(doc => doc.data().title === union.title), 'lesson report counts allStudents distributions over the class', allBody.report?.cards);
