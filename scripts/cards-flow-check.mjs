@@ -489,7 +489,7 @@ async function roomSection() {
   await new Promise(resolve => setTimeout(resolve, 3100));
   await room(host, 'POST', ['rooms', roomId, 'tick']);
   const asked = (await db().doc(`playRooms/${roomId}/rounds/0`).get()).data();
-  for (const n of [1, 2]) await room(player(n), 'POST', ['rooms', roomId, 'answer'], {round: 0, choiceId: asked.choices[0].id});
+  for (const n of [1, 2]) await room(player(n), 'POST', ['rooms', roomId, 'answer'], {round: 0, choiceId: asked.choices[n - 1].id});
   await room(host, 'POST', ['rooms', roomId, 'tick']);
   await room(host, 'POST', ['rooms', roomId, 'next'], {status: 'reveal', round: 0});
   const finished = (await db().doc(`playRooms/${roomId}`).get()).data();
