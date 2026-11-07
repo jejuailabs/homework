@@ -8,10 +8,14 @@ import {BerryError} from './policy';
 type Data = Record<string, any>;
 type Direction = 'front-back' | 'back-front';
 type Release = 'immediate' | 'after-due' | 'never';
+type Format = 'written' | 'choice';
+type AfterDue = 'open' | 'late' | 'lock';
 const MODES = ['memorize', 'recall', 'spell'] as const;
 const MODE_LABEL = {memorize: '암기', recall: '리콜', spell: '스펠'} as const;
 const RELEASE_LABEL: Record<Release, string> = {immediate: '제출 직후', 'after-due': '마감 이후', never: '공개 안 함'};
 const DIRECTION_LABEL: Record<Direction, string> = {'front-back': '앞면 → 뒷면', 'back-front': '뒷면 → 앞면'};
+const FORMAT_LABEL: Record<Format, string> = {written: '직접 쓰기', choice: '객관식'};
+const AFTER_DUE_LABEL: Record<AfterDue, string> = {open: '계속 열어 두기', late: '열어 두고 지각 표시', lock: '학습과 테스트 닫기'};
 
 function whole(value: unknown, fallback: number, min: number, max: number, label: string) {
   const number = value ?? fallback;
@@ -29,7 +33,7 @@ function section(value: unknown, name: string): Data {
   return value as Data;
 }
 
-export function cardDistributionSettings(args: {required_modes?: unknown; test?: unknown}, cardCount: number, hasDue: boolean) {
+export function cardDistributionSettings(args: {required_modes?: unknown; test?: unknown; after_due?: unknown}, cardCount: number, hasDue: boolean) {
   const modes = section(args.required_modes, 'required_modes');
   const unknown = Object.keys(modes).find(key => !(MODES as readonly string[]).includes(key));
   if (unknown) throw new BerryError(`required_modes에는 memorize, recall, spell만 넣어 주세요: ${unknown}`);
@@ -46,11 +50,17 @@ export function cardDistributionSettings(args: {required_modes?: unknown; test?:
   const answerRelease = (raw.answer_release ?? 'immediate') as Release;
   if (!(answerRelease in RELEASE_LABEL)) throw new BerryError('answer_release는 immediate, after-due, never 중에서 골라 주세요.');
   if (answerRelease === 'after-due' && !hasDue) throw new BerryError('마감 후 정답 공개에는 마감(due_at)이 필요해요.');
-  const test = {questionCount: whole(raw.question_count, Math.min(20, cardCount), 1, cardCount, '테스트 문항 수'), goalScore: whole(raw.goal_score, 80, 0, 100, '목표 점수'), maxAttempts: whole(raw.max_attempts, 3, 1, 20, '응시 횟수'), requireStudy: raw.require_study === true, direction: direction(raw.direction, 'back-front', '테스트'), answerRelease};
+  const format = (raw.format ?? 'written') as Format;
+  if (!(format in FORMAT_LABEL)) throw new BerryError('format은 written 또는 choice로 보내 주세요.');
+  const timeLimitSeconds = raw.time_limit_seconds === undefined || raw.time_limit_seconds === null ? null : whole(raw.time_limit_seconds, 0, 60, 7200, '테스트 제한 시간(초)');
+  const afterDue = (args.after_due ?? 'late') as AfterDue;
+  if (!(afterDue in AFTER_DUE_LABEL)) throw new BerryError('after_due는 open, late, lock 중에서 골라 주세요.');
+  if (args.after_due !== undefined && !hasDue) throw new BerryError('마감 후 처리를 정하려면 마감(due_at)이 필요해요.');
+  const test = {questionCount: whole(raw.question_count, Math.min(20, cardCount), 1, cardCount, '테스트 문항 수'), goalScore: whole(raw.goal_score, 80, 0, 100, '목표 점수'), maxAttempts: whole(raw.max_attempts, 3, 1, 20, '응시 횟수'), requireStudy: raw.require_study === true, direction: direction(raw.direction, 'back-front', '테스트'), answerRelease, format, timeLimitSeconds};
   const study = MODES.map(mode => {
     const rule = requiredModes[mode], range = rule.rangeStart === 1 && rule.rangeEnd === cardCount ? '' : ` (${rule.rangeStart}~${rule.rangeEnd}번)`;
     return `${MODE_LABEL[mode]} ${rule.requiredCount ? `${rule.requiredCount}${range}` : '선택'}`;
   }).join(' · ');
-  const lines = [`필수 학습: ${study}`, `테스트: ${test.questionCount}문항 · 목표 ${test.goalScore}점 · ${test.maxAttempts}회 · ${DIRECTION_LABEL[test.direction]} · 정답 ${RELEASE_LABEL[answerRelease]}${test.requireStudy ? ' · 필수 학습 후 응시' : ''}`];
-  return {requiredModes, test, lines};
+  const lines = [`필수 학습: ${study}`, `테스트: ${test.questionCount}문항 · 목표 ${test.goalScore}점 · ${test.maxAttempts}회 · ${DIRECTION_LABEL[test.direction]} · ${FORMAT_LABEL[format]}${timeLimitSeconds ? ` · 제한 ${timeLimitSeconds % 60 ? `${timeLimitSeconds}초` : `${timeLimitSeconds / 60}분`}` : ''} · 정답 ${RELEASE_LABEL[answerRelease]}${test.requireStudy ? ' · 필수 학습 후 응시' : ''}`, ...(hasDue ? [`마감 후: ${AFTER_DUE_LABEL[afterDue]}`] : [])];
+  return {requiredModes, test, afterDue, lines};
 }

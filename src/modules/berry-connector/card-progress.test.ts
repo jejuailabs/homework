@@ -6,11 +6,12 @@ const label = (number: number) => `학생 ${String(number).padStart(2, '0')}`;
 const summary = classCardProgress([
   {number: 7, unfinished: true, goalReached: false, bestScore: null, mistakes: {a: 3, b: 1, gone: 9}},
   {number: 2, unfinished: true, goalReached: false, bestScore: 60, mistakes: {a: 1, b: 2, c: 1}},
-  {number: 11, unfinished: false, goalReached: true, bestScore: 90},
+  {number: 11, unfinished: false, goalReached: true, bestScore: 90, late: true},
 ], cards, label);
 assert.equal(summary.students, 3);
 assert.equal(summary.finished, 1);
 assert.equal(summary.unfinished, 2);
+assert.equal(summary.late, 1, 'late work is a count, never a list of students');
 assert.deepEqual(summary.unfinished_students, ['학생 02', '학생 07'], 'students stay pseudonymous, in number order');
 assert.equal(summary.goal_reached, 1);
 assert.equal(summary.tested, 2);
