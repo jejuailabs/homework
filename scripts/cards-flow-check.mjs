@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old ai. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old berry ai. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,6 +43,7 @@ globalThis.__fakeAuth = {
 const {db} = await import('@/lib/server/admin');
 const {handleCards} = await import('@/lib/server/cards');
 const {lessonReports} = await import('@/lib/server/lesson-reports');
+const {callClassroomTool} = await import('@/modules/berry-connector/classroom-tools');
 const logic = await import('@/lib/cards-logic');
 
 let passed = 0;
@@ -475,6 +476,17 @@ async function oldSection() {
   check(!!union && (await db().collection('cardClassSets').where('classId', '==', 'class-a').get()).docs.some(doc => doc.data().title === union.title), 'lesson report counts allStudents distributions over the class', allBody.report?.cards);
 }
 
+async function berrySection() {
+  section('berry masks names in card titles');
+  const named = await call(teacher, 'POST', ['sets'], {title: '학생1 보충 단어', description: '', type: 'word', folderId: null, cards, requestId: 'set-named'});
+  const given = await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: named.data.set.id, expectedVersion: 1, requestId: 'dist-named'});
+  const bearer = {uid: teacher, role: 'teacher', grantId: 'grant', clientId: 'client', scopes: ['classroom:read']};
+  const listed = await callClassroomTool('list_card_sets', {class_id: 'class-a'}, bearer), one = await callClassroomTool('list_card_sets', {distribution_id: given.data.distribution.id}, bearer);
+  check(!JSON.stringify(listed).includes('학생1') && !JSON.stringify(one).includes('학생1'), 'list_card_sets never carries a child name', {listed, one});
+  check(listed.card_sets.find(row => row.id === given.data.distribution.id)?.title?.includes('보충 단어'), 'the rest of the title stays');
+  same(one.card_sets[0].students, (await db().collection('classes/class-a/students').get()).docs.filter(doc => !doc.data().disabled).length, 'all_students sets report the live class size');
+}
+
 async function aiSection() {
   section('ai-draft');
   const original = globalThis.fetch, sent = [];
@@ -514,7 +526,7 @@ async function aiSection() {
   } finally {globalThis.fetch = original; process.env.OPENAI_API_KEY = 'stub-not-a-key';}
 }
 
-const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, ai: aiSection};
+const sections = {study: studySection, edited: editedSection, tests: testsSection, deadline: deadlineSection, patch: patchSection, old: oldSection, berry: berrySection, ai: aiSection};
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

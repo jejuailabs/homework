@@ -111,7 +111,9 @@ async function quizRanges(classValue: Data) {
 }
 async function liveRooms(classId: string) {
   const rooms = await db().collection('playRooms').where('classId', '==', classId).limit(20).get();
-  return rooms.docs.map(doc => doc.data()).filter(room => (room.expiresAtMs ?? 0) > Date.now() && room.status !== 'finished').map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0, ...(room.cards ? {card_set: room.cards.title} : {})}));
+  const open = rooms.docs.map(doc => doc.data()).filter(room => (room.expiresAtMs ?? 0) > Date.now() && room.status !== 'finished');
+  const students = open.some(room => room.cards) ? await roster(classId) : [];
+  return open.map(room => ({mode: room.mode, status: room.status, players: Array.isArray(room.players) ? room.players.length : 0, ...(room.cards ? {card_set: maskNames(String(room.cards.title ?? ''), students)} : {})}));
 }
 
 async function signals(ctx: BearerContext) {
@@ -212,8 +214,9 @@ async function speechProgress(ctx: BearerContext, classId: unknown) {
 
 const CARD_PROGRESS_SETS = 8;
 const cardLink = (value: Data, id: string) => value.setId ? `/teacher/cards/${value.setId}/report?classId=${value.classId}&distributionId=${id}` : `/teacher/cards?classId=${value.classId}`;
-const cardRow = (id: string, value: Data, className: unknown) => ({
-  id, class: className, title: value.title, due_at: value.dueAt ?? null, after_due: cardAfterDue(value), active: value.active !== false, students: value.targetCount ?? null, all_students: !!value.allStudents,
+// A set title is the teacher's words but may hold a child's name, so it is masked with that class's roster.
+const cardRow = (id: string, value: Data, className: unknown, students: Student[]) => ({
+  id, class: className, title: maskNames(String(value.title ?? ''), students), due_at: value.dueAt ?? null, after_due: cardAfterDue(value), active: value.active !== false, students: value.allStudents ? new Set([...(value.targetStudentIds ?? []), ...students.map(student => student.id)]).size : value.targetCount ?? null, all_students: !!value.allStudents,
   required: value.requiredModes ? {memorize: value.requiredModes.memorize?.requiredCount ?? 0, recall: value.requiredModes.recall?.requiredCount ?? 0, spell: value.requiredModes.spell?.requiredCount ?? 0} : null,
   goal_score: value.test?.goalScore ?? null, link: cardLink(value, id),
 });
@@ -235,18 +238,19 @@ async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: 
     const id = safeId(distributionId, '배부'), snap = await db().doc(`cardClassSets/${id}`).get();
     if (!snap.exists || snap.data()?.ownerUid !== ctx.uid) throw new BerryError('그 카드 배부를 찾지 못했어요.', 404, 'not_found');
     const value = snap.data()!, room = await ownedClass(ctx.uid, value.classId);
-    return {card_sets: [{...cardRow(id, value, room.name), progress: await cardProgressOf(id, value)}]};
+    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value)}]};
   }
   const classes = classId === undefined ? await ownedClasses(ctx.uid) : [await ownedClass(ctx.uid, classId)];
   // The list stays light (no card text); only the few sets a teacher is likely asking about load their cards and progress.
-  const lists = await Promise.all(classes.map(value => db().collection('cardClassSets').where('classId', '==', value.id).select('ownerUid', 'classId', 'setId', 'title', 'dueAt', 'afterDue', 'allStudents', 'active', 'targetCount', 'requiredModes', 'test', 'createdAt').limit(200).get()));
-  const rows = lists.flatMap((snap, index) => snap.docs.filter(doc => doc.data().ownerUid === ctx.uid).map(doc => ({id: doc.id, value: doc.data(), className: classes[index].name})))
+  const lists = await Promise.all(classes.map(value => db().collection('cardClassSets').where('classId', '==', value.id).select('ownerUid', 'classId', 'setId', 'title', 'dueAt', 'afterDue', 'allStudents', 'active', 'targetCount', 'targetStudentIds', 'requiredModes', 'test', 'createdAt').limit(200).get()));
+  const rosters = await Promise.all(classes.map(value => roster(value.id)));
+  const rows = lists.flatMap((snap, index) => snap.docs.filter(doc => doc.data().ownerUid === ctx.uid).map(doc => ({id: doc.id, value: doc.data(), className: classes[index].name, students: rosters[index]})))
     .sort((a, b) => String(b.value.createdAt ?? '').localeCompare(String(a.value.createdAt ?? ''))).slice(0, LIST * 2);
   const detailed = new Set(rows.filter(row => row.value.active !== false).slice(0, CARD_PROGRESS_SETS).map(row => row.id));
   return {card_sets: await Promise.all(rows.map(async row => {
-    if (!detailed.has(row.id)) return {...cardRow(row.id, row.value, row.className), progress: null};
+    if (!detailed.has(row.id)) return {...cardRow(row.id, row.value, row.className, row.students), progress: null};
     const full = await db().doc(`cardClassSets/${row.id}`).get();
-    return {...cardRow(row.id, row.value, row.className), progress: await cardProgressOf(row.id, full.data()!)};
+    return {...cardRow(row.id, row.value, row.className, row.students), progress: await cardProgressOf(row.id, full.data()!)};
   }))};
 }
 
