@@ -3,7 +3,7 @@
 import {useState, useSyncExternalStore} from 'react';
 import {Image as ImageIcon} from 'lucide-react';
 import {usePreferences} from './providers';
-import {cardIllustration, type IllustratedCard} from '@/lib/card-illustrations';
+import {CARD_ILLUSTRATIONS_LIVE, cardIllustration, type IllustratedCard} from '@/lib/card-illustrations';
 import type {CardSetType} from '@/lib/cards-types';
 
 const STORAGE_KEY = 'cards-illustrations-v1';
@@ -38,6 +38,7 @@ export function useCardIllustrations() {return useSyncExternalStore(subscribe, s
 /** One shared, device-local switch; reverting to the familiar text layout takes one tap. */
 export function CardIllustrationToggle({className = ''}: {className?: string}) {
   const checked = useCardIllustrations(), {locale} = usePreferences();
+  if (!CARD_ILLUSTRATIONS_LIVE) return null;
   return <label className={`ci-toggle ${className}`}><input type="checkbox" checked={checked} onChange={event => setEnabled(event.target.checked)}/><ImageIcon size={16} aria-hidden="true"/><span>{locale === 'ko' ? '그림 보기' : 'Show pictures'}</span></label>;
 }
 
