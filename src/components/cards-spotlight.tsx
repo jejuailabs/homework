@@ -8,6 +8,7 @@ import AccessGate from './access-gate';
 import {faceLabels, FitText, reducedMotion, SPEECH_RATES, typingTarget, useClassroomCopy, useFullscreen, useIdle, useLocalPrefs, useSpeech, useTeacherSet} from './cards-classroom-shared';
 import {cardsRequest} from './cards-shared';
 import {CardModeIcon} from './cards-visuals';
+import {CardIllustration} from '@/components/card-illustration';
 import '@/styles/cards-classroom.css';
 
 type Classroom = {id: string; name: string; year: number};
@@ -128,7 +129,7 @@ function Spotlight({setId, initialClassId}: {setId: string; initialClassId: stri
         <div className="cards-spot-question">
           {prompt === 'speech' ? <button className="cards-spot-listen" onClick={() => speak(card.front, prefs.rate)}><Volume2 size={56}/><span>{c('listen')}</span><small>{c('replay')}</small></button> : <FitText text={question} min={22} max={180}/>}
         </div>
-        <div className={`cards-spot-answer ${turn.revealed ? 'is-open' : ''}`}>{turn.revealed ? <><small>{c('answer')}</small><FitText text={answer} min={18} max={110}/></> : <button className="button" onClick={toggleAnswer}>{c('revealAnswer')}</button>}</div>
+        <div className={`cards-spot-answer ${turn.revealed ? 'is-open' : ''}`}>{turn.revealed ? <><small>{c('answer')}</small><div className="cards-spot-illustration"><CardIllustration card={card} type={set.type} variant="compact"/></div><FitText text={answer} min={18} max={110}/></> : <button className="button" onClick={toggleAnswer}>{c('revealAnswer')}</button>}</div>
         <div className="cards-spot-judge"><button className="cards-spot-right" onClick={() => mark(true)}><Check size={34}/>{c('correct')}</button><button className="cards-spot-wrong" onClick={() => mark(false)}><X size={34}/>{c('wrong')}</button></div>
       </> : <div className="cards-spot-judge"><button className="button primary cards-spot-draw" disabled={!!drawing || !pool.length} onClick={draw}><CardModeIcon mode="spotlight" size={30}/>{drawing ? c('drawing') : c('draw')}</button>{tally.turns.length > 0 && <button className="button" onClick={undo}><RotateCcw size={17}/>{c('undo')}</button>}</div>}
     </section>

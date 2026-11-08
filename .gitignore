@@ -8,6 +8,8 @@ out/
 *service-account*.json
 *.pem
 .qa/
+# Generated card artwork belongs in Firebase Storage, not the repository.
+/public/cards/vocabulary-*/
 preview-check.html
 *.tsbuildinfo
 coverage/

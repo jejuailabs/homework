@@ -89,6 +89,7 @@ export function ttsAllowance(raw: string | undefined, fallback: number) {
   return Number.isInteger(value) && value >= 0 && value <= 100_000_000 ? value : fallback;
 }
 export function ttsConfig(env: Record<string, string | undefined>): TtsConfig {
-  const family = env.GOOGLE_TTS_FAMILY?.trim() === 'neural2' ? 'neural2' : 'chirp3-hd';
+  // Neural2 is the default (2026-11-08): clearer on single words and half the price. Set GOOGLE_TTS_FAMILY=chirp3-hd to switch back.
+  const family = env.GOOGLE_TTS_FAMILY?.trim() === 'chirp3-hd' ? 'chirp3-hd' : 'neural2';
   return {enabled: env.GOOGLE_TTS_ENABLED === 'true', family, voiceOverride: {ko: env.GOOGLE_TTS_VOICE_KO, en: env.GOOGLE_TTS_VOICE_EN}};
 }

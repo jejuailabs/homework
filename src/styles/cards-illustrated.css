@@ -1,0 +1,276 @@
+/* Illustrated vocabulary keeps the existing card controls and study order.
+   Shared stationery tokens follow all six palettes and the dark appearance. */
+.ci-art {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+}
+
+.ci-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+.ci-art .ci-caption {
+  display: block;
+  max-width: 100%;
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.ci-art--hero { width: 150px; }
+.ci-art--thumb { width: 48px; }
+.ci-art--tile { width: 48px; }
+.ci-art--compact { width: 76px; }
+
+.ci-art--hero img,
+.ci-art--compact img {
+  border-radius: 42% 48% 43% 46%;
+  background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--play-yellow) 55%, transparent), transparent 72%);
+}
+
+.ci-study-word {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-width: 0;
+  max-width: 620px;
+  margin: 5px auto 20px;
+}
+
+.ci-study-word > .cs-prompt {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 0;
+}
+
+.ci-word-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  font-weight: 650;
+}
+
+.ci-word-cell > :not(.ci-art) { min-width: 0; overflow-wrap: anywhere; }
+
+.ci-deck-preview {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  min-width: 0;
+  margin: 8px 0 0;
+}
+
+.ci-deck-preview .ci-art {
+  width: 44px;
+  padding: 3px;
+  border: 1px solid var(--play-outline);
+  border-radius: 12px;
+  background: var(--play-paper);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--play-outline) 55%, transparent);
+}
+
+.ci-deck-preview .ci-art:nth-child(2) { transform: translateY(-3px); }
+
+.ci-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  min-height: 44px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.ci-toggle input[type="checkbox"] { width: 17px; height: 17px; min-height: 0; flex: none; padding: 0; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.ci-toggle span { white-space: nowrap; }
+.ci-toggle svg { flex: none; width: 17px; height: 17px; }
+.ci-toggle:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: var(--accent-soft); color: var(--accent-strong); }
+.ci-toggle:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-strong); }
+.ci-toggle:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 3px; }
+.ci-toggle input:focus-visible { outline-offset: 2px; }
+
+.ci-vocab-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 7px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ci-vocab-preview li { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); }
+.ci-vocab-preview li > span { min-width: 0; overflow-wrap: anywhere; }
+.ci-vocab-preview b { display: block; font-size: 13px; line-height: 1.4; }
+.ci-vocab-preview small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.5; color: var(--muted); }
+
+/* The learning toolbar, keyboard shortcuts, choices and action buttons stay in place. */
+.cs-study .cs-flashcard {
+  position: relative;
+  border: 2px solid var(--surface);
+  border-radius: 26px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--play-yellow) 14%, var(--surface)), var(--surface) 48%);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--play-outline) 85%, var(--border)), 0 12px 28px color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.cs-study .cs-card-toolbar {
+  min-height: 44px;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+
+.cs-study .cs-card-toolbar > div { min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.cs-study .cs-card-toolbar .icon-button { min-width: 44px; min-height: 44px; }
+.cs-study .cs-card-toolbar > .cs-tag { flex: none; white-space: nowrap; background: var(--play-yellow); color: var(--text); }
+.cs-study .cs-card-back { border-top-color: color-mix(in srgb, var(--accent) 25%, var(--border)); }
+.cs-study .cs-reveal { border-color: color-mix(in srgb, var(--accent) 22%, var(--border)); background: var(--accent-soft); }
+.cs-study .cs-choice { border-width: 2px; border-radius: 15px; box-shadow: 0 2px 0 color-mix(in srgb, var(--border) 65%, transparent); }
+.cs-study .cs-choice.is-correct { box-shadow: 0 2px 0 color-mix(in srgb, var(--success) 22%, transparent); }
+.cs-study .cs-answer { border-radius: 15px; background: var(--play-paper); }
+.cs-study .cs-study-controls .button { min-height: 48px; border-radius: 14px; }
+.cs-study .cs-study-controls .button.primary { box-shadow: 0 3px 0 color-mix(in srgb, var(--accent-strong) 60%, transparent); }
+.cs-study .cs-feedback { border-radius: 15px; }
+
+/* Pastel tabs retain the familiar four learning modes and dense section list. */
+.cs-workspace .cs-mode { --ci-tone: var(--play-mint); border: 2px solid var(--surface); border-radius: 22px; background: linear-gradient(145deg, color-mix(in srgb, var(--ci-tone) 63%, var(--surface)), var(--surface)); box-shadow: 0 4px 0 color-mix(in srgb, var(--ci-tone) 75%, var(--border)); }
+.cs-workspace .cs-mode-memorize { --ci-tone: var(--play-mint); }
+.cs-workspace .cs-mode-recall { --ci-tone: var(--play-sky); }
+.cs-workspace .cs-mode-spell { --ci-tone: var(--play-lilac); }
+.cs-workspace .cs-mode-test { --ci-tone: var(--play-peach); }
+.cs-workspace .cs-mode:hover:not(.is-disabled) { border-color: color-mix(in srgb, var(--accent) 35%, var(--surface)); }
+.cs-workspace .cs-mode .cs-mode-icon { background: var(--surface); border: 1px solid color-mix(in srgb, var(--ci-tone) 75%, var(--border)); transform: rotate(-4deg); }
+.cs-workspace .cs-mode .cs-mode-icon svg { transform: rotate(4deg); }
+.cs-workspace .cs-distribution { border-radius: 21px; box-shadow: 0 3px 0 color-mix(in srgb, var(--play-outline) 60%, transparent); }
+.cs-workspace .cs-set-icon { background: var(--play-mint); }
+.cs-workspace .cs-sections,
+.cs-workspace .cs-card-table { border-radius: 20px; }
+.cs-workspace .cs-card-table-head { background: color-mix(in srgb, var(--play-mint) 55%, var(--surface)); }
+.cs-workspace .cs-card-table li { align-items: center; }
+.cs-workspace .cs-card-table li:nth-child(even) { background: color-mix(in srgb, var(--play-paper) 65%, var(--surface)); }
+.cs-workspace .cs-card-table .ci-word-cell p { font-weight: 650; }
+.cs-workspace .cs-card-list-title { flex-wrap: wrap; gap: 8px 12px; }
+.cs-workspace .cs-goal-strip { background: color-mix(in srgb, var(--play-yellow) 45%, var(--surface)); border-color: color-mix(in srgb, var(--play-yellow) 50%, var(--border)); }
+
+/* Small cues make game surfaces feel like the same classroom, without moving targets. */
+.cs-workspace .cg-entry { border: 2px solid var(--surface); border-radius: 20px; background: linear-gradient(110deg, var(--play-peach), color-mix(in srgb, var(--play-yellow) 65%, var(--surface))); box-shadow: 0 3px 0 color-mix(in srgb, var(--play-peach) 65%, var(--border)); }
+.cg-page .cg-icon { background: var(--play-yellow); border: 2px solid var(--surface); box-shadow: 0 3px 0 color-mix(in srgb, var(--play-yellow) 65%, var(--border)); }
+.cg-page .cg-game { --ci-tone: var(--play-mint); border: 2px solid var(--surface); border-radius: 22px; background: linear-gradient(145deg, color-mix(in srgb, var(--ci-tone) 65%, var(--surface)), var(--surface)); box-shadow: 0 4px 0 color-mix(in srgb, var(--ci-tone) 75%, var(--border)); }
+.cg-page .cg-game:nth-child(2) { --ci-tone: var(--play-sky); }
+.cg-page .cg-game:nth-child(3) { --ci-tone: var(--play-lilac); }
+.cg-page .cg-game .cg-icon { background: var(--surface); border-color: color-mix(in srgb, var(--ci-tone) 65%, var(--border)); box-shadow: none; }
+.cg-page .cg-status { border-bottom: 1px dashed var(--border); margin-bottom: 8px; }
+.cg-page .cg-top { flex-wrap: wrap; }
+.cg-page .cg-top .cg-tools { flex-wrap: wrap; justify-content: flex-end; margin-left: auto; gap: 6px; }
+.cg-page .cg-tile { border-radius: 17px; box-shadow: 0 3px 0 color-mix(in srgb, var(--border) 60%, transparent); }
+.cg-page .cg-tile.is-front { background: color-mix(in srgb, var(--play-yellow) 20%, var(--surface)); }
+.cg-page .cg-tile.is-back { background: color-mix(in srgb, var(--play-sky) 30%, var(--surface)); }
+.cg-page .cg-tile.is-picked { background: var(--accent-soft); border-color: var(--accent); box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+.cg-page .cg-tile.is-wrong { background: color-mix(in srgb, var(--danger) 9%, var(--surface)); border-color: var(--danger); }
+.cg-page .cg-tile.is-done { box-shadow: none; }
+.cg-page .cg-tile .ci-art { display: flex; overflow: visible; -webkit-line-clamp: unset; -webkit-box-orient: initial; margin: 0 auto 2px; }
+.cg-page .cg-tile .cg-pair-content { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 100%; min-width: 0; overflow: visible; -webkit-line-clamp: unset; -webkit-box-orient: initial; }
+.cg-page .cg-tile .cg-pair-word { width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.cg-page .cg-puzzle,
+.cg-page .cg-setup { border: 2px solid var(--surface); border-radius: 24px; box-shadow: 0 4px 0 color-mix(in srgb, var(--play-outline) 75%, var(--border)); }
+.cg-page .cg-answer { background: color-mix(in srgb, var(--play-lilac) 25%, var(--surface)); }
+.cg-page .cg-puzzle-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cg-page .cg-puzzle-heading .cg-hint { flex: 1; min-width: 0; }
+.cg-page .cg-chunk { box-shadow: 0 2px 0 color-mix(in srgb, var(--border) 60%, transparent); }
+.cg-page .cg-rain { border: 2px solid var(--surface); border-radius: 22px; background: linear-gradient(to bottom, color-mix(in srgb, var(--play-sky) 45%, var(--surface)), var(--surface) 65%, color-mix(in srgb, var(--play-mint) 32%, var(--surface))); box-shadow: 0 4px 0 color-mix(in srgb, var(--play-sky) 70%, var(--border)); }
+.cg-page .cg-drop { background: var(--play-paper); }
+.cg-page .cg-missed .ci-art--compact { width: 44px; }
+.cg-page .cg-missed li { align-items: center; }
+.cg-page .cg-missed-word { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.cg-page .cg-missed-word > span { color: var(--text); overflow-wrap: anywhere; }
+
+/* Projector layouts reserve a small strip; their fitted text keeps the remaining space. */
+.cards-board-illustration { flex: none; align-self: center; height: 72px; }
+.cards-board-illustration .ci-art--compact { width: 72px; }
+.cards-spot-illustration { flex: none; height: 52px; margin: 3px 0; }
+.cards-spot-illustration .ci-art--compact { width: 52px; }
+.cards-board-illustration:empty,
+.cards-spot-illustration:empty { display: none; }
+.cards-board .ci-toggle { background: var(--board-card); border-color: var(--board-line); color: var(--board-ink); }
+.cards-board .ci-toggle:has(input:checked) { background: var(--board-soft); border-color: var(--board-accent); color: var(--board-accent); }
+.cards-board .ci-toggle input { accent-color: var(--board-accent); }
+
+/* A quiet celebration surrounds the existing next / retry actions. */
+.cs-study .cs-finish,
+.cg-page .cg-finish {
+  border: 2px solid var(--surface);
+  border-radius: 27px;
+  background: radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--play-yellow) 80%, transparent), transparent 57%), var(--surface);
+  box-shadow: 0 5px 0 color-mix(in srgb, var(--play-mint) 70%, var(--border));
+}
+
+.cs-study .cs-result-grid > div,
+.cg-page .cg-finish dl > div { min-width: 0; padding: 9px 12px; border-radius: 16px; background: color-mix(in srgb, var(--play-mint) 35%, var(--surface)); }
+.cs-study .cs-result-grid > div:nth-child(2),
+.cg-page .cg-finish dl > div:nth-child(2) { background: color-mix(in srgb, var(--play-sky) 35%, var(--surface)); }
+.cs-study .cs-result-grid > div:nth-child(3) { background: color-mix(in srgb, var(--play-peach) 35%, var(--surface)); }
+.cg-page .cg-ranking { border-radius: 21px; }
+
+@media (max-width: 640px) {
+  .ci-study-word { gap: 14px; margin-bottom: 16px; }
+  .ci-art--hero { width: 128px; }
+  .ci-word-cell { gap: 8px; }
+  .ci-art--thumb { width: 40px; }
+  .ci-art--tile { width: 42px; }
+  .ci-deck-preview .ci-art { width: 38px; border-radius: 10px; }
+  .cs-study .cs-result-grid { gap: 9px; }
+  .cs-study .cs-result-grid > div { padding: 8px 6px; }
+  .cg-page .cg-game { border-radius: 18px; }
+}
+
+@media (max-width: 480px) {
+  .ci-art--hero { width: 112px; }
+  .ci-art--compact { width: 64px; }
+  .ci-study-word { gap: 10px; }
+  .ci-art .ci-caption { font-size: 10px; }
+  .ci-toggle { gap: 5px; padding-inline: 9px; font-size: 11px; }
+  .cs-study .cs-flashcard { padding: 12px 14px 20px; border-radius: 22px; }
+  .cs-study .cs-card-toolbar { align-items: flex-start; }
+  .cs-study .cs-card-toolbar > div { flex-wrap: nowrap; }
+  .cs-study .cs-card-toolbar > .cs-tag { margin-top: 10px; }
+  .cs-study .cs-card-toolbar .ci-toggle { gap: 5px; padding: 6px 8px; font-size: 11px; }
+  .cs-study .cs-card-toolbar .ci-toggle > svg { display: none; }
+  .cs-study .cs-study-controls .button { min-height: 48px; }
+  .cs-workspace .cs-mode { border-radius: 18px; }
+  .cs-workspace .cs-card-table .ci-word-cell { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .cs-workspace .cs-card-table .ci-art--thumb { width: 36px; }
+  .cg-page .cg-tile { border-radius: 14px; }
+  .cs-study .cs-finish,
+  .cg-page .cg-finish { border-radius: 23px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ci-art,
+  .ci-toggle,
+  .cs-workspace .cs-mode,
+  .cg-page .cg-game { transition: none; }
+}

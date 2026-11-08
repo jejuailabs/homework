@@ -1,5 +1,6 @@
 .env*
 .qa/
+/public/cards/vocabulary-*/
 design-assets/
 node_modules/
 .git/

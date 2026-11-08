@@ -32,12 +32,15 @@ test('voices: Chirp 3 HD by default, Neural2 by env, overrides stay in their loc
   assert.equal(ttsVoiceName('en', 'chirp3-hd', 'bright', 'ko-KR-Chirp3-HD-Leda'), 'en-US-Chirp3-HD-Kore', 'a wrong-locale override is ignored');
   assert.deepEqual(ttsConfig({GOOGLE_TTS_ENABLED: 'true', GOOGLE_TTS_FAMILY: 'neural2'}), {enabled: true, family: 'neural2', voiceOverride: {ko: undefined, en: undefined}});
   assert.equal(ttsConfig({GOOGLE_TTS_ENABLED: '1'}).enabled, false, 'only the exact word true turns it on');
-  assert.equal(ttsConfig({}).family, 'chirp3-hd');
+  assert.equal(ttsConfig({}).family, 'neural2', 'Neural2 is the default family');
+  assert.equal(ttsConfig({GOOGLE_TTS_FAMILY: 'chirp3-hd'}).family, 'chirp3-hd');
+  assert.equal(ttsConfig({GOOGLE_TTS_FAMILY: 'wavenet'}).family, 'neural2', 'unknown families fall back to the default');
 });
 
 test('cache key: normalized text + language + voice + model; whitespace and Unicode form do not split the cache', () => {
-  const config = ttsConfig({GOOGLE_TTS_ENABLED: 'true'});
+  const config = ttsConfig({GOOGLE_TTS_ENABLED: 'true', GOOGLE_TTS_FAMILY: 'chirp3-hd'});
   const a = ttsPlan(config, {text: '안녕하세요'}, sha), b = ttsPlan(config, {text: '  안녕하세요 '.normalize('NFD')}, sha);
+  assert.equal(ttsPlan(ttsConfig({GOOGLE_TTS_ENABLED: 'true'}), {text: 'apple'}, sha).voiceName, 'en-US-Neural2-F', 'the default family reads with Neural2');
   assert.equal(a.key, b.key);
   assert.equal(a.key, sha(ttsCacheMaterial('안녕하세요', 'ko', 'ko-KR-Chirp3-HD-Kore', 'google-tts-chirp3-hd')));
   assert.equal(a.path, ttsObjectPath(a.key));

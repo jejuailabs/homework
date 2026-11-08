@@ -7,6 +7,7 @@ import {GAME_MAX_MS, newRain, rainCap, rainCapped, rainCatch, rainLevel, rainPla
 import type {CardDirection, CardEntry} from '@/lib/cards-types';
 import type {GameProps} from './home';
 import {GameFrame, GameResult, gameRandom, SoundToggle, useGameCopy, useGameSound, useReducedMotion, useRecordSave} from './shared';
+import {CardIllustration} from '@/components/card-illustration';
 
 type Phase = 'setup' | 'play' | 'done';
 const STEP_MAX = 100; // A slow frame or a background tab never jumps the game forward by more than this.
@@ -76,7 +77,7 @@ export function RainGame(props: GameProps) {
   if (phase === 'done') return <GameFrame distributionId={distributionId} game="rain" title={distribution.title} tools={tools}>
     <GameResult game="rain" save={save} board={boards.games.rain} shown={boards.rankingsShown} onAgain={() => setPhase('setup')} stats={[{label: c.score, value: `${rainScore(value.correct)}${c.points}`}, {label: c.caught, value: String(value.correct)}, {label: c.missed, value: String(value.missed)}]}/>
     {rainCapped(value) && <p className="cg-muted" role="status">{fill(c.rainCapped, {words: RAIN_MAX_WORDS, minutes: GAME_MAX_MS / 60_000})}</p>}
-    {missedCards.length > 0 && <section className="cg-missed"><h3>{c.missedList}</h3><ul>{missedCards.map(card => <li key={card.id}><b>{prompt(card)}</b><span>{expected(card)}</span></li>)}</ul></section>}
+    {missedCards.length > 0 && <section className="cg-missed"><h3>{c.missedList}</h3><ul>{missedCards.map(card => <li key={card.id}><b className="cg-missed-word"><CardIllustration card={card} type={distribution.snapshot.type} variant="thumb"/><span>{prompt(card)}</span></b><span>{expected(card)}</span></li>)}</ul></section>}
   </GameFrame>;
   return <GameFrame distributionId={distributionId} game="rain" title={distribution.title} tools={<>{tools}<button type="button" className="icon-button" aria-label={paused ? c.resume : c.pause} title={paused ? c.resume : c.pause} onClick={() => setPaused(!paused)}>{paused ? <Play size={18}/> : <Pause size={18}/>}</button></>}>
     <div className="cg-status"><span className="cg-lives" aria-label={`${c.lives} ${value.lives} / ${RAIN_LIVES}`}>{Array.from({length: RAIN_LIVES}, (_, index) => <Heart key={index} size={16} fill={index < value.lives ? 'currentColor' : 'none'} aria-hidden="true"/>)}</span><span>{c.score} <b>{rainScore(value.correct)}</b></span><span>{c.level} {rainLevel(value.correct)}</span></div>

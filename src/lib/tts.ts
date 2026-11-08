@@ -43,7 +43,7 @@ export function ttsVoiceName(lang: TtsLang, family: TtsFamily, key: TtsVoiceKey 
 }
 
 export const ttsVoiceKey = (value: unknown): TtsVoiceKey => ttsVoiceKeys.includes(value as TtsVoiceKey) ? value as TtsVoiceKey : 'bright';
-export const ttsFamily = (value: unknown): TtsFamily => ttsFamilies.includes(value as TtsFamily) ? value as TtsFamily : 'chirp3-hd';
+export const ttsFamily = (value: unknown): TtsFamily => ttsFamilies.includes(value as TtsFamily) ? value as TtsFamily : 'neural2';
 export const ttsCharacters = (text: string) => text.length;
 
 /** What the cache key hashes: normalized text + language + voice + model, in a fixed order. */

@@ -11,6 +11,7 @@ import '@/styles/student-delight.css';
 import '@/styles/teacher-dashboard.css';
 import '@/styles/participation-integration.css';
 import '@/styles/cards-integration.css';
+import '@/styles/cards-illustrated.css';
 import '@/styles/learning-king-beta.css';
 
 export const metadata:Metadata={title:'모두의 교실 · Our Classroom',description:'숙제, 작품전시, 퀴즈와 수업 활동을 함께 나누는 우리 반 교실.',appleWebApp:{capable:true,title:'모두의 교실',statusBarStyle:'default'},robots:{index:false,follow:false}};
