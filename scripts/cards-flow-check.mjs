@@ -1450,6 +1450,62 @@ async function vocabSection() {
   check(letters.words.length === 5 && letters.total > 5 && letters.truncated && letters.words.every(entry => /^[xyz]/.test(entry.word)), 'Berry filters by letters and caps the list', letters);
 }
 sections.vocab = vocabSection;
+// 구역 assist (§39): 교과 개념어·복습 세트 AI 초안과 베리의 세트 만들기 → 배부. OpenAI는 가짜로 답한다.
+async function assistSection() {
+  section('subject terms, review drafts and Berry set making');
+  const original = globalThis.fetch, sent = [];
+  const answer = cards => Response.json({status: 'completed', usage: {input_tokens: 10, output_tokens: 20}, output: [{type: 'message', content: [{type: 'output_text', text: JSON.stringify({cards})}]}]});
+  globalThis.fetch = async (url, init) => {
+    if (!String(url).startsWith('https://api.openai.com/')) {if (/^https?:/.test(String(url)) && !String(url).includes(host)) throw new Error(`unexpected outside call: ${url}`); return original(url, init);}
+    sent.push(init); const request = JSON.parse(init.body), data = JSON.parse(request.input[0].content[0].text);
+    if (Array.isArray(data.cards)) return answer(data.cards.map(card => ({front: card.front.toUpperCase(), back: 'hacked', example: `New sentence with ${card.front}.`})));
+    if (/science \(과학\)/.test(request.instructions)) return answer([{front: '광합성', back: '빛으로 양분을 만드는 일', example: '잎에서 광합성이 일어나요.'}, {front: '세포 호흡', back: '양분을 쓰는 일', example: ''}]);
+    return answer([{front: 'sunny', back: '맑은', example: 'It is sunny.'}, {front: 'rainy', back: '비 오는', example: 'It is rainy.'}, {front: 'windy', back: '', example: ''}]);
+  };
+  try {
+    const draft = body => call(teacher, 'POST', ['ai-draft'], body);
+    const concept = await draft({mode: 'concept', level: 'elementary', subject: 'science', topic: '식물', text: '식물은 잎에서 광합성을 해요.', count: 5});
+    same(concept.data.cards, [{front: '광합성', back: '빛으로 양분을 만드는 일', example: '잎에서 광합성이 일어나요.'}], 'subject terms keep only words that are in the textbook text');
+    check(!/class-a|teacher-a|학생/.test(sent.at(-1).body), 'no class or student data goes to the provider');
+    const review = await draft({mode: 'review', level: 'elementary', cards: [{front: 'word 1', back: '뜻 1', example: ''}]});
+    same(review.data.cards, [{front: 'word 1', back: '뜻 1', example: 'New sentence with word 1.'}], 'a review draft keeps the teacher card and takes only the new example');
+    same((await db().collection('aiJobs').where('tool', 'in', ['cards-ai-concept', 'cards-ai-review']).get()).size, 2, 'both go through the usage meter under their own names');
+
+    // The class misses word 4 (two students) and word 5 (one student).
+    const base = await distribute();
+    await study(pupil(1), base.id, 'recall', 'as-1', [{cardId: cards[4].id, answer: 'x'}, {cardId: cards[5].id, answer: 'x'}, ...right(6)]);
+    await study(pupil(2), base.id, 'recall', 'as-2', [{cardId: cards[4].id, answer: 'x'}, ...right(5)]);
+    const {planManage, executeManage} = await import('@/modules/berry-connector/manage-tools');
+    const bearer = {...bearerOf(teacher), scopes: ['classroom:read', 'classroom:write']};
+    const before = (await db().collection('cardSets').get()).size, distsBefore = (await db().collection('cardClassSets').get()).size;
+    const reviewPlan = await planManage('manage_cards', {action: 'create_review_set', distribution_id: base.id, count: 5}, bearer);
+    same(reviewPlan.view.body, '1. word 4 — 뜻 4\n2. word 5 — 뜻 5', 'the review preview lists the missed cards, most missed first');
+    check(!/학생\d/.test(JSON.stringify(reviewPlan)), 'the preview carries no student names', reviewPlan.view);
+    same((await db().collection('cardSets').get()).size, before, 'planning stores nothing');
+    const reviewSaved = await executeManage(reviewPlan, bearer);
+    same([reviewSaved.done, reviewSaved.failed.length], [1, 0], 'confirming saves the review set');
+    const reviewSet = (await db().collection('cardSets').where('title', '==', '점검 세트 복습').get()).docs[0]?.data();
+    same([reviewSet?.cardCount, reviewSet?.ownerUid], [2, teacher], 'the review set is the teacher own set with the missed cards');
+
+    const makePlan = await planManage('manage_cards', {action: 'create_set', set_title: '날씨', source: 'topic', topic: 'weather', count: 3, class_id: 'class-a', due_at: '2030-01-05 18:00'}, bearer);
+    same([makePlan.calls.length, makePlan.calls[1].chain, makePlan.view.count], [2, 'setId', 2], 'create_set with a class saves then assigns; a card with no meaning is dropped');
+    same((await db().collection('cardClassSets').get()).size, distsBefore, 'nothing is assigned before the teacher confirms');
+    const made = await executeManage(makePlan, bearer);
+    same([made.done, made.failed.length], [2, 0], 'one confirm makes the set and assigns it');
+    const weather = (await db().collection('cardSets').where('title', '==', '날씨').get()).docs[0];
+    const assigned = (await db().collection('cardClassSets').where('setId', '==', weather?.id ?? '-').get()).docs.map(doc => doc.data());
+    same([assigned.length, assigned[0]?.classId, assigned[0]?.cardCount, !!assigned[0]?.dueAt], [1, 'class-a', 2, true], 'the new set is assigned to the class with the deadline');
+    same((await executeManage(makePlan, bearer)).failed.length, 0, 'a replayed confirm is idempotent');
+    same((await db().collection('cardClassSets').where('setId', '==', weather?.id ?? '-').get()).size, 1, 'and makes no second assignment');
+
+    const broken = {...makePlan, calls: [{...makePlan.calls[0], body: {...makePlan.calls[0].body, requestId: 'assist-broken', title: ''}}, makePlan.calls[1]]};
+    const half = await executeManage(broken, bearer).catch(error => ({error: error.message}));
+    check('error' in half, 'when the set is not saved nothing is assigned', half);
+    let refusedPlan = null; try {await planManage('manage_cards', {action: 'create_set', set_title: 'x', source: 'topic', topic: 'weather', class_id: 'class-b'}, bearer);} catch (error) {refusedPlan = error.message;}
+    check(!!refusedPlan, 'another teacher class is refused at planning', refusedPlan);
+  } finally {globalThis.fetch = original;}
+}
+sections.assist = assistSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();

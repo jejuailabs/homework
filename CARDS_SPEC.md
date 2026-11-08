@@ -674,3 +674,14 @@ FSRS(ts-fsrs) 대신 작은 라이트너 일정을 직접 두었다. 학생이 �
 - 코드: 규칙 `src/lib/tts.ts`, 서버 `src/lib/server/tts-core.ts`(캐시·대기·계량 판단)·`tts.ts`(Storage·Google·한도 연결), 경로 `src/app/api/tts/route.ts`, 화면 `src/lib/tts-client.ts`. 카드 쪽 변경은 `cards-study.tsx`·`cards-classroom-shared.tsx`·`cards-chunks.tsx`의 읽기 함수뿐이다. 미리 만들기 `scripts/tts-pregenerate.mjs`(기본은 미리보기, `--apply`만 비용 발생).
 - 규칙: `firestore.rules`·`storage.rules` 변경 없음. `tts/` 파일은 서버만 쓰고, 읽기는 서명된 링크(UTC 하루 단위로 같은 주소)로만 한다. 저장 공간은 교사 요금제에 넣지 않는 사이트 공용 캐시다.
 - 검증: `src/lib/tts.test.ts`(언어·캐시 키·목소리·캐시 적중 무과금·동시 요청 1회·한도·실패 시 저장 안 함·계량 단가·화면 대체). 실제 Google 호출은 운영 설정 전이라 확인하지 않았다.
+
+## 39. AI가 대신 만드는 세트 — 교과 개념어·복습 세트·베리 — 2026-11-08
+
+선생님 손을 덜기 위해 AI 초안을 세 군데 더 쓴다. 모두 초안만 만들고, 선생님이 확인하고 저장해야 세트가 생긴다. 학생 이름·답안 원문은 AI에 보내지 않는다.
+
+- **교과 개념어(가져오기·AI 초안 > 교과 개념어 탭):** 과목(국어·수학·사회·과학·한자·기타)과 단원·주제, 또는 교과서 내용을 넣으면 개념어 카드를 만든다. 앞면은 교과서 낱말, 뒷면은 쉬운 뜻(한자는 훈·음), 예문은 한국어 한 문장. 교과서 내용을 넣으면 그 글에 실제로 있는 낱말만 남긴다(한자는 한글로 적혀 있을 수 있어 검사하지 않는다). 한국어 카드는 원어민 읽어주기가 한국어 목소리로 읽는다. 계량 이름 `cards-ai-concept`.
+- **복습 세트(학습 리포트 > 많이 틀린 단어 > [복습 세트 만들기]):** 그 배부에서 반 학생들이 틀린 카드를 틀린 학생 수 → 틀린 횟수 → 세트 순서로 최대 30장 모으고, 많이 틀린 10장을 미리 고른다. 단어 세트는 'AI로 예문 새로 쓰기'(기본 켬)로 앞면·뜻은 그대로 두고 예문만 바꾼다. AI가 실패하면 예문 그대로 만들 수 있다. 새 세트로 저장하고 원래 세트·배부는 건드리지 않는다. 배부는 새 세트 화면에서 한다. 계량 이름 `cards-ai-review`.
+- **베리(`manage_cards`):** `create_set`(source: words·topic·passage·concept, level, count, 선택 class_id)과 `create_review_set`(distribution_id, count 기본 10, rewrite_examples, 선택 class_id). 미리보기를 만들 때 AI 초안을 돌려 저장될 카드를 그대로 보여 준다. class_id를 주면 확인 한 번에 세트 저장 → 그 세트 배부를 이어서 한다(앞 단계가 실패하면 배부는 하지 않음). 배부 값은 기존 distribute와 같은 규칙(우리 반 학습 기본값, 없으면 앱 값). 사진·표 가져오기와 세트 고치기는 계속 화면에서 한다.
+- **한도:** 모두 기존 AI 사용 한도(`runMeteredAi`, 선생님별 분·일 한도)를 같이 쓴다. 베리 미리보기도 한 번의 AI 사용으로 센다.
+- **코드:** 규칙 `src/lib/cards-ai-draft.ts`(요청 검사·프롬프트·정리), 서버 `src/lib/server/cards-ai.ts`(`draftCardsFor`), 화면 `cards-import-dialog.tsx`·`cards-review-set.tsx`·`cards-report.tsx`, 후보 고르기 `cards-summary.ts`의 `cardReviewCandidates`, 베리 `berry-connector/card-drafts.ts`·`manage-tools.ts`.
+- **검증:** `cards-ai-draft.test.ts`(개념어·복습 요청 검사, 프롬프트, 본문에 있는 낱말만 남기기, 앞면·뜻 유지), `cards-summary.test.ts`(복습 후보 순서), `berry-connector/card-drafts.test.ts`(베리 인자 → 요청, 미리보기).

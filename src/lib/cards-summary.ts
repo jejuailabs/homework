@@ -69,3 +69,14 @@ export function cardUnmastered(rows: (ReportRow & {levels?: Record<string, numbe
       return {word, wrongRate: below / learners.length * 100, wrongCount: below};
     });
 }
+/** 복습 세트 (§39): every card someone in the class missed, most students first, then most misses, then set order. */
+export function cardReviewCandidates<C extends Pick<CardEntry, 'id'>>(rows: Pick<CardReportStudent, 'mistakes'>[], cards: C[], limit = 30) {
+  const order = new Map(cards.map((card, index) => [card.id, index])), misses = new Map<string, {students: number; total: number}>();
+  for (const row of rows) for (const {cardId, count} of row.mistakes) {
+    if (!order.has(cardId) || count <= 0) continue;
+    const entry = misses.get(cardId) ?? {students: 0, total: 0};
+    misses.set(cardId, {students: entry.students + 1, total: entry.total + count});
+  }
+  return [...misses].sort(([a, x], [b, y]) => y.students - x.students || y.total - x.total || order.get(a)! - order.get(b)!).slice(0, limit)
+    .map(([cardId, value]) => ({card: cards[order.get(cardId)!], ...value}));
+}

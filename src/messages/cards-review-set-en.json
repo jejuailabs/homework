@@ -1,0 +1,10 @@
+{
+  "open": "Make a review set", "title": "Make a review set from missed cards",
+  "intro": "These are the cards your class missed in this assignment, most missed first. Pick the ones to keep and they are saved as a new set. The original set and assignment stay as they are.",
+  "students": "{count} missed", "times": "{count}×", "setTitle": "New set name", "suffix": "review",
+  "rewrite": "Write new examples with AI", "rewriteHint": "Fronts and meanings stay; only the example sentences change to new ones. You can edit them before assigning.", "rewriteWordsOnly": "New examples work for word sets only.",
+  "level": "Level", "picked": "{count} cards picked", "pickTop": "Top 10 only", "pickAll": "Pick all", "create": "Make set", "creating": "Making…",
+  "none": "Pick at least one card.", "noTitle": "Enter a set name.", "saveFailed": "Could not save the set. Please try again.",
+  "aiFailed": "Could not write AI examples. You can make the set with the old examples.", "keepExamples": "Keep old examples",
+  "done": "The review set is ready. Open it to check the cards and assign it to the class.", "openSet": "Open set and assign", "description": "Cards missed in {title}"
+}

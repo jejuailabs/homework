@@ -14,3 +14,5 @@ const neighborhoodCore = moduleUrl(compile('../../lib/neighborhood.ts'));
 const spots = moduleUrl(compile('../../lib/neighborhood-spots.ts').replace("'./neighborhood'", JSON.stringify(neighborhoodCore)));
 const packs = moduleUrl(compile('./neighborhood-packs.ts').replace("'@/lib/neighborhood-spots'", JSON.stringify(spots)));
 await import(moduleUrl(compile('./neighborhood-packs.test.ts').replace("'./neighborhood-packs'", JSON.stringify(packs))));
+const draftRules = moduleUrl(compile('../../lib/cards-ai-draft.ts'));
+await import(moduleUrl(compile('./card-drafts.test.ts').replace("'./card-drafts'", JSON.stringify(moduleUrl(compile('./card-drafts.ts').replace("'@/lib/cards-ai-draft'", JSON.stringify(draftRules)).replace("'./policy'", JSON.stringify(policy)))))));

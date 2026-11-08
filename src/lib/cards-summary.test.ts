@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {cardClassStatus, cardHardWords, cardSetUnfinished, cardUnmastered, filterCardReport, summarizeStudentCards} from './cards-summary';
+import {cardClassStatus, cardHardWords, cardReviewCandidates, cardSetUnfinished, cardUnmastered, filterCardReport, summarizeStudentCards} from './cards-summary';
 import type {CardRequiredModes} from './cards-types';
 
 const rule = (requiredCount: number) => ({requiredCount, direction: 'front-back' as const, rangeStart: 1, rangeEnd: 10});
@@ -45,3 +45,12 @@ assert.deepEqual(cardUnmastered([{...done, levels: {a: 3, b: 4, c: 3}}], learned
 assert.deepEqual(cardUnmastered([{...idle}], learned), [], 'no activity, no list');
 assert.deepEqual(cardUnmastered([{...working}], learned).length, 3, 'old reports without levels read as not learned');
 console.log('cards mastery summary tests ok');
+
+// review candidates: every missed card, most students then most misses then set order
+{
+  const cards = ['a', 'b', 'c', 'd'].map(id => ({id, front: id}));
+  const rows = [{mistakes: [{cardId: 'c', count: 1}, {cardId: 'b', count: 1}, {cardId: 'gone', count: 9}]}, {mistakes: [{cardId: 'c', count: 2}, {cardId: 'a', count: 3}, {cardId: 'd', count: 0}]}, {mistakes: [{cardId: 'b', count: 1}]}];
+  assert.deepEqual(cardReviewCandidates(rows, cards).map(row => [row.card.id, row.students, row.total]), [['c', 2, 3], ['b', 2, 2], ['a', 1, 3]]);
+  assert.equal(cardReviewCandidates(rows, cards, 1).length, 1);
+  assert.deepEqual(cardReviewCandidates([], cards), []);
+}
