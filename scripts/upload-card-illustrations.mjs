@@ -125,7 +125,14 @@ async function localPack(options) {
 
 async function atomicJson(path, value) {
   const temp = `${path}.${process.pid}.${randomUUID()}.tmp`;
-  try {await writeFile(temp, JSON.stringify(value, null, 2) + '\n', {flag: 'wx', mode: 0o600}); await rename(temp, path);}
+  try {
+    await writeFile(temp, JSON.stringify(value, null, 2) + '\n', {flag: 'wx', mode: 0o600});
+    // Windows: renaming over a file an indexer or antivirus just opened fails with EPERM/EBUSY for a moment.
+    for (let attempt = 0; ; attempt++) {
+      try {await rename(temp, path); break;}
+      catch (error) {if (attempt >= 5 || !['EPERM', 'EBUSY', 'EACCES'].includes(error.code)) throw error; await delay(50 * (attempt + 1));}
+    }
+  }
   finally {await rm(temp, {force: true}).catch(() => {});}
 }
 async function readReceipt(bucket, pack) {
@@ -154,7 +161,7 @@ async function retried(operation, file) {
     catch (error) {
       if (error instanceof SafeError || Number(error.code) === 412) throw error;
       if (attempt < 2 && [408, 429, 500, 502, 503, 504, 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN'].includes(typeof error.code === 'string' && /^\d+$/.test(error.code) ? Number(error.code) : error.code)) {await delay(500 * 2 ** attempt); continue;}
-      fail(`Cloud operation failed for ${file}; stopped without publishing the release. Check credentials, permissions, and connectivity.`);
+      fail(`Cloud operation failed for ${file} (${error?.code ?? error?.name ?? 'unknown'}); stopped without publishing the release. Check credentials, permissions, and connectivity.`);
     }
   }
 }
@@ -232,4 +239,4 @@ async function main() {
   if (!options['--upload']) {console.log('Dry-run only. No credentials loaded, remote operations, receipt changes, or ready-config changes.'); return;}
   await upload(pack, options['--bucket']);
 }
-main().catch(error => {console.error(error instanceof SafeError ? error.message : 'Local validation or upload failed. No credentials or server error payloads are printed. The release is published only after all objects are verified.'); process.exitCode = 1;});
+main().catch(error => {console.error(error instanceof SafeError ? error.message : `Local validation or upload failed (${error?.code ?? error?.name ?? 'unknown'}). No credentials or server error payloads are printed. The release is published only after all objects are verified.`); process.exitCode = 1;});
