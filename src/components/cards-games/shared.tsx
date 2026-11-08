@@ -6,6 +6,7 @@ import {ArrowLeft, CheckCircle2, LoaderCircle, RefreshCw, RotateCcw, Trophy, Vol
 import {usePreferences} from '../providers';
 import {cardRequest, CardBuddy} from '../cards-study';
 import {CardModeIcon} from '../cards-visuals';
+import {CardIllustrationToggle} from '@/components/card-illustration';
 import {setCardSound, useCardSound} from '../cards-care';
 import {cardDueState} from '@/lib/cards-logic';
 import {formatGameTime, lowerIsBetter, type CardGame, type GameRecord} from '@/lib/cards-games';
@@ -44,7 +45,7 @@ export function GameError({retry}: {retry: () => void}) {const {c} = useGameCopy
 
 export function GameFrame({distributionId, game, title, tools, children}: {distributionId: string; game?: CardGame; title: string; tools?: ReactNode; children: ReactNode}) {
   const {c} = useGameCopy();
-  return <section className="cg-page"><div className="cg-top"><Link className="cs-back" href={game ? `/student/cards/${distributionId}/games` : `/student/cards/${distributionId}`}><ArrowLeft size={16}/>{game ? c.toGames : c.back}</Link>{tools}</div>
+  return <section className="cg-page"><div className="cg-top"><Link className="cs-back" href={game ? `/student/cards/${distributionId}/games` : `/student/cards/${distributionId}`}><ArrowLeft size={16}/>{game ? c.toGames : c.back}</Link><div className="cg-tools"><CardIllustrationToggle/>{tools}</div></div>
     <header className="cg-heading">{game && <span className="cg-icon"><CardModeIcon mode={gameIcon[game]} size={30}/></span>}<div><p>{game ? title : c.games}</p><h1>{game ? c[game] : title}</h1></div></header>{children}</section>;
 }
 

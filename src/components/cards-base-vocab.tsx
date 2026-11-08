@@ -1,6 +1,8 @@
 'use client';
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {BookA, Search} from 'lucide-react';
+import {CardIllustration, CardIllustrationToggle} from './card-illustration';
+
 import ko from '@/messages/cards-vocab-ko.json';
 import en from '@/messages/cards-vocab-en.json';
 import {BASE_VOCAB_CHUNKS, BASE_VOCAB_LETTERS, BASE_VOCAB_QUERY_LENGTH, BASE_VOCAB_SET_MAX, baseVocabCards, baseVocabSetTitle, chunkBaseVocab, filterBaseVocab, type BaseVocabData, type BaseVocabScope, type BaseVocabWord} from '@/lib/cards-base-vocab';
@@ -45,7 +47,9 @@ function Filters({copy, filter, update, disabled}: {copy: Copy; filter: Filter; 
 function SourceNote({copy, data}: {copy: Copy; data: BaseVocabData}) {
   return <div className="cards-vocab-source"><p className="cards-vocab-ai" role="note"><strong>{data.meaningNote}</strong> · {copy.aiNoteLong}</p><p className="cards-muted">{copy.source}: <a className="cards-text-link" href={data.source.url} target="_blank" rel="noreferrer">{data.source.title}</a> ({data.source.notice})</p></div>;
 }
-const wordLine = (chunk: BaseVocabWord[]) => chunk.map(entry => `${entry.word} ${entry.meaning}`).join(' · ');
+function WordPreview({words}: {words: BaseVocabWord[]}) {
+  return <ul className="ci-vocab-preview">{words.map(entry => <li key={entry.word}><CardIllustration card={{front: entry.word, back: entry.meaning}} variant="thumb"/><span><b lang="en">{entry.word}</b><small>{entry.meaning}</small></span></li>)}</ul>;
+}
 
 /** Makes ordinary owned sets, one POST /api/cards/sets per group, with a stable request ID per group so a retry never doubles one. */
 export default function CardsBaseVocab({folders, onClose, onCreated}: {folders: CardFolder[]; onClose: () => void; onCreated: (count: number, folderId: string | null) => void}) {
@@ -95,7 +99,7 @@ export default function CardsBaseVocab({folders, onClose, onCreated}: {folders: 
           {!!chunks.length && <span className="cards-actions"><button type="button" className="button" onClick={() => setSkipped(new Set())}>{copy.pickAll}</button><button type="button" className="button" onClick={() => setSkipped(new Set(chunks.map((_, index) => index)))}>{copy.pickNone}</button></span>}</div>
         {!chunks.length ? <p className="cards-empty">{copy.none}</p> : <ol className="cards-vocab-groups">{chunks.map((chunk, index) => <li key={`${signature}:${index}`}>
           <input type="checkbox" aria-label={`${copy.group} ${index + 1}`} checked={!skipped.has(index)} onChange={e => setSkipped(current => {const next = new Set(current); if (e.target.checked) next.delete(index); else next.add(index); return next;})}/>
-          <details><summary><strong>{baseVocabSetTitle(prefixOf(copy, filter.scope), index, chunks.length, chunk)}</strong> <small>{chunk.length}{copy.wordUnit}</small></summary><p lang="en">{wordLine(chunk)}</p></details>
+          <details><summary><strong>{baseVocabSetTitle(prefixOf(copy, filter.scope), index, chunks.length, chunk)}</strong> <small>{chunk.length}{copy.wordUnit}</small></summary><WordPreview words={chunk}/></details>
         </li>)}</ol>}
         {tooMany && <p role="alert" className="cards-error">{copy.tooMany}</p>}
         <div className="cards-vocab-folder"><label>{copy.folder}<select value={folderChoice} onChange={e => setFolderChoice(e.target.value)}><option value="new">{copy.newFolder}</option><option value="none">{copy.noFolder}</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.name}</option>)}</select></label>
@@ -127,7 +131,7 @@ export function BaseVocabImportTab({fronts, limit, onAppend}: {fronts: string[];
     <Filters copy={copy} filter={filter} update={update}/>
     {!chunks.length ? <p className="cards-muted">{copy.none}</p> : <>
       <label className="cards-import-merge">{copy.pickGroup}<select value={Math.min(group, chunks.length - 1)} onChange={e => setGroup(Number(e.target.value))}>{chunks.map((item, index) => <option key={index} value={index}>{baseVocabSetTitle(prefixOf(copy, filter.scope), index, chunks.length, item)} · {item.length}</option>)}</select></label>
-      <p className="cards-vocab-preview" lang="en">{wordLine(chunk)}</p>
+      <CardIllustrationToggle/><WordPreview words={chunk}/>
       <div className="cards-actions"><span className="cards-import-count">{copy.append} {fresh.length}{t('cards')}</span><button type="button" className="button primary" disabled={!fresh.length} onClick={append}>{copy.append}</button></div>
       {!!duplicates.length && <p className="cards-import-note">{copy.duplicates} {duplicates.join(', ')}</p>}
     </>}

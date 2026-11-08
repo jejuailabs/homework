@@ -5,6 +5,7 @@ import {ArrowLeft, ChevronLeft, ChevronRight, Expand, LoaderCircle, Moon, Pause,
 import type {CardEntry} from '@/lib/cards-types';
 import {cardRange, shuffled} from '@/lib/cards-classroom';
 import AccessGate from './access-gate';
+import {CardIllustration, CardIllustrationToggle} from '@/components/card-illustration';
 import {faceLabels, FitText, reducedMotion, SPEECH_RATES, typingTarget, useClassroomCopy, useFullscreen, useIdle, useLocalPrefs, useSpeech, useTeacherSet} from './cards-classroom-shared';
 import '@/styles/cards-classroom.css';
 
@@ -61,6 +62,7 @@ function Screen({setId, classId}: {setId: string; classId: string}) {
       : !card ? <div className="cards-board-state"><p>{c('emptySet')}</p><Link className="button" href={back}>{c('back')}</Link></div>
       : <main className="cards-board-stage">
         <div key={`${card.id}:${revealed}`} className={`cards-board-card ${revealed ? 'is-revealed' : ''} ${motion && revealed ? 'is-flipping' : ''}`} onClick={flip} aria-live="polite">
+          {(prefs.front || revealed) && (prefs.back || revealed) && set.type === 'word' && <div className="cards-board-illustration"><CardIllustration card={card} type={set.type} variant="compact"/></div>}
           {present.map(field => <section key={field} className={`cards-board-slot is-${field}`}>
             <small>{labels?.[field]}</small>
             {prefs[field] || revealed ? <FitText text={card[field]} min={field === 'example' ? 16 : 22} max={field === 'front' ? 220 : field === 'back' ? 150 : 80}/> : <div className="cards-board-cover">{c('hiddenSlot')}</div>}
@@ -80,6 +82,7 @@ function Screen({setId, classId}: {setId: string; classId: string}) {
     </footer>}
     {panel && set && <aside className="cards-board-panel" aria-label={c('settings')}>
       <div className="cards-board-panel-head"><h2>{c('settings')}</h2><button className="cards-board-icon" aria-label={c('close')} onClick={() => setPanel(false)}><X size={20}/></button></div>
+      <CardIllustrationToggle/>
       <fieldset><legend>{c('shownFields')}</legend><div className="cards-board-chips">{FIELDS.map(field => <button key={field} aria-pressed={prefs[field]} onClick={() => {setPrefs({[field]: !prefs[field]}); setRevealed(false);}}>{labels?.[field]}</button>)}</div><p>{c('shownHint')}</p></fieldset>
       <fieldset><legend>{c('range')}</legend><div className="cards-board-range"><label>{c('rangeFrom')}<input type="number" min={1} max={total} value={from} onChange={event => setFrom(Number(event.target.value) || 1)}/></label><label>{c('rangeTo')}<input type="number" min={1} max={total} value={to || total} onChange={event => setTo(Number(event.target.value) || total)}/></label></div><p>{c('rangeNow', {start: range.start, end: range.end, count: range.indices.length})}</p></fieldset>
       <fieldset><legend>{c('shuffle')}</legend><div className="cards-board-chips"><button aria-pressed={shuffleOn} onClick={() => setShuffleOn(!shuffleOn)}><Shuffle size={16}/>{c('shuffle')}</button>{shuffleOn && <button onClick={() => setSeed(value => value + 1)}><RefreshCw size={16}/>{c('shuffleAgain')}</button>}</div></fieldset>

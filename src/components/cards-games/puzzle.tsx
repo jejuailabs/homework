@@ -5,6 +5,7 @@ import {ArrowRight, Check, Eraser, SkipForward, Timer} from 'lucide-react';
 import {buildPuzzles, formatGameTime, puzzlePoints, puzzlePrefix, puzzleScore, puzzleSolved, puzzleStart, type PuzzleItem} from '@/lib/cards-games';
 import type {GameProps} from './home';
 import {GameFrame, GameResult, gameRandom, SoundToggle, useGameCopy, useGameSound, useRecordSave} from './shared';
+import {CardIllustration} from '@/components/card-illustration';
 
 type Feedback = {kind: 'right' | 'wrong' | 'shown'; prefix: number} | null;
 type Round = {items: PuzzleItem[]; starts: number[][]; index: number; placed: number[]; wrong: number; results: number[]; feedback: Feedback; startedAt: number; finishedMs: number | null};
@@ -19,6 +20,7 @@ export function PuzzleGame(props: GameProps) {
   const [round, setRound] = useState(() => newRound(props)), [now, setNow] = useState(() => performance.now());
   const save = useRecordSave(distributionId, 'puzzle', setBoards);
   const item = round.items[round.index], start = round.starts[round.index] ?? [], finished = round.finishedMs !== null, settled = round.feedback?.kind === 'right' || round.feedback?.kind === 'shown';
+  const illustrationCard = distribution.snapshot.type === 'word' ? distribution.snapshot.cards.find(card => card.id === item?.cardId) : undefined;
   const pool = start.filter(chunk => !round.placed.includes(chunk));
   useEffect(() => {if (finished) return; const tick = setInterval(() => setNow(performance.now()), 250); return () => clearInterval(tick);}, [finished]);
   const place = (chunk: number) => {if (!settled) setRound(value => ({...value, placed: [...value.placed, chunk], feedback: value.feedback?.kind === 'wrong' ? null : value.feedback}));};
@@ -52,7 +54,7 @@ export function PuzzleGame(props: GameProps) {
     {finished ? <GameResult game="puzzle" save={save} board={boards.games.puzzle} shown={boards.rankingsShown} onAgain={again} stats={[{label: c.score, value: `${puzzleScore(round.results)}${c.points}`}, {label: c.puzzleSolved, value: `${solved} / ${round.items.length}`}, {label: c.time, value: `${formatGameTime(elapsed)}${c.seconds}`}]}/> : item && <>
       <div className="cg-status"><span>{fill(c.puzzleProgress, {current: round.index + 1, total: round.items.length})}</span><span className="cg-clock"><Timer size={16}/>{formatGameTime(elapsed)}{c.seconds}</span><span>{c.score} {puzzleScore(round.results)}</span></div>
       <div className="cg-puzzle">
-        <p className="cg-hint"><small>{c.puzzleHint}</small>{item.hint}</p>
+        <div className="cg-puzzle-heading">{illustrationCard && <CardIllustration card={illustrationCard} type="word" variant="compact"/>}<p className="cg-hint"><small>{c.puzzleHint}</small>{item.hint}</p></div>
         <p className="cg-muted">{c.puzzleArrange}</p>
         <div className={`cg-answer ${round.feedback ? `is-${round.feedback.kind}` : ''}`} aria-label={c.puzzleAnswer}>{round.placed.map((chunk, position) => <button key={chunk} type="button" className={`cg-chunk ${round.feedback?.kind === 'wrong' ? position < round.feedback.prefix ? 'is-ok' : 'is-off' : ''}`} disabled={settled} onClick={() => unplace(chunk)}>{item.chunks[chunk]}</button>)}</div>
         <div className="cg-pool">{pool.map((chunk, position) => <button key={chunk} type="button" className="cg-chunk" disabled={settled} onClick={() => place(chunk)}>{position < 9 && <kbd>{position + 1}</kbd>}{item.chunks[chunk]}</button>)}</div>
