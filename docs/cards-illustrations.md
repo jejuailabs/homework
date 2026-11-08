@@ -54,6 +54,8 @@ node scripts/upload-card-illustrations.mjs --bucket book-9b8ce.firebasestorage.a
 
 이미 게시한 버전의 객체는 바꾸지 않는다. 그림 수정 시 새 `cards/vocabulary/vN` 경로를 사용하고 새 업로드 계획을 만든다. 업로드 스크립트에는 웹사이트 커밋·푸시·배포 동작이 없다.
 
+`codex/cards-illustrated` 작업 브랜치는 코드 보관용 푸시를 위해 `vercel.json`의 `git.deploymentEnabled`에서 자동 배포를 끈다. 다른 브랜치의 기존 배포 설정은 유지한다. 이 브랜치의 미리보기 배포를 시작할 때는 별도 승인을 확인한 후 해당 항목을 제거한다.
+
 ## 검증
 
 ```sh
