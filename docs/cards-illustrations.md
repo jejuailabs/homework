@@ -71,3 +71,5 @@ npm run typecheck
 베리 분류표에는 자동 그림 연결과 기기별 표시 설정, 시험 힌트 제외를 기록했다. 새 서버 데이터 필드나 쓰기 도구는 추가하지 않았다.
 
 2026-11-08 운영 반영: 업로드 완료 후 공개 토큰 URL로 `apple.svg`·`elephant.svg`·`I.svg`·`zoo.svg`가 `image/svg+xml`, 1년 불변 캐시로 내려오는 것을 확인했다. 전체 테스트(667건)와 TypeScript 검사를 통과했다. 같은 반영에서 원어민 읽어주기 기본 모델을 Neural2로 바꿨다(`GOOGLE_TTS_FAMILY` 기본값, `.env.example`).
+
+2026-11-09 **그림 기능 전체 숨김.** 묶음의 자체 검수표는 3,000개 중 `ready` 1,286개뿐이고 `grammar` 180개(a=사과, the=사과+돋보기, and=사과+책처럼 뜻과 무관), `abstract` 882개, `polysemy` 622개, `metaphor` 30개는 검수가 필요한데, 이를 보지 않고 전부 켠 것이 문제였다. `card-illustration-storage.json`의 `ready`를 `false`로 되돌려 모든 그림을 숨기고, `CARD_ILLUSTRATIONS_LIVE`가 꺼져 있으면 '그림 보기' 토글도 그리지 않는다. 업로드한 객체·버킷·토큰은 그대로 두었으므로, 검수(예: `review: 'ready'`만 표시)를 마친 뒤 `ready: true`로 켜면 된다.

@@ -33,6 +33,9 @@ export function cardIllustrationStorageUrl(file: string, config: CardIllustratio
   return `https://firebasestorage.googleapis.com/v0/b/${config.bucket}/o/${objectPath}?alt=media&token=${config.downloadToken}`;
 }
 
+/** False while the pack is hidden (ready: false): every picture and the picture toggle stay out of the UI. */
+export const CARD_ILLUSTRATIONS_LIVE = cardIllustrationStorageUrl('apple.svg') !== null;
+
 /** Whole headwords only: sentences, paths, and partial matches must stay text. */
 export function illustrationHeadword(front: string): string | null {
   const word = front.normalize('NFKC').trim().toLowerCase();
