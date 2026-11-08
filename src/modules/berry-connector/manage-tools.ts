@@ -10,6 +10,9 @@ import {handlePoints} from '@/lib/server/points';
 import {handleCards} from '@/lib/server/cards';
 import {cardDistributionSettings} from './card-settings';
 import {classDefaultsFor} from '@/lib/server/cards-class-settings';
+import {cardSetDraftInput, reviewDraftInput, setDraftPreview} from './card-drafts';
+import {draftCardsFor} from '@/lib/server/cards-ai';
+import {cardReviewCandidates} from '@/lib/cards-summary';
 import {handleLearningLinks} from '@/lib/server/learning-links';
 import {handleCanvases} from '@/lib/server/canvases';
 import {handlePublicQuiz} from '@/modules/daily-quiz/public-server';
@@ -28,7 +31,8 @@ import type {BearerContext, McpTool} from './types';
 type Data = Record<string, any>;
 type Route = 'api' | 'visibility' | 'exhibitions' | 'boards' | 'quiz' | 'review' | 'playground' | 'points' | 'cards' | 'links' | 'canvases' | 'workspace';
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-export type ManageCall = {route: Route; segments: string[]; method: Method; body?: unknown; query?: string; label?: string};
+/** chain 'setId': this call needs the set the previous call saved (its id and version go into the body); it is skipped when that call failed. */
+export type ManageCall = {route: Route; segments: string[]; method: Method; body?: unknown; query?: string; label?: string; chain?: 'setId'};
 export type ManagePlan = {view: Data; calls: ManageCall[]; savedNote: string};
 
 const ROUTES: Record<Route, (request: Request, segments: string[]) => Promise<Response>> = {
@@ -113,7 +117,7 @@ export const MANAGE_TOOLS: McpTool[] = [
   {name: 'manage_review', scope: 'classroom:write', description: `복습하기 관리. action: hide, show(숨긴 복습 다시 보이기), delete_draft(초안 삭제, 위험), rewards_on, rewards_off(복습 보상). lesson_id는 get_review_status에서 확인. 배포는 publish_review. ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['hide', 'show', 'delete_draft', 'rewards_on', 'rewards_off']}, class_id: str, lesson_id: str}, required: ['action', 'class_id'], additionalProperties: false}},
   {name: 'manage_playground', scope: 'classroom:write', description: `말놀이터 설정과 반 문제. action: settings(enabled, duels, rankings, rewards, solo_reward 0~3, duel_reward 0~3 중 바꿀 것만), add_item(kind nonsense|riddle|vocab|spelling, prompt, answers, reveal 풀이, choices·hints 선택, grade_band low|mid|high). ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['settings', 'add_item']}, class_id: str, enabled: boolSchema, duels: boolSchema, rankings: boolSchema, rewards: boolSchema, solo_reward: {type: 'integer', minimum: 0, maximum: 3}, duel_reward: {type: 'integer', minimum: 0, maximum: 3}, kind: {type: 'string', enum: ['nonsense', 'riddle', 'vocab', 'spelling']}, prompt: {type: 'string', maxLength: 600}, answers: {type: 'array', items: {type: 'string', maxLength: 120}, maxItems: 8}, choices: {type: 'array', items: {type: 'string', maxLength: 120}, maxItems: 4}, hints: {type: 'array', items: {type: 'string', maxLength: 300}, maxItems: 3}, reveal: {type: 'string', maxLength: 1200}, grade_band: {type: 'string', enum: ['low', 'mid', 'high']}}, required: ['action', 'class_id'], additionalProperties: false}},
   {name: 'manage_points', scope: 'classroom:write', description: `보말 주기·빼기·설정. action: grant(student_numbers 또는 all_students, amount, reason 필수), revoke(위험, 같은 입력), settings(enabled, label, homework_points). ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['grant', 'revoke', 'settings']}, class_id: str, student_numbers: nums, all_students: boolSchema, amount: {type: 'integer', minimum: 1, maximum: 1000}, reason: {type: 'string', maxLength: 200}, enabled: boolSchema, label: {type: 'string', maxLength: 16}, homework_points: {type: 'integer', minimum: 0, maximum: 1000}}, required: ['action', 'class_id'], additionalProperties: false}},
-  {name: 'manage_cards', scope: 'classroom:write', description: `카드놀이 배부. action: distribute(set_title 또는 set_id를 class_id에 배부), stop·resume(distribution_id, list_card_sets의 id). 배부 때 말하지 않은 값은 그 반의 '우리 반 학습 기본값'(저장했으면), 아니면 앱 기본값(암기·리콜은 카드 수만큼 필수, 스펠은 선택, 테스트는 최대 20문항·목표 80점·3회·직접 쓰기·시간 제한 없음, 마감 후에는 열어 두고 지각 표시)을 쓴다. 선택 학습을 원하면 required_modes에서 모드마다 count 0을 보낸다. ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['distribute', 'stop', 'resume']}, class_id: str, set_id: str, set_title: {type: 'string', maxLength: 120}, distribution_id: str, due_at: {type: 'string', description: 'YYYY-MM-DD HH:mm (Asia/Seoul)'}, required_modes: {type: 'object', description: '모드별 필수 학습. 없는 모드는 기본값', properties: {memorize: cardMode, recall: cardMode, spell: cardMode}, additionalProperties: false}, test: {type: 'object', properties: {question_count: {type: 'integer', minimum: 1}, goal_score: {type: 'integer', minimum: 0, maximum: 100}, max_attempts: {type: 'integer', minimum: 1, maximum: 20}, require_study: {type: 'boolean', description: '필수 학습을 마쳐야 테스트 열기'}, direction: cardDirection, answer_release: {type: 'string', enum: ['immediate', 'after-due', 'never'], description: '정답 공개 시점. after-due는 due_at 필요'}, format: {type: 'string', enum: ['written', 'choice'], description: '문제 형식. written은 직접 쓰기, choice는 객관식'}, time_limit_seconds: {type: 'integer', minimum: 60, maximum: 7200, description: '테스트 제한 시간(초). 없으면 제한 없음'}}, additionalProperties: false}, after_due: {type: 'string', enum: ['open', 'late', 'lock'], description: '마감 후 처리. open은 계속 열어 두기, late는 열어 두고 지각 표시, lock은 학습과 새 테스트 닫기. due_at 필요'}}, required: ['action'], additionalProperties: false}},
+  {name: 'manage_cards', scope: 'classroom:write', description: `카드놀이 세트 만들기·배부. action: create_set(set_title과 source로 AI 초안 세트 만들기. source: words=영어 단어 목록 words, topic=영어 주제 topic, passage=영어 본문 text에서 뽑기, concept=교과 개념어·한자(subject와 topic 또는 교과서 text). level·count 선택. class_id를 주면 저장 직후 그 반에 배부), create_review_set(distribution_id의 많이 틀린 카드로 복습 세트. count 기본 10, rewrite_examples 기본 true면 단어 세트 예문만 AI로 새로 씀. class_id를 주면 바로 배부), distribute(set_title 또는 set_id를 class_id에 배부), stop·resume(distribution_id, list_card_sets의 id). 만든 세트는 미리보기에 카드가 보이고, 선생님이 저장해야 생긴다. 배부 때 말하지 않은 값은 그 반의 '우리 반 학습 기본값'(저장했으면), 아니면 앱 기본값(암기·리콜은 카드 수만큼 필수, 스펠은 선택, 테스트는 최대 20문항·목표 80점·3회·직접 쓰기·시간 제한 없음, 마감 후에는 열어 두고 지각 표시)을 쓴다. 선택 학습을 원하면 required_modes에서 모드마다 count 0을 보낸다. ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['create_set', 'create_review_set', 'distribute', 'stop', 'resume']}, class_id: str, set_id: str, set_title: {type: 'string', maxLength: 120}, distribution_id: str, source: {type: 'string', enum: ['words', 'topic', 'passage', 'concept'], description: 'create_set 재료'}, words: {type: 'array', items: {type: 'string', maxLength: 80}, maxItems: 60, description: 'source=words: 영어 단어·숙어'}, topic: {type: 'string', maxLength: 100, description: 'source=topic·concept: 주제나 단원'}, text: {type: 'string', maxLength: 8000, description: 'source=passage: 영어 본문, concept: 교과서 내용(선택)'}, subject: {type: 'string', enum: ['korean', 'math', 'social', 'science', 'hanja', 'other'], description: 'source=concept 과목'}, level: {type: 'string', enum: ['elementary', 'middle', 'high'], description: '수준. 없으면 elementary'}, count: {type: 'integer', minimum: 1, maximum: 30, description: '카드 수(topic·passage·concept 기본 15, 복습 기본 10)'}, rewrite_examples: {type: 'boolean', description: 'create_review_set: 예문을 AI로 새로 쓰기'}, due_at: {type: 'string', description: 'YYYY-MM-DD HH:mm (Asia/Seoul)'}, required_modes: {type: 'object', description: '모드별 필수 학습. 없는 모드는 기본값', properties: {memorize: cardMode, recall: cardMode, spell: cardMode}, additionalProperties: false}, test: {type: 'object', properties: {question_count: {type: 'integer', minimum: 1}, goal_score: {type: 'integer', minimum: 0, maximum: 100}, max_attempts: {type: 'integer', minimum: 1, maximum: 20}, require_study: {type: 'boolean', description: '필수 학습을 마쳐야 테스트 열기'}, direction: cardDirection, answer_release: {type: 'string', enum: ['immediate', 'after-due', 'never'], description: '정답 공개 시점. after-due는 due_at 필요'}, format: {type: 'string', enum: ['written', 'choice'], description: '문제 형식. written은 직접 쓰기, choice는 객관식'}, time_limit_seconds: {type: 'integer', minimum: 60, maximum: 7200, description: '테스트 제한 시간(초). 없으면 제한 없음'}}, additionalProperties: false}, after_due: {type: 'string', enum: ['open', 'late', 'lock'], description: '마감 후 처리. open은 계속 열어 두기, late는 열어 두고 지각 표시, lock은 학습과 새 테스트 닫기. due_at 필요'}}, required: ['action'], additionalProperties: false}},
   {name: 'manage_class_tools', scope: 'classroom:write', description: `투표·캔버스. action: create_poll(class_id, title, options 2~50, closes_at·hide_names·show_results live|closed 선택), close_poll·reopen_poll(poll_id), create_canvas(class_id, title, mission), freeze_canvas·open_canvas·archive_canvas(canvas_id). id는 list_class_tools에서 확인. ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['create_poll', 'close_poll', 'reopen_poll', 'create_canvas', 'freeze_canvas', 'open_canvas', 'archive_canvas']}, class_id: str, title: {type: 'string', maxLength: 160}, options: {type: 'array', items: {type: 'string', maxLength: 200}, maxItems: 50}, closes_at: {type: 'string', description: 'YYYY-MM-DD HH:mm (Asia/Seoul)'}, hide_names: boolSchema, show_results: {type: 'string', enum: ['live', 'closed']}, poll_id: str, mission: {type: 'string', maxLength: 600}, canvas_id: str}, required: ['action'], additionalProperties: false}},
   {name: 'manage_class', scope: 'classroom:write', description: `학급·명단. action: create_class(name, grade, year), add_students(class_id, students [{number, name}]), reset_code(class_id, student_number, 위험: 그 학생은 새 코드로 다시 로그인). 입장 코드는 채팅에 보이지 않고 학급 명단 화면에서 확인합니다. ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['create_class', 'add_students', 'reset_code']}, class_id: str, name: {type: 'string', maxLength: 80}, grade: {type: 'integer', minimum: 1, maximum: 6}, year: {type: 'integer', minimum: 2020, maximum: 2100}, students: {type: 'array', maxItems: 100, items: {type: 'object', properties: {number: {type: 'integer', minimum: 1, maximum: 999}, name: {type: 'string', maxLength: 50}}, required: ['number', 'name'], additionalProperties: false}}, student_number: {type: 'integer', minimum: 1, maximum: 999}}, required: ['action'], additionalProperties: false}},
   {name: 'manage_workspace', scope: 'workspace:write', description: `업무 공간 고치기·지우기. action: edit_event(event_id와 title·start·end·all_day 중 바꿀 것), delete_event(위험), edit_item(item_id와 title·body·due_at·tags), delete_item(위험), delete_folder(빈 폴더만, 위험), save_timetable(week_key YYYY-Www, timetable_text "월1 국어, 월2 수학" 형식으로 그 주 전체를 바꿈). id는 get_calendar·search_workspace에서 확인. 민감 항목은 고칠 수 없습니다. ${PLAN_NOTE}`, inputSchema: {type: 'object', properties: {action: {type: 'string', enum: ['edit_event', 'delete_event', 'edit_item', 'delete_item', 'delete_folder', 'save_timetable']}, event_id: str, item_id: str, folder_id: str, title: {type: 'string', maxLength: 120}, start: {type: 'string', description: 'YYYY-MM-DD 또는 YYYY-MM-DD HH:mm'}, end: {type: 'string', description: 'YYYY-MM-DD 또는 YYYY-MM-DD HH:mm, none이면 없앰'}, all_day: boolSchema, body: {type: 'string', maxLength: 8000}, due_at: {type: 'string', description: 'YYYY-MM-DD 또는 none'}, tags: {type: 'array', items: {type: 'string', maxLength: 20}, maxItems: 10}, week_key: {type: 'string', description: 'YYYY-Www (ISO 주)'}, timetable_text: {type: 'string', maxLength: 4000}}, required: ['action'], additionalProperties: false}},
@@ -343,7 +347,42 @@ async function points(args: Data, ctx: BearerContext): Promise<ManagePlan> {
   return {view: {target, action: grant ? `${label} 주기` : `${label} 빼기`, students: students.map(student => student.label), count: students.length, amount, reason, ...(grant ? {note: '학생 화면 잔액에 바로 반영돼요.'} : {danger: `${students.length}명에게서 ${amount}점씩 빼요. 잔액이 모자란 학생이 있으면 전체가 취소돼요.`})}, calls: [{route: 'points', segments: ['classes', cls.id, grant ? 'grant' : 'revoke'], method: 'POST', body: {studentIds: students.map(student => student.id), amount, reason, requestId: randomUUID()}}], savedNote: `${students.length}명에게 ${label} ${amount}점을 ${grant ? '줬어요' : '뺐어요'}.`};
 }
 
+async function distributeCall(args: Data, ctx: BearerContext, cls: Data & {id: string}, set: {id?: string; type: string; cardCount: number; version?: unknown}): Promise<{call: ManageCall; lines: string[]; dueAt: string | null}> {
+  const dueAt = args.due_at ? instant(args.due_at, 'due_at') : null;
+  const {requiredModes, test, afterDue, lines, speechRate} = cardDistributionSettings(args, set.cardCount, !!dueAt, await classDefaultsFor(cls.id, ctx.uid, set.type === 'sentence' ? 'sentence' : 'word'));
+  const body = {classId: cls.id, ...(set.id ? {setId: set.id} : {}), ...(Number.isInteger(set.version) ? {expectedVersion: set.version} : {}), requiredModes, test, dueAt, afterDue, ...(speechRate ? {speechRate} : {}), requestId: randomUUID()};
+  return {call: {route: 'cards', segments: ['distributions'], method: 'POST', body, label: '배부', ...(set.id ? {} : {chain: 'setId' as const})}, lines, dueAt};
+}
+/** create_set / create_review_set: the AI draft runs now, so the preview shows the real cards; nothing is stored until the teacher confirms. */
+async function cardSetPlan(args: Data, ctx: BearerContext): Promise<ManagePlan> {
+  const cls = args.class_id ? await ownedClass(ctx.uid, args.class_id) : null;
+  let title: string, type: 'word' | 'sentence' | 'drill' = 'word', cards: {front: string; back: string; example: string; alternatives?: string[]; chunks?: number[]; drill?: unknown}[], description: string, source: string;
+  if (args.action === 'create_review_set') {
+    const id = safeId(args.distribution_id, '배부'), owned_ = await owned(`cardClassSets/${id}`, ctx.uid, '카드 배부');
+    const report = await read({route: 'cards', segments: ['distributions', id, 'report']}, await contextForUid(ctx.uid));
+    const snapshot = report.distribution?.snapshot ?? {title: owned_.title, type: 'word', cards: []};
+    const input = reviewDraftInput(args, snapshot.type);
+    const picked = cardReviewCandidates(Array.isArray(report.students) ? report.students : [], snapshot.cards ?? [], input.count).map(row => row.card);
+    if (!picked.length) throw new BerryError('이 배부에는 아직 틀린 카드가 없어요.');
+    type = snapshot.type; title = String(args.set_title ?? `${snapshot.title} 복습`).trim().slice(0, 120);
+    const examples = input.rewrite ? await draftCardsFor(ctx.uid, {mode: 'review', level: input.level, cards: picked.map((card: Data) => ({front: card.front, back: card.back, example: card.example ?? ''}))}) : null;
+    cards = picked.map((card: Data, index: number) => ({...card, front: String(card.front), back: String(card.back ?? ''), example: examples?.[index]?.example || card.example || ''}));
+    description = `${snapshot.title}에서 많이 틀린 카드`.slice(0, 500); source = input.rewrite ? '많이 틀린 카드 · AI가 예문만 새로 씀' : '많이 틀린 카드 · 예문 그대로';
+  } else {
+    const input = cardSetDraftInput(args);
+    title = input.title; cards = (await draftCardsFor(ctx.uid, input.request)).filter(card => card.front && card.back).slice(0, 60);
+    if (!cards.length) throw new BerryError('AI 초안에 카드가 없어요. 주제나 단어를 바꿔 다시 말해 주세요.');
+    description = input.description; source = input.label;
+  }
+  const save: ManageCall = {route: 'cards', segments: ['sets'], method: 'POST', label: '세트 저장', body: {requestId: randomUUID(), title, description, type, folderId: null, cards: cards.map(card => ({id: randomUUID(), front: card.front, back: card.back, example: card.example ?? '', alternatives: card.alternatives ?? [], ...(card.chunks ? {chunks: card.chunks} : {}), ...(card.drill ? {drill: card.drill} : {})}))}};
+  const preview = setDraftPreview(cards);
+  if (!cls) return {view: {target: title, action: '카드 세트 만들기', count: cards.length, changes: [`재료: ${source}`], body: preview, note: 'AI 초안이에요. 저장하면 카드놀이 내 세트에 생기고, 학생에게는 아직 보이지 않아요. 카드놀이 화면에서 고친 뒤 배부할 수 있어요.'}, calls: [save], savedNote: '카드 세트를 만들었어요. 카드놀이에서 확인하고 배부해 주세요.'};
+  const {call, lines, dueAt} = await distributeCall(args, ctx, cls, {type, cardCount: cards.length, version: 1});
+  return {view: {target: `${cls.name ?? ''} · ${title}`, action: '카드 세트 만들기 + 배부', count: cards.length, due_at: clock(dueAt), changes: [`재료: ${source}`, ...lines], body: preview, note: `AI 초안이에요. 저장하면 세트가 생기고 바로 배부돼요. ${STUDENT}`}, calls: [save, call], savedNote: '카드 세트를 만들어 배부했어요.'};
+}
+
 async function cards(args: Data, ctx: BearerContext): Promise<ManagePlan> {
+  if (args.action === 'create_set' || args.action === 'create_review_set') return cardSetPlan(args, ctx);
   if (args.action === 'stop' || args.action === 'resume') {
     const id = safeId(args.distribution_id, '배부'), value = await owned(`cardClassSets/${id}`, ctx.uid, '카드 배부');
     return {view: {target: String(value.title ?? '카드'), action: args.action === 'stop' ? '배부 멈추기' : '배부 다시 열기', note: STUDENT}, calls: [{route: 'cards', segments: ['distributions', id], method: 'PATCH', body: {active: args.action === 'resume'}}], savedNote: args.action === 'stop' ? '배부를 멈췄어요.' : '배부를 다시 열었어요.'};
@@ -360,10 +399,10 @@ async function cards(args: Data, ctx: BearerContext): Promise<ManagePlan> {
     set = {id: found[0].id, ...found[0].data()};
   }
   if (set.archived) throw new BerryError('보관한 카드 세트예요.');
-  const dueAt = args.due_at ? instant(args.due_at, 'due_at') : null, cardCount = Number(set.cardCount);
+  const cardCount = Number(set.cardCount);
   if (!Number.isInteger(cardCount) || cardCount < 1) throw new BerryError('카드가 없는 세트예요. 카드놀이 화면에서 확인해 주세요.');
-  const {requiredModes, test, afterDue, lines, speechRate} = cardDistributionSettings(args, cardCount, !!dueAt, await classDefaultsFor(cls.id, ctx.uid, set.type === 'sentence' ? 'sentence' : 'word'));
-  return {view: {target: `${cls.name ?? ''} · ${set.title}`, action: '카드 배부', count: cardCount, due_at: clock(dueAt), changes: lines, note: STUDENT}, calls: [{route: 'cards', segments: ['distributions'], method: 'POST', body: {classId: cls.id, setId: set.id, ...(Number.isInteger(set.version) ? {expectedVersion: set.version} : {}), requiredModes, test, dueAt, afterDue, ...(speechRate ? {speechRate} : {}), requestId: randomUUID()}}], savedNote: '카드를 배부했어요.'};
+  const {call, lines, dueAt} = await distributeCall(args, ctx, cls, {id: set.id, type: String(set.type ?? 'word'), cardCount, version: set.version});
+  return {view: {target: `${cls.name ?? ''} · ${set.title}`, action: '카드 배부', count: cardCount, due_at: clock(dueAt), changes: lines, note: STUDENT}, calls: [{...call, label: undefined}], savedNote: '카드를 배부했어요.'};
 }
 
 async function classTools(args: Data, ctx: BearerContext): Promise<ManagePlan> {
@@ -462,9 +501,16 @@ async function workspace(args: Data, ctx: BearerContext, teacher: Context): Prom
  */
 export async function executeManage(plan: ManagePlan, ctx: BearerContext) {
   const teacher = await contextForUid(ctx.uid), failed: {step: string; error: string}[] = [];
-  let done = 0;
-  for (const call of plan.calls) {
+  let done = 0, previous: {status: number; data: Data} | null = null;
+  for (const planned of plan.calls) {
+    let call = planned;
+    if (planned.chain === 'setId') {
+      const set = previous && previous.status < 400 ? previous.data.set : null;
+      if (!set?.id) {failed.push({step: planned.label ?? '다음 단계', error: '앞 단계가 저장되지 않아 하지 않았어요.'}); previous = null; continue;}
+      call = {...planned, body: {...(planned.body as Data), setId: set.id, ...(Number.isInteger(set.version) ? {expectedVersion: set.version} : {})}};
+    }
     const result = await run(call, teacher);
+    previous = result;
     if (result.status < 400) {
       const rows = Array.isArray(result.data.results) ? result.data.results as {ok?: boolean; code?: string}[] : null;
       if (rows) {done += rows.filter(row => row.ok).length; for (const row of rows.filter(row => !row.ok)) failed.push({step: call.label ?? '항목', error: String(row.code ?? '실패')});}

@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import {Camera, FileUp, Sparkles, Trash2, X} from 'lucide-react';
 import ko from '@/messages/cards-import-ko.json';
 import en from '@/messages/cards-import-en.json';
-import {CARD_AI_COUNT_MAX, CARD_AI_LEVELS, CARD_AI_TEXT_LIMIT, CARD_AI_TOPIC_LENGTH, CARD_AI_WORD_LENGTH, CARD_PHOTO_CHARS, CARD_PHOTO_EDGE, CARD_PHOTO_LIMIT, cardAiFailureKey, chunkList, dedupeByFront, fitPhotoSize, parseCardWords, photoFileProblem, splitCardText, type CardAiDraft, type CardAiLevel, type CardAiRequest} from '@/lib/cards-ai-draft';
+import {CARD_AI_COUNT_MAX, CARD_AI_LEVELS, CARD_AI_SUBJECTS, CARD_AI_TEXT_LIMIT, CARD_AI_TOPIC_LENGTH, CARD_AI_WORD_LENGTH, CARD_PHOTO_CHARS, CARD_PHOTO_EDGE, CARD_PHOTO_LIMIT, cardAiFailureKey, chunkList, dedupeByFront, fitPhotoSize, parseCardWords, photoFileProblem, splitCardText, type CardAiDraft, type CardAiLevel, type CardAiRequest, type CardAiSubject} from '@/lib/cards-ai-draft';
 import {CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT} from '@/lib/cards-logic';
 import {CARD_XLSX_BYTES, groupImportErrors, parseCardImport, parseCardXlsx, type CardImportResult, type ImportedCard} from '@/lib/cards-import';
 import type {CardSet, CardSetSummary} from '@/lib/cards-types';
@@ -15,10 +15,10 @@ import '@/styles/cards-import.css';
 // 기본 어휘 (§37) loads its screen and the word list only when the tab opens.
 const BaseVocabImportTab = dynamic(() => import('./cards-base-vocab').then(module => module.BaseVocabImportTab), {ssr: false});
 
-type Tab = 'words' | 'text' | 'photo' | 'passage' | 'topic' | 'table' | 'merge' | 'vocab';
+type Tab = 'words' | 'text' | 'photo' | 'passage' | 'topic' | 'concept' | 'table' | 'merge' | 'vocab';
 type DraftRow = CardAiDraft & {id: string; keep: boolean};
 type Photo = {id: string; name: string; image: string};
-const TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic', 'table', 'merge', 'vocab'], AI_TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic'], CARD_LIMIT = 200;
+const TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic', 'concept', 'table', 'merge', 'vocab'], AI_TABS: Tab[] = ['words', 'text', 'photo', 'passage', 'topic', 'concept'], CARD_LIMIT = 200;
 
 /** Shrinks in the browser: long edge 1600px, JPEG re-encode (drops EXIF and location). The photo only leaves in the draft request and is never stored. */
 async function shrinkPhoto(file: File): Promise<string> {
@@ -44,6 +44,7 @@ export default function CardsImportDialog({fronts, setId, onAppend, onClose}: {f
   const {t, locale} = useCardsCopy(), copy = locale === 'ko' ? ko : en;
   const [tab, setTab] = useState<Tab>('words'), [level, setLevel] = useState<CardAiLevel>('elementary'), [words, setWords] = useState(''), [text, setText] = useState(''), [bulk, setBulk] = useState('');
   const [photos, setPhotos] = useState<Photo[]>([]), [shrinking, setShrinking] = useState(false), [passage, setPassage] = useState(''), [topic, setTopic] = useState(''), [count, setCount] = useState(15);
+  const [subject, setSubject] = useState<CardAiSubject>('science'), [unit, setUnit] = useState(''), [source, setSource] = useState('');
   const [sets, setSets] = useState<CardSetSummary[] | null>(null), [mergeId, setMergeId] = useState(''), [merge, setMerge] = useState<{fresh: ImportedCard[]; duplicates: string[]} | null>(null), [mergeBusy, setMergeBusy] = useState(false);
   const [draft, setDraft] = useState<DraftRow[]>([]), [skipped, setSkipped] = useState<string[]>([]), [error, setError] = useState(''), [progress, setProgress] = useState<{done: number; total: number} | null>(null), [pending, setPending] = useState<CardAiRequest[]>([]);
   const control = useRef<AbortController | null>(null), messages = useRef<HTMLDivElement>(null), running = !!progress;
@@ -53,7 +54,7 @@ export default function CardsImportDialog({fronts, setId, onAppend, onClose}: {f
     cardsMetadataPages<CardSetSummary>('/api/cards/library', 'sets').then(list => setSets(list.filter(item => item.id !== setId && item.cardCount > 0))).catch(() => {setSets([]); setError(copy.mergeFailed);});
   }, [tab, sets, setId, copy.mergeFailed]);
   function close() {
-    if ((running || draft.length || words.trim() || text.trim() || bulk.trim() || photos.length || passage.trim() || topic.trim()) && !window.confirm(t('discard'))) return;
+    if ((running || draft.length || words.trim() || text.trim() || bulk.trim() || photos.length || passage.trim() || topic.trim() || unit.trim() || source.trim()) && !window.confirm(t('discard'))) return;
     control.current?.abort(); onClose();
   }
   async function run(requests: CardAiRequest[]) {
@@ -99,6 +100,11 @@ export default function CardsImportDialog({fronts, setId, onAppend, onClose}: {f
       if (passage.length > CARD_AI_TEXT_LIMIT) {setError(copy.passageTooLong); return;}
       if (!counted) {setError(copy.countRange); return;}
       void run([{mode: 'passage', level, text: passage, count}]);
+    } else if (tab === 'concept') {
+      if (!/\p{L}/u.test(unit) && !/\p{L}/u.test(source)) {setError(copy.noConcept); return;}
+      if (unit.trim().length > CARD_AI_TOPIC_LENGTH || source.length > CARD_AI_TEXT_LIMIT) {setError(copy.conceptTooLong); return;}
+      if (!counted) {setError(copy.countRange); return;}
+      void run([{mode: 'concept', level, subject, topic: unit.trim(), text: source.trim(), count}]);
     } else {
       if (!/\p{L}/u.test(topic) || topic.trim().length > CARD_AI_TOPIC_LENGTH) {setError(copy.noTopic); return;}
       if (!counted) {setError(copy.countRange); return;}
@@ -172,15 +178,18 @@ export default function CardsImportDialog({fronts, setId, onAppend, onClose}: {f
       {merge && <div className="cards-actions"><span className="cards-import-count">{copy.mergeReady} {merge.fresh.length}{t('cards')}</span><button type="button" className="button primary" disabled={!merge.fresh.length} onClick={appendMerge}>{copy.mergeAdd}</button></div>}
       {merge && !!merge.duplicates.length && <p className="cards-import-note">{copy.duplicates} {merge.duplicates.join(', ')}</p>}
     </section>}
-    {ai && <section className="cards-import" role="tabpanel"><p>{copy[`${tab as 'words' | 'text' | 'photo' | 'passage' | 'topic'}Hint`]}</p>
+    {ai && <section className="cards-import" role="tabpanel"><p>{copy[`${tab as 'words' | 'text' | 'photo' | 'passage' | 'topic' | 'concept'}Hint`]}</p>
       {tab === 'words' && <textarea key="words" aria-label={copy.words} rows={6} value={words} disabled={running} onChange={e => editInput(setWords)(e.target.value)} placeholder={copy.wordsPlaceholder}/>}
       {tab === 'text' && <textarea key="text" aria-label={copy.text} rows={8} value={text} disabled={running} onChange={e => editInput(setText)(e.target.value)} placeholder={copy.textPlaceholder}/>}
       {tab === 'passage' && <textarea key="passage" aria-label={copy.passage} rows={8} lang="en" value={passage} disabled={running} onChange={e => editInput(setPassage)(e.target.value)} placeholder={copy.passagePlaceholder}/>}
       {tab === 'topic' && <label className="cards-import-topic">{copy.topicLabel}<input maxLength={CARD_AI_TOPIC_LENGTH} value={topic} disabled={running} onChange={e => editInput(setTopic)(e.target.value)} placeholder={copy.topicPlaceholder}/></label>}
+      {tab === 'concept' && <><div className="cards-actions"><label className="cards-import-level">{copy.subject}<select value={subject} disabled={running} onChange={e => {setSubject(e.target.value as CardAiSubject); setPending([]);}}>{CARD_AI_SUBJECTS.map(item => <option key={item} value={item}>{copy.subjects[item]}</option>)}</select></label></div>
+        <label className="cards-import-topic">{copy.conceptUnit}<input maxLength={CARD_AI_TOPIC_LENGTH} value={unit} disabled={running} onChange={e => editInput(setUnit)(e.target.value)} placeholder={copy.conceptUnitPlaceholder[subject]}/></label>
+        <textarea key="concept" aria-label={copy.conceptText} rows={5} value={source} disabled={running} onChange={e => editInput(setSource)(e.target.value)} placeholder={copy.conceptTextPlaceholder}/></>}
       {tab === 'photo' && <><p className="cards-import-note">{copy.photoPrivacy}</p>
         <div className="cards-actions"><label className={`button cards-file-button${running || shrinking || photos.length >= CARD_PHOTO_LIMIT ? ' disabled' : ''}`}><Camera size={16}/>{shrinking ? copy.photoReading : copy.photoPick}<input type="file" accept="image/*,.heic,.heif" multiple disabled={running || shrinking || photos.length >= CARD_PHOTO_LIMIT} onChange={e => {const files = [...e.target.files ?? []]; e.target.value = ''; if (files.length) void pickPhotos(files);}}/></label></div>
         {!!photos.length && <ul className="cards-import-photos">{photos.map((photo, index) => <li key={photo.id}>{/* eslint-disable-next-line @next/next/no-img-element -- a local data URL preview */}<img src={photo.image} alt={`${copy.photo} ${index + 1}`}/><span>{photo.name}</span><button type="button" className="icon-button" disabled={running} aria-label={`${copy.photoRemove} ${index + 1}`} onClick={() => {setPhotos(current => current.filter(item => item.id !== photo.id)); setPending([]);}}><X size={16}/></button></li>)}</ul>}</>}
-      <div className="cards-actions">{levelPicker}{(tab === 'passage' || tab === 'topic') && countPicker}
+      <div className="cards-actions">{levelPicker}{(tab === 'passage' || tab === 'topic' || tab === 'concept') && countPicker}
         {(tab === 'text' || tab === 'passage') && <span className={`cards-import-count${(tab === 'text' ? text : passage).length > CARD_AI_TEXT_LIMIT ? ' over' : ''}`}>{(tab === 'text' ? text : passage).length.toLocaleString()} / {CARD_AI_TEXT_LIMIT.toLocaleString()}</span>}
         {running ? <button type="button" className="button" onClick={() => control.current?.abort()}>{copy.stop}</button> : <button type="button" className="button primary" disabled={shrinking} onClick={generate}><Sparkles size={16}/>{copy.generate}</button>}</div>
     </section>}

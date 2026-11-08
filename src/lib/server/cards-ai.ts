@@ -1,6 +1,6 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
-import {alignWordCards, buildCardAiRequest, CARD_PHOTO_CHARS, dedupeByFront, fitPassageCards, parseCardAiOutput, parseCardAiRequest, type CardAiDraft, type CardAiRequest} from '../cards-ai-draft';
+import {alignReviewCards, alignWordCards, fitConceptCards, buildCardAiRequest, CARD_PHOTO_CHARS, dedupeByFront, fitPassageCards, parseCardAiOutput, parseCardAiRequest, type CardAiDraft, type CardAiRequest} from '../cards-ai-draft';
 import {runMeteredAi} from './ai';
 import {AiError, completedAiText, providerFailure, readBoundedJson} from './ai-policy';
 import type {Context} from './auth';
@@ -9,11 +9,13 @@ import {ApiError} from './policy';
 const BODY_BYTES_MAX = 64 * 1024, PHOTO_BODY_BYTES_MAX = CARD_PHOTO_CHARS + 4096, REPLY_BYTES_MAX = 256 * 1024, PROVIDER_TIMEOUT_MS = 45_000;
 const AI_MODEL = () => process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna';
 /** Word and vocabulary-text drafts keep their original meter name; the P1 sources are counted apart. */
-const TOOL: Record<CardAiRequest['mode'], string> = {words: 'cards-ai-draft', text: 'cards-ai-draft', photo: 'cards-ai-photo', passage: 'cards-ai-passage', topic: 'cards-ai-topic'};
+const TOOL: Record<CardAiRequest['mode'], string> = {words: 'cards-ai-draft', text: 'cards-ai-draft', photo: 'cards-ai-photo', passage: 'cards-ai-passage', topic: 'cards-ai-topic', concept: 'cards-ai-concept', review: 'cards-ai-review'};
 
 function settle(input: CardAiRequest, cards: CardAiDraft[]) {
   if (input.mode === 'words') return alignWordCards(input.words, cards);
   if (input.mode === 'passage') return fitPassageCards(input.text, cards, input.count);
+  if (input.mode === 'review') return alignReviewCards(input.cards, cards);
+  if (input.mode === 'concept') return fitConceptCards(input, cards);
   if (input.mode === 'topic') return dedupeByFront(cards, [], card => card.front).fresh.slice(0, input.count);
   return cards;
 }
@@ -26,8 +28,13 @@ export async function cardsAiDraft(ctx: Context, request: Request): Promise<{car
   if ((raw as {mode?: unknown} | null)?.mode !== 'photo' && Buffer.byteLength(JSON.stringify(raw)) > BODY_BYTES_MAX) throw new AiError(413, '입력 자료가 너무 커요. 내용을 줄여 주세요.', 'BODY_TOO_LARGE');
   const input = parseCardAiRequest(raw);
   if ('error' in input) throw new AiError(400, input.error, 'INPUT_INVALID');
+  return {cards: await draftCardsFor(ctx.uid, input)};
+}
+
+/** The same metered draft for a teacher's own tools (Berry plans a card set with it); input must already be parsed. */
+export async function draftCardsFor(uid: string, input: CardAiRequest): Promise<CardAiDraft[]> {
   const model = AI_MODEL(), fingerprint = createHash('sha256').update(JSON.stringify(['cards-ai-draft-v2', input])).digest('hex');
-  const cards = await runMeteredAi(ctx.uid, TOOL[input.mode], model, fingerprint, async observe => {
+  const cards = await runMeteredAi(uid, TOOL[input.mode], model, fingerprint, async observe => {
     const signal = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
     try {
       const response = await fetch('https://api.openai.com/v1/responses', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json'}, body: JSON.stringify(buildCardAiRequest(input, model)), signal, cache: 'no-store'});
@@ -42,5 +49,5 @@ export async function cardsAiDraft(ctx: Context, request: Request): Promise<{car
       throw new AiError(503, 'AI 서비스에 연결하지 못했어요. 잠시 뒤 다시 시도해 주세요.', 'AI_UNAVAILABLE');
     }
   });
-  return {cards: settle(input, cards)};
+  return settle(input, cards);
 }

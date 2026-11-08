@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {alignWordCards, buildCardAiRequest, CARD_AI_CHUNK_SIZE, CARD_AI_COUNT_MAX, CARD_AI_TEXT_LIMIT, CARD_AI_WORD_LIMIT, CARD_PHOTO_CHARS, CARD_PHOTO_FILE_BYTES, cardAiFailureKey, cardPhotoProblem, chunkList, dedupeByFront, fitPassageCards, fitPhotoSize, parseCardAiOutput, parseCardAiRequest, parseCardWords, passageSentences, photoFileProblem, splitCardText} from './cards-ai-draft';
+import {alignReviewCards, alignWordCards, buildCardAiRequest, CARD_AI_CHUNK_SIZE, CARD_AI_REVIEW_MAX, fitConceptCards, CARD_AI_COUNT_MAX, CARD_AI_TEXT_LIMIT, CARD_AI_WORD_LIMIT, CARD_PHOTO_CHARS, CARD_PHOTO_FILE_BYTES, cardAiFailureKey, cardPhotoProblem, chunkList, dedupeByFront, fitPassageCards, fitPhotoSize, parseCardAiOutput, parseCardAiRequest, parseCardWords, passageSentences, photoFileProblem, splitCardText} from './cards-ai-draft';
 
 test('word lists drop numbering and keep phrases and hyphens whole', () => {
   assert.deepEqual(parseCardWords('1. apple\n2) look after, well-being\r\n③ run\n- bright\n7\tseven\n-ing form\n\n99'), ['apple', 'look after', 'well-being', 'run', 'bright', 'seven', '-ing form']);
@@ -116,4 +116,32 @@ test('passage drafts use real passage sentences and drop words that are not in i
     {front: 'cross the road', back: '길을 건너다', example: 'She “carefully” crossed the road!'},
   ]);
   assert.equal(fitPassageCards(passage, cards, 2).length, 2);
+});
+
+test('concept requests: subject, unit or textbook text, and count', () => {
+  assert.deepEqual(parseCardAiRequest({mode: 'concept', level: 'elementary', subject: 'science', topic: ' 식물의 한살이 ', count: 10}), {mode: 'concept', level: 'elementary', subject: 'science', topic: '식물의 한살이', text: '', count: 10});
+  assert.deepEqual(parseCardAiRequest({mode: 'concept', level: 'middle', subject: 'social', text: '삼권 분립은\r\n권력을 나눈다.', count: 5}), {mode: 'concept', level: 'middle', subject: 'social', topic: '', text: '삼권 분립은\n권력을 나눈다.', count: 5});
+  for (const value of [{mode: 'concept', level: 'high', subject: 'music', topic: 'a', count: 5}, {mode: 'concept', level: 'high', subject: 'math', count: 5}, {mode: 'concept', level: 'high', subject: 'math', topic: ' ', text: '12', count: 5}, {mode: 'concept', level: 'high', subject: 'math', topic: 'a', count: 0}, {mode: 'concept', level: 'high', subject: 'math', topic: 1, count: 3}, {mode: 'concept', level: 'high', subject: 'math', topic: 'a'.repeat(101), count: 3}]) assert.ok('error' in parseCardAiRequest(value), JSON.stringify(value));
+});
+test('concept prompts switch to Korean terms, or to 훈·음 for hanja, and keep input as data', () => {
+  const science = buildCardAiRequest({mode: 'concept', level: 'elementary', subject: 'science', topic: '자석', text: '', count: 5}, 'm');
+  assert.match(science.instructions, /science \(과학\)/);
+  assert.match(science.instructions, /easy Korean explanation/);
+  assert.match(science.instructions, /untrusted data/);
+  assert.deepEqual(JSON.parse(String(science.input[0].content[0].text)), {topic: '자석', count: 5});
+  const hanja = buildCardAiRequest({mode: 'concept', level: 'middle', subject: 'hanja', topic: '', text: '산과 물', count: 3}, 'm');
+  assert.match(hanja.instructions, /메 산/);
+  assert.match(hanja.instructions, /Never choose a term that is not in the text/);
+});
+test('concept drafts from text keep only terms in the text; hanja is not checked', () => {
+  const cards = [{front: '광합성', back: '빛으로 양분 만들기', example: ''}, {front: '증산 작용', back: '물이 잎으로 나감', example: ''}, {front: '세포', back: 'x', example: ''}, {front: '광합성', back: 'dup', example: ''}];
+  assert.deepEqual(fitConceptCards({subject: 'science', text: '잎에서 광합성이 일어나고 증산작용으로 물이 빠져나간다.', count: 5}, cards).map(card => card.front), ['광합성', '증산 작용']);
+  assert.equal(fitConceptCards({subject: 'science', text: '', count: 2}, cards).length, 2);
+  assert.equal(fitConceptCards({subject: 'hanja', text: '산과 물', count: 5}, [{front: '山', back: '메 산', example: ''}]).length, 1);
+});
+test('review requests and drafts keep the teacher card and only refresh the example', () => {
+  assert.deepEqual(parseCardAiRequest({mode: 'review', level: 'middle', cards: [{front: ' run ', back: '달리다', example: 'I run.'}]}), {mode: 'review', level: 'middle', cards: [{front: 'run', back: '달리다', example: 'I run.'}]});
+  for (const value of [{mode: 'review', level: 'middle', cards: []}, {mode: 'review', level: 'middle', cards: [{front: '', back: 'a'}]}, {mode: 'review', level: 'middle', cards: [{front: 'a', back: 'b', id: 'x'}]}, {mode: 'review', level: 'middle', cards: Array(CARD_AI_REVIEW_MAX + 1).fill({front: 'a', back: 'b'})}]) assert.ok('error' in parseCardAiRequest(value), JSON.stringify(value).slice(0, 60));
+  assert.deepEqual(alignReviewCards([{front: 'run', back: '달리다', example: 'I run.'}, {front: 'eat', back: '먹다', example: 'old'}], [{front: 'RUN', back: 'hacked', example: 'She runs to school every morning.'}, {front: 'extra', back: 'x', example: 'y'}]), [{front: 'run', back: '달리다', example: 'She runs to school every morning.'}, {front: 'eat', back: '먹다', example: 'old'}]);
+  assert.match(buildCardAiRequest({mode: 'review', level: 'high', cards: [{front: 'a', back: 'b', example: ''}]}, 'm').instructions, /copied exactly as given/);
 });

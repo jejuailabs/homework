@@ -31,6 +31,7 @@ const readOnly = buildCatalog(tools.filter(entry => !entry.name.startsWith('crea
 assert.ok(!readOnly.domains.some(domain => domain.key === 'confirm'));
 // Berry's brain renders the table into at most 14,000 characters; each new tool row adds about 200 bytes here.
 assert.ok(open.rules.some(rule => rule.includes('기본 어휘')) && open.domains.find(domain => domain.key === 'cards')?.tools.includes('find_base_vocab'), 'base vocabulary: Berry looks words up, the teacher makes sets');
+assert.ok(open.rules.some(rule => rule.includes('create_set') && rule.includes('create_review_set')), 'Berry knows it can make card sets and review sets');
 assert.ok(new TextEncoder().encode(JSON.stringify(full)).length < 18_000, 'the whole table stays small');
 assert.ok(full.domains.every(domain => domain.key !== 'other'), 'every tool has a menu (no 기타)');
 console.log('catalog tests ok');
