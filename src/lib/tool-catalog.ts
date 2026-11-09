@@ -1,5 +1,5 @@
 export type ToolCategory = 'focus' | 'random' | 'play' | 'materials' | 'class' | 'prepare';
-export type ToolDefinition = {id: string; ko: string; en: string; category: ToolCategory; icon: string; color: string; ai?: boolean; kind?: 'ai' | 'matching' | 'neighborhood' | 'report' | 'poll' | 'canvas' | 'handwriting' | 'sketchbook' | 'speech'};
+export type ToolDefinition = {id: string; ko: string; en: string; category: ToolCategory; icon: string; color: string; ai?: boolean; kind?: 'ai' | 'matching' | 'neighborhood' | 'report' | 'poll' | 'canvas' | 'handwriting' | 'sketchbook' | 'speech' | 'dictionary'};
 export const toolCategories: {id: ToolCategory; ko: string; en: string}[] = [
   {id: 'focus', ko: '시간·집중', en: 'Time & focus'}, {id: 'random', ko: '뽑기·모둠', en: 'Pick & group'},
   {id: 'play', ko: '놀이·활동', en: 'Games & activities'}, {id: 'materials', ko: '판서·자료', en: 'Board & materials'},
@@ -25,6 +25,7 @@ export const toolCatalog: ToolDefinition[] = [
   {id:'manipulatives',ko:'디지털 교구',en:'Math objects',category:'play',icon:'Shapes',color:'mint',ai:true},
   {id:'matching',ko:'같은 그림 찾기',en:'Picture match',category:'play',icon:'ScanEye',color:'peach',ai:true,kind:'matching'},
   {id:'memo',ko:'메모',en:'Memo',category:'materials',icon:'StickyNote',color:'yellow'},
+  {id:'dictionary',ko:'국어사전',en:'Korean dictionary',category:'materials',icon:'BookOpen',color:'mint',kind:'dictionary'},
   {id:'board',ko:'판서',en:'Classroom board',category:'materials',icon:'Presentation',color:'sky'},
   {id:'sketchbook',ko:'스케치북',en:'Sketchbook',category:'materials',icon:'Palette',color:'pink',kind:'sketchbook'},
   {id:'notes',ko:'노트',en:'Notebook',category:'materials',icon:'NotebookPen',color:'lavender',ai:true},

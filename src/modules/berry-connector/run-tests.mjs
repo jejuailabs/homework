@@ -10,6 +10,7 @@ await import(moduleUrl(compile('../berry-panel/abilities.test.ts').replace("'../
 await import(moduleUrl(compile('./card-progress.test.ts').replace("'./card-progress'", JSON.stringify(moduleUrl(compile('./card-progress.ts'))))));
 await import(moduleUrl(compile('./card-settings.test.ts').replace("'./card-settings'", JSON.stringify(moduleUrl(compile('./card-settings.ts').replace("'./policy'", JSON.stringify(policy)))))));
 await import(moduleUrl(compile('./catalog.test.ts').replace("'./catalog'", JSON.stringify(moduleUrl(compile('./catalog.ts'))))));
+await import(moduleUrl(compile('./dictionary-info.test.ts').replace("'./dictionary-info'", JSON.stringify(moduleUrl(compile('./dictionary-info.ts'))))));
 const neighborhoodCore = moduleUrl(compile('../../lib/neighborhood.ts'));
 const spots = moduleUrl(compile('../../lib/neighborhood-spots.ts').replace("'./neighborhood'", JSON.stringify(neighborhoodCore)));
 const packs = moduleUrl(compile('./neighborhood-packs.ts').replace("'@/lib/neighborhood-spots'", JSON.stringify(spots)));

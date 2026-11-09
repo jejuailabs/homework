@@ -16,6 +16,12 @@ assert.equal(full.domains.find(domain => domain.key === 'kids_daily')?.tools.len
 assert.ok(full.rules.some(rule => rule.includes('가명')), 'privacy rules travel with the table');
 assert.ok(full.rules.some(rule => rule.includes('숙제 /teacher/homework')), 'menu links travel with the table');
 assert.ok(full.rules.some(rule => rule.includes('작품전시 /teacher/exhibitions')));
+assert.equal(open.tools.find(row => row.name === 'get_dictionary_info')?.domain, 'dictionary');
+assert.ok(open.rules.some(rule => rule.includes('Tools > 국어사전 /teacher/tools/dictionary')));
+assert.ok(open.rules.some(rule => rule.includes('기기 단어장·최근 검색어는 볼 수 없다')));
+const dictionaryOff = buildCatalog(tools, {dictionary: false});
+assert.equal(dictionaryOff.domains.find(domain => domain.key === 'dictionary')?.enabled, false);
+assert.ok(!dictionaryOff.rules.some(rule => rule.includes('국어사전 /teacher/tools/dictionary')));
 assert.equal(full.tools.find(row => row.name === 'get_signals')?.summary, 'get_signals 설명입니다.', 'summaries keep the first sentence');
 
 // A tool nobody filed still shows up, so the table never falls behind the code.

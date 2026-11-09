@@ -28,6 +28,7 @@ import {cardsMenuVisible} from '@/lib/menu-visibility';
 import {BerryError, alias, maskNames, safeId} from './policy';
 import {classCardProgress} from './card-progress';
 import {PACK_LINK, filterPacks, packDetail, packSummary} from './neighborhood-packs';
+import {dictionaryInfo} from './dictionary-info';
 import type {BearerContext, McpTool} from './types';
 
 /**
@@ -56,6 +57,7 @@ export const CLASSROOM_TOOLS: McpTool[] = [
   {name: 'find_base_vocab', scope: 'classroom:read', description: '카드놀이 기본 어휘(2022 개정 영어과 교육과정 3,000개, 초등 권장 800) 찾기. 낱말·뜻으로 찾거나 범위(level)·알파벳(from·to)으로 고른 단어와 뜻(AI 초안, 교사 검토 권장), 맞은 수. 세트 만들기는 선생님이 카드놀이 화면에서 합니다.', inputSchema: {type: 'object', properties: {query: {type: 'string', description: '영어 낱말 일부 또는 한국어 뜻'}, level: {type: 'string', enum: ['elementary', 'secondary', 'all'], description: 'elementary=초등 권장 800, secondary=중고 2,200, all=전체(기본)'}, from: {type: 'string', description: '시작 알파벳 a~z'}, to: {type: 'string', description: '끝 알파벳 a~z'}, limit: {type: 'integer', minimum: 1, maximum: 60}}, additionalProperties: false}},
   {name: 'get_speech', scope: 'classroom:read', description: '말하기·읽기 스튜디오: 학생별(가명) 읽기 정확도·추세·실수·다음 책 수준. 말한 글·녹음은 제외.', inputSchema: {type: 'object', properties: {class_id: cls}, required: ['class_id'], additionalProperties: false}},
   {name: 'list_class_tools', scope: 'classroom:read', description: 'Tools에서 쓰는 우리 반 캔버스와 투표(상태·마감·참여 수).', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
+  {name: 'get_dictionary_info', scope: 'classroom:read', description: 'Tools > 국어사전의 연결 상태와 사용 안내만 읽습니다. 정확히·포함 검색, 뜻·품사·원어·출처, 공식 난이도 제공 여부와 스피커 읽어주기를 안내합니다. 검색이나 음성 API를 호출하지 않고 기기 단어장·최근 검색어도 읽지 않습니다.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'list_neighborhood_packs', scope: 'classroom:read', description: 'Tools > 우리 동네 탐험에 저장한 수업 자료 목록: 제목·지역·학년·단원·연결 학급·저장한 날·AI 약도 여부, 최신순. 학급·기간(from·to)·낱말(제목·지역·단원)로 찾습니다. "지난달쯤"처럼 흐린 기간은 앞뒤 한 달을 넓혀 줍니다. 장소·출처는 get_neighborhood_pack으로 읽습니다.', inputSchema: {type: 'object', properties: {query: {type: 'string', description: '제목·지역·단원 낱말(띄어쓰기로 여러 개)'}, from: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM 또는 YYYY-MM-DD'}, class_id: cls}, additionalProperties: false}},
   {name: 'get_neighborhood_pack', scope: 'classroom:read', description: '우리 동네 탐험 자료 하나: 고른 수업 장소(이름·종류·분류·설명·교사 확인 여부, 최대 12곳), 약도 제목과 큰길, 지도 출처·기준일, 참고 자료 목록, 브리핑 앞부분. 좌표·도로 같은 지도 원본은 내보내지 않으니 지도는 링크로 열어 보게 합니다.', inputSchema: {type: 'object', properties: {pack_id: {type: 'string', description: 'list_neighborhood_packs의 자료 id'}}, required: ['pack_id'], additionalProperties: false}},
 ];
@@ -152,7 +154,7 @@ export function menuFlags() {
   return {
     homework: true, exhibitions: true, boards: true, quiz: true, lesson_review: true,
     playground: process.env.PLAYGROUND_DISABLED !== 'true', playground_live: process.env.PLAYGROUND_DISABLED !== 'true' && process.env.PLAYGROUND_LIVE_DISABLED !== 'true',
-    kids_daily: process.env.MY_SPACE_DISABLED !== 'true', tools: true, tools_disabled: tools, points: true,
+    kids_daily: process.env.MY_SPACE_DISABLED !== 'true', tools: true, tools_disabled: tools, dictionary: !tools.includes('dictionary'), points: true,
     cards: cardsMenuVisible, notebook: process.env.TEACHER_NOTEBOOK_DISABLED !== 'true', workspace: process.env.TEACHER_WORKSPACE_DISABLED !== 'true',
   };
 }
@@ -350,6 +352,7 @@ export async function callClassroomTool(name: string, args: Data, ctx: BearerCon
     case 'find_base_vocab': return (await import('@/lib/server/cards-base-vocab')).findBaseVocab(args);
     case 'get_speech': return speechProgress(ctx, args.class_id);
     case 'list_class_tools': return classTools(ctx, args.class_id);
+    case 'get_dictionary_info': return dictionaryInfo({configured: !!process.env.STDICT_API_KEY?.trim(), disabled: !menuFlags().dictionary});
     case 'list_neighborhood_packs': return neighborhoodPacks(ctx, args);
     case 'get_neighborhood_pack': return neighborhoodPack(ctx, args.pack_id);
   }
