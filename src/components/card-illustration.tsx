@@ -1,6 +1,6 @@
 'use client';
 
-import {createContext, useContext, useState, useSyncExternalStore} from 'react';
+import {useState, useSyncExternalStore} from 'react';
 import {Image as ImageIcon} from 'lucide-react';
 import {usePreferences} from './providers';
 import {CARD_ILLUSTRATIONS_LIVE, cardIllustration, type IllustratedCard} from '@/lib/card-illustrations';
@@ -33,15 +33,12 @@ function setEnabled(value: boolean) {
   listeners.forEach(listener => listener());
 }
 
-/** Lets the unlinked sample page supply its own pictures; every other screen keeps the normal, currently hidden pack. */
-export const CardIllustrationSampleContext = createContext<typeof cardIllustration | null>(null);
-
 export function useCardIllustrations() {return useSyncExternalStore(subscribe, snapshot, serverSnapshot);}
 
 /** One shared, device-local switch; reverting to the familiar text layout takes one tap. */
 export function CardIllustrationToggle({className = ''}: {className?: string}) {
-  const checked = useCardIllustrations(), {locale} = usePreferences(), sample = useContext(CardIllustrationSampleContext);
-  if (!CARD_ILLUSTRATIONS_LIVE && !sample) return null;
+  const checked = useCardIllustrations(), {locale} = usePreferences();
+  if (!CARD_ILLUSTRATIONS_LIVE) return null;
   return <label className={`ci-toggle ${className}`}><input type="checkbox" checked={checked} onChange={event => setEnabled(event.target.checked)}/><ImageIcon size={16} aria-hidden="true"/><span>{locale === 'ko' ? '그림 보기' : 'Show pictures'}</span></label>;
 }
 
@@ -57,9 +54,9 @@ type Props = {
 
 /** Decorative support for text. Parents decide when an answer/hint may be shown. */
 export function CardIllustration({card, type = 'word', variant = 'hero', className = '', enabled: allowed = true, showCaption = false}: Props) {
-  const visible = useCardIllustrations(), sample = useContext(CardIllustrationSampleContext);
+  const visible = useCardIllustrations();
   if (!visible || !allowed) return null;
-  const artwork = (sample ?? cardIllustration)(card, type);
+  const artwork = cardIllustration(card, type);
   if (!artwork?.src) return null;
   return <LoadedIllustration key={artwork.src} src={artwork.src} sense={artwork.sense} variant={variant} className={className} showCaption={showCaption}/>;
 }

@@ -21,20 +21,20 @@ function validBucket(bucket: string) {
 /**
  * This curated image pack is intentionally public. The shared download token is
  * a public asset URL token, never an admin credential. Resolve URLs locally:
- * no Storage SDK, metadata request, Next image proxy, or deployed SVG copy.
+ * no Storage SDK, metadata request, Next image proxy, or deployed image copy.
  * A release becomes ready only after its entire pack has been uploaded.
  */
 export function cardIllustrationStorageUrl(file: string, config: CardIllustrationStorageConfig = storageRelease): string | null {
   if (config.ready !== true || typeof config.bucket !== 'string' || !validBucket(config.bucket)
     || typeof config.prefix !== 'string' || !/^cards\/vocabulary\/v[1-9]\d*$/.test(config.prefix)
     || typeof config.downloadToken !== 'string' || !tokenPattern.test(config.downloadToken)
-    || !/^[A-Za-z]+(?:-[A-Za-z]+)*\.svg$/.test(file) || !registeredFiles.has(file)) return null;
+    || !/^[A-Za-z]+(?:-[A-Za-z]+)*\.webp$/.test(file) || !registeredFiles.has(file)) return null;
   const objectPath = encodeURIComponent(`${config.prefix}/${file}`);
   return `https://firebasestorage.googleapis.com/v0/b/${config.bucket}/o/${objectPath}?alt=media&token=${config.downloadToken}`;
 }
 
 /** False while the pack is hidden (ready: false): every picture and the picture toggle stay out of the UI. */
-export const CARD_ILLUSTRATIONS_LIVE = cardIllustrationStorageUrl('apple.svg') !== null;
+export const CARD_ILLUSTRATIONS_LIVE = cardIllustrationStorageUrl('apple.webp') !== null;
 
 /** Whole headwords only: sentences, paths, and partial matches must stay text. */
 export function illustrationHeadword(front: string): string | null {
