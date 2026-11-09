@@ -224,7 +224,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     if (!text || !canSpeak) return;
     setVoiceUsed(true); setSpeechFailed(false);
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    void ttsPlayer().speak(text, {rate: speed, fallback: () => speakWithDevice(text, speed, () => setSpeechFailed(true))});
+    void ttsPlayer().speak(text, {rate: speed, source: 'cards', fallback: () => speakWithDevice(text, speed, () => setSpeechFailed(true))});
   }
   // 카드 자동 읽기 (소리 설정, 기본 꺼짐): each new card's prompt once. The speaker button works either way.
   useEffect(() => {if (sound.autoSpeech && content && !session?.finished) speak(content.prompt);}, [session?.index, session?.direction, session?.finished, sound.autoSpeech, canSpeak]);
@@ -232,8 +232,8 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   useEffect(() => {
     if (!session || session.finished || !content || !(sound.autoSpeech || voiceUsed)) return;
     const player = ttsPlayer(), upcoming = cards.find(item => item.id === session.queue[session.index + 1]);
-    player.prefetch(content.expected);
-    if (upcoming) player.prefetch(textFor(upcoming, session.direction).prompt);
+    player.prefetch(content.expected, {source: 'cards'});
+    if (upcoming) player.prefetch(textFor(upcoming, session.direction).prompt, {source: 'cards'});
   }, [session?.index, session?.direction, session?.finished, sound.autoSpeech, voiceUsed, revealed, feedback]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     function key(event: KeyboardEvent) {

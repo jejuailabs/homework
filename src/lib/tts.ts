@@ -14,6 +14,12 @@ export type TtsFamily = (typeof ttsFamilies)[number];
 /** Model id recorded in aiJobs; its price lives in ai-usage.ts. */
 export const ttsModelName = (family: TtsFamily) => `google-tts-${family}`;
 
+/** Which screen asked for the audio, so the admin report can split read-aloud cost by feature. */
+export const ttsSources = ['cards', 'speech', 'dictionary'] as const;
+export type TtsSource = (typeof ttsSources)[number];
+export const ttsSource = (value: unknown): TtsSource | undefined => ttsSources.find(source => source === value);
+export const ttsToolName = (source?: TtsSource) => source ? `tts-${source}` : 'tts';
+
 /** Same text, same audio: NFC, one space between words, no edges. */
 export function normalizeTtsText(value: unknown) {
   return typeof value === 'string' ? value.normalize('NFC').replace(/\s+/g, ' ').trim() : '';

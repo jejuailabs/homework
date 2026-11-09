@@ -14,6 +14,7 @@ const kinds=[
   {key:'cachedInputTokens',label:'캐시 입력',cell:(r:Row)=>r.measuredCalls?number(r.cachedInputTokens):'미집계'},
   {key:'outputTokens',label:'출력 토큰',cell:(r:Row)=>r.measuredCalls?number(r.outputTokens):'미집계'},
   {key:'audioSeconds',label:'음성 길이',cell:(r:Row)=>r.audioSeconds?`${(r.audioSeconds/60).toFixed(1)}분`:'—'},
+  {key:'characters',label:'음성 글자',cell:(r:Row)=>r.characters?`${number(r.characters)}자`:'—'},
   {key:'webSearchCalls',label:'웹 검색',cell:(r:Row)=>r.webSearchCalls?`${number(r.webSearchCalls)}회`:'—'},
   {key:'estimatedUsd',label:'추정 비용',cell:(r:Row)=>r.pricedCalls?'$'+r.estimatedUsd.toFixed(4):r.requests?'미집계':'$0'},
   {key:'requests',label:'호출',cell:(r:Row)=>number(r.requests)},
@@ -43,7 +44,7 @@ function TokenView({data,sort,open,toggle,onSort,download}:{data:Data;sort:Kind;
   return <>
     <section className="content-card"><div className="admin-list-heading"><h2>교사 토큰 사용량</h2><button className="button soft" onClick={download}><Download size={16}/>교사·기능별 CSV</button></div>
       <p className="admin-scope">{data.from} ~ {data.to} · {data.limitsNote}</p>{data.partial&&<p role="alert" className="error-message">요청이 50,000건을 넘어 최근 50,000건만 집계했습니다. 조회 기간을 줄여 주세요.</p>}
-      <div className="admin-stat-grid">{kinds.slice(0,7).map(k=><button type="button" className={'admin-stat admin-token-stat'+(sort===k.key?' is-sorted':'')} key={k.key} onClick={()=>onSort(k.key)} aria-pressed={sort===k.key}><span>{k.label}</span><strong>{k.cell(total)}</strong><small>{k.key==='cachedInputTokens'?'입력 토큰 중 할인 적용분':k.key==='estimatedUsd'?`비용 확인 ${number(total.pricedCalls)}건`:k.key==='audioSeconds'?'전사 녹음 길이':k.key==='webSearchCalls'?'수업자료 웹 검색':`토큰 확인 ${number(total.measuredCalls)} / ${number(total.requests)}건`}</small></button>)}</div>
+      <div className="admin-stat-grid">{kinds.slice(0,8).map(k=><button type="button" className={'admin-stat admin-token-stat'+(sort===k.key?' is-sorted':'')} key={k.key} onClick={()=>onSort(k.key)} aria-pressed={sort===k.key}><span>{k.label}</span><strong>{k.cell(total)}</strong><small>{k.key==='cachedInputTokens'?'입력 토큰 중 할인 적용분':k.key==='estimatedUsd'?`비용 확인 ${number(total.pricedCalls)}건`:k.key==='audioSeconds'?'전사 녹음 길이':k.key==='webSearchCalls'?'수업자료 웹 검색':`토큰 확인 ${number(total.measuredCalls)} / ${number(total.requests)}건`}</small></button>)}</div>
     </section>
     <section className="content-card"><h2>교사별 · 기능별</h2><p className="admin-scope">교사 이름을 누르면 기능별로 나눠 봅니다. 표 머리글이나 위 칸을 누르면 그 항목이 큰 순서로 정렬됩니다.</p>
       <div className="admin-usage-table-wrap"><table className="admin-usage-table admin-token-table"><caption>교사별 AI 토큰 사용량</caption>
@@ -52,7 +53,7 @@ function TokenView({data,sort,open,toggle,onSort,download}:{data:Data;sort:Kind;
           <tr><th><button type="button" className="admin-usage-link" aria-expanded={expanded} onClick={()=>toggle(t.uid!)}>{expanded?<ChevronDown size={13}/>:<ChevronRight size={13}/>}{t.name}</button><small>{t.tools.length}개 기능</small></th>{kinds.map(k=><td key={k.key}>{k.cell(t)}</td>)}</tr>
           {expanded&&t.tools.map(f=><tr key={f.tool} className="admin-token-sub"><th>{aiFeatureName(f.tool!)}</th>{kinds.map(k=><td key={k.key}>{k.cell(f)}</td>)}</tr>)}
         </Fragment>;})}</tbody></table>{!rows.length&&<p className="admin-scope">선택한 기간에 AI 요청이 없습니다.</p>}</div>
-      <p className="admin-scope">{data.meteringSince} 이후 기록부터 집계합니다. 읽어 주기 음성처럼 제공사가 사용량을 돌려주지 않는 호출은 ‘미집계’로 표시되고 호출 수만 셉니다. 추정 비용은 실제 청구액이 아닙니다. 확인 {adminDate(data.checkedAt)}</p>
+      <p className="admin-scope">{data.meteringSince} 이후 기록부터 집계합니다. 토큰이 없는 읽어 주기 음성은 토큰만 ‘미집계’로 표시되고, 비용은 글자 수로 계산합니다. 학생이 쓴 양은 담당 선생님에게 합산합니다. 추정 비용은 실제 청구액이 아닙니다. 확인 {adminDate(data.checkedAt)}</p>
     </section>
   </>;
 }

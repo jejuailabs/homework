@@ -52,7 +52,7 @@ export function useReadAloud(options: {scope: string; bookId: string; classId: s
   const googleAudio = async (text: string): Promise<Blob | string | null> => {
     const {classId, voice} = opts.current;
     setLoading(true);
-    const url = await ttsPlayer().link(text, {voice, ...(classId ? {classId} : {})}).finally(() => setLoading(false));
+    const url = await ttsPlayer().link(text, {voice, source: 'speech', ...(classId ? {classId} : {})}).finally(() => setLoading(false));
     if (!url) return null;
     try {const response = await fetch(url); if (response.ok) return await response.blob();} catch {}
     return url;

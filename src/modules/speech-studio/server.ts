@@ -129,7 +129,7 @@ async function voice(request: Request, ctx: Context) {
   const speaker = Object.hasOwn(readerVoices, String(input.voice)) ? readerVoices[input.voice as ReaderVoice] : readerVoices.bright;
   const speed = typeof input.speed === 'number' && Number.isFinite(input.speed) ? Math.min(1.2, Math.max(0.7, input.speed)) : 1;
   const name = model.voice();
-  const audio = await runMeteredAi(ctx.uid, 'speech-voice', name, hash(JSON.stringify(['speech-voice-v1', name, speaker, speed, text])), async () => {
+  const audio = await runMeteredAi(ctx.uid, 'speech-voice', name, hash(JSON.stringify(['speech-voice-v1', name, speaker, speed, text])), async observe => {
     // tts-1 models take a numeric speed; gpt-4o-mini-tts takes spoken direction instead.
     const legacy = name.startsWith('tts-1');
     const request = legacy ? {model: name, voice: speaker, input: text, speed, response_format: 'mp3'}
@@ -139,6 +139,7 @@ async function voice(request: Request, ctx: Context) {
     if (size > 6 * 1024 * 1024) {await response.body?.cancel(); throw new ApiError(502, '음성이 너무 길어요. 페이지를 나눠 주세요.', 'VOICE_TOO_LARGE');}
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (!bytes.length || bytes.length > 6 * 1024 * 1024) throw new ApiError(502, '읽어 줄 목소리를 만들지 못했어요.', 'VOICE_EMPTY');
+    observe({}, {characters: text.length});
     return bytes;
   }, optionalClass(input.classId));
   return new Response(Uint8Array.from(audio), {headers: {'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, no-store'}});

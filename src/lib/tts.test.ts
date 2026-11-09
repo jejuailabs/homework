@@ -52,7 +52,7 @@ test('cache key: normalized text + language + voice + model; whitespace and Unic
 });
 
 function fakeDeps(over: Partial<TtsDeps> = {}) {
-  const stored = new Map<string, Uint8Array>(), calls = {synth: 0, meter: [] as TtsMeterInfo[], spent: 0, exists: 0};
+  const stored = new Map<string, Uint8Array>(), calls = {synth: 0, meter: [] as TtsMeterInfo[], reused: [] as {model: string; characters: number}[], spent: 0, exists: 0};
   const deps: TtsDeps = {
     config: {enabled: true, family: 'chirp3-hd', voiceOverride: {}}, hash: sha, known: new Set(), inflight: new Map(),
     exists: async path => {calls.exists++; return stored.has(path);},
@@ -60,6 +60,7 @@ function fakeDeps(over: Partial<TtsDeps> = {}) {
     save: async (path, audio) => {stored.set(path, audio);},
     synthesize: async () => {calls.synth++; return new Uint8Array([1, 2, 3]);},
     meter: async (info, run) => {calls.meter.push(info); return run();},
+    reused: info => {calls.reused.push(info);},
     spend: async characters => {calls.spent += characters;},
     claim: async () => true, sleep: async () => {},
     ...over,
@@ -74,6 +75,7 @@ test('a cache miss pays once and is metered; the next request is a free hit, eve
   assert.deepEqual(calls.meter.map(item => [item.model, item.characters]), [['google-tts-chirp3-hd', 5]]);
   assert.match(first.url, /^https:\/\/signed\.example\/tts\/v1\//);
   const second = await ttsAudio(deps, {text: 'apple'});
+  assert.deepEqual(calls.reused, [{model: 'google-tts-chirp3-hd', characters: 5}], 'a hit is counted as a free reuse');
   assert.equal(second.cached, true); assert.equal(calls.synth, 1); assert.equal(calls.meter.length, 1, 'a hit is never metered'); assert.equal(calls.spent, 5, 'a hit spends no allowance');
   const other = fakeDeps({exists: async path => stored.has(path)});
   const third = await ttsAudio(other.deps, {text: 'apple'});
@@ -85,6 +87,7 @@ test('simultaneous requests share one call; another instance waits for the file 
   const results = await Promise.all([ttsAudio(deps, {text: 'banana'}), ttsAudio(deps, {text: 'banana'}), ttsAudio(deps, {text: 'banana'})]);
   assert.equal(calls.synth, 1);
   assert.deepEqual(results.map(result => result.cached), [false, true, true]);
+  assert.equal(calls.reused.length, 2, 'whoever waited for the same audio reused it');
   let checks = 0;
   const waiting = fakeDeps({claim: async () => false, exists: async () => ++checks >= 3});
   const waited = await ttsAudio(waiting.deps, {text: 'cherry'});
