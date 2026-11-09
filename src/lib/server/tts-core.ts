@@ -22,6 +22,8 @@ export type TtsDeps = {
   synthesize: (request: TtsSynthesis) => Promise<Uint8Array>;
   /** Wraps the one paid call: aiJobs record, characters and estimated USD. Never called on a cache hit. */
   meter: <T>(info: TtsMeterInfo, run: () => Promise<T>) => Promise<T>;
+  /** Notes one free reuse of stored audio. It costs nothing, but cost is shared out by how much each teacher really uses. */
+  reused: (info: {model: string; characters: number}) => void;
   /** Spends characters from the caller's daily allowance before a paid call; throws TtsError when it is used up. */
   spend: (characters: number) => Promise<void>;
   /** Cross-instance claim on one hash, so a class opening the same card at once pays once. True when this caller owns it. */
@@ -49,10 +51,11 @@ export function ttsPlan(config: TtsConfig, input: {text?: unknown; lang?: unknow
 export async function ttsAudio(deps: TtsDeps, input: {text?: unknown; lang?: unknown; voice?: unknown}): Promise<TtsResult> {
   if (!deps.config.enabled) throw new TtsError(503, 'TTS_DISABLED', '고음질 읽어주기가 꺼져 있어요. 기기 목소리로 읽어요.');
   const plan = ttsPlan(deps.config, input, deps.hash);
-  const done = async (cached: boolean): Promise<TtsResult> => {deps.known.add(plan.path); return {url: await deps.readUrl(plan.path), cached, lang: plan.lang, voice: plan.voice, characters: plan.characters};};
+  const reused = () => deps.reused({model: plan.model, characters: plan.characters});
+  const done = async (cached: boolean): Promise<TtsResult> => {if (cached) reused(); deps.known.add(plan.path); return {url: await deps.readUrl(plan.path), cached, lang: plan.lang, voice: plan.voice, characters: plan.characters};};
   if (deps.known.has(plan.path) || await deps.exists(plan.path)) return done(true);
   const running = deps.inflight.get(plan.path);
-  if (running) return {...await running, cached: true};
+  if (running) {const result = await running; reused(); return {...result, cached: true};}
   const work = (async () => {
     if (!await deps.claim(plan.key)) {
       // Someone else is making this audio right now: wait for their file instead of paying twice.

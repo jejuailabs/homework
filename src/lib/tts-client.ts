@@ -3,14 +3,14 @@
  * memory, plays them at the chosen speed, and falls back to the device voice whenever the server audio is
  * off, refused or fails to play. Browser objects are passed in so the choices are tested in Node.
  */
-import {detectTtsLang, normalizeTtsText, type TtsLang, type TtsVoiceKey} from './tts';
+import {detectTtsLang, normalizeTtsText, type TtsLang, type TtsSource, type TtsVoiceKey} from './tts';
 
 export type AudioLike = {src: string; playbackRate: number; preservesPitch?: boolean; preload?: string; play(): Promise<void>; pause(): void; onended: (() => void) | null; onerror: (() => void) | null};
 export type TtsClientEnv = {
-  post: (body: {text: string; lang: TtsLang; voice: TtsVoiceKey; classId?: string}) => Promise<{ok: boolean; status: number; json(): Promise<unknown>}>;
+  post: (body: {text: string; lang: TtsLang; voice: TtsVoiceKey; classId?: string; source?: TtsSource}) => Promise<{ok: boolean; status: number; json(): Promise<unknown>}>;
   createAudio: () => AudioLike;
 };
-export type SpeakOptions = {rate?: number; lang?: TtsLang; voice?: TtsVoiceKey; classId?: string; fallback: () => void};
+export type SpeakOptions = {rate?: number; lang?: TtsLang; voice?: TtsVoiceKey; classId?: string; source?: TtsSource; fallback: () => void};
 
 const MEMORY = 80;
 /** Off for the rest of this page: the server said the feature is off, not set up, or today's allowance is gone. */
@@ -26,7 +26,7 @@ export function createTtsPlayer(env: TtsClientEnv) {
     while (links.size > MEMORY) links.delete(links.keys().next().value!);
   }
   /** The signed link for this text, or null when the device voice should read it. */
-  function link(raw: string, options: {lang?: TtsLang; voice?: TtsVoiceKey; classId?: string} = {}): Promise<string | null> {
+  function link(raw: string, options: {lang?: TtsLang; voice?: TtsVoiceKey; classId?: string; source?: TtsSource} = {}): Promise<string | null> {
     const text = normalizeTtsText(raw);
     if (off || !text || text.length > 1000) return Promise.resolve(null);
     const lang = options.lang ?? detectTtsLang(text);
@@ -36,7 +36,7 @@ export function createTtsPlayer(env: TtsClientEnv) {
     if (known?.pending) return known.pending;
     const pending = (async () => {
       try {
-        const response = await env.post({text, lang, voice, ...(options.classId ? {classId: options.classId} : {})});
+        const response = await env.post({text, lang, voice, ...(options.classId ? {classId: options.classId} : {}), ...(options.source ? {source: options.source} : {})});
         const data = await response.json().catch(() => null) as {url?: unknown; code?: unknown} | null;
         if (response.ok && typeof data?.url === 'string' && /^(https?:|blob:)/.test(data.url)) {remember(key, {url: data.url}); return data.url;}
         if (typeof data?.code === 'string' && STOP_CODES.has(data.code)) off = true;
@@ -80,7 +80,7 @@ export function createTtsPlayer(env: TtsClientEnv) {
     return play(url, rate, mine, options.fallback);
   }
   /** Fetch the next card's link (and let the browser start downloading the audio) before it is needed. */
-  function prefetch(text: string, options: {lang?: TtsLang; voice?: TtsVoiceKey; classId?: string} = {}) {
+  function prefetch(text: string, options: {lang?: TtsLang; voice?: TtsVoiceKey; classId?: string; source?: TtsSource} = {}) {
     void link(text, options).then(url => {
       if (!url) return;
       try {const audio = env.createAudio(); audio.preload = 'auto'; audio.src = url;} catch {}
