@@ -1,10 +1,10 @@
 import 'server-only';
 import {createHash, randomUUID} from 'node:crypto';
-import {Timestamp} from 'firebase-admin/firestore';
+import {FieldValue, Timestamp} from 'firebase-admin/firestore';
 import {db} from './admin';
 import {assertOrigin, requireTeacher} from './auth';
 import {ApiError,id} from './policy';
-import {aiProviderUsage,type AiProviderUsage,type AiUsageObserver} from '../ai-usage';
+import {aiProviderUsage,aiUsageHour,type AiProviderUsage,type AiUsageObserver} from '../ai-usage';
 import {citedAiOutput, type AiCitation} from '../ai-citations';
 import {artworkAuthorNames, artworkAuthorRequest} from './artwork-author-policy';
 import {AI_PROMPT_VERSION, AiError, aiWindows, assertAiQuota, buildAiRequest, completedAiText, configuredLimit, providerFailure, readBoundedJson, validateAiInput, type AiInput, type AiLimits} from './ai-policy';
@@ -131,6 +131,17 @@ export async function getAiOperations() {
     teacherDailyLimit: config.limits.teacherDaily, teacherMinuteLimit: config.limits.teacherMinute,
     resetAt: new Date(windows.dayEnd).toISOString(), timeZone: 'Asia/Seoul'
   }};
+}
+
+/** A call to a free outside API: nothing to reserve, but it still belongs in the per-teacher, per-hour report. */
+export async function recordExternalCall(uid:string,tool:string,model:string,ok:boolean,durationMs:number){
+  const now=new Date().toISOString();
+  await db().collection('aiJobs').add({actorUid:uid,classId:'',meteringVersion:2,tool,model,status:ok?'done':'failed',createdAt:now,completedAt:now,durationMs,usage:aiProviderUsage({},model)});
+}
+/** One counter per person, hour and feature for answers served from a shared store. */
+export async function recordAiReuse(uid:string,classId:string,tool:string,model:string,characters:number){
+  const hour=aiUsageHour(new Date());
+  await db().doc(`aiUsageHits/${hour}_${tool}_${hash(uid)}`).set({uid,classId,tool,model,hour,hits:FieldValue.increment(1),characters:FieldValue.increment(characters),updatedAt:new Date().toISOString()},{merge:true});
 }
 
 /**

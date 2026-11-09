@@ -1,15 +1,14 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
-import {FieldValue, Timestamp} from 'firebase-admin/firestore';
+import {Timestamp} from 'firebase-admin/firestore';
 import {after, NextResponse} from 'next/server';
 import {bucket, cloudAccessToken, db} from './admin';
 import {assertOrigin, getContext, type Context} from './auth';
-import {runMeteredAi} from './ai';
+import {recordAiReuse, runMeteredAi} from './ai';
 import {aiWindows, readBoundedJson} from './ai-policy';
 import {ApiError, id} from './policy';
 import {stableReadUrl} from './signed-urls';
 import {FILE_CACHE_CONTROL} from '../storage-cache';
-import {aiUsageHour} from '../ai-usage';
 import {ttsSource, ttsToolName, type TtsSource} from '../tts';
 import {ttsAllowance, ttsAudio, ttsAudioContent, ttsConfig, ttsSynthesizeBody, TtsError, type TtsDeps, type TtsResult, type TtsSynthesis} from './tts-core';
 
@@ -92,12 +91,6 @@ function assertBurst(uid: string, now = Date.now()) {
   if (bursts.size > 5000) bursts.clear();
 }
 
-/** One counter per person, hour and feature. A student's class is kept so the report can reach their teacher. */
-async function recordReuse(ctx: Context, tool: string, info: {model: string; characters: number}) {
-  const hour = aiUsageHour(new Date());
-  await db().doc(`aiUsageHits/${hour}_${tool}_${hash(ctx.uid)}`).set({uid: ctx.uid, classId: ctx.role === 'student' ? ctx.classId ?? '' : '', tool, model: info.model, hour, hits: FieldValue.increment(1), characters: FieldValue.increment(info.characters), updatedAt: new Date().toISOString()}, {merge: true});
-}
-
 export function ttsDeps(ctx: Context, requestedClass?: string, source?: TtsSource): TtsDeps {
   const tool = ttsToolName(source);
   return {
@@ -106,7 +99,8 @@ export function ttsDeps(ctx: Context, requestedClass?: string, source?: TtsSourc
     readUrl: path => stableReadUrl(path),
     spend: characters => spend(ctx, characters),
     // Runs after the response so a free replay never waits on a database write.
-    reused: info => after(() => recordReuse(ctx, tool, info).catch(() => console.error('TTS reuse record failed'))),
+    // A student's class is kept so the report can reach their teacher.
+    reused: info => after(() => recordAiReuse(ctx.uid, ctx.role === 'student' ? ctx.classId ?? '' : '', tool, info.model, info.characters).catch(() => console.error('TTS reuse record failed'))),
     claim,
     meter: (info, run) => runMeteredAi(ctx.uid, tool, info.model, info.fingerprint, async observe => {
       const result = await run();
