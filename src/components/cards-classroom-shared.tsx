@@ -50,7 +50,7 @@ export function useSpeech() {
   const speak = useCallback((text: string, rate: number) => {
     if (!text.trim()) return;
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-    void ttsPlayer().speak(text, {rate, fallback: () => speakWithDevice(text, rate, undefined, speechLang(text))});
+    void ttsPlayer().speak(text, {rate, source: 'cards', fallback: () => speakWithDevice(text, rate, undefined, speechLang(text))});
   }, []);
   return {can, speak};
 }

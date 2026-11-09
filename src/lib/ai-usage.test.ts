@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {aiProviderUsage,aiUsagePeriod,summarizeAiUsage,summarizeTeacherTokens} from './ai-usage';
+import {aiProviderUsage,aiUsageHour,aiUsageHourRows,aiUsagePeriod,aiUsageTeacher,summarizeAiUsage,summarizeAiUsageHours,summarizeTeacherTokens} from './ai-usage';
 test('AI usage retains only metering metadata and prices cached input plus actual search calls',()=>{
   const usage=aiProviderUsage({usage:{input_tokens:10000,output_tokens:1000,total_tokens:11000,input_tokens_details:{cached_tokens:2000}},service_tier:'default',output:[{type:'web_search_call'},{type:'web_search_call'},{type:'message',content:'PRIVATE TEXT'}],image:'PRIVATE PHOTO'},'gpt-6-luna');
   assert.equal(usage.inputTokens,10000);assert.equal(usage.cachedInputTokens,2000);assert.equal(usage.webSearchCalls,2);assert(Math.abs(usage.estimatedUsd!-.02132)<1e-10);assert(!JSON.stringify(usage).includes('PRIVATE'));
@@ -32,4 +32,23 @@ test('teacher token view splits each teacher by feature and token kind',()=>{
   assert.equal(rows[0].tools[0].requests,2);
   // Calls the provider does not meter still count as requests.
   assert.equal(rows[1].requests,1);assert.equal(rows[1].measuredCalls,0);
+});
+
+test('a student call counts for the class teacher; classless and unknown classes stay with the caller',()=>{
+  const owners=new Map([['class1','teacherA']]);
+  assert.equal(aiUsageTeacher('student1','class1',owners),'teacherA');
+  assert.equal(aiUsageTeacher('teacherB','',owners),'teacherB');
+  assert.equal(aiUsageTeacher('student2','gone',owners),'student2');
+});
+test('voice characters and free reuse are totalled per teacher, class, feature and Korean-time hour',()=>{
+  const usage=aiProviderUsage({},'google-tts-neural2',{characters:1000}),jobs=[{actorUid:'teacherA',classId:'class1',tool:'tts-cards',model:'google-tts-neural2',status:'done',createdAt:'2026-11-09T01:30:00.000Z',usage}];
+  const hits=[{uid:'teacherA',classId:'class1',tool:'tts-cards',model:'google-tts-neural2',hour:'2026-11-09T10',hits:3,characters:300},{uid:'teacherA',classId:'',tool:'tts-speech',model:'google-tts-neural2',hour:'2026-11-09T11',hits:1,characters:50}];
+  assert.equal(aiUsageHour('2026-11-09T15:30:00.000Z'),'2026-11-10T00');
+  const summary=summarizeAiUsage(jobs,hits);
+  assert.equal(summary.total.requests,1,'a free reuse is not an outside call');assert.equal(summary.total.characters,1000);assert.equal(summary.total.reusedRequests,4);assert.equal(summary.total.reusedCharacters,350);assert.equal(summary.teachers[0].reusedCharacters,350);
+  assert.equal(summary.tools.find(row=>row.tool==='tts-speech')?.reusedRequests,1);assert.equal(summary.classes.find(row=>row.classId==='class1')?.characters,1000);
+  const hours=summarizeAiUsageHours(jobs,hits);
+  assert.deepEqual(hours.map(row=>row.hour),['2026-11-09T11','2026-11-09T10']);assert.equal(hours[1].requests,1);assert.equal(hours[1].characters,1000);assert.equal(hours[1].reusedRequests,3);assert.ok(Math.abs(hours[1].estimatedUsd-.016)<1e-9);
+  const rows=aiUsageHourRows(jobs,hits);
+  assert.equal(rows.length,2);assert.equal(rows[1].uid,'teacherA');assert.equal(rows[1].tool,'tts-cards');assert.equal(rows[1].model,'google-tts-neural2');assert.equal(rows[1].reusedCharacters,300);
 });

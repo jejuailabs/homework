@@ -27,7 +27,7 @@ export function CardChunkEditor({text, chunks, onChange}: {text: string; chunks:
 function speakText(text: string, rate = 1) {
   if (typeof window === 'undefined' || !text) return;
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  void ttsPlayer().speak(text, {rate, fallback: () => speakWithDevice(text, rate)});
+  void ttsPlayer().speak(text, {rate, source: 'cards', fallback: () => speakWithDevice(text, rate)});
 }
 const shuffle = <T,>(values: T[]) => {const result = [...values]; for (let index = result.length - 1; index > 0; index--) {const other = Math.floor(Math.random() * (index + 1)); [result[index], result[other]] = [result[other], result[index]];} return result;};
 

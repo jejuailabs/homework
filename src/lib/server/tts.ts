@@ -1,7 +1,7 @@
 import 'server-only';
 import {createHash} from 'node:crypto';
-import {Timestamp} from 'firebase-admin/firestore';
-import {NextResponse} from 'next/server';
+import {FieldValue, Timestamp} from 'firebase-admin/firestore';
+import {after, NextResponse} from 'next/server';
 import {bucket, cloudAccessToken, db} from './admin';
 import {assertOrigin, getContext, type Context} from './auth';
 import {runMeteredAi} from './ai';
@@ -9,6 +9,8 @@ import {aiWindows, readBoundedJson} from './ai-policy';
 import {ApiError, id} from './policy';
 import {stableReadUrl} from './signed-urls';
 import {FILE_CACHE_CONTROL} from '../storage-cache';
+import {aiUsageHour} from '../ai-usage';
+import {ttsSource, ttsToolName, type TtsSource} from '../tts';
 import {ttsAllowance, ttsAudio, ttsAudioContent, ttsConfig, ttsSynthesizeBody, TtsError, type TtsDeps, type TtsResult, type TtsSynthesis} from './tts-core';
 
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
@@ -90,14 +92,23 @@ function assertBurst(uid: string, now = Date.now()) {
   if (bursts.size > 5000) bursts.clear();
 }
 
-export function ttsDeps(ctx: Context, requestedClass?: string): TtsDeps {
+/** One counter per person, hour and feature. A student's class is kept so the report can reach their teacher. */
+async function recordReuse(ctx: Context, tool: string, info: {model: string; characters: number}) {
+  const hour = aiUsageHour(new Date());
+  await db().doc(`aiUsageHits/${hour}_${tool}_${hash(ctx.uid)}`).set({uid: ctx.uid, classId: ctx.role === 'student' ? ctx.classId ?? '' : '', tool, model: info.model, hour, hits: FieldValue.increment(1), characters: FieldValue.increment(info.characters), updatedAt: new Date().toISOString()}, {merge: true});
+}
+
+export function ttsDeps(ctx: Context, requestedClass?: string, source?: TtsSource): TtsDeps {
+  const tool = ttsToolName(source);
   return {
     config: ttsConfig(process.env), hash, sleep, known, inflight, save, synthesize,
     exists: async path => (await bucket().file(path).exists())[0],
     readUrl: path => stableReadUrl(path),
     spend: characters => spend(ctx, characters),
+    // Runs after the response so a free replay never waits on a database write.
+    reused: info => after(() => recordReuse(ctx, tool, info).catch(() => console.error('TTS reuse record failed'))),
     claim,
-    meter: (info, run) => runMeteredAi(ctx.uid, 'tts', info.model, info.fingerprint, async observe => {
+    meter: (info, run) => runMeteredAi(ctx.uid, tool, info.model, info.fingerprint, async observe => {
       const result = await run();
       observe({}, {characters: info.characters});
       return result;
@@ -121,7 +132,7 @@ export async function handleTts(request: Request) {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ApiError(400, '입력을 확인해 주세요.');
     const body = input as Record<string, unknown>;
     const classId = typeof body.classId === 'string' && body.classId ? id(body.classId) : undefined;
-    const result = await ttsAudio(ttsDeps(ctx, classId), body);
+    const result = await ttsAudio(ttsDeps(ctx, classId, ttsSource(body.source)), body);
     return NextResponse.json({url: result.url, cached: result.cached, lang: result.lang}, {headers});
   } catch (error) {
     if (error instanceof TtsError || error instanceof ApiError) return NextResponse.json({error: error.message, code: error.code}, {status: error.status, headers});
