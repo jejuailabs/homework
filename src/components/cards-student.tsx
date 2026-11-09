@@ -71,7 +71,7 @@ export default function StudentCardsList() {
   async function loadMore() {if (!data?.nextCursor || moreBusy) return; setMoreBusy(true); setMoreError(false); try {const next = await cardRequest<StudentCardsData>(`/api/cards/student?cursor=${encodeURIComponent(data.nextCursor)}`); setData(previous => previous ? {...previous, distributions: [...previous.distributions, ...next.distributions.filter(item => !previous.distributions.some(old => old.id === item.id))], nextCursor: next.nextCursor} : next);} catch {setMoreError(true);} finally {setMoreBusy(false);}}
   if (loading) return <CardLoading/>;
   if (error || !data) return <CardError retry={() => void load()}/>;
-  return <section className="cs-workspace"><header className="cs-heading"><div><p className="cs-eyebrow"><Layers size={17}/>{c.title}{data.profile?.className && <span> / {data.profile.className}</span>}</p><h1>{c.ourSets}</h1><p>{c.listIntro}</p></div><CardBuddy character={data.profile?.character}/></header>
+  return <section className="cs-workspace"><header className="cs-heading"><div><p className="cs-eyebrow"><Layers size={17}/>{c.title}{data.profile?.className && <span> / {data.profile.className}</span>}</p><h1>{c.ourSets}</h1></div><CardBuddy character={data.profile?.character}/></header>
     <div className="cards-notes-row"><StudentNotesButton summary={data.notes}/></div>
     <CardRoomJoin/>
     {!!data.review?.total && <MissedReviewRow summary={data.review} today={cardReviewDate(clockOf(data.serverTime))}/>}

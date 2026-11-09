@@ -25,7 +25,7 @@ export function StudentCardGames({distributionId}: {distributionId: string}) {
   const unavailable = {pair: c.unavailablePair, rain: c.unavailableRain, puzzle: c.unavailablePuzzle};
   // 시험 정답 보호: the cards came back without answers, so the games wait for the test.
   if (testing) return <GameFrame distributionId={distributionId} title={distribution.title}><CardTestWait distributionId={distributionId}/></GameFrame>;
-  return <GameFrame distributionId={distributionId} title={distribution.title}><p className="cg-muted cg-intro">{c.homeIntro}</p>
+  return <GameFrame distributionId={distributionId} title={distribution.title}>
     {closed && <p className="cs-alert" role="status"><Clock3 size={15}/> {c.locked}</p>}
     <div className="cg-games">{CARD_GAMES.map(game => {
       const playable = gamePlayable(game, distribution) && !closed, best = boards.games[game].best;
@@ -34,7 +34,6 @@ export function StudentCardGames({distributionId}: {distributionId: string}) {
     })}</div>
     <div className="cg-tabs" role="group" aria-label={c.classRanking}>{CARD_GAMES.map(game => <button type="button" key={game} aria-pressed={tab === game} onClick={() => setTab(game)}>{c[game]}</button>)}</div>
     <GameRanking game={tab} board={boards.games[tab]} shown={boards.rankingsShown}/>
-    <p className="cg-muted">{c.notGrades}</p>
   </GameFrame>;
 }
 
