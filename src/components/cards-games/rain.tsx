@@ -70,7 +70,7 @@ export function RainGame(props: GameProps) {
   if (phase === 'setup') return <GameFrame distributionId={distributionId} game="rain" title={distribution.title} tools={tools}><div className="cg-setup">
     <fieldset><legend>{c.direction}</legend>{(['front-back', 'back-front'] as const).map(value => <label key={value}><input type="radio" name="cg-direction" checked={direction === value} onChange={() => setDirection(value)}/>{value === 'front-back' ? c.showFront : c.showBack}</label>)}</fieldset>
     <fieldset><legend>{c.motion}</legend>{[false, true].map(value => <label key={String(value)}><input type="radio" name="cg-motion" checked={staticMode === value} onChange={() => setStill(value)}/>{value ? c.motionStatic : c.motionFall}</label>)}{reduced && still === null && <p className="cg-muted">{c.motionNote}</p>}</fieldset>
-    <p className="cg-muted">{c.rainBody} {c.rainKeys}</p>
+    <p className="cg-muted">{c.rainBody}</p>
     <div className="cs-actions"><button className="button primary" onClick={start} autoFocus><Play size={16}/>{c.play}</button></div>
   </div></GameFrame>;
   const value = game!, missedCards = [...new Set(value.missedCards)].map(cardId => byId.get(cardId)).filter((card): card is CardEntry => !!card);

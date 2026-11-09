@@ -1,17 +1,17 @@
 {
-  "defaults": "우리 반 학습 기본값", "defaultsHint": "새로 배부할 때 이 값으로 채워져요. 배부할 때마다 바꿀 수 있고, 이미 배부한 세트는 그대로예요.",
-  "required": "필수", "amount": "학습량", "percentHint": "100%는 고른 카드를 한 바퀴, 200%는 두 바퀴 학습해요. 끄면 선택 학습이에요.",
+  "defaults": "우리 반 학습 기본값", "defaultsHint": "새 배부에 자동으로 채워져요.",
+  "required": "필수", "amount": "학습량", "percentHint": "100%는 한 바퀴, 끄면 선택 학습이에요.",
   "speechRate": "읽어 주기 기본 속도", "speechDefault": "기본 (1×)", "speechHint": "학생이 학습 화면에서 바꿀 수 있어요.", "afterDueHint": "마감을 정한 배부에만 쓰여요.",
   "allClasses": "모든 반에 적용", "allClassesHint": "다른 반의 차시 메모와 순서는 그대로예요.",
   "savedDefaults": "기본값을 저장했어요.", "savedAll": "{n}개 반에 저장했어요.",
-  "applyExisting": "기존 배부에도 적용", "applyExistingHint": "이 반에서 학습 중인 {type} {n}개의 설정을 이 값으로 바꿔요. 배부마다 고른 카드 범위와 쌓인 학습 기록은 그대로예요. 진행 중인 테스트는 시작할 때 설정으로 채점돼요.",
+  "applyExisting": "기존 배부에도 적용", "applyExistingHint": "학습 중인 {type} {n}개에 적용해요. 학습 기록은 그대로예요.",
   "applyConfirm": "{n}개 바꾸기", "applyDone": "{n}개 배부를 바꿨어요.", "applyFailed": "{n}개는 바꾸지 못했어요. 다시 시도해 주세요.", "noExisting": "이 반에 학습 중인 {type}가 없어요.", "applying": "바꾸는 중…",
   "saveFirst": "기본값을 먼저 저장해 주세요.",
-  "filled": "우리 반 학습 기본값으로 채웠어요. 이 배부에서만 바꿀 수도 있어요.",
-  "plan": "차시 메모·순서", "planHint": "줄 사이에 메모를 넣고 순서를 정해요. 학생 목록도 이 순서와 메모로 보여요. 숨긴 줄은 학생에게 보이지 않지만 학습 기록은 남아요.",
+  "filled": "우리 반 기본값으로 채웠어요.",
+  "plan": "차시 메모·순서", "planHint": "메모와 순서가 학생 목록에 그대로 보여요.",
   "addMemo": "메모 넣기", "memoLabel": "차시 메모", "memoPlaceholder": "예: 3/12 수업: Unit 1-2", "removeMemo": "메모 지우기",
   "moveUp": "위로", "moveDown": "아래로", "drag": "끌어서 옮기기", "highlight": "강조", "unhighlight": "강조 끄기", "hide": "학생에게 숨기기", "show": "학생에게 보이기",
   "hiddenTag": "학생에게 숨김", "newTag": "새 배부", "inactiveTag": "학습 종료", "savePlan": "순서 저장", "memoLimit": "메모는 {n}개까지 넣을 수 있어요.", "emptyMemo": "빈 메모가 있어요. 내용을 쓰거나 지워 주세요.",
-  "unsaved": "저장하지 않은 변경이 있어요. 닫을까요?", "noRows": "이 반에 배부한 세트가 없어요. 메모만 먼저 넣어 둘 수도 있어요.",
+  "unsaved": "저장하지 않은 변경이 있어요. 닫을까요?", "noRows": "배부한 세트가 없어요.",
   "teacherPick": "선생님 강조", "memoRole": "선생님 메모"
 }

@@ -81,6 +81,5 @@ export function CardDayLoad({rows, time}: {rows: CardStudentDistribution[]; time
   const [open, setOpen] = useState(false);
   if (!load.minutes) return null;
   return <section className={`cc-day${load.heavy ? ' is-heavy' : ''}`} aria-live="polite"><p><Clock3 size={16}/><b>{fill(c.dayTotal, {minutes: load.minutes})}</b></p>
-    {load.heavy && <><p>{c.dayHeavy}</p><ol aria-label={c.dayOrder}>{load.order.slice(0, open ? undefined : 3).map(({row, minutes}) => <li key={row.id}><Link href={`/student/cards/${row.id}`}>{row.title}</Link><span>{row.dueAt ? new Intl.DateTimeFormat(locale, {month: 'short', day: 'numeric'}).format(new Date(row.dueAt)) : '—'} · {fill(c.minutesShort, {minutes})}</span></li>)}</ol>{load.order.length > 3 && !open && <button type="button" className="cs-text-button" onClick={() => setOpen(true)}>+{load.order.length - 3}</button>}</>}
-    <small>{c.estimateNote}</small></section>;
+    {load.heavy && <><p>{c.dayHeavy}</p><ol aria-label={c.dayOrder}>{load.order.slice(0, open ? undefined : 3).map(({row, minutes}) => <li key={row.id}><Link href={`/student/cards/${row.id}`}>{row.title}</Link><span>{row.dueAt ? new Intl.DateTimeFormat(locale, {month: 'short', day: 'numeric'}).format(new Date(row.dueAt)) : '—'} · {fill(c.minutesShort, {minutes})}</span></li>)}</ol>{load.order.length > 3 && !open && <button type="button" className="cs-text-button" onClick={() => setOpen(true)}>+{load.order.length - 3}</button>}</>}</section>;
 }
