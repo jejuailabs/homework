@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
-import {detectTtsLang, normalizeTtsText, ttsCacheMaterial, ttsObjectPath, ttsRequest, ttsVoiceName} from './tts';
+import {detectTtsLang, normalizeTtsText, ttsCacheMaterial, ttsFamilyFor, ttsObjectPath, ttsRequest, ttsVoiceName} from './tts';
 import {ttsAllowance, ttsAudio, ttsAudioContent, ttsConfig, ttsPlan, ttsSynthesizeBody, TtsError, type TtsDeps, type TtsMeterInfo} from './server/tts-core';
 import {createTtsPlayer, type AudioLike} from './tts-client';
 import {aiProviderUsage} from './ai-usage';
@@ -186,4 +186,11 @@ test('player: a newer tap cancels an older one that is still waiting for its lin
   await player.speak('fast', {fallback: () => {}});
   release(); await first;
   assert.deepEqual(FakeAudio.played.map(audio => audio.src), ['https://signed.example/fast.mp3']);
+});
+
+test('dictionary narration uses Chirp 3 HD while other screens keep the configured voice family', () => {
+  assert.equal(ttsFamilyFor('dictionary', 'neural2'), 'chirp3-hd');
+  assert.equal(ttsFamilyFor('cards', 'neural2'), 'neural2');
+  assert.equal(ttsFamilyFor(undefined, 'neural2'), 'neural2');
+  assert.equal(ttsVoiceName('ko', ttsFamilyFor('dictionary', 'neural2')), 'ko-KR-Chirp3-HD-Kore');
 });

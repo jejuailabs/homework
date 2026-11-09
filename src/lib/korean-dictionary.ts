@@ -60,11 +60,11 @@ export const DICTIONARY_PREVIEW_ENTRIES: DictionaryEntry[] = PREVIEW_WORDS.map(e
 const ORDINALS = ['첫째', '둘째', '셋째', '넷째', '다섯째'];
 const NARRATED_SENSES = ORDINALS.length, NARRATION_CHUNK = 900;
 /** Spoken script, one piece per meaning so each piece stays under the audio limit and is reused on its own. */
-export function dictionaryNarration(explanation: Pick<DictionaryExplanation, 'word' | 'partOfSpeech' | 'senses'>): string[] {
+export function dictionaryNarration(explanation: Pick<DictionaryExplanation, 'word' | 'senses'>): string[] {
   const senses = explanation.senses.slice(0, NARRATED_SENSES), many = senses.length > 1;
   const pieces = senses.map((sense, index) => [many ? `${ORDINALS[index]} 뜻.` : '', sense.definition, sense.example ? `예를 들면, ${sense.example}` : ''].filter(Boolean).join(' ').slice(0, NARRATION_CHUNK));
   if (!pieces.length) return [];
-  pieces[0] = [explanation.word + '.', explanation.partOfSpeech ? explanation.partOfSpeech + '.' : '', pieces[0]].filter(Boolean).join(' ');
+  pieces[0] = `${explanation.word}. ${pieces[0]}`;
   return pieces;
 }
 

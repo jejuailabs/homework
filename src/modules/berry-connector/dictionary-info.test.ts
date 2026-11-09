@@ -4,7 +4,7 @@ import {dictionaryInfo} from './dictionary-info';
 const ready = dictionaryInfo({configured: true, disabled: false});
 assert.equal(ready.available, true);
 assert.equal(ready.link, '/teacher/tools/dictionary');
-assert.deepEqual(ready.search_modes, ['exact', 'include']);
+assert.match(ready.search_order, /정확히 일치/);
 assert.equal(ready.read_aloud.berry_can_start, false, 'metadata cannot authorize paid speech');
 assert.deepEqual(ready.browser_only, ['단어장', '최근 검색어']);
 assert.equal(dictionaryInfo({configured: false, disabled: false}).available, false, 'missing key is not a working connection');
