@@ -2,7 +2,7 @@
 export function dictionaryInfo(config: {configured: boolean; disabled: boolean}) {
   return {
     link: '/teacher/tools/dictionary',
-    provider: '국립국어원 한국어기초사전(기본)·표준국어대사전(깊이)',
+    provider: '국립국어원 한국어기초사전(기본)·표준국어대사전(깊이)·우리말샘(두 사전에 없는 낱말)',
     configured: config.configured,
     available: config.configured && !config.disabled,
     search_order: '정확히 일치하는 낱말을 맨 위에, 그 아래 포함하는 낱말',

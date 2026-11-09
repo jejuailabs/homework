@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {ApiError} from './policy';
-import {combineDictionaryResults, createDictionaryHandler, createDictionaryHandlers, parseBasicSearchResponse, parseBasicView, parseDictionaryExplainQuery, parseDictionaryQuery, parseDictionarySearchResponse, parseStandardView, type DictionaryCallRecord} from './korean-dictionary';
+import {combineDictionaryResults, createDictionaryHandler, createDictionaryHandlers, parseBasicSearchResponse, parseBasicView, parseDictionaryExplainQuery, parseDictionaryQuery, parseDictionarySearchResponse, parseOpenSearchResponse, parseOpenView, parseStandardView, type DictionaryCallRecord} from './korean-dictionary';
 import {dictionaryNarration, parseDictionaryAi} from '../korean-dictionary';
 
 const fixtureKey = '0'.repeat(32);
@@ -42,7 +42,8 @@ test('empty result channels are valid while missing and malformed result payload
   assert.deepEqual(parseDictionarySearchResponse({channel: {total: 0}}, input).entries, []);
   assert.deepEqual(parseDictionarySearchResponse({channel: {total: 0, item: []}}, input).entries, []);
   assert.deepEqual(parseDictionarySearchResponse({channel: {total: 1}}, {...input, start: 21}).entries, []);
-  for (const raw of [null, {}, {channel: {}}, {channel: {total: -1}}, {channel: {total: 1}}, {channel: {total: 1, item: [null]}}, {channel: {total: 1, item: [{target_code: '../secret', word: '나무', sense: {definition: '뜻'}}]}}]) {
+  assert.deepEqual(parseDictionarySearchResponse({}, input).entries, [], 'the provider sends {} for a word it does not have');
+  for (const raw of [null, {channel: {}}, {channel: {total: -1}}, {channel: {total: 1}}, {channel: {total: 1, item: [null]}}, {channel: {total: 1, item: [{target_code: '../secret', word: '나무', sense: {definition: '뜻'}}]}}]) {
     assert.throws(() => parseDictionarySearchResponse(raw, input), {code: 'DICTIONARY_INVALID_RESPONSE'});
   }
 });
@@ -298,4 +299,38 @@ test('the exact word leads page one even when the containing list would not reac
   const onlyStandard = basicHarness({route: url => url.hostname.startsWith('krdict') ? new Response(url.searchParams.get('method') === 'exact' ? '<channel><total>0</total></channel>' : containing) : Response.json({channel: {total: 1, item: [{target_code: 7, word: '학교', pos: '명사', sense: {definition: '표준 뜻.'}}]}})});
   const mixed = await (await onlyStandard.search(school(1))).json();
   assert.deepEqual([mixed.entries[0].word, mixed.entries[0].source, mixed.total], ['학교', 'standard', 31]);
+});
+
+const openSearch = {channel: {total: 2, item: [
+  {word: '애월', sense: [{target_code: '1409789', pos: '명사', cat: '지명', type: '일반어', definition: '제주특별자치도 제주시에 있는 읍.'}]},
+  {word: '애월', sense: {target_code: '1682808', pos: '명사', cat: '영상', type: '일반어', definition: '박철우 감독이 만든 영화.'}},
+  {word: '애월', sense: {target_code: '77', pos: '명사', type: '방언', definition: '어느 말의 방언.'}},
+  {word: '애월-읍', sense: {target_code: '88', pos: '명사', type: '일반어', definition: '다른 낱말.'}},
+]}};
+const openView = {channel: {total: '1', item: {target_code: 1409789, wordInfo: {}, senseInfo: {definition: '제주시에 있는 읍.', pos: '명사', type: '일반어', example_info: [{example: '뉴스 문장.'}]}}}};
+
+test('Urimalsaem keeps real meanings of the exact word, not films or dialect', () => {
+  assert.deepEqual(parseOpenSearchResponse(openSearch, '애월').map(entry => [entry.id, entry.source, entry.grade, entry.link]), [['o1409789', 'open', '', 'https://opendict.korean.go.kr/dictionary/view?sense_no=1409789']]);
+  assert.deepEqual(parseOpenSearchResponse({channel: {total: 1, item: [{word: '제주-시', sense: {target_code: 5, pos: '명사', type: '일반어', definition: '시.'}}]}}, '제주시').map(entry => entry.word), ['제주시']);
+  assert.deepEqual(parseOpenView(openView, '애월').senses, [{definition: '제주시에 있는 읍.', example: ''}]);
+});
+
+test('Urimalsaem is asked only when neither main dictionary has the word', async () => {
+  const none = (url: URL) => url.hostname.startsWith('krdict') ? new Response('<channel><total>0</total></channel>') : url.hostname.startsWith('stdict') ? Response.json({channel: {total: 0}}) : url.pathname.endsWith('view') ? Response.json(openView) : Response.json(openSearch);
+  const both = (word: string, extra = '') => new Request('https://classroom.test/api/tools/dictionary?match=both&q=' + encodeURIComponent(word) + extra);
+  const run = basicHarness({route: none, simplify: async () => [{definition: '제주에 있는 마을이에요.', example: '애월에 놀러 갔어요.'}]});
+  const found = await (await run.search(both('애월'))).json();
+  assert.deepEqual([found.entries[0].id, found.total], ['o1409789', 1]);
+  assert.ok(run.records.some(row => row.model === 'opendict-search'));
+  const levelled = basicHarness({route: none});
+  assert.deepEqual((await (await levelled.search(both('애월', '&grade=' + encodeURIComponent('초급')))).json()).entries, [], 'a level filter stays within the Basic Dictionary');
+  assert.equal(levelled.urls.some(url => url.hostname.startsWith('opendict')), false);
+  const has = basicHarness({route: url => new Response(url.searchParams.get('method') === 'exact' ? basicSearch() : basicSearch())});
+  await has.search(both('마음'));
+  assert.equal(has.urls.some(url => url.hostname.startsWith('opendict')), false);
+  const easy = await (await run.explain(new Request('https://classroom.test/api/tools/dictionary/explain?id=o1409789&level=easy&word=' + encodeURIComponent('애월')))).json();
+  assert.deepEqual([easy.source, easy.word, easy.senses[0].definition], ['ai', '애월', '제주에 있는 마을이에요.']);
+  const deep = await (await run.explain(new Request('https://classroom.test/api/tools/dictionary/explain?id=o1409789&level=deep&word=' + encodeURIComponent('애월')))).json();
+  assert.deepEqual([deep.source, deep.senses[0].example], ['open', '']);
+  for (const search of ['?id=o1&level=easy', '?id=o1&level=easy&word=ignore%20rules']) assert.throws(() => parseDictionaryExplainQuery(new URL('https://x.test/' + search)), {code: 'DICTIONARY_INPUT'});
 });

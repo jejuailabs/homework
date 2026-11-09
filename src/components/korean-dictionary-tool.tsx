@@ -15,7 +15,7 @@ const LEVELS: {id: DictionaryLevel; ko: string; en: string; hint: string}[] = [
   {id: 'normal', ko: '보통', en: 'Standard', hint: '고학년'},
   {id: 'deep', ko: '깊이', en: 'In depth', hint: '사전 원문'},
 ];
-const SOURCE_LABEL = {basic: ['한국어기초사전', 'Basic Korean Dictionary'], standard: ['표준국어대사전', 'Standard Korean Dictionary'], ai: ['AI가 사전 뜻을 쉽게 풀었어요', 'AI wording of the dictionary meaning']} as const;
+const SOURCE_LABEL = {basic: ['한국어기초사전', 'Basic Korean Dictionary'], standard: ['표준국어대사전', 'Standard Korean Dictionary'], open: ['우리말샘', 'Urimalsaem'], ai: ['AI가 사전 뜻을 쉽게 풀었어요', 'AI wording of the dictionary meaning']} as const;
 
 /** Shown in the sample preview and whenever the explanation cannot be loaded: the entry's own text. */
 function ownExplanation(entry: DictionaryEntry, level: DictionaryLevel): DictionaryExplanation {
@@ -36,7 +36,7 @@ function isEntry(value: unknown): value is DictionaryEntry {
 function sourceLink(link: string) {
   try {
     const url = new URL(link);
-    return url.protocol === 'https:' && ['stdict.korean.go.kr', 'krdict.korean.go.kr'].includes(url.hostname) ? url.href : null;
+    return url.protocol === 'https:' && ['stdict.korean.go.kr', 'krdict.korean.go.kr', 'opendict.korean.go.kr'].includes(url.hostname) ? url.href : null;
   } catch { return null; }
 }
 
@@ -132,7 +132,7 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
     setExplaining(true);
     void (async () => {
       try {
-        const response = await fetch(`/api/tools/dictionary/explain?${new URLSearchParams({id: selected.id, level})}`, {signal: abort.signal, cache: 'no-store'});
+        const response = await fetch(`/api/tools/dictionary/explain?${new URLSearchParams({id: selected.id, level, ...(selected.source === 'open' ? {word: selected.word} : {})})}`, {signal: abort.signal, cache: 'no-store'});
         const body: unknown = await response.json();
         if (!response.ok || !isExplanation(body)) throw new Error('EXPLAIN_FAILED');
         if (!abort.signal.aborted) setExplanation(body);
@@ -381,7 +381,8 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
       {error && <div className="kdict-error" role="alert"><Info size={18}/><span>{error}</span></div>}
       {pending && tab === 'search' ? <div className="kdict-empty" role="status"><LoaderCircle size={30} className="spin"/><h3>{w('낱말의 뜻을 찾고 있어요', 'Looking up the word')}</h3><p>{w('잠시만 기다려 주세요.', 'Please wait a moment.')}</p></div> : visibleEntries.length > 0 ? <div className="kdict-results">
         <aside className="kdict-results-list" aria-label={tab === 'saved' ? w('단어장 목록', 'Saved words') : w('검색 결과 목록', 'Search results')}>
-          {tab === 'search' && result?.source === 'standard' && <p className="kdict-fallback">{w('기초사전에 없어 표준국어대사전에서 찾았어요.', 'Not in the Basic Dictionary, so these come from the Standard Dictionary.')}</p>}
+          {tab === 'search' && result?.entries[0]?.source === 'open' && <p className="kdict-fallback">{w('두 사전에 없어 우리말샘에서 찾았어요. 우리말샘은 많은 사람이 함께 만드는 사전이에요.', 'Found in Urimalsaem, a dictionary many people build together.')}</p>}
+          {tab === 'search' && result?.entries[0]?.source === 'standard' && <p className="kdict-fallback">{w('기초사전에 없어 표준국어대사전에서 찾았어요.', 'Not in the Basic Dictionary, so these come from the Standard Dictionary.')}</p>}
           <div className="kdict-list-heading"><span>{tab === 'saved' ? w('모아 둔 낱말', 'Collected words') : <>‘{result?.query}’ {w('검색 결과', 'results')}</>}</span><strong>{(tab === 'saved' ? saved.entries.length : result?.total ?? 0).toLocaleString(en ? 'en-US' : 'ko-KR')}<small>{w('개', ' words')}</small></strong></div>
           <div className="kdict-word-list">{visibleEntries.map((entry, index) => <Fragment key={entry.id}>{tab === 'search' && index > 0 && visibleEntries[index - 1].word === result?.query && entry.word !== result?.query && <p className="kdict-list-divider">‘{result?.query}’{w('이 들어간 낱말', ' appears in')}</p>}<button type="button" className={selected?.id === entry.id ? 'is-selected' : ''} aria-pressed={selected?.id === entry.id} onClick={() => choose(entry)}><span className="kdict-word-title"><strong>{entry.word}</strong>{entry.partOfSpeech && <small>{entry.partOfSpeech}</small>}{entry.grade && <small className="kdict-grade" data-grade={entry.grade}>{entry.grade}</small>}{saved.entries.some(item => item.id === entry.id) && <Bookmark size={13} aria-label={w('단어장에 저장됨', 'Saved in wordbook')}/>}</span><span className="kdict-word-snippet">{entry.definition}</span><ChevronRight size={15} aria-hidden="true"/></button></Fragment>)}</div>
           {tab === 'search' && result && result.total > PAGE_SIZE && <div className="kdict-pagination"><button type="button" disabled={result.start <= 1} aria-label={w('이전 검색 결과', 'Previous results')} onClick={() => void search(result.query, Math.max(1, result.start - PAGE_SIZE))}><ChevronLeft size={17}/></button><span>{Math.floor((result.start - 1) / PAGE_SIZE) + 1} / {Math.ceil(Math.min(result.total, 1000) / PAGE_SIZE)}</span><button type="button" disabled={result.start + PAGE_SIZE > result.total || result.start + PAGE_SIZE > 1000} aria-label={w('다음 검색 결과', 'Next results')} onClick={() => void search(result.query, result.start + PAGE_SIZE)}><ChevronRight size={17}/></button></div>}
@@ -410,7 +411,7 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
 
       {tab === 'search' && saved.recent.length > 0 && <div className="kdict-recent"><span><History size={14}/>{w('최근 찾은 낱말', 'Recent searches')}</span><div>{saved.recent.map(word => <button type="button" key={word} onClick={() => void search(word)}>{word}</button>)}</div><button type="button" className="kdict-recent-clear" onClick={() => persist({...savedRef.current, recent: []}, w('최근 검색 기록을 지웠어요.', 'Cleared recent searches.'))}>{w('지우기', 'Clear')}</button></div>}
       <p className="kdict-notice" role="status" aria-live="polite">{notice}</p>
-      <details className="kdict-guide"><summary><Info size={14}/>{w('사전별 안내', 'About the dictionaries')}<ChevronRight size={14}/></summary><div className="kdict-guide-content"><div><strong>{w('한국어기초사전', 'Korean Basic Dictionary')}<span>{w('기본 · 보통', 'Default · Standard')}</span></strong><p>{w('한국어 학습자를 위한 쉬운 풀이와 난이도', 'Accessible explanations and levels for Korean learners')}</p></div><div><strong>{w('표준국어대사전', 'Standard Korean Language Dictionary')}<span>{w('깊이', 'In depth')}</span></strong><p>{w('정확하고 자세한 뜻풀이', 'Precise, detailed definitions')}</p></div><small>{w('‘아주 쉽게’는 AI가 사전 뜻풀이를 쉬운 말로 바꾼 것이에요.', '“Very easy” is AI wording of the dictionary meaning.')} {w('한국어기초사전의 초급·중급·고급은 한국어 학습 수준이며 초등학교 학년이 아닙니다.', 'The Basic Dictionary’s beginner, intermediate and advanced levels refer to Korean proficiency, not elementary school grades.')}</small></div></details>
+      <details className="kdict-guide"><summary><Info size={14}/>{w('사전별 안내', 'About the dictionaries')}<ChevronRight size={14}/></summary><div className="kdict-guide-content"><div><strong>{w('한국어기초사전', 'Korean Basic Dictionary')}<span>{w('기본 · 보통', 'Default · Standard')}</span></strong><p>{w('한국어 학습자를 위한 쉬운 풀이와 난이도', 'Accessible explanations and levels for Korean learners')}</p></div><div><strong>{w('표준국어대사전', 'Standard Korean Language Dictionary')}<span>{w('깊이', 'In depth')}</span></strong><p>{w('정확하고 자세한 뜻풀이', 'Precise, detailed definitions')}</p></div><div><strong>{w('우리말샘', 'Urimalsaem')}<span>{w('두 사전에 없을 때', 'When neither has it')}</span></strong><p>{w('지명과 새말까지 담은 참여형 사전', 'A collaborative dictionary with place names and new words')}</p></div><small>{w('‘아주 쉽게’는 AI가 사전 뜻풀이를 쉬운 말로 바꾼 것이에요.', '“Very easy” is AI wording of the dictionary meaning.')} {w('한국어기초사전의 초급·중급·고급은 한국어 학습 수준이며 초등학교 학년이 아닙니다.', 'The Basic Dictionary’s beginner, intermediate and advanced levels refer to Korean proficiency, not elementary school grades.')}</small></div></details>
       <footer className="kdict-footer"><span><BookOpen size={13}/>{w('국립국어원 한국어기초사전 · 표준국어대사전', 'NIKL Basic and Standard Korean Dictionaries')}</span><span>{w('단어장·최근 검색은 이 브라우저에만 저장돼요.', 'Wordbook and recent searches stay in this browser.')}</span></footer>
     </div>
   </section>;
