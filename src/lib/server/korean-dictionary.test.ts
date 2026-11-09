@@ -269,12 +269,12 @@ test('explanations: normal is the Basic text, easy is AI with a safe fallback, d
 
 test('narration keeps each piece under the audio limit and AI answers must be complete', () => {
   const senses = Array.from({length: 7}, (_, index) => ({definition: '뜻'.repeat(index === 0 ? 2000 : 3), example: index === 1 ? '예문.' : ''}));
-  const pieces = dictionaryNarration({word: '마음', partOfSpeech: '명사', senses});
+  const pieces = dictionaryNarration({word: '마음', senses});
   assert.equal(pieces.length, 5);
   assert.ok(pieces.every(piece => piece.length <= 1000));
-  assert.ok(pieces[0].startsWith('마음. 명사. 첫째 뜻.'));
+  assert.ok(pieces[0].startsWith('마음. 첫째 뜻.'));
   assert.ok(pieces[1].includes('예를 들면, 예문.'));
-  assert.deepEqual(dictionaryNarration({word: '마음', partOfSpeech: '', senses: [{definition: '뜻.', example: ''}]}), ['마음. 뜻.']);
+  assert.deepEqual(dictionaryNarration({word: '마음', senses: [{definition: '뜻.', example: ''}]}), ['마음. 뜻.']);
   assert.deepEqual(parseDictionaryAi('{"senses":[{"definition":" 뜻 ","example":"예"}]}', 1), [{definition: '뜻', example: '예'}]);
   for (const bad of ['not json', '{"senses":[]}', '{"senses":[{"definition":"","example":""}]}']) assert.equal(parseDictionaryAi(bad, 1), null);
 });

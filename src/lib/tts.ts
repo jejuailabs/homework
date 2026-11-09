@@ -19,6 +19,8 @@ export const ttsSources = ['cards', 'speech', 'dictionary'] as const;
 export type TtsSource = (typeof ttsSources)[number];
 export const ttsSource = (value: unknown): TtsSource | undefined => ttsSources.find(source => source === value);
 export const ttsToolName = (source?: TtsSource) => source ? `tts-${source}` : 'tts';
+/** Dictionary narration reads whole sentences, where Chirp 3 HD sounds natural; single-word cards stay on the default. */
+export const ttsFamilyFor = (source: TtsSource | undefined, family: TtsFamily): TtsFamily => source === 'dictionary' ? 'chirp3-hd' : family;
 
 /** Same text, same audio: NFC, one space between words, no edges. */
 export function normalizeTtsText(value: unknown) {

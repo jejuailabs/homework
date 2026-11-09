@@ -9,7 +9,7 @@ import {aiWindows, readBoundedJson} from './ai-policy';
 import {ApiError, id} from './policy';
 import {stableReadUrl} from './signed-urls';
 import {FILE_CACHE_CONTROL} from '../storage-cache';
-import {ttsSource, ttsToolName, type TtsSource} from '../tts';
+import {ttsFamilyFor, ttsSource, ttsToolName, type TtsSource} from '../tts';
 import {ttsAllowance, ttsAudio, ttsAudioContent, ttsConfig, ttsSynthesizeBody, TtsError, type TtsDeps, type TtsResult, type TtsSynthesis} from './tts-core';
 
 const GOOGLE_TTS_URL = 'https://texttospeech.googleapis.com/v1/text:synthesize';
@@ -92,9 +92,9 @@ function assertBurst(uid: string, now = Date.now()) {
 }
 
 export function ttsDeps(ctx: Context, requestedClass?: string, source?: TtsSource): TtsDeps {
-  const tool = ttsToolName(source);
+  const tool = ttsToolName(source), config = ttsConfig(process.env);
   return {
-    config: ttsConfig(process.env), hash, sleep, known, inflight, save, synthesize,
+    config: {...config, family: ttsFamilyFor(source, config.family)}, hash, sleep, known, inflight, save, synthesize,
     exists: async path => (await bucket().file(path).exists())[0],
     readUrl: path => stableReadUrl(path),
     spend: characters => spend(ctx, characters),
