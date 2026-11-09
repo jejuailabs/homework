@@ -40,6 +40,9 @@ test('a student call counts for the class teacher; classless and unknown classes
   assert.equal(aiUsageTeacher('teacherB','',owners),'teacherB');
   assert.equal(aiUsageTeacher('student2','gone',owners),'student2');
 });
+test('free dictionary APIs are a known zero cost',()=>{
+  assert.equal(aiProviderUsage({},'krdict-search').estimatedUsd,0);assert.equal(aiProviderUsage({},'stdict-view').estimatedUsd,0);assert.equal(aiProviderUsage({},'some-other-api').estimatedUsd,null);
+});
 test('voice characters and free reuse are totalled per teacher, class, feature and Korean-time hour',()=>{
   const usage=aiProviderUsage({},'google-tts-neural2',{characters:1000}),jobs=[{actorUid:'teacherA',classId:'class1',tool:'tts-cards',model:'google-tts-neural2',status:'done',createdAt:'2026-11-09T01:30:00.000Z',usage}];
   const hits=[{uid:'teacherA',classId:'class1',tool:'tts-cards',model:'google-tts-neural2',hour:'2026-11-09T10',hits:3,characters:300},{uid:'teacherA',classId:'',tool:'tts-speech',model:'google-tts-neural2',hour:'2026-11-09T11',hits:1,characters:50}];

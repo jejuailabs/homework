@@ -11,6 +11,7 @@
 - Teacher attribution: a call with a class counts for that class's teacher at report time, so students' use (and past records) land on the teacher. A call whose class no longer exists stays under the caller.
 - Read-aloud is split by screen (`tts-cards`, `tts-speech`, `tts-dictionary`; older records stay `tts`). Free replays of stored audio are counted per person and Korean-time hour in `aiUsageHits` from this release on; audio already held on the device is not counted.
 - `/admin/api-usage` shows an hourly table for the selected teacher or class, and a CSV with one row per hour, teacher, feature and model. Reports stay limited to 31 days per query.
+- Korean dictionary: each call to the National Institute of Korean Language APIs is recorded at a known zero cost (`dictionary-search`, `dictionary-explain`); answers from the server's short cache count as reuse. AI wording is `dictionary-easy` (shared in `dictionaryAiCache`, so a word is paid for once) and narration is `tts-dictionary`.
 - Accounting starts when this release is deployed. Historical request counts remain visible, but missing token, cost or class metadata is not reconstructed.
 
 Pricing sources: [OpenAI pricing](https://developers.openai.com/api/docs/pricing), [Google Cloud Text-to-Speech pricing](https://cloud.google.com/text-to-speech/pricing), [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [Firestore pricing](https://firebase.google.com/docs/firestore/pricing).

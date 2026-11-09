@@ -11,10 +11,12 @@ const policy = moduleUrl(compile('./policy.ts').replace("'../characters'", JSON.
 // Authentication is replaced before importing: this suite cannot initialize
 // Firebase, use real credentials or make a network request through the route.
 const auth = moduleUrl('export async function requireTeacher() { throw new Error("Offline test must inject authentication"); }');
+const shared = moduleUrl(compile('../korean-dictionary.ts'));
 const dictionary = moduleUrl(compile('./korean-dictionary.ts')
   .replace("import 'server-only';", '')
   .replace("'./auth'", JSON.stringify(auth))
   .replace("'./policy'", JSON.stringify(policy)));
 await import(moduleUrl(compile('./korean-dictionary.test.ts')
   .replace("'./policy'", JSON.stringify(policy))
-  .replace("'./korean-dictionary'", JSON.stringify(dictionary))));
+  .replace("'./korean-dictionary'", JSON.stringify(dictionary))
+  .replace("'../korean-dictionary'", JSON.stringify(shared))));

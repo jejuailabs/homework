@@ -1,4 +1,4 @@
-import {dictionaryRoute} from '@/lib/server/korean-dictionary';
+import {dictionaryRoute} from '@/lib/server/korean-dictionary-route';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
