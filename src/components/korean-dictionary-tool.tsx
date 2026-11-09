@@ -1,12 +1,11 @@
 'use client';
 
-import {useEffect, useId, useRef, useState, type FormEvent} from 'react';
+import {Fragment, useEffect, useId, useRef, useState, type FormEvent} from 'react';
 import {ArrowDownRight, ArrowUpRight, Bookmark, BookOpen, Check, ChevronLeft, ChevronRight, History, Info, LoaderCircle, Search, Square, Volume2, X} from 'lucide-react';
 import {DICTIONARY_GRADES, DICTIONARY_PREVIEW_ENTRIES, DICTIONARY_SUGGESTIONS, dictionaryNarration, type DictionaryEntry, type DictionaryExplanation, type DictionaryGrade, type DictionaryLevel, type DictionarySearchResult} from '@/lib/korean-dictionary';
 import {ttsPlayer} from '@/lib/tts-client';
 import '@/styles/korean-dictionary.css';
 
-type Match = 'exact' | 'include';
 type SavedWords = {entries: DictionaryEntry[]; recent: string[]};
 const PAGE_SIZE = 20;
 const BOOKMARK_LIMIT = 50;
@@ -41,8 +40,9 @@ function sourceLink(link: string) {
   } catch { return null; }
 }
 
-function previewResult(query: string, match: Match, start: number, grade: DictionaryGrade | '' = ''): DictionarySearchResult {
-  const entries = DICTIONARY_PREVIEW_ENTRIES.filter(entry => (match === 'exact' ? entry.word === query : entry.word.includes(query)) && (!grade || entry.grade === grade));
+function previewResult(query: string, start: number, grade: DictionaryGrade | '' = ''): DictionarySearchResult {
+  const found = DICTIONARY_PREVIEW_ENTRIES.filter(entry => entry.word.includes(query) && (!grade || entry.grade === grade));
+  const entries = [...found.filter(entry => entry.word === query), ...found.filter(entry => entry.word !== query)];
   return {query, total: entries.length, start, num: PAGE_SIZE, entries: entries.slice(start - 1, start - 1 + PAGE_SIZE), source: 'basic'};
 }
 
@@ -51,10 +51,8 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
   const w = (ko: string, english: string) => en ? english : ko;
   const searchId = useId();
   const [query, setQuery] = useState(preview ? '마음' : '');
-  const [match, setMatch] = useState<Match>('include');
-  const [result, setResult] = useState<DictionarySearchResult | null>(() => preview ? previewResult('마음', 'include', 1) : null);
-  const [resultMatch, setResultMatch] = useState<Match>('include');
-  const [selectedId, setSelectedId] = useState<string | null>(() => preview ? previewResult('마음', 'include', 1).entries[0]?.id ?? null : null);
+  const [result, setResult] = useState<DictionarySearchResult | null>(() => preview ? previewResult('마음', 1) : null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => preview ? previewResult('마음', 1).entries[0]?.id ?? null : null);
   const [tab, setTab] = useState<'search' | 'saved'>('search');
   const [saved, setSaved] = useState<SavedWords>({entries: [], recent: []});
   const [pending, setPending] = useState(false);
@@ -267,7 +265,7 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
 
   function chooseGrade(next: DictionaryGrade | '') {
     setGrade(next);
-    if (result) void search(result.query, 1, resultMatch, next);
+    if (result) void search(result.query, 1, next);
   }
 
   function persist(next: SavedWords, successMessage = '') {
@@ -284,7 +282,7 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
     }
   }
 
-  async function search(value: string, start = 1, searchMatch = match, searchGrade = grade) {
+  async function search(value: string, start = 1, searchGrade = grade) {
     const cleanQuery = value.trim().normalize('NFC');
     if (!cleanQuery || [...cleanQuery].length > 80) {
       setError(w('찾을 낱말을 1~80자로 입력해 주세요.', 'Enter a word of 1–80 characters.'));
@@ -307,9 +305,9 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
     try {
       let data: DictionarySearchResult;
       if (preview) {
-        data = previewResult(cleanQuery, searchMatch, start, searchGrade);
+        data = previewResult(cleanQuery, start, searchGrade);
       } else {
-        const params = new URLSearchParams({q: cleanQuery, start: String(start), match: searchMatch, ...(searchGrade ? {grade: searchGrade} : {})});
+        const params = new URLSearchParams({q: cleanQuery, start: String(start), match: 'both', ...(searchGrade ? {grade: searchGrade} : {})});
         const response = await fetch(`/api/tools/dictionary?${params}`, {signal: abort.signal, cache: 'no-store'});
         const body = await response.json();
         if (!response.ok) {
@@ -327,7 +325,6 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
       }
       if (version !== requestVersion.current || abort.signal.aborted) return;
       setResult(data);
-      setResultMatch(searchMatch);
       setSelectedId(data.entries[0]?.id ?? null);
       const current = savedRef.current;
       persist({...current, recent: [cleanQuery, ...current.recent.filter(item => item !== cleanQuery)].slice(0, 8)});
@@ -374,7 +371,7 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
       <form className="kdict-search-form" onSubmit={submit} role="search" aria-label={w('국어사전 낱말 검색', 'Search Korean words')}>
         <label className="kdict-sr-only" htmlFor={searchId}>{w('찾을 낱말', 'Word to find')}</label>
         <div className="kdict-search-box"><Search size={22} aria-hidden="true"/><input id={searchId} ref={input} value={query} maxLength={160} onChange={event => setQuery(event.target.value)} placeholder={w('궁금한 낱말을 써 봐! 예: 마음', 'Try a word, like 마음')} autoComplete="off" spellCheck={false}/>{query && <button type="button" className="kdict-clear" aria-label={w('검색어 지우기', 'Clear search')} onClick={() => {setQuery(''); input.current?.focus();}}><X size={17}/></button>}<button className="kdict-search-submit" type="submit" disabled={pending}>{pending ? <LoaderCircle size={17} className="spin"/> : <Search size={17}/>}<span>{w('찾기', 'Search')}</span></button></div>
-        <div className="kdict-search-options"><div className="kdict-match" role="group" aria-label={w('검색 방식', 'Search mode')}><button type="button" aria-pressed={match === 'include'} onClick={() => setMatch('include')}>{w('포함한 낱말', 'Contains')}</button><button type="button" aria-pressed={match === 'exact'} onClick={() => setMatch('exact')}>{w('일치하는 낱말', 'Exact word')}</button></div><span>{preview ? w('예시 낱말만 검색돼요', 'Searches sample words only') : w('낱말을 입력하고 찾기를 눌러 주세요', 'Enter a word, then select Search')}</span></div>
+        <div className="kdict-search-options"><span>{preview ? w('예시 낱말만 검색돼요', 'Searches sample words only') : w('낱말을 입력하고 찾기를 눌러 주세요', 'Enter a word, then select Search')}</span></div>
         <div className="kdict-grades" role="group" aria-label={w('난이도로 거르기', 'Filter by level')}><span>{w('난이도', 'Level')}</span><button type="button" aria-pressed={grade === ''} onClick={() => chooseGrade('')}>{w('전체', 'All')}</button>{DICTIONARY_GRADES.map(item => <button type="button" key={item} data-grade={item} aria-pressed={grade === item} onClick={() => chooseGrade(item)}>{item}</button>)}</div>
       </form>
 
@@ -386,8 +383,8 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
         <aside className="kdict-results-list" aria-label={tab === 'saved' ? w('단어장 목록', 'Saved words') : w('검색 결과 목록', 'Search results')}>
           {tab === 'search' && result?.source === 'standard' && <p className="kdict-fallback">{w('기초사전에 없어 표준국어대사전에서 찾았어요.', 'Not in the Basic Dictionary, so these come from the Standard Dictionary.')}</p>}
           <div className="kdict-list-heading"><span>{tab === 'saved' ? w('모아 둔 낱말', 'Collected words') : <>‘{result?.query}’ {w('검색 결과', 'results')}</>}</span><strong>{(tab === 'saved' ? saved.entries.length : result?.total ?? 0).toLocaleString(en ? 'en-US' : 'ko-KR')}<small>{w('개', ' words')}</small></strong></div>
-          <div className="kdict-word-list">{visibleEntries.map(entry => <button type="button" key={entry.id} className={selected?.id === entry.id ? 'is-selected' : ''} aria-pressed={selected?.id === entry.id} onClick={() => choose(entry)}><span className="kdict-word-title"><strong>{entry.word}</strong>{entry.partOfSpeech && <small>{entry.partOfSpeech}</small>}{entry.grade && <small className="kdict-grade" data-grade={entry.grade}>{entry.grade}</small>}{saved.entries.some(item => item.id === entry.id) && <Bookmark size={13} aria-label={w('단어장에 저장됨', 'Saved in wordbook')}/>}</span><span className="kdict-word-snippet">{entry.definition}</span><ChevronRight size={15} aria-hidden="true"/></button>)}</div>
-          {tab === 'search' && result && result.total > PAGE_SIZE && <div className="kdict-pagination"><button type="button" disabled={result.start <= 1} aria-label={w('이전 검색 결과', 'Previous results')} onClick={() => void search(result.query, Math.max(1, result.start - PAGE_SIZE), resultMatch)}><ChevronLeft size={17}/></button><span>{Math.floor((result.start - 1) / PAGE_SIZE) + 1} / {Math.ceil(Math.min(result.total, 1000) / PAGE_SIZE)}</span><button type="button" disabled={result.start + result.entries.length > result.total || result.entries.length === 0 || result.start + PAGE_SIZE > 1000} aria-label={w('다음 검색 결과', 'Next results')} onClick={() => void search(result.query, result.start + PAGE_SIZE, resultMatch)}><ChevronRight size={17}/></button></div>}
+          <div className="kdict-word-list">{visibleEntries.map((entry, index) => <Fragment key={entry.id}>{tab === 'search' && index > 0 && visibleEntries[index - 1].word === result?.query && entry.word !== result?.query && <p className="kdict-list-divider">‘{result?.query}’{w('이 들어간 낱말', ' appears in')}</p>}<button type="button" className={selected?.id === entry.id ? 'is-selected' : ''} aria-pressed={selected?.id === entry.id} onClick={() => choose(entry)}><span className="kdict-word-title"><strong>{entry.word}</strong>{entry.partOfSpeech && <small>{entry.partOfSpeech}</small>}{entry.grade && <small className="kdict-grade" data-grade={entry.grade}>{entry.grade}</small>}{saved.entries.some(item => item.id === entry.id) && <Bookmark size={13} aria-label={w('단어장에 저장됨', 'Saved in wordbook')}/>}</span><span className="kdict-word-snippet">{entry.definition}</span><ChevronRight size={15} aria-hidden="true"/></button></Fragment>)}</div>
+          {tab === 'search' && result && result.total > PAGE_SIZE && <div className="kdict-pagination"><button type="button" disabled={result.start <= 1} aria-label={w('이전 검색 결과', 'Previous results')} onClick={() => void search(result.query, Math.max(1, result.start - PAGE_SIZE))}><ChevronLeft size={17}/></button><span>{Math.floor((result.start - 1) / PAGE_SIZE) + 1} / {Math.ceil(Math.min(result.total, 1000) / PAGE_SIZE)}</span><button type="button" disabled={result.start + PAGE_SIZE > result.total || result.start + PAGE_SIZE > 1000} aria-label={w('다음 검색 결과', 'Next results')} onClick={() => void search(result.query, result.start + PAGE_SIZE)}><ChevronRight size={17}/></button></div>}
         </aside>
         {selected && <article className="kdict-definition" aria-label={w('선택한 낱말 뜻풀이', 'Selected word definition')}>
           <div className="kdict-definition-top"><span className="kdict-entry-label">{w('낱말을 발견했어요!', 'WORD DISCOVERED!')}</span><button type="button" className={`kdict-bookmark${selectedSaved ? ' is-saved' : ''}`} disabled={!storageReady} aria-pressed={selectedSaved} onClick={toggleBookmark}>{selectedSaved ? <Check size={16}/> : <Bookmark size={16}/>}<span>{selectedSaved ? w('담았어요', 'Saved') : w('단어장에 쏙', 'Save word')}</span></button></div>
@@ -409,7 +406,7 @@ export default function KoreanDictionaryTool({locale, storageScope, preview = fa
           <div className="kdict-think"><img className="kdict-think-friend" src="/characters/hamster-kong.webp" alt=""/><div><strong>{w('콩이의 작은 도전', 'Kong’s little challenge')}</strong><p>{w('이 낱말을 넣어 나만의 문장을 말해 볼까?', 'Can you make your own sentence with this word?')}</p></div></div>
           <footer className="kdict-definition-footer"><span>{preview ? w('화면 구성을 위한 예시 뜻풀이', 'Sample definition for this preview') : w('국립국어원 제공', 'Source: National Institute of Korean Language')}</span>{selectedSource && <a href={selectedSource} target="_blank" rel="noopener noreferrer">{w('사전 원문 보기', 'Open dictionary source')}<ArrowUpRight size={14}/></a>}</footer>
         </article>}
-      </div> : <div className="kdict-empty"><span className="kdict-empty-icon"><BookOpen size={36} strokeWidth={1.25}/></span><h3>{tab === 'saved' ? w('기억하고 싶은 낱말을 담아 보세요', 'Collect words you want to remember') : result ? w('찾은 낱말이 없어요', 'No words found') : w('낱말 하나에서 시작하는 발견', 'A discovery begins with one word')}</h3><p>{tab === 'saved' ? w('뜻풀이 옆 ‘단어장에 담기’를 누르면 여기에 모여요.', 'Select “Save word” beside a definition to collect it here.') : result ? (preview ? w('이 시안에서는 마음·배려·탐구 등 예시 낱말을 찾아볼 수 있어요.', 'This preview contains sample words such as 마음, 배려 and 탐구.') : w('철자를 확인하거나 ‘포함한 낱말’로 다시 찾아보세요.', 'Check your spelling or try the “Contains” search mode.')) : w('궁금했던 우리말의 뜻을 천천히 알아가요.', 'Take a moment to discover the meaning of a Korean word.')}</p></div>}
+      </div> : <div className="kdict-empty"><span className="kdict-empty-icon"><BookOpen size={36} strokeWidth={1.25}/></span><h3>{tab === 'saved' ? w('기억하고 싶은 낱말을 담아 보세요', 'Collect words you want to remember') : result ? w('찾은 낱말이 없어요', 'No words found') : w('낱말 하나에서 시작하는 발견', 'A discovery begins with one word')}</h3><p>{tab === 'saved' ? w('뜻풀이 옆 ‘단어장에 담기’를 누르면 여기에 모여요.', 'Select “Save word” beside a definition to collect it here.') : result ? (preview ? w('이 시안에서는 마음·배려·탐구 등 예시 낱말을 찾아볼 수 있어요.', 'This preview contains sample words such as 마음, 배려 and 탐구.') : w('철자를 확인하고 다시 찾아보세요.', 'Check your spelling and try again.')) : w('궁금했던 우리말의 뜻을 천천히 알아가요.', 'Take a moment to discover the meaning of a Korean word.')}</p></div>}
 
       {tab === 'search' && saved.recent.length > 0 && <div className="kdict-recent"><span><History size={14}/>{w('최근 찾은 낱말', 'Recent searches')}</span><div>{saved.recent.map(word => <button type="button" key={word} onClick={() => void search(word)}>{word}</button>)}</div><button type="button" className="kdict-recent-clear" onClick={() => persist({...savedRef.current, recent: []}, w('최근 검색 기록을 지웠어요.', 'Cleared recent searches.'))}>{w('지우기', 'Clear')}</button></div>}
       <p className="kdict-notice" role="status" aria-live="polite">{notice}</p>

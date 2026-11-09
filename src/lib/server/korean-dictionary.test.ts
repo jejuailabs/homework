@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {ApiError} from './policy';
-import {createDictionaryHandler, createDictionaryHandlers, parseBasicSearchResponse, parseBasicView, parseDictionaryExplainQuery, parseDictionaryQuery, parseDictionarySearchResponse, parseStandardView, type DictionaryCallRecord} from './korean-dictionary';
+import {combineDictionaryResults, createDictionaryHandler, createDictionaryHandlers, parseBasicSearchResponse, parseBasicView, parseDictionaryExplainQuery, parseDictionaryQuery, parseDictionarySearchResponse, parseStandardView, type DictionaryCallRecord} from './korean-dictionary';
 import {dictionaryNarration, parseDictionaryAi} from '../korean-dictionary';
 
 const fixtureKey = '0'.repeat(32);
@@ -277,4 +277,25 @@ test('narration keeps each piece under the audio limit and AI answers must be co
   assert.deepEqual(dictionaryNarration({word: '마음', partOfSpeech: '', senses: [{definition: '뜻.', example: ''}]}), ['마음. 뜻.']);
   assert.deepEqual(parseDictionaryAi('{"senses":[{"definition":" 뜻 ","example":"예"}]}', 1), [{definition: '뜻', example: '예'}]);
   for (const bad of ['not json', '{"senses":[]}', '{"senses":[{"definition":"","example":""}]}']) assert.equal(parseDictionaryAi(bad, 1), null);
+});
+
+test('the exact word leads page one even when the containing list would not reach it, and never repeats', async () => {
+  const item = (code: number, word: string) => `<item><target_code>${code}</target_code><word>${word}</word><pos>명사</pos><word_grade>초급</word_grade><sense><definition>뜻.</definition></sense></item>`;
+  const containing = `<channel><total>30</total>${item(1, '고등학교')}${item(2, '초등학교')}</channel>`, exact = `<channel><total>1</total>${item(9, '학교')}</channel>`;
+  const run = basicHarness({route: url => new Response(url.searchParams.get('method') === 'exact' ? exact : containing)});
+  const school = (start: number) => new Request('https://classroom.test/api/tools/dictionary?match=both&q=' + encodeURIComponent('학교') + '&start=' + start);
+  const first = await (await run.search(school(1))).json();
+  assert.deepEqual(first.entries.map((entry: {word: string}) => entry.word), ['학교', '고등학교', '초등학교']);
+  assert.equal(first.total, 30);
+  const before = run.urls.length;
+  const next = await (await run.search(school(21))).json();
+  assert.deepEqual(next.entries.map((entry: {word: string}) => entry.word), ['고등학교', '초등학교']);
+  assert.equal(run.urls.length, before + 1, 'later pages do not ask for the exact word again');
+  assert.equal(run.urls.at(-1)?.searchParams.get('start'), '2', 'providers count pages, not entries');
+  const entry = (id: string, word: string) => ({id, word, originalWord: '', partOfSpeech: '', definition: '뜻', link: '', source: 'basic' as const, grade: '' as const});
+  const merged = combineDictionaryResults('학교', [entry('k9', '학교')], {query: '학교', total: 2, start: 1, num: 20, source: 'basic', entries: [entry('k9', '학교'), entry('k1', '고등학교')]});
+  assert.deepEqual(merged.entries.map(row => row.id), ['k9', 'k1']);
+  const onlyStandard = basicHarness({route: url => url.hostname.startsWith('krdict') ? new Response(url.searchParams.get('method') === 'exact' ? '<channel><total>0</total></channel>' : containing) : Response.json({channel: {total: 1, item: [{target_code: 7, word: '학교', pos: '명사', sense: {definition: '표준 뜻.'}}]}})});
+  const mixed = await (await onlyStandard.search(school(1))).json();
+  assert.deepEqual([mixed.entries[0].word, mixed.entries[0].source, mixed.total], ['학교', 'standard', 31]);
 });

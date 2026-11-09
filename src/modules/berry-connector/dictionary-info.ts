@@ -5,7 +5,7 @@ export function dictionaryInfo(config: {configured: boolean; disabled: boolean})
     provider: '국립국어원 한국어기초사전(기본)·표준국어대사전(깊이)',
     configured: config.configured,
     available: config.configured && !config.disabled,
-    search_modes: ['exact', 'include'],
+    search_order: '정확히 일치하는 낱말을 맨 위에, 그 아래 포함하는 낱말',
     grade_filter: ['초급', '중급', '고급'],
     explanation_levels: ['아주 쉽게(AI가 사전 뜻을 쉽게 풀이)', '보통(기초사전)', '깊이(표준국어대사전)'],
     result_fields: ['낱말', '뜻풀이', '품사', '난이도', '예문', '원어(제공되는 경우)', '공식 원문 링크'],

@@ -20,7 +20,8 @@ const CACHE_ENTRIES = 120;
 const MAX_LIMIT_USERS = 1_000;
 const MINUTE_REQUESTS = 30;
 
-export type DictionaryQuery = {query: string; start: number; match: 'exact' | 'include'; grade?: DictionaryGrade};
+/** both: the exact word first, then words containing it. The other two go straight to a provider. */
+export type DictionaryQuery = {query: string; start: number; match: 'exact' | 'include' | 'both'; grade?: DictionaryGrade};
 type DictionaryConfig = {key?: string; basicKey?: string; disabled?: string};
 export type DictionaryCallRecord = {uid: string; tool: 'dictionary-search' | 'dictionary-explain'; model: string; cached: boolean; ok: boolean; durationMs: number};
 type DictionaryDependencies = {
@@ -49,7 +50,7 @@ export function parseDictionaryQuery(url: URL): DictionaryQuery {
   const grade = params.get('grade') ?? '';
   if (!query || [...query].length > 80 || /[\u0000-\u001f\u007f]/u.test(query)
     || !/^\d{1,4}$/.test(startText) || Number(startText) < 1 || Number(startText) > 1_000
-    || (match !== 'exact' && match !== 'include')
+    || (match !== 'exact' && match !== 'include' && match !== 'both')
     || (grade !== '' && !Object.hasOwn(GRADE_LEVEL, grade))
     || ['q', 'start', 'match', 'grade'].some(name => params.getAll(name).length > 1)) {
     throw new ApiError(400, '검색어는 1~80자로 입력하고 검색 조건을 확인해 주세요.', 'DICTIONARY_INPUT');
@@ -150,9 +151,7 @@ export function parseBasicSearchResponse(xml: string, input: DictionaryQuery): D
     };
   });
   if (new Set(entries.map(entry => entry.id)).size !== entries.length) throw invalidResponse();
-  // The provider sorts alphabetically; the word a child typed should come first.
-  const ordered = [...entries].sort((a, b) => Number(b.word === input.query) - Number(a.word === input.query));
-  return {query: input.query, total, start: input.start, num: PAGE_SIZE, entries: ordered, source: 'basic'};
+  return {query: input.query, total, start: input.start, num: PAGE_SIZE, entries, source: 'basic'};
 }
 
 export function parseBasicView(xml: string): WordDetail {
@@ -239,6 +238,21 @@ function json(value: unknown, status = 200): Response {
   return Response.json(value, {status, headers: {'Cache-Control': 'private, no-store', ...(status === 429 ? {'Retry-After': '60'} : {})}});
 }
 
+/**
+ * Providers sort alphabetically, so a word can sit pages away from where it is wanted. The exact word always
+ * leads page one; every containing page leaves it out so it never appears twice. `extra` counts exact entries
+ * from another dictionary, which the containing total does not include.
+ */
+export function combineDictionaryResults(query: string, exact: DictionaryEntry[], containing: DictionarySearchResult, extra = 0): DictionarySearchResult {
+  const seen = new Set(exact.map(entry => entry.id));
+  // Affixes such as -배 also match exactly; the plain word goes ahead of them.
+  const leading = [...exact].sort((a, b) => Number(b.word === query) - Number(a.word === query));
+  return {...containing, total: containing.total + extra, entries: [...leading, ...containing.entries.filter(entry => entry.word !== query && !seen.has(entry.id))]};
+}
+
+/** Both providers count `start` in pages, while this API counts entries. */
+const providerPage = (start: number) => String(Math.floor((start - 1) / PAGE_SIZE) + 1);
+
 const failure = (error: unknown) => json({error: error instanceof ApiError ? error.message : '사전 검색을 완료하지 못했어요. 다시 시도해 주세요.', code: error instanceof ApiError ? error.code : 'DICTIONARY_ERROR'}, error instanceof ApiError ? error.status : 500);
 
 export function createDictionaryHandlers(dependencies: DictionaryDependencies) {
@@ -306,7 +320,7 @@ export function createDictionaryHandlers(dependencies: DictionaryDependencies) {
   }
 
   async function standardSearch(uid: string, tool: DictionaryCallRecord['tool'], key: string, input: DictionaryQuery) {
-    const text = await call(uid, tool, 'stdict-search', ENDPOINT, {key, q: input.query, req_type: 'json', start: String(input.start), num: String(PAGE_SIZE), advanced: 'y', target: '1', method: input.match}, 'application/json');
+    const text = await call(uid, tool, 'stdict-search', ENDPOINT, {key, q: input.query, req_type: 'json', start: providerPage(input.start), num: String(PAGE_SIZE), advanced: 'y', target: '1', method: input.match}, 'application/json');
     return parseDictionarySearchResponse(parseJson(text), input);
   }
   const standardView = async (uid: string, key: string, code: string) => parseStandardView(parseJson(await call(uid, 'dictionary-explain', 'stdict-view', STANDARD_VIEW, {key, type_search: 'view', method: 'TARGET_CODE', q: code, req_type: 'json'}, 'application/json')));
@@ -325,15 +339,31 @@ export function createDictionaryHandlers(dependencies: DictionaryDependencies) {
         record({uid, tool: 'dictionary-search', model: (cached.result as DictionarySearchResult).source === 'basic' ? 'krdict-search' : 'stdict-search', cached: true, ok: true});
         return json(cached.result);
       }
+      const firstPage = input.start === 1;
+      const basicSearch = async (match: 'exact' | 'include') => parseBasicSearchResponse(await call(uid, 'dictionary-search', 'krdict-search', BASIC_SEARCH, {key: keys.basicKey, q: input.query, part: 'word', start: providerPage(input.start), num: String(PAGE_SIZE), sort: 'dict', advanced: 'y', method: match, ...(input.grade ? {level: GRADE_LEVEL[input.grade]} : {})}, 'application/xml'), {...input, match});
+      const standardExact = () => standardSearch(uid, 'dictionary-search', keys.key, {query: input.query, start: 1, match: 'exact'});
       let result: DictionarySearchResult | null = null;
       if (keys.basicKey) {
         try {
-          const basic = parseBasicSearchResponse(await call(uid, 'dictionary-search', 'krdict-search', BASIC_SEARCH, {key: keys.basicKey, q: input.query, part: 'word', start: String(input.start), num: String(PAGE_SIZE), sort: 'dict', advanced: 'y', method: input.match, ...(input.grade ? {level: GRADE_LEVEL[input.grade]} : {})}, 'application/xml'), input);
-          if (basic.total > 0 || input.grade) result = basic;
+          if (input.match === 'both') {
+            const [containing, exact] = await Promise.all([basicSearch('include'), firstPage ? basicSearch('exact') : null]);
+            if (containing.total > 0 || exact?.entries.length || input.grade) {
+              // A word only the Standard Dictionary has still belongs at the top, unless a level was asked for.
+              const other = firstPage && !exact?.entries.length && !input.grade ? (await standardExact().catch(() => null))?.entries ?? [] : [];
+              result = combineDictionaryResults(input.query, exact?.entries.length ? exact.entries : other, containing, other.length);
+            }
+          } else {
+            const basic = await basicSearch(input.match);
+            if (basic.total > 0 || input.grade) result = basic;
+          }
         } catch (error) {
           // A level filter only exists in the Basic Dictionary; a plain search can still be answered.
           if (input.grade) throw error;
         }
+      }
+      if (!result && input.match === 'both') {
+        const [containing, exact] = await Promise.all([standardSearch(uid, 'dictionary-search', keys.key, {...input, match: 'include'}), firstPage ? standardExact() : null]);
+        result = combineDictionaryResults(input.query, exact?.entries ?? [], containing);
       }
       result ??= await standardSearch(uid, 'dictionary-search', keys.key, input);
       remember(cacheKey, result);
