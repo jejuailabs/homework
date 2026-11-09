@@ -4,6 +4,12 @@ import {ApiError} from './policy';
 
 const ENDPOINT = 'https://stdict.korean.go.kr/api/search.do';
 const STANDARD_VIEW = 'https://stdict.korean.go.kr/api/view.do';
+const OPEN_SEARCH = 'https://opendict.korean.go.kr/api/search';
+const OPEN_VIEW = 'https://opendict.korean.go.kr/api/view';
+const OPEN_ENTRIES = 8;
+// 우리말샘 also lists films, songs and paintings under ordinary words; those are not what a class is looking up.
+const OPEN_WORK = /감독의|감독이 만든|작사|작곡의|앨범에|화가 .*그린 그림/;
+const OPEN_WORD = /^[가-힣0-9 ]{1,40}$/;
 const BASIC_SEARCH = 'https://krdict.korean.go.kr/api/search';
 const BASIC_VIEW = 'https://krdict.korean.go.kr/api/view';
 const GRADE_LEVEL: Record<DictionaryGrade, string> = {초급: 'level1', 중급: 'level2', 고급: 'level3'};
@@ -58,10 +64,12 @@ export function parseDictionaryQuery(url: URL): DictionaryQuery {
   return {query, start: Number(startText), match, ...(grade ? {grade: grade as DictionaryGrade} : {})};
 }
 
-export function parseDictionaryExplainQuery(url: URL): {id: string; level: DictionaryLevel} {
-  const id = url.searchParams.get('id') ?? '', level = url.searchParams.get('level') ?? 'normal';
-  if (!CODE_PATTERN.test(id.replace(/^k/, '')) || !LEVELS.includes(level as DictionaryLevel)) throw new ApiError(400, '낱말을 다시 골라 주세요.', 'DICTIONARY_INPUT');
-  return {id, level: level as DictionaryLevel};
+export function parseDictionaryExplainQuery(url: URL): {id: string; level: DictionaryLevel; word?: string} {
+  const id = url.searchParams.get('id') ?? '', level = url.searchParams.get('level') ?? 'normal', open = id.startsWith('o');
+  // 우리말샘's detail response has no headword, so the word comes with the request and is held to plain Korean.
+  const word = url.searchParams.get('word') ?? '';
+  if (!CODE_PATTERN.test(id.replace(/^[ko]/, '')) || !LEVELS.includes(level as DictionaryLevel) || (open && !OPEN_WORD.test(word))) throw new ApiError(400, '낱말을 다시 골라 주세요.', 'DICTIONARY_INPUT');
+  return {id, level: level as DictionaryLevel, ...(open ? {word} : {})};
 }
 
 function plainText(value: unknown, maximum: number, optional = false): string {
@@ -74,6 +82,8 @@ function plainText(value: unknown, maximum: number, optional = false): string {
 export function parseDictionarySearchResponse(value: unknown, input: DictionaryQuery): DictionarySearchResult {
   const root = object(value);
   if (!root) throw invalidResponse();
+  // The provider answers a word it does not have with an empty object.
+  if (!Object.keys(root).length) return {query: input.query, total: 0, start: input.start, num: PAGE_SIZE, entries: [], source: 'standard'};
   if (Object.hasOwn(root, 'error')) {
     const code = String(object(root.error)?.error_code ?? '').padStart(3, '0');
     if (code === '020' || code === '021') throw notConfigured();
@@ -222,6 +232,39 @@ async function boundedText(response: Response): Promise<string> {
   catch {throw invalidResponse();}
 }
 
+const openHidden = (type: unknown, categories: unknown[], definition: string) => HIDDEN_SENSE_TYPES.has(String(type)) || categories.includes('영상') || OPEN_WORK.test(definition);
+
+export function parseOpenSearchResponse(value: unknown, query: string): DictionaryEntry[] {
+  const root = object(value);
+  if (!root) throw invalidResponse();
+  if (!Object.keys(root).length) return [];
+  if (Object.hasOwn(root, 'error')) throw unavailable();
+  const channel = object(root.channel);
+  if (!channel) throw invalidResponse();
+  const entries: DictionaryEntry[] = [];
+  for (const raw of list(channel.item)) {
+    const item = object(raw), word = typeof item?.word === 'string' ? item.word.replace(/[-^]/g, '') : '';
+    if (word !== query) continue;
+    for (const senseRaw of list(item?.sense)) {
+      const sense = object(senseRaw), code = String(sense?.target_code ?? ''), definition = cleanText(plainText(sense?.definition, 12_000));
+      if (!CODE_PATTERN.test(code)) throw invalidResponse();
+      if (entries.length >= OPEN_ENTRIES || openHidden(sense?.type, list(sense?.cat), definition)) continue;
+      entries.push({id: 'o' + code, word, originalWord: '', partOfSpeech: typeof sense?.pos === 'string' ? sense.pos : '', definition, link: `https://opendict.korean.go.kr/dictionary/view?sense_no=${code}`, source: 'open', grade: ''});
+    }
+  }
+  return entries;
+}
+
+/** Example sentences here are quoted from news articles, so only the meaning is carried over for children. */
+export function parseOpenView(value: unknown, word: string): WordDetail {
+  const root = object(value);
+  if (!root) throw invalidResponse();
+  if (Object.hasOwn(root, 'error')) throw unavailable();
+  const sense = object(object(list(object(root.channel)?.item)[0])?.senseInfo);
+  if (!sense) throw invalidResponse();
+  return {word, partOfSpeech: typeof sense.pos === 'string' ? sense.pos : '', pronunciation: '', origin: '', idioms: [], senses: [{definition: cleanText(plainText(sense.definition, 12_000)), example: ''}]};
+}
+
 function parseJson(text: string): unknown {
   try {return JSON.parse(text);} catch {throw invalidResponse();}
 }
@@ -366,6 +409,11 @@ export function createDictionaryHandlers(dependencies: DictionaryDependencies) {
         result = combineDictionaryResults(input.query, exact?.entries ?? [], containing);
       }
       result ??= await standardSearch(uid, 'dictionary-search', keys.key, input);
+      if (input.match === 'both' && firstPage && !input.grade && !result.entries.some(entry => entry.word === input.query)) {
+        // Place names and new words: only when neither main dictionary has the word itself.
+        const open = await call(uid, 'dictionary-search', 'opendict-search', OPEN_SEARCH, {key: keys.key, q: input.query, req_type: 'json', num: '10', advanced: 'y', method: 'exact'}, 'application/json').then(text => parseOpenSearchResponse(parseJson(text), input.query)).catch(() => []);
+        if (open.length) result = combineDictionaryResults(input.query, open, result, open.length);
+      }
       remember(cacheKey, result);
       return json(result);
     } catch (error) {return failure(error);}
@@ -384,18 +432,18 @@ export function createDictionaryHandlers(dependencies: DictionaryDependencies) {
     try {
       if (request.method !== 'GET') throw new ApiError(405, '요청을 확인해 주세요.', 'METHOD_NOT_ALLOWED');
       assertSameOrigin(request);
-      const {id, level} = parseDictionaryExplainQuery(new URL(request.url));
-      const keys = settings(), basic = id.startsWith('k'), code = id.replace(/^k/, '');
+      const {id, level, word} = parseDictionaryExplainQuery(new URL(request.url));
+      const keys = settings(), basic = id.startsWith('k'), open = id.startsWith('o'), code = id.replace(/^[ko]/, '');
       if (basic && !keys.basicKey) throw notConfigured();
       const uid = await admit(request, keys);
-      const cacheKey = JSON.stringify(['explain', id, level]);
+      const cacheKey = JSON.stringify(['explain', id, level, word ?? '']);
       const cached = cache.get(cacheKey);
       if (cached) {
-        record({uid, tool: 'dictionary-explain', model: basic ? 'krdict-view' : 'stdict-view', cached: true, ok: true});
+        record({uid, tool: 'dictionary-explain', model: basic ? 'krdict-view' : open ? 'opendict-view' : 'stdict-view', cached: true, ok: true});
         return json(cached.result);
       }
-      const detail = basic ? parseBasicView(await call(uid, 'dictionary-explain', 'krdict-view', BASIC_VIEW, {key: keys.basicKey, method: 'target_code', q: code}, 'application/xml')) : await standardView(uid, keys.key, code);
-      const own: DictionarySource = basic ? 'basic' : 'standard';
+      const detail = basic ? parseBasicView(await call(uid, 'dictionary-explain', 'krdict-view', BASIC_VIEW, {key: keys.basicKey, method: 'target_code', q: code}, 'application/xml')) : open ? parseOpenView(parseJson(await call(uid, 'dictionary-explain', 'opendict-view', OPEN_VIEW, {key: keys.key, method: 'target_code', q: code, req_type: 'json'}, 'application/json')), word ?? '') : await standardView(uid, keys.key, code);
+      const own: DictionarySource = basic ? 'basic' : open ? 'open' : 'standard';
       let shown = detail, source: DictionaryExplanation['source'] = own, fallback = false;
       if (level === 'deep') {
         if (basic) {const deep = await deepDetail(uid, keys.key, detail); shown = deep.detail; source = deep.found ? 'standard' : 'basic';}

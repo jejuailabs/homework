@@ -4,7 +4,7 @@ export type AiUsageHints={audioSeconds?:number;serviceTier?:string;characters?:n
 /** Google Cloud Text-to-Speech, USD per 1M input characters (list price checked 2026-11-08). Cache hits are never metered. */
 export const TTS_USD_PER_MILLION_CHARS:Record<string,number>={'google-tts-chirp3-hd':30,'google-tts-neural2':16};
 /** National Institute of Korean Language APIs have no per-call charge; a known zero, not an unknown cost. */
-export const FREE_API_MODELS=new Set(['krdict-search','krdict-view','stdict-search','stdict-view']);
+export const FREE_API_MODELS=new Set(['krdict-search','krdict-view','stdict-search','stdict-view','opendict-search','opendict-view']);
 export type AiUsageObserver=(payload:unknown,hints?:AiUsageHints)=>void;
 const record=(value:unknown):Record<string,unknown>=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
 const amount=(value:unknown)=>typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1_000_000_000?value:null;

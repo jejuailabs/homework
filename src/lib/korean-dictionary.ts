@@ -2,8 +2,8 @@ export const DICTIONARY_GRADES = ['초급', '중급', '고급'] as const;
 export type DictionaryGrade = (typeof DICTIONARY_GRADES)[number];
 export const DICTIONARY_LEVELS = ['easy', 'normal', 'deep'] as const;
 export type DictionaryLevel = (typeof DICTIONARY_LEVELS)[number];
-/** basic: 한국어기초사전, the children's default. standard: 표준국어대사전. */
-export type DictionarySource = 'basic' | 'standard';
+/** basic: 한국어기초사전, the children's default. standard: 표준국어대사전. open: 우리말샘, for words neither has. */
+export type DictionarySource = 'basic' | 'standard' | 'open';
 
 export type DictionaryEntry = {
   id: string;
