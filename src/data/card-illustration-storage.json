@@ -1,6 +1,6 @@
 {
-  "ready": false,
+  "ready": true,
   "bucket": "book-9b8ce.firebasestorage.app",
-  "prefix": "cards/vocabulary/v1",
+  "prefix": "cards/vocabulary/v2",
   "downloadToken": "61eb2984-246d-4a99-95fe-28e8e83ff882"
 }
