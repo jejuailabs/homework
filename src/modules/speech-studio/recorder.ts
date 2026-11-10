@@ -34,7 +34,7 @@ function classify(error: unknown): MicProblem {
 
 export type Take = {samples: Float32Array; wav: Uint8Array; url: string; seconds: number};
 
-async function toTake(blob: Blob): Promise<Take> {
+async function toTake(blob: Blob, maxSeconds: number): Promise<Take> {
   const browser = globalThis as typeof globalThis & {webkitAudioContext?: typeof AudioContext; webkitOfflineAudioContext?: typeof OfflineAudioContext};
   const Audio = browser.AudioContext || browser.webkitAudioContext, Offline = browser.OfflineAudioContext || browser.webkitOfflineAudioContext;
   if (!Audio || !Offline) throw new Error('이 브라우저에서는 녹음을 바꿀 수 없어요. 최신 크롬·사파리에서 다시 녹음해 주세요.');
@@ -42,7 +42,7 @@ async function toTake(blob: Blob): Promise<Take> {
   try {
     const decoded = await context.decodeAudioData(await blob.arrayBuffer());
     if (!Number.isFinite(decoded.duration) || decoded.duration < 0.5) throw new Error('녹음이 너무 짧아요. 조금 더 길게 다시 녹음해 주세요.');
-    const length = Math.min(SPEECH_RATE_HZ * SPEECH_MAX_SECONDS, Math.floor(decoded.duration * SPEECH_RATE_HZ));
+    const length = Math.min(SPEECH_RATE_HZ * maxSeconds, Math.floor(decoded.duration * SPEECH_RATE_HZ));
     const offline = new Offline(1, length, SPEECH_RATE_HZ), source = offline.createBufferSource();
     source.buffer = decoded; source.connect(offline.destination); source.start();
     const samples = (await offline.startRendering()).getChannelData(0), wav = pcmWav(samples);
@@ -54,7 +54,7 @@ async function toTake(blob: Blob): Promise<Take> {
  * One take at a time: start, a live level for the meter, stop at two minutes. A blocked microphone is
  * watched, so allowing it in the browser settings clears the problem without a reload.
  */
-export function useRecorder(onTake: (take: Take) => void) {
+export function useRecorder(onTake: (take: Take) => void, maxSeconds = SPEECH_MAX_SECONDS) {
   const [state, setState] = useState<'idle' | 'starting' | 'recording' | 'processing'>('idle');
   const [problem, setProblem] = useState<MicProblem | null>(null), [error, setError] = useState('');
   const [seconds, setSeconds] = useState(0), [level, setLevel] = useState(0);
@@ -99,7 +99,7 @@ export function useRecorder(onTake: (take: Take) => void) {
         release();
         if (cancelled.current || !alive.current) {if (alive.current) setState('idle'); return;}
         setState('processing');
-        try {const take = await toTake(new Blob(parts.current, {type})); if (alive.current) handler.current(take);}
+        try {const take = await toTake(new Blob(parts.current, {type}), maxSeconds); if (alive.current) handler.current(take);}
         catch (reason) {if (alive.current) setError(reason instanceof Error ? reason.message : '녹음을 처리하지 못했어요.');}
         finally {if (alive.current) setState('idle');}
       };
@@ -121,13 +121,13 @@ export function useRecorder(onTake: (take: Take) => void) {
       timers.current.push(window.setInterval(() => {
         const elapsed = Math.floor((Date.now() - began) / 1000);
         setSeconds(elapsed);
-        if (elapsed >= SPEECH_MAX_SECONDS && rec.state === 'recording') rec.stop();
+        if (elapsed >= maxSeconds && rec.state === 'recording') rec.stop();
       }, 250));
     } catch (reason) {
       release();
       if (alive.current) {setProblem(classify(reason)); setState('idle');}
     }
-  }, [release, state]);
+  }, [maxSeconds, release, state]);
 
   const stop = useCallback((discard = false) => {
     cancelled.current = discard;
