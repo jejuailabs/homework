@@ -126,6 +126,11 @@ export function shuffleWith<T>(values: T[], random: (max: number) => number) {
 }
 const cardPrompt = (card: CardEntry, direction: CardDirection) => card.drill || direction === 'front-back' ? card.front : card.back;
 /** Wrong answers for this card. Different answers only, nothing that would be graded correct, and nothing from a card sharing this prompt: big and large both meaning 크다 are each a right answer to 크다. */
+/** 뒤집은 뒤 읽어 줄 글. 한글이 없는 예문 줄을 먼저 읽고, 없으면 한글이 없는 쪽 면을 읽는다. 전부 한글인 세트는 답을 그대로 읽는다. */
+export function cardRevealSpeech(card: CardEntry, expected: string) {
+  const hangul = /[가-힣]/u, example = card.example.split(/\r?\n/u).map(line => line.trim()).filter(line => line && !hangul.test(line)).join(' ');
+  return example || [card.front, expected].find(text => text.trim() && !hangul.test(text)) || expected;
+}
 export function cardDistractors(card: CardEntry, pool: CardEntry[], direction: CardDirection) {
   const prompt = normalizeCardAnswer(cardPrompt(card, direction)), seen = new Set([normalizeCardAnswer(cardAnswer(card, direction))]), distractors: string[] = [];
   for (const other of pool) {

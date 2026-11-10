@@ -52,7 +52,8 @@ export function useSpeech() {
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     void ttsPlayer().speak(text, {rate, source: 'cards', fallback: () => speakWithDevice(text, rate, undefined, speechLang(text))});
   }, []);
-  return {can, speak};
+  const stop = useCallback(() => {ttsPlayer().stop(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();}, []);
+  return {can, speak, stop};
 }
 export function useFullscreen(ref: RefObject<HTMLElement | null>) {
   const [on, setOn] = useState(false), [supported, setSupported] = useState(false);

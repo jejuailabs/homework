@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {rainCap, rainCapped, RAIN_MAX_WORDS, GAME_MAX_MS, betterRecord, buildPairTiles, buildPuzzles, checkGameResult, formatGameTime, isPair, newRain, PAIR_MAX, PAIR_PENALTY_MS, pairCount, pairEligible, pairTime, puzzleCount, puzzleEligible, puzzlePrefix, puzzleScore, puzzleSolved, puzzleStart, rainCatch, rainFallMs, rainLevel, rainScore, rainSpawnMs, rainStep, RAIN_LIVES, RAIN_MAX_DROPS, rankGameRows, recentPlays, sentenceChunks} from './cards-games';
+import {rainCap, rainCapped, RAIN_MAX_WORDS, GAME_MAX_MS, betterRecord, buildPairTiles, buildPuzzles, checkGameResult, formatGameTime, isPair, newRain, PAIR_MAX, PAIR_PENALTY_MS, pairCount, pairEligible, pairTime, puzzleCount, puzzleEligible, puzzlePrefix, puzzleScore, puzzleSpeech, puzzleSolved, puzzleStart, rainCatch, rainFallMs, rainLevel, rainMiss, rainReady, rainScore, rainSpawnMs, rainStep, rainTarget, RAIN_LIVES, RAIN_MAX_DROPS, rankGameRows, recentPlays, sentenceChunks} from './cards-games';
 import type {CardEntry} from './cards-types';
 
 const card = (index: number, extra: Partial<CardEntry> = {}): CardEntry => ({id: `c${index}`, front: `word ${index}`, back: `뜻 ${index}`, example: '', alternatives: [], ...extra});
@@ -28,7 +28,11 @@ const sentences = [card(1, {front: 'I am a student.', back: '나는 학생이다
 assert.deepEqual(puzzleEligible(sentences, 'sentence').map(item => item.cardId), ['c1'], 'sentence sets arrange the front, once per sentence, long enough only');
 const words = [card(1, {example: 'I eat an apple.\n나는 사과를 먹는다.'}), card(2, {example: ''}), card(3, {example: '\nThe cat sleeps here.'})];
 assert.deepEqual(puzzleEligible(words, 'word').map(item => [item.cardId, item.chunks.join(' ')]), [['c1', 'I eat an apple.'], ['c3', 'The cat sleeps here.']], 'word sets arrange the first line of the example');
-assert.equal(puzzleEligible(words, 'word')[0].hint, 'word 1 · 뜻 1', 'word puzzles hint with the card');
+assert.equal(puzzleEligible(words, 'word')[0].hint, '나는 사과를 먹는다.', 'a Korean line in the example becomes the hint');
+assert.equal(puzzleEligible(words, 'word')[1].hint, 'word 3 · 뜻 3', 'with no Korean line the card is the hint');
+assert.equal(puzzleEligible([card(1, {example: '나는 사과를 먹는다.\n오늘 아침에.'})], 'word')[0].hint, 'word 1 · 뜻 1', 'a Korean sentence to arrange has no translation line');
+assert.equal(puzzleSpeech(['I eat', 'an apple.']), 'I eat an apple.', 'the English sentence is read whole');
+assert.equal(puzzleSpeech(['나는', '사과를', '먹는다.']), '', 'a Korean sentence is not read');
 assert.equal(puzzleCount(cards, 'word'), 0, 'word sets without examples have no puzzle');
 const chunks = ['I', 'like', 'apples'];
 for (let round = 0; round < 20; round++) assert.equal(puzzleSolved(chunks, puzzleStart(chunks, random)), false, 'the starting order is never already solved');
@@ -61,6 +65,18 @@ assert.equal(falling.lives, 0, 'all lives are spent');
 assert.equal(falling.missed, RAIN_LIVES, 'the game stops at the last life');
 assert.ok(falling.drops.length <= RAIN_MAX_DROPS, 'never more than four words at once');
 assert.equal(rainStep(falling, 5000, ids, random), falling, 'a finished game stays put');
+// Four choices: the lowest word is asked, a wrong pick costs a life and removes that word.
+const twoDown = rainStep(rainStep(newRain(ids, random), 0, ids, random), rainSpawnMs(1), ids, random);
+assert.equal(rainTarget(twoDown)!.id, twoDown.drops[0].id, 'the word closest to the ground is the one asked');
+assert.equal(rainTarget(newRain(ids, random)), null, 'an empty sky asks nothing');
+const missedOne = rainMiss(twoDown, twoDown.drops[0].id)!;
+assert.deepEqual([missedOne.lives, missedOne.missed, missedOne.drops.length, missedOne.missedCards], [RAIN_LIVES - 1, 1, 1, [twoDown.drops[0].cardId]], 'a wrong pick spends a life, takes the word away and lists it as missed');
+assert.equal(rainMiss(twoDown, 9999), null, 'a word already gone cannot be missed');
+assert.equal(rainMiss({...twoDown, lives: 1}, twoDown.drops[0].id)!.over, true, 'a wrong pick on the last life ends the round');
+assert.equal(rainReady(cards.slice(0, 4)), true, 'four different meanings can make four choices');
+assert.equal(rainReady(cards.slice(0, 3)), false, 'three cannot');
+assert.equal(rainReady([...cards.slice(0, 3), card(9, {back: '뜻 0'})]), false, 'repeated meanings count once');
+assert.equal(checkGameResult('rain', {correct: 0, missed: 0, elapsedMs: 1000}, cards.slice(0, 3), 'word').ok, false, 'the server refuses a set that cannot make four choices');
 const small = rainStep(newRain(['only'], random), 0, ['only'], random);
 assert.equal(rainStep(small, 5000, ['only'], random).drops.filter(drop => drop.cardId === 'only').length, 1, 'a one-card set waits for the card to leave before reusing it');
 

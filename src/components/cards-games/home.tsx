@@ -4,7 +4,7 @@ import {useState} from 'react';
 import Link from 'next/link';
 import {ArrowRight, Clock3} from 'lucide-react';
 import {CardModeIcon} from '../cards-visuals';
-import {CARD_GAMES, pairCount, PAIR_MIN, puzzleCount, rainPlayable, type CardGame} from '@/lib/cards-games';
+import {CARD_GAMES, pairCount, PAIR_MIN, puzzleCount, rainReady, type CardGame} from '@/lib/cards-games';
 import type {CardDistribution} from '@/lib/cards-types';
 import {GameError, GameFrame, GameLoading, GameRanking, gameIcon, useGameCopy, useGameData} from './shared';
 import {PairGame} from './pair';
@@ -14,7 +14,7 @@ import {CardTestWait} from '../cards-care';
 
 export const gamePlayable = (game: CardGame, distribution: CardDistribution) => {
   const {cards, type} = distribution.snapshot;
-  return game === 'pair' ? pairCount(cards) >= PAIR_MIN : game === 'rain' ? rainPlayable(cards).length > 0 : puzzleCount(cards, type) > 0;
+  return game === 'pair' ? pairCount(cards) >= PAIR_MIN : game === 'rain' ? rainReady(cards) : puzzleCount(cards, type) > 0;
 };
 
 /** /student/cards/[id]/games: the three games, each student's own best, and the class ranking. */
