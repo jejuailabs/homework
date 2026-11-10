@@ -36,8 +36,8 @@ export function buildPairTiles(cards: CardEntry[], random: Random): PairTile[] |
 export const isPair = (a: PairTile, b: PairTile) => a.cardId === b.cardId && a.side !== b.side;
 export const pairTime = (elapsedMs: number, mistakes: number) => elapsedMs + mistakes * PAIR_PENALTY_MS;
 
-// 단어 비: 떨어지는 카드의 답을 입력한다. 맞힌 수가 늘면 조금씩 빨라지고, 바닥에 닿으면 목숨이 준다.
-export const RAIN_LIVES = 3, RAIN_LANES = 3, RAIN_MAX_DROPS = 4, RAIN_LEVEL_EVERY = 5, RAIN_MAX_LEVEL = 8, RAIN_MIN_INTERVAL = 1400, RAIN_MAX_WORDS = 500, RAIN_MIN_MS = 600;
+// 단어 비: 떨어지는 영어 카드의 뜻을 보기 4개에서 고른다. 맞힌 수가 늘면 조금씩 빨라지고, 틀리거나 바닥에 닿으면 목숨이 준다.
+export const RAIN_LIVES = 3, RAIN_LANES = 3, RAIN_MAX_DROPS = 4, RAIN_LEVEL_EVERY = 5, RAIN_MAX_LEVEL = 8, RAIN_MIN_INTERVAL = 1400, RAIN_MAX_WORDS = 500, RAIN_MIN_MS = 600, RAIN_CHOICES = 4;
 export const rainLevel = (correct: number) => Math.min(RAIN_MAX_LEVEL, 1 + Math.floor(correct / RAIN_LEVEL_EVERY));
 export const rainFallMs = (level: number) => Math.max(4400, 10_000 - (level - 1) * 800);
 export const rainSpawnMs = (level: number) => Math.max(RAIN_MIN_INTERVAL, 3000 - (level - 1) * 220);
@@ -50,6 +50,8 @@ export function rainScore(correct: number) {
 export type RainDrop = {id: number; cardId: string; lane: number; born: number; life: number};
 export type RainState = {time: number; nextSpawn: number; serial: number; correct: number; missed: number; lives: number; drops: RainDrop[]; deck: string[]; missedCards: string[]; over: boolean};
 export const rainPlayable = (cards: CardEntry[]) => cards.filter(card => filled(card.front) && filled(card.back));
+/** 보기 4개를 만들 수 있게 서로 다른 뜻이 네 개 이상 있어야 판을 연다. */
+export const rainReady = (cards: CardEntry[]) => new Set(rainPlayable(cards).map(card => normalizeCardAnswer(card.back))).size >= RAIN_CHOICES;
 export const newRain = (cardIds: string[], random: Random): RainState => ({time: 0, nextSpawn: 0, serial: 0, correct: 0, missed: 0, lives: RAIN_LIVES, drops: [], deck: shuffleWith(cardIds, random), missedCards: [], over: false});
 /** Moves the game on by `dt` milliseconds of play: spent words cost a life, new ones fall into a free lane. */
 export function rainStep(state: RainState, dt: number, allIds: string[], random: Random): RainState {
@@ -73,13 +75,24 @@ export function rainStep(state: RainState, dt: number, allIds: string[], random:
   }
   return {...state, time, nextSpawn, serial, deck, drops, lives, missed, missedCards: [...state.missedCards, ...expired.map(drop => drop.cardId)], over};
 }
-/** The lowest matching drop is caught. Returns null when nothing on screen takes this answer. */
 /** True once a round reaches what the server accepts for one record: RAIN_MAX_WORDS words or GAME_MAX_MS of play. */
 export const rainCapped = (state: RainState) => state.correct >= RAIN_MAX_WORDS || state.time >= GAME_MAX_MS;
 /** Ends the round at the cap, so a very long round finishes kindly and saves instead of being refused as GAME_RESULT. */
 export function rainCap(state: RainState): RainState {
   return !state.over && rainCapped(state) ? {...state, time: Math.min(state.time, GAME_MAX_MS), drops: [], over: true} : state;
 }
+/** The word the four choices are about: the one closest to the ground. */
+export function rainTarget(state: RainState): RainDrop | null {
+  return state.drops.reduce<RainDrop | null>((low, drop) => !low || (state.time - drop.born) / drop.life > (state.time - low.born) / low.life ? drop : low, null);
+}
+/** A wrong choice spends a life and takes that word away, so guessing through the choices never pays. */
+export function rainMiss(state: RainState, dropId: number): RainState | null {
+  const drop = state.drops.find(item => item.id === dropId);
+  if (!drop || state.over) return null;
+  const lives = Math.max(0, state.lives - 1);
+  return {...state, lives, missed: state.missed + 1, drops: state.drops.filter(item => item.id !== dropId), missedCards: [...state.missedCards, drop.cardId], over: lives === 0};
+}
+/** The lowest matching drop is caught. Returns null when nothing on screen takes this answer. */
 export function rainCatch(state: RainState, matches: (cardId: string) => boolean): RainState | null {
   const hit = [...state.drops].sort((a, b) => a.born - b.born).find(drop => matches(drop.cardId));
   return hit && !state.over ? {...state, correct: state.correct + 1, drops: state.drops.filter(drop => drop.id !== hit.id)} : null;
@@ -142,7 +155,7 @@ export function checkGameResult(game: CardGame, input: Record<string, unknown>, 
     return {ok: true, record: {score: pairTime(ms, input.mistakes as number), timeMs: ms}};
   }
   if (game === 'rain') {
-    if (!rainPlayable(cards).length) return fail('cards');
+    if (!rainReady(cards)) return fail('cards');
     if (!int(input.correct, 0, RAIN_MAX_WORDS) || !int(input.missed, 0, RAIN_LIVES)) return fail('counts');
     const correct = input.correct as number, missed = input.missed as number;
     if (correct * RAIN_MIN_MS > ms || correct + missed > 1 + Math.floor(ms / RAIN_MIN_INTERVAL) + RAIN_MAX_DROPS) return fail('too-fast');
