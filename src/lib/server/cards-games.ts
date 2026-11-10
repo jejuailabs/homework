@@ -122,6 +122,7 @@ export async function cardGameRankingSettings(ctx: Context, request: Request, cl
   } else if (request.method !== 'GET') throw new ApiError(404, '카드놀이 기능을 찾을 수 없어요.', 'NOT_FOUND');
   return json({ rankingsShown: shown });
 }
+export { access as cardDistributionAccess };
 export async function cardGames(ctx: Context, request: Request, distributionId: string) {
   if (request.method === 'GET') return readBoards(ctx, distributionId);
   if (request.method === 'POST') return saveRecord(ctx, request, distributionId);

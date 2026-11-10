@@ -251,12 +251,19 @@ async function cardGamePlayers(id: string, classId: string) {
   return Object.fromEntries(['pair', 'rain', 'puzzle'].map(game => [game, rows.filter(doc => doc.data().games?.[game]).length]));
 }
 
+/** 스피킹이 켜졌는지와 녹음을 남긴 학생 수만 알린다. 녹음 파일과 학생 이름은 베리에 주지 않는다. */
+async function cardSpeakingSummary(id: string, value: Record<string, any>) {
+  if (value.speaking !== true) return {on: false, students: 0};
+  const rows = (await db().collection('cardSpeaking').where('distributionId', '==', id).select('classId', 'takes').get()).docs;
+  return {on: true, students: rows.filter(doc => doc.data().classId === value.classId && Object.keys(doc.data().takes ?? {}).length > 0).length};
+}
+
 async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: unknown) {
   if (distributionId !== undefined) {
     const id = safeId(distributionId, '배부'), snap = await db().doc(`cardClassSets/${id}`).get();
     if (!snap.exists || snap.data()?.ownerUid !== ctx.uid) throw new BerryError('그 카드 배부를 찾지 못했어요.', 404, 'not_found');
     const value = snap.data()!, room = await ownedClass(ctx.uid, value.classId);
-    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value), game_players: await cardGamePlayers(id, value.classId), parent_links: await cardShareCounts(id, ctx.uid)}]};
+    return {card_sets: [{...cardRow(id, value, room.name, await roster(value.classId)), progress: await cardProgressOf(id, value), game_players: await cardGamePlayers(id, value.classId), speaking: await cardSpeakingSummary(id, value), parent_links: await cardShareCounts(id, ctx.uid)}]};
   }
   const classes = classId === undefined ? await ownedClasses(ctx.uid) : [await ownedClass(ctx.uid, classId)];
   // The list stays light (no card text); only the few sets a teacher is likely asking about load their cards and progress.
@@ -272,7 +279,7 @@ async function cardSets(ctx: BearerContext, classId?: unknown, distributionId?: 
     const base = {...cardRow(row.id, row.value, row.className, row.students), order: row.position + 1, ...(row.hidden ? {hidden_from_students: true} : {}), ...(row.highlight ? {highlight: true} : {})};
     if (!detailed.has(row.id)) return {...base, progress: null};
     const full = await db().doc(`cardClassSets/${row.id}`).get();
-    return {...base, progress: await cardProgressOf(row.id, full.data()!), game_players: await cardGamePlayers(row.id, row.value.classId), parent_links: await cardShareCounts(row.id, ctx.uid)};
+    return {...base, progress: await cardProgressOf(row.id, full.data()!), game_players: await cardGamePlayers(row.id, row.value.classId), speaking: await cardSpeakingSummary(row.id, full.data()!), parent_links: await cardShareCounts(row.id, ctx.uid)};
   }));
   // 동료 공유는 수로만: 공유한 폴더·동료 수·공유한 세트·복사해 온 세트. 동료 이메일·이름과 동료 세트 내용은 내보내지 않는다.
   // 쪽지는 반마다 켜짐 여부와 안 읽은 학생 쪽지 수만. 쪽지 글과 보낸 학생은 내보내지 않는다(교사·학생 사이 사적인 대화라서).
