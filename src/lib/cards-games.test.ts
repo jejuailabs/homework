@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {rainCap, rainCapped, RAIN_MAX_WORDS, GAME_MAX_MS, betterRecord, buildPairTiles, buildPuzzles, checkGameResult, formatGameTime, isPair, newRain, PAIR_MAX, PAIR_PENALTY_MS, pairCount, pairEligible, pairTime, puzzleCount, puzzleEligible, puzzlePrefix, puzzleScore, puzzleSolved, puzzleStart, rainCatch, rainFallMs, rainLevel, rainMiss, rainReady, rainScore, rainSpawnMs, rainStep, rainTarget, RAIN_LIVES, RAIN_MAX_DROPS, rankGameRows, recentPlays, sentenceChunks} from './cards-games';
+import {rainCap, rainCapped, RAIN_MAX_WORDS, GAME_MAX_MS, betterRecord, buildPairTiles, buildPuzzles, checkGameResult, formatGameTime, isPair, newRain, PAIR_MAX, PAIR_PENALTY_MS, pairCount, pairEligible, pairTime, puzzleCount, puzzleEligible, puzzlePrefix, puzzleScore, puzzleSpeech, puzzleSolved, puzzleStart, rainCatch, rainFallMs, rainLevel, rainMiss, rainReady, rainScore, rainSpawnMs, rainStep, rainTarget, RAIN_LIVES, RAIN_MAX_DROPS, rankGameRows, recentPlays, sentenceChunks} from './cards-games';
 import type {CardEntry} from './cards-types';
 
 const card = (index: number, extra: Partial<CardEntry> = {}): CardEntry => ({id: `c${index}`, front: `word ${index}`, back: `뜻 ${index}`, example: '', alternatives: [], ...extra});
@@ -28,7 +28,11 @@ const sentences = [card(1, {front: 'I am a student.', back: '나는 학생이다
 assert.deepEqual(puzzleEligible(sentences, 'sentence').map(item => item.cardId), ['c1'], 'sentence sets arrange the front, once per sentence, long enough only');
 const words = [card(1, {example: 'I eat an apple.\n나는 사과를 먹는다.'}), card(2, {example: ''}), card(3, {example: '\nThe cat sleeps here.'})];
 assert.deepEqual(puzzleEligible(words, 'word').map(item => [item.cardId, item.chunks.join(' ')]), [['c1', 'I eat an apple.'], ['c3', 'The cat sleeps here.']], 'word sets arrange the first line of the example');
-assert.equal(puzzleEligible(words, 'word')[0].hint, 'word 1 · 뜻 1', 'word puzzles hint with the card');
+assert.equal(puzzleEligible(words, 'word')[0].hint, '나는 사과를 먹는다.', 'a Korean line in the example becomes the hint');
+assert.equal(puzzleEligible(words, 'word')[1].hint, 'word 3 · 뜻 3', 'with no Korean line the card is the hint');
+assert.equal(puzzleEligible([card(1, {example: '나는 사과를 먹는다.\n오늘 아침에.'})], 'word')[0].hint, 'word 1 · 뜻 1', 'a Korean sentence to arrange has no translation line');
+assert.equal(puzzleSpeech(['I eat', 'an apple.']), 'I eat an apple.', 'the English sentence is read whole');
+assert.equal(puzzleSpeech(['나는', '사과를', '먹는다.']), '', 'a Korean sentence is not read');
 assert.equal(puzzleCount(cards, 'word'), 0, 'word sets without examples have no puzzle');
 const chunks = ['I', 'like', 'apples'];
 for (let round = 0; round < 20; round++) assert.equal(puzzleSolved(chunks, puzzleStart(chunks, random)), false, 'the starting order is never already solved');

@@ -109,13 +109,24 @@ export function sentenceChunks(sentence: string, max = PUZZLE_MAX_CHUNKS): strin
   for (let index = 0, from = 0; index < count; index++) {const to = from + size + (index < extra ? 1 : 0); chunks.push(words.slice(from, to).join(' ')); from = to;}
   return chunks;
 }
+const hangul = /[가-힣]/u;
+/** 예문에 함께 적힌 한글 번역 줄. 맞출 문장이 이미 한글이면 번역으로 보지 않는다. */
+export function exampleTranslation(example: string, sentence: string) {
+  if (hangul.test(sentence)) return '';
+  return example.split(/\r?\n/u).map(line => line.trim()).find(line => line !== sentence.trim() && hangul.test(line)) ?? '';
+}
+/** 정답 뒤에 읽어 줄 문장. 한글 문장은 읽지 않는다. */
+export function puzzleSpeech(chunks: string[]) {
+  const sentence = chunks.join(' ');
+  return hangul.test(sentence) ? '' : sentence;
+}
 /** Sentence sets arrange the front; word sets arrange the first line of an example. The same sentence is offered once. */
 export function puzzleEligible(cards: CardEntry[], type: CardSetType): PuzzleItem[] {
   const seen = new Set<string>(), items: PuzzleItem[] = [];
   for (const card of cards) {
     const sentence = type === 'sentence' ? card.front : (card.example.split(/\r?\n/u).find(line => line.trim()) ?? ''), chunks = sentenceChunks(sentence), key = normalizeCardAnswer(sentence);
     if (!chunks || seen.has(key)) continue;
-    seen.add(key); items.push({cardId: card.id, chunks, hint: type === 'sentence' ? card.back : `${card.front} · ${card.back}`});
+    seen.add(key); items.push({cardId: card.id, chunks, hint: type === 'sentence' ? card.back : exampleTranslation(card.example, sentence) || `${card.front} · ${card.back}`});
   }
   return items;
 }

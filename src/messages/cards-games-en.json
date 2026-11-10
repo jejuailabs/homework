@@ -85,6 +85,7 @@
   "puzzleWrongNone": "Think again from the first piece.",
   "puzzleShown": "Answer: {sentence}",
   "puzzleNext": "Next sentence",
+  "puzzleListen": "Listen again",
   "puzzleSolved": "Solved",
   "puzzleKeys": "Number keys: place a piece · Backspace: take one back · Enter: check",
   "loading": "Getting the game ready",

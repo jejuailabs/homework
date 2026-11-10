@@ -85,6 +85,7 @@
   "puzzleWrongNone": "첫 조각부터 다시 생각해 봐요.",
   "puzzleShown": "정답: {sentence}",
   "puzzleNext": "다음 문장",
+  "puzzleListen": "다시 듣기",
   "puzzleSolved": "푼 문장",
   "puzzleKeys": "숫자키: 조각 놓기 · Backspace: 하나 빼기 · Enter: 확인",
   "loading": "게임을 준비하는 중이에요",
