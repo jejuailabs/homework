@@ -8,7 +8,7 @@ import {usePreferences} from './providers';
 import {CardIllustration, CardIllustrationToggle} from './card-illustration';
 
 import {characterFiles, type Character} from '@/lib/characters';
-import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
+import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, cardRevealSpeech, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
 import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardReviewItem, CardSetType, CardStudyMode} from '@/lib/cards-types';
 import ko from '@/messages/cards-study-ko.json';
 import en from '@/messages/cards-study-en.json';
@@ -220,7 +220,8 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     catch {setStars(previous); setStarError(true);} finally {setStarBusy(false);}
   }
   // 원어민 음성(서버 TTS)이 켜져 있으면 그 소리로, 꺼졌거나 실패하면 기기 목소리로 읽는다.
-  function speak(text = content ? (revealed || feedback ? content.expected : content.prompt) : '') {
+  const revealSpeech = card && content ? (mode === 'memorize' ? cardRevealSpeech(card, content.expected) : content.expected) : '';
+  function speak(text = content ? (revealed || feedback ? revealSpeech : content.prompt) : '') {
     if (!text || !canSpeak) return;
     setVoiceUsed(true); setSpeechFailed(false);
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
@@ -228,11 +229,13 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   }
   // 카드 자동 읽기 (소리 설정, 기본 꺼짐): each new card's prompt once. The speaker button works either way.
   useEffect(() => {if (sound.autoSpeech && content && !session?.finished) speak(content.prompt);}, [session?.index, session?.direction, session?.finished, sound.autoSpeech, canSpeak]);
+  // 자동 읽기를 켠 학생에게는 뒤집을 때 영어 예문도 한 번 읽어 준다.
+  useEffect(() => {if (sound.autoSpeech && revealed && mode === 'memorize' && revealSpeech) speak(revealSpeech);}, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
   // Once sound is in use, fetch this card's answer and the next card's prompt ahead, so they play at once.
   useEffect(() => {
     if (!session || session.finished || !content || !(sound.autoSpeech || voiceUsed)) return;
     const player = ttsPlayer(), upcoming = cards.find(item => item.id === session.queue[session.index + 1]);
-    player.prefetch(content.expected, {source: 'cards'});
+    player.prefetch(revealSpeech, {source: 'cards'});
     if (upcoming) player.prefetch(textFor(upcoming, session.direction).prompt, {source: 'cards'});
   }, [session?.index, session?.direction, session?.finished, sound.autoSpeech, voiceUsed, revealed, feedback]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

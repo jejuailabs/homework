@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {CARD_MISS_LIMIT, cardAddDays, cardMastery, cardMissList, cardReviewDate, cardReviewState, cardReviewStates, cardWeekStart, dueCardIds, nextCardReview, recordCardMisses, summarizeCardMisses} from './cards-logic';
+import {CARD_MISS_LIMIT, cardAddDays, cardRevealSpeech, cardMastery, cardMissList, cardReviewDate, cardReviewState, cardReviewStates, cardWeekStart, dueCardIds, nextCardReview, recordCardMisses, summarizeCardMisses} from './cards-logic';
 
 const day0 = '2026-11-02'; // a Monday
 assert.equal(cardReviewDate(Date.parse('2026-11-06T15:30:00Z')), '2026-11-07', 'review dates follow Seoul, not UTC');
@@ -65,4 +65,10 @@ assert.deepEqual(cardMissList(index, '2026-11-05', new Set(['d1', 'd2'])).map(ro
 assert.deepEqual(cardMissList(index, '2026-11-05', undefined, '2026-10-26').map(row => row.cardId), ['b'], 'one week only');
 assert.deepEqual(summarizeCardMisses(index, '2026-11-05', new Set(['d1', 'd2'])), {total: 3, weeks: [{week: '2026-11-02', count: 2}, {week: '2026-10-26', count: 1}]}, 'weekly groups, newest week first');
 assert.deepEqual(summarizeCardMisses(undefined, day0), {total: 0, weeks: []});
+// After a card is flipped the English example is read, never the Korean meaning.
+const speechCard = (example: string, front = 'apple', back = '사과') => ({id: 'c', front, back, example, alternatives: []});
+assert.equal(cardRevealSpeech(speechCard('I eat an apple.'), '사과'), 'I eat an apple.', 'the example is read instead of the meaning');
+assert.equal(cardRevealSpeech(speechCard('I eat an apple.\n나는 사과를 먹는다.'), '사과'), 'I eat an apple.', 'a Korean translation line is skipped');
+assert.equal(cardRevealSpeech(speechCard(''), '사과'), 'apple', 'with no example the English word is read');
+assert.equal(cardRevealSpeech(speechCard('사과를 먹었다.', '사과', '과일'), '과일'), '과일', 'an all-Korean card still reads its answer');
 console.log('cards review tests passed');
