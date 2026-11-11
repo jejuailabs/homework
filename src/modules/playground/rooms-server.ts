@@ -15,7 +15,7 @@ import {HUNT_POINTS, HUNT_TRIES, isHuntRoom, isVersusRoom, roomHasClass} from '.
 import {isCorrectCardAnswer} from '@/lib/cards-logic';
 import {cardTeamEnabled, playgroundLive, roomEngineEnabled} from './flags';
 import {playKinds, type PlayItem, type PlayScore, type PlaySettings} from './types';
-import {activeKeys, canAnswer, huntResults, missedRounds, namedTeams, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
+import {activeKeys, canAnswer, huntResults, minPlayers, missedRounds, namedTeams, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
 import type {PlayRoom, PlayRoomMode, RoomAnswer, RoomCardSource, RoomBootstrap, RoomPlayer, RoomPlayerSummary, PublicRoomRound} from './room-types';
 
 type Data = Record<string, unknown>;
@@ -255,7 +255,7 @@ async function step(roomId: string, action: RoomAction, data: Data, ctx?: Contex
       // A 1:1 needs both friends. Larger rooms start without a closed laptop; that player joins from the next question on reconnecting.
       const offline=players.filter(player=>player.forfeited||now-player.lastSeen>30000);
       if(room.mode==='duel'&&offline.length)throw new ApiError(409,'두 친구가 모두 연결된 뒤 시작해 주세요.');
-      if(players.length-offline.length<2)throw new ApiError(409,'연결된 친구가 두 명 이상일 때 시작할 수 있어요.');
+      if(players.length-offline.length<minPlayers(room))throw new ApiError(409,room.mode==='duel'?'연결된 친구가 두 명일 때 시작할 수 있어요.':'연결된 친구가 있을 때 시작할 수 있어요.');
       if(room.mode==='team'&&isVersusRoom(room)) {
         // Each class is a team: nobody is moved, and the score is the class average so class sizes may differ.
         if(new Set(players.map(player=>player.team)).size<2)throw new ApiError(400,'두 반 이상의 학생이 들어와야 시작할 수 있어요.');
@@ -265,7 +265,7 @@ async function step(roomId: string, action: RoomAction, data: Data, ctx?: Contex
         const teams=snakeTeams(players.map((player,i)=>({key:player.key,previousScore:previous[i].reduce((sum,row)=>sum+(row.data()?.solo||0),0)})),Math.min(room.teamCount,players.length));
         const manual=data.teams&&typeof data.teams==='object'?data.teams as Record<string,unknown>:{};
         players.forEach(player=>{player.team=manual[player.key]===undefined?teams[player.key]:bounded(manual[player.key],0,0,room.teamCount-1);});
-        if(new Set(players.map(player=>player.team)).size<2)throw new ApiError(400,'두 팀 이상으로 나누어 주세요.');
+        if(players.length>1&&new Set(players.map(player=>player.team)).size<2)throw new ApiError(400,'두 팀 이상으로 나누어 주세요.');
         next.teams=teamScores(players,room.teamCount);next.players=players.map(summary);
       }
     }

@@ -73,3 +73,9 @@ test('roomDue matches the transitions a server tick would apply', () => {
   assert.equal(roomDue({...reveal, mode: 'team'}, 99999), false);
   assert.equal(roomDue({...reveal, status: 'paused'}, 99999), false);
 });
+test('a single student can start any room except a 1:1 duel', () => {
+  assert.equal(roomTransition({...room(), mode: 'team', playerKeys: ['a']}, 'start', 1000).status, 'countdown');
+  assert.equal(roomTransition({...room(), playerKeys: ['a']}, 'start', 1000).status, 'countdown');
+  assert.equal(roomTransition({...room(), mode: 'duel', playerKeys: ['a']}, 'start', 1000).status, 'lobby');
+  assert.equal(roomTransition({...room(), playerKeys: []}, 'start', 1000).status, 'lobby');
+});
