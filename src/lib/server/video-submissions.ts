@@ -5,7 +5,7 @@ import {cloudAccessToken,bucket,db} from './admin';
 import {assertOrigin,requireStudent,type Context} from './auth';
 import {ApiError,id,text,canUseUpload} from './policy';
 import {videoSelectionError,type VideoJobView} from '../video-submission';
-import {r2VideoPath,type VideoStorage} from '../video-storage';
+import {chosenVideoStorage,defaultVideoStorage,r2VideoPath,type VideoStorage} from '../video-storage';
 import {r2Configured,r2Delete} from './r2';
 import {assertAssignmentVisible, assignmentVisibility} from './assignment-visibility-policy';
 
@@ -55,9 +55,11 @@ export async function cleanupVideoJobs() {
   }
   return {expired,requeued,hasMore:candidates.length===100};
 }
-export async function createVideoSubmission(ctx:Context,assignment:Data,answer:string,uploadIds:string[],storage:VideoStorage='google') {
+/** `runtimeConfig/videoProcessing.outputStorage: 'r2'` moves every new compressed video to R2 at once; `VIDEO_R2_DISABLED=true` sends them back to Google. */
+export async function createVideoSubmission(ctx:Context,assignment:Data,answer:string,uploadIds:string[],choice?:unknown) {
   assertAssignmentVisible(assignment);
-  if(!await videoConfig()||(storage==='r2'&&!r2Configured()))throw new ApiError(503,'영상 처리 서버를 준비하고 있어요. 잠시 뒤 제출해 주세요.','VIDEO_NOT_CONFIGURED');
+  const config=await videoConfig(),storage:VideoStorage=chosenVideoStorage(assignment,choice,config?.outputStorage==='r2'?defaultVideoStorage('r2',r2Configured(),process.env.VIDEO_R2_DISABLED):'google');
+  if(!config||(storage==='r2'&&!r2Configured()))throw new ApiError(503,'영상 처리 서버를 준비하고 있어요. 잠시 뒤 제출해 주세요.','VIDEO_NOT_CONFIGURED');
   if(uploadIds.length!==1)throw new ApiError(400,'영상은 한 개만 제출해 주세요.','VIDEO_COUNT');
   const uploadId=id(uploadIds[0]),jobRef=db().doc(`videoJobs/${uploadId}`),uploadRef=db().doc(`uploads/${uploadId}`),slot=db().doc(`videoSubmissionSlots/${assignment.id}_${ctx.studentId}`);
   const existing=await jobRef.get();

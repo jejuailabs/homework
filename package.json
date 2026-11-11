@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node src/lib/server/run-tests.mjs",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
-    "berry:allow": "node scripts/berry-allowlist.mjs"
+    "berry:allow": "node scripts/berry-allowlist.mjs",
+    "video:storage": "node scripts/video-storage-switch.mjs"
   },
   "engines": {
     "node": "24.x"
