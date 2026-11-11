@@ -42,7 +42,7 @@ export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled
   const resolvedAppearance=appearance==='system'?(systemDark?'dark':'light'):appearance;
   const nextAppearance=resolvedAppearance==='dark'?'light':'dark';
   const appearanceLabel=t('appearanceToggle',{current:t(appearance==='system'?(systemDark?'systemDark':'systemLight'):appearance),next:t(nextAppearance)});
-  const isLogin=path==='/',isPublicGallery=path.startsWith('/gallery/')||path.startsWith('/board/')||path.startsWith('/family/'),isAdmin=path.startsWith('/admin'),isStudent=path.startsWith('/student');
+  const isLogin=path==='/',isPublicGallery=path.startsWith('/gallery/')||path.startsWith('/board/')||path.startsWith('/family/')||path==='/guide'||path.startsWith('/guide/'),isAdmin=path.startsWith('/admin'),isStudent=path.startsWith('/student');
   const workspacePath=isAdmin?'/admin':isStudent?'/student':'/teacher';
   const homeworkPath=isAdmin?'/admin':isStudent?'/student':'/teacher/homework';
   async function logout(){clearClassMetadata(true);window.dispatchEvent(new Event('homework-session-ended'));setBusy(true);try{await fetch('/api/auth/session',{method:'DELETE'});await signOut(auth);router.replace('/');router.refresh();}finally{setBusy(false);}}
