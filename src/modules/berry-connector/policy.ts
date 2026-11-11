@@ -1,5 +1,5 @@
 import {createHash, randomBytes, timingSafeEqual} from 'node:crypto';
-import {BERRY_SCOPES, DEFAULT_SCOPES, WRITE_SCOPES, type AuthorizeRequest, type BerryAccessConfig, type BerryDerivedEvent, type BerryEvent, type BerryScope, type McpTool} from './types';
+import {BERRY_SCOPES, DEFAULT_SCOPES, type AuthorizeRequest, type BerryAccessConfig, type BerryDerivedEvent, type BerryEvent, type BerryScope, type McpTool} from './types';
 
 export class BerryError extends Error {constructor(message: string, public status = 400, public code = 'invalid_request') {super(message);}}
 export const ACCESS_TOKEN_SECONDS = 60 * 60, AUTH_CODE_SECONDS = 10 * 60, MIN_ACCESS_DAYS = 1, MAX_ACCESS_DAYS = 365, DEFAULT_ACCESS_DAYS = 30;
@@ -52,8 +52,12 @@ export function parseScopes(value: unknown): BerryScope[] {
 }
 export const hasScope = (granted: readonly BerryScope[], needed: BerryScope) => granted.includes(needed);
 export const toolAllowed = (tool: Pick<McpTool, 'scope'>, granted: readonly BerryScope[]) => (typeof tool.scope === 'string' ? [tool.scope] : tool.scope).some(scope => granted.includes(scope));
-/** The consent screen starts with these unchecked: the teacher opts in to real names and to every write. */
-export const checkedByDefault = (scope: BerryScope) => scope !== 'names' && !WRITE_SCOPES.includes(scope);
+/**
+ * The consent screen starts with everything checked, writes included: every write still stops at a confirm card, and a
+ * teacher who has to tick boxes one by one ends up with a half-working Berry. Real names stay opt-in, because that one
+ * sends students' names outside ourclass.
+ */
+export const checkedByDefault = (scope: BerryScope) => scope !== 'names';
 /** The second list must not exceed the first (refresh may narrow a grant, never widen it). */
 export const scopesWithin = (granted: readonly BerryScope[], requested: readonly BerryScope[]) => requested.every(scope => granted.includes(scope));
 
