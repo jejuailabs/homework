@@ -100,7 +100,8 @@ export function rainCatch(state: RainState, matches: (cardId: string) => boolean
 
 // 문장 퍼즐: 섞인 조각을 순서대로 놓는다. 한 번에 맞히면 100점, 다시 확인할 때마다 20점씩 덜 받고 최소 20점이다.
 export const PUZZLE_ROUND = 5, PUZZLE_MAX_CHUNKS = 6, PUZZLE_MIN_WORDS = 3, PUZZLE_MIN_MS = 1000, PUZZLE_MAX_TRIES = 20;
-export type PuzzleItem = {cardId: string; chunks: string[]; hint: string};
+/** `meaning` is a whole Korean sentence to translate from; without one the hint is only the word and its meaning. */
+export type PuzzleItem = {cardId: string; chunks: string[]; hint: string; meaning: boolean};
 /** Splits a sentence on spaces into at most `max` pieces of neighbouring words, sizes differing by one at most. */
 export function sentenceChunks(sentence: string, max = PUZZLE_MAX_CHUNKS): string[] | null {
   const words = sentence.normalize('NFKC').trim().split(/\s+/u).filter(Boolean);
@@ -126,12 +127,14 @@ export function puzzleEligible(cards: CardEntry[], type: CardSetType): PuzzleIte
   for (const card of cards) {
     const sentence = type === 'sentence' ? card.front : (card.example.split(/\r?\n/u).find(line => line.trim()) ?? ''), chunks = sentenceChunks(sentence), key = normalizeCardAnswer(sentence);
     if (!chunks || seen.has(key)) continue;
-    seen.add(key); items.push({cardId: card.id, chunks, hint: type === 'sentence' ? card.back : exampleTranslation(card.example, sentence) || `${card.front} · ${card.back}`});
+    const meaning = type === 'sentence' ? card.back.trim() : exampleTranslation(card.example, sentence);
+    seen.add(key); items.push({cardId: card.id, chunks, hint: meaning || `${card.front} · ${card.back}`, meaning: !!meaning});
   }
   return items;
 }
 export const puzzleCount = (cards: CardEntry[], type: CardSetType) => Math.min(PUZZLE_ROUND, puzzleEligible(cards, type).length);
-export const buildPuzzles = (cards: CardEntry[], type: CardSetType, random: Random) => shuffleWith(puzzleEligible(cards, type), random).slice(0, PUZZLE_ROUND);
+/** Puzzles with a Korean sentence come first, so a word hint is used only when too few cards have one. */
+export const buildPuzzles = (cards: CardEntry[], type: CardSetType, random: Random) => {const mixed = shuffleWith(puzzleEligible(cards, type), random); return [...mixed.filter(item => item.meaning), ...mixed.filter(item => !item.meaning)].slice(0, PUZZLE_ROUND);};
 /** Chunk positions in a starting order that is not already solved, when the chunks allow it. */
 export function puzzleStart(chunks: string[], random: Random) {
   const order = chunks.map((_, index) => index);
