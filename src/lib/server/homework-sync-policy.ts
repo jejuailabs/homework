@@ -1,4 +1,4 @@
-import {ApiError} from './policy';
+import {ApiError, requiredSubmissionType} from './policy';
 
 export type HomeworkSync = {exhibitionId: string | null; boardId: string | null};
 export const EXHIBITION_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -12,6 +12,17 @@ export function homeworkSyncTargets(raw: unknown, submissionType: string) {
   if (value.exhibition === true && submissionType === 'text') throw new ApiError(400, '텍스트 숙제는 전시실에 연동되지 않아요.', 'SYNC_TEXT_EXHIBITION');
   if (value.exhibition === true && submissionType === 'audio') throw new ApiError(400, '녹음 숙제는 전시실에 연동되지 않아요. 게시판 연동을 써 주세요.', 'SYNC_AUDIO_EXHIBITION');
   return {exhibition: value.exhibition === true, board: value.board === true};
+}
+
+/**
+ * A homework room may switch how students hand in only while nobody has handed anything in; files already sent would no longer fit.
+ * Returns the new type, or null when the request keeps the current one.
+ */
+export function submissionTypeChange(current: unknown, requested: unknown, hasSubmissions: boolean) {
+  if (requested === undefined || requested === null || requested === current) return null;
+  const next = requiredSubmissionType(requested);
+  if (hasSubmissions) throw new ApiError(409, '이미 제출한 학생이 있어 제출 방식을 바꿀 수 없어요. 새 숙제방을 열어 주세요.', 'SUBMISSION_TYPE_LOCKED');
+  return next;
 }
 
 /**

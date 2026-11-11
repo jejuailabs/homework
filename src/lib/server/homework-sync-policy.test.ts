@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {editedHomeworkSync, homeworkSyncTargets, syncDue, syncableUploads} from './homework-sync-policy';
+import {editedHomeworkSync, homeworkSyncTargets, submissionTypeChange, syncDue, syncableUploads} from './homework-sync-policy';
 
 test('turning a room on creates it only when there is none to reuse', () => {
   const on = editedHomeworkSync(null, null, {exhibition: true, board: false});
@@ -56,4 +56,14 @@ test('a failed sync retries three times per attempt; a new attempt always syncs'
 test('recording homework can feed a board but never an exhibition', () => {
   assert.throws(() => homeworkSyncTargets({exhibition: true}, 'audio'), (error: unknown) => (error as {code?: string}).code === 'SYNC_AUDIO_EXHIBITION');
   assert.deepEqual(homeworkSyncTargets({board: true}, 'audio'), {exhibition: false, board: true});
+});
+
+test('a homework room changes its submission type only before anyone hands in', () => {
+  assert.equal(submissionTypeChange('text', undefined, true), null);
+  assert.equal(submissionTypeChange('text', 'text', true), null);
+  assert.equal(submissionTypeChange('legacy', 'legacy', true), null);
+  assert.equal(submissionTypeChange('text', 'image', false), 'image');
+  assert.equal(submissionTypeChange('legacy', 'audio', false), 'audio');
+  assert.throws(() => submissionTypeChange('text', 'image', true), (error: unknown) => (error as {code?: string; status?: number}).code === 'SUBMISSION_TYPE_LOCKED' && (error as {status?: number}).status === 409);
+  assert.throws(() => submissionTypeChange('text', 'drawing', false), (error: unknown) => (error as {code?: string}).code === 'SUBMISSION_TYPE');
 });

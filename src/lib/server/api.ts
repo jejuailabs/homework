@@ -29,7 +29,7 @@ import {ownedItems, roomCompanionAppearance} from '@/modules/my-space/policy';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
 import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
 import {createLinkedRooms, resyncHomeworkRooms, setSyncedWithdrawn, syncSubmission} from './homework-sync';
-import {editedHomeworkSync, homeworkSyncTargets} from './homework-sync-policy';
+import {editedHomeworkSync, homeworkSyncTargets, submissionTypeChange} from './homework-sync-policy';
 
 type Data = Record<string, any>;
 const now = () => new Date().toISOString();
@@ -308,22 +308,29 @@ async function assignmentDetail(request: Request, assignmentId: string) {
     assertAssignmentVisible(assignment);
     const input = await body(request);
     const changes = {title: text(input.title, '과제 제목', 120), description: text(input.description, '과제 설명', 5000, true), dueAt: input.dueAt ? new Date(input.dueAt).toISOString() : null};
-    const targets = input.sync === undefined ? null : homeworkSyncTargets(input.sync, assignment.submissionType);
+    // The type may change while nobody has handed in. Rooms already linked must still fit the new type.
+    const submissionType = submissionTypeChange(assignment.submissionType, input.submissionType, false) ?? assignment.submissionType, typeChanged = submissionType !== assignment.submissionType;
+    const targets = input.sync === undefined ? null : homeworkSyncTargets(input.sync, submissionType);
+    if (typeChanged && !targets) homeworkSyncTargets({exhibition: !!assignment.sync?.exhibitionId, board: !!assignment.sync?.boardId}, submissionType);
     let roomAdded = false, sync = assignment.sync;
     const materials = await db().runTransaction(async tx => {
       const fresh = await tx.get(snap.ref); if (!fresh.exists) throw new ApiError(404, '과제를 찾을 수 없어요.');
       assertAssignmentVisible(fresh.data());
+      if (typeChanged) {
+        const sent = await Promise.all(['submissions', 'submissionTrash', 'videoSubmissionSlots'].map(name => tx.get(db().collection(name).where('assignmentId', '==', assignmentId).limit(1))));
+        submissionTypeChange(fresh.data()?.submissionType, submissionType, sent.some(found => !found.empty));
+      }
       const materials = await bindAssignmentMaterials(tx, ctx, assignment.classId, assignmentId, input.materialIds ?? (fresh.data()?.materials ?? []).map((material: Data) => material.id), fresh.data()?.materials ?? []);
       const rooms = targets ? editedHomeworkSync(fresh.data()?.sync, fresh.data()?.syncPaused, targets) : null;
       if (rooms) {
-        const made = createLinkedRooms(tx, {assignmentId, title: changes.title, description: changes.description, submissionType: assignment.submissionType, classId: assignment.classId, cls, ownerUid: cls.ownerUid, sync: rooms.create});
+        const made = createLinkedRooms(tx, {assignmentId, title: changes.title, description: changes.description, submissionType, classId: assignment.classId, cls, ownerUid: cls.ownerUid, sync: rooms.create});
         sync = {exhibitionId: rooms.sync.exhibitionId ?? made.exhibitionId, boardId: rooms.sync.boardId ?? made.boardId};
         roomAdded = rooms.added;
       }
-      tx.update(snap.ref, {...changes, materials, ...(rooms ? {sync, syncPaused: rooms.paused} : {}), updatedAt: now()}); return materials;
+      tx.update(snap.ref, {...changes, ...(typeChanged ? {submissionType} : {}), materials, ...(rooms ? {sync, syncPaused: rooms.paused} : {}), updatedAt: now()}); return materials;
     });
     if (roomAdded) after(() => resyncHomeworkRooms(assignmentId));
-    return json({assignment: {...assignment, ...changes, sync, materials: await signedAssignmentMaterials(materials)}});
+    return json({assignment: {...assignment, ...changes, submissionType, sync, materials: await signedAssignmentMaterials(materials)}});
   }
   const [roster, submissions] = await Promise.all([db().collection(`classes/${assignment.classId}/students`).get(), db().collection('submissions').where('assignmentId', '==', assignmentId).get()]);
   const targets = roster.docs.filter(doc => assignment.targetStudentIds.includes(doc.id));
