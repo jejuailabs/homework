@@ -17,6 +17,7 @@ const teacher = {uid: 'teacher-1', role: 'teacher', email: null, displayName: nu
 const student = {uid: 'student-1', role: 'student', classId: 'class-a', studentId: 'pupil-1'};
 const submissionEdit = load('../submission-edit.ts');
 const videoStorage = load('../video-storage.ts');
+const homeworkSyncPolicy = load('./homework-sync-policy.ts', {'./policy': policy});
 
 function fixture(initial) {
   const data = new Map(Object.entries(initial).map(([key, value]) => [key, structuredClone(value)]));
@@ -64,6 +65,7 @@ function fixture(initial) {
     ...imports, 'node:crypto': crypto, 'next/server': {NextResponse: {json: Response.json.bind(Response)}},
     'firebase-admin/firestore': fieldValue,
     '../assignment-submission': submission, '../submission-edit': submissionEdit, './homework-uploads': homeworkUploads, './submission-edits': submissionEdits,
+    './homework-sync-policy': homeworkSyncPolicy,
     './points-policy': {pointBalance: value => value ?? 0, pointSettings: () => ({}), wardrobeOutfit: () => ({})},
     '@/modules/my-space/profile': {companionProfile: () => null},
     './assignment-materials': {signedAssignmentMaterials: async value => {assert.notEqual(value?.[0]?.id, 'secret'); return value ?? [];}, bindAssignmentMaterials: async () => []},

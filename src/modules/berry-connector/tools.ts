@@ -6,7 +6,7 @@ import {NOTEBOOK_TAG_LABELS, type NotebookTag} from '@/modules/teacher-notebook/
 import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, maskNames, safeId, studentLabel, toolAllowed} from './policy';
 import {WORKSPACE_TOOLS, callWorkspaceTool} from './workspace-tools';
 import {CLASSROOM_TOOLS, callClassroomTool, menuFlags} from './classroom-tools';
-import {buildCatalog} from './catalog';
+import {buildCatalog, flatCatalog} from './catalog';
 import {MANAGE_TOOLS} from './manage-tools';
 import {ASSIGNMENT_KINDS, ASSIGNMENT_ORDERS, findAssignments} from '@/lib/assignment-finder';
 import type {BearerContext, McpTool} from './types';
@@ -72,7 +72,9 @@ export async function callTool(name: string, args: Data, ctx: BearerContext) {
   if (!toolAllowed(tool, ctx.scopes)) throw new BerryError(`이 도구에는 ${[tool.scope].flat().join(' 또는 ')} 권한이 필요해요.`, 403, 'insufficient_scope');
   if (name === 'get_catalog') {
     // Built from the tools this connection may use, so the table never lists something the client cannot call.
-    const catalog = buildCatalog(TOOLS.filter(entry => toolAllowed(entry, ctx.scopes)), menuFlags());
+    const usable = TOOLS.filter(entry => toolAllowed(entry, ctx.scopes)), tree = buildCatalog(usable, menuFlags());
+    // A client that walks the tree asks for it; one that does not gets the same content flattened, as it always read it.
+    const catalog = args.tree === true ? tree : flatCatalog(tree, usable);
     return typeof args.known_version === 'string' && args.known_version === catalog.version ? {version: catalog.version, unchanged: true} : catalog;
   }
   if (CLASSROOM_TOOLS.includes(tool)) return callClassroomTool(name, args, ctx);

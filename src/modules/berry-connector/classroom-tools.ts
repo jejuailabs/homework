@@ -42,7 +42,7 @@ const LIST = 30;
 const cls = {type: 'string', description: 'list_classes의 학급 id'};
 
 export const CLASSROOM_TOOLS: McpTool[] = [
-  {name: 'get_catalog', scope: 'classroom:read', description: '모두의 교실 핵심 분류표: 메뉴마다 담긴 것, 핵심 지표, 읽는 도구, 민감도, 읽기 비용, 대표 질문과 사용 원칙. 계획을 세울 때 먼저 봅니다. known_version이 같으면 unchanged만 돌려줍니다.', inputSchema: {type: 'object', properties: {known_version: {type: 'string'}}, additionalProperties: false}},
+  {name: 'get_catalog', scope: 'classroom:read', description: '모두의 교실 핵심 분류표(트리): 메뉴마다 한 줄 설명(what)·주소(link)·부르는 말(words)과, 그 메뉴를 열 때만 읽는 안내(guide)·지표·도구·민감도·읽기 비용, 그리고 모든 메뉴에 걸친 원칙(rules). 계획을 세울 때 먼저 메뉴를 고르고 그 메뉴의 안내와 도구만 봅니다. tree=true로 부르면 이 트리 형식으로, 아니면 같은 내용을 한 장으로 편 예전 형식으로 돌려줍니다. known_version이 같으면 unchanged만 돌려줍니다.', inputSchema: {type: 'object', properties: {known_version: {type: 'string'}, tree: {type: 'boolean', description: '트리 형식으로 받기'}}, additionalProperties: false}},
   {name: 'get_signals', scope: 'classroom:read', description: '모든 메뉴의 지금 숫자만 돌려줍니다: 학급별 미제출·검사 대기·마감 지남·다시 하기, 오늘·내일 퀴즈 범위 설정 여부, 진행 중 말놀이터 방, 복습 초안 수, 전시·보드 승인 대기, 저장 공간 단계, 받은 Kids Daily 공유 수, 오늘 일정 수. "지금 어때?"에 먼저 씁니다.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'get_storage', scope: 'classroom:read', description: '선생님 저장 공간: 전체 용량·사용량·남은 양, 항목별 사용량(숙제 영상·사진·전시·참고 자료·보드·업무 공간), 경고 단계, 이번 이용 기간 종료일.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'list_exhibitions', scope: 'classroom:read', description: '작품전시 전시실 목록: 상태(준비·열림·마감), 작품 수, 승인 대기 작품 수, QR 관람 허용, 숙제 연동 여부.', inputSchema: {type: 'object', properties: {class_id: cls}, additionalProperties: false}},
