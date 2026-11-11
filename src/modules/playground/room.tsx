@@ -11,6 +11,7 @@ import {CardRoomReview, CardTeamPodium, teamSticker} from './card-room-results';
 import SocialPanel from './social';
 import {usePlayRoom} from './use-play-room';
 import {HUNT_TRIES, isHuntRoom, isVersusRoom, roomModeLabels, roomTeamColors, roomTeamNames} from './room-types';
+import {minPlayers} from './room-machine';
 import {useCardsP2Copy} from '@/lib/cards-p2-copy';
 import type {PlayChoice} from './types';
 import './room-styles.css';
@@ -55,7 +56,7 @@ export default function PlayRoomScreen({codeOrId,teacher=false,fromCards=false}:
       <div className="play-room-roster">{roster.map(member=><article key={member.key}><CharacterAvatar character={member.character} imageSrc={member.imageSrc} outfit={member.outfit} spaceOutfit={member.spaceOutfit}/><strong>{member.name}</strong><span>{member.key===room.hostKey?'방장':room.mode==='team'&&!teacher?'함께 기다려요':now-member.lastSeen>30000?'연결을 기다려요':'준비됐어요'}</span>{teacher&&versus&&<span className="play-room-class-tag" style={{color:roomTeamColors[member.team]}}>{room.classNames?.[member.team]}</span>}{teacher&&!versus&&<label>팀<select value={teams[member.key]??member.team} onChange={event=>setTeams(previous=>({...previous,[member.key]:Number(event.target.value)}))}>{roomTeamNames.slice(0,room.teamCount).map((name,index)=><option key={name} value={index}>{name} 팀</option>)}</select></label>}</article>)}</div>
       {!teacher&&viewer?.canHost&&<SocialPanel enabled/>}
       {!room.playerKeys.length&&<p className="play-room-empty">친구들이 모이면 시작할 수 있어요. 코드를 알려 주세요.</p>}
-      {viewer?.canHost?<div className="play-room-host-actions"><button className="button" disabled={busy||room.playerKeys.length<2} onClick={()=>void invoke('start',teacher&&Object.keys(teams).length?{teams}:{})}><Play size={18}/>다 같이 시작</button>{teacher&&<p>{versus?p2.versusLobby:'팀을 직접 고르지 않으면 최근 4주 점수를 기준으로 골고루 나눠요.'}</p>}{teacher&&cardRoom&&<p>{t('teamJoinHint')}</p>}</div>:<p role="status" className="play-room-notice">방장이 시작할 때까지 잠깐 기다려요.</p>}
+      {viewer?.canHost?<div className="play-room-host-actions"><button className="button" disabled={busy||room.playerKeys.length<minPlayers(room)} onClick={()=>void invoke('start',teacher&&Object.keys(teams).length?{teams}:{})}><Play size={18}/>다 같이 시작</button>{teacher&&<p>{versus?p2.versusLobby:'팀을 직접 고르지 않으면 최근 4주 점수를 기준으로 골고루 나눠요.'}</p>}{teacher&&cardRoom&&<p>{t('teamJoinHint')}</p>}</div>:<p role="status" className="play-room-notice">방장이 시작할 때까지 잠깐 기다려요.</p>}
     </>}
     {room.status==='countdown'&&<div className="play-room-countdown" role="status"><p>준비됐나요?</p><strong>{remaining||'시작!'}</strong><span>{hunt?p2.huntHint:'답은 한 번만 고를 수 있어요'}</span></div>}
     {room.status==='paused'&&<div className="play-room-empty" role="status"><Pause size={42}/><h2>잠깐 쉬어 가요</h2><p>선생님이 다시 시작하면 이어서 풀어요.</p></div>}

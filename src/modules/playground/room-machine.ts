@@ -16,6 +16,8 @@ export function roomDue(room: PlayRoom, now: number) {
   if (room.status === 'question') return now > room.statusEndsAt;
   return room.status === 'reveal' && room.mode !== 'team' && now >= room.statusEndsAt;
 }
+/** A 1:1 needs two friends; every other room may start with a single student. */
+export function minPlayers(room: Pick<PlayRoom, 'mode'>) {return room.mode === 'duel' ? 2 : 1;}
 export function roomTransition(previous: PlayRoom, action: 'start'|'tick'|'next'|'pause'|'end', now: number, answered = 0, active = previous.playerKeys.length): PlayRoom {
   const room = structuredClone(previous);
   if (['finished', 'closed'].includes(room.status)) return room;
@@ -27,7 +29,7 @@ export function roomTransition(previous: PlayRoom, action: 'start'|'tick'|'next'
       const elapsed = now - room.pausedAt; room.status = room.pausedFrom; room.statusEndsAt += elapsed; room.roundStartsAt += elapsed; room.roundEndsAt += elapsed; room.pausedFrom = null;
     } else if (room.status === 'countdown' || room.status === 'question' || room.status === 'reveal') {room.pausedFrom = room.status; room.pausedAt = now; room.status = 'paused';}
   } else if (room.status === 'lobby') {
-    if (action === 'start' && room.playerKeys.length >= 2) {room.status = 'countdown'; room.statusEndsAt = now + 3000;}
+    if (action === 'start' && room.playerKeys.length >= minPlayers(room)) {room.status = 'countdown'; room.statusEndsAt = now + 3000;}
     else if (now >= room.statusEndsAt) {room.status = 'closed'; room.expiresAtMs = now;}
   } else if (room.status === 'countdown' && now >= room.statusEndsAt) question();
   else if (room.status === 'question' && (now > room.roundEndsAt + ANSWER_GRACE_MS || answered > 0 && answered >= active || action === 'next')) {
