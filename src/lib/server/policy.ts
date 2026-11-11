@@ -33,7 +33,7 @@ export function validSessionAuthentication(authTime: unknown, validAfter?: strin
   return Number.isFinite(cutoff) && authTime * 1000 >= cutoff;
 }
 export function requiredSubmissionType(value: unknown): SubmissionType {
-  if (!submissionTypes.includes(value as SubmissionType)) throw new ApiError(400, '숙제 제출 방식을 글쓰기, 사진·이미지, 영상 중에서 선택해 주세요.', 'SUBMISSION_TYPE');
+  if (!submissionTypes.includes(value as SubmissionType)) throw new ApiError(400, '숙제 제출 방식을 글쓰기, 사진·이미지, 영상, 녹음 중에서 선택해 주세요.', 'SUBMISSION_TYPE');
   return value as SubmissionType;
 }
 export function submissionContentPolicy(type: AssignmentSubmissionType, answer: string, fileCount: number) {
@@ -42,12 +42,12 @@ export function submissionContentPolicy(type: AssignmentSubmissionType, answer: 
     if (!answer.trim() || fileCount !== 0) throw new ApiError(400, '글쓰기 숙제는 내용을 적어 제출해 주세요. 첨부파일은 사용할 수 없어요.', 'SUBMISSION_CONTENT');
     return;
   }
-  if ((type === 'image' || type === 'video') && fileCount < 1) throw new ApiError(400, type === 'image' ? '사진·이미지를 한 개 이상 첨부해 주세요.' : '영상을 한 개 이상 첨부해 주세요.', 'SUBMISSION_CONTENT');
+  if ((type === 'image' || type === 'video' || type === 'audio') && fileCount < 1) throw new ApiError(400, type === 'image' ? '사진·이미지를 한 개 이상 첨부해 주세요.' : type === 'audio' ? '녹음을 한 개 이상 첨부해 주세요.' : '영상을 한 개 이상 첨부해 주세요.', 'SUBMISSION_CONTENT');
   if (type === 'legacy' && !answer.trim() && !fileCount) throw new ApiError(400, '내용을 적거나 파일을 첨부해 주세요.', 'SUBMISSION_CONTENT');
 }
 export function uploadPolicy(contentType: unknown, size: unknown, submissionType: AssignmentSubmissionType = 'legacy') {
-  if (typeof contentType !== 'string' || !acceptsSubmissionFile('legacy', contentType)) throw new ApiError(400, '사진, PDF 또는 지원되는 영상 파일을 선택해 주세요.', 'FILE_TYPE');
-  if (!acceptsSubmissionFile(submissionType, contentType)) throw new ApiError(400, submissionType === 'text' ? '글쓰기 숙제에는 파일을 첨부할 수 없어요.' : submissionType === 'image' ? '이 숙제는 사진·이미지만 첨부할 수 있어요.' : '이 숙제는 영상만 첨부할 수 있어요.', 'SUBMISSION_FILE_TYPE');
+  if (typeof contentType !== 'string' || !acceptsSubmissionFile('legacy', contentType)) throw new ApiError(400, '사진, PDF, 녹음 또는 지원되는 영상 파일을 선택해 주세요.', 'FILE_TYPE');
+  if (!acceptsSubmissionFile(submissionType, contentType)) throw new ApiError(400, submissionType === 'text' ? '글쓰기 숙제에는 파일을 첨부할 수 없어요.' : submissionType === 'image' ? '이 숙제는 사진·이미지만 첨부할 수 있어요.' : submissionType === 'audio' ? '이 숙제는 녹음(소리 파일)만 첨부할 수 있어요.' : '이 숙제는 영상만 첨부할 수 있어요.', 'SUBMISSION_FILE_TYPE');
   const limit = (videoSubmissionMimeTypes.includes(contentType as (typeof videoSubmissionMimeTypes)[number]) ? 250 : 100) * 1024 * 1024;
   if (typeof size !== 'number' || !Number.isSafeInteger(size) || size <= 0 || size > limit) throw new ApiError(400, `이 파일은 ${limit / 1024 / 1024}MB까지 올릴 수 있어요.`, 'FILE_SIZE');
   return { contentType, size, limit };

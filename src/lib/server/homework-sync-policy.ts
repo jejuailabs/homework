@@ -10,6 +10,7 @@ export function homeworkSyncTargets(raw: unknown, submissionType: string) {
   const value = raw as Record<string, unknown>;
   for (const key of ['exhibition', 'board']) if (key in value && typeof value[key] !== 'boolean') throw new ApiError(400, '자동 연동 설정을 확인해 주세요.', 'SYNC_INPUT');
   if (value.exhibition === true && submissionType === 'text') throw new ApiError(400, '텍스트 숙제는 전시실에 연동되지 않아요.', 'SYNC_TEXT_EXHIBITION');
+  if (value.exhibition === true && submissionType === 'audio') throw new ApiError(400, '녹음 숙제는 전시실에 연동되지 않아요. 게시판 연동을 써 주세요.', 'SYNC_AUDIO_EXHIBITION');
   return {exhibition: value.exhibition === true, board: value.board === true};
 }
 

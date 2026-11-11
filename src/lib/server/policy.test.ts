@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { acceptsSubmissionFile, assignmentSubmissionType, imageSubmissionMimeTypes, videoSubmissionMimeTypes } from '../assignment-submission';
+import { acceptsSubmissionFile, assignmentSubmissionType, audioSubmissionMimeTypes, imageSubmissionMimeTypes, videoSubmissionMimeTypes } from '../assignment-submission';
 import { validSessionAuthentication, ApiError, BATCH_REVIEW_LIMIT, batchReviewItems, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
 
 test('teacher and platform administrator class access always requires ownership', () => {
@@ -77,6 +77,21 @@ test('image and video assignments require their media and permit an optional cap
     assert.throws(() => uploadPolicy('application/pdf', 100, type));
     assert.throws(() => uploadPolicy('application/octet-stream', 100, type));
   }
+});
+
+test('audio assignments take recordings and audio files only', () => {
+  assert.throws(() => submissionContentPolicy('audio', '설명만 적었어요.', 0), (error: unknown) => error instanceof ApiError && error.code === 'SUBMISSION_CONTENT');
+  assert.doesNotThrow(() => submissionContentPolicy('audio', '', 1));
+  assert.doesNotThrow(() => submissionContentPolicy('audio', '두 번 녹음했어요.', 3));
+  for (const mime of audioSubmissionMimeTypes) {
+    assert.equal(acceptsSubmissionFile('audio', mime), true);
+    assert.equal(acceptsSubmissionFile('legacy', mime), true);
+    assert.doesNotThrow(() => uploadPolicy(mime, 100, 'audio'));
+    for (const other of ['text', 'image', 'video'] as const) assert.throws(() => uploadPolicy(mime, 100, other));
+  }
+  for (const mime of [...imageSubmissionMimeTypes, ...videoSubmissionMimeTypes, 'application/pdf']) assert.throws(() => uploadPolicy(mime, 100, 'audio'), (error: unknown) => error instanceof ApiError && error.code === 'SUBMISSION_FILE_TYPE');
+  assert.throws(() => uploadPolicy('audio/mpeg', 100 * 1024 * 1024 + 1, 'audio'), (error: unknown) => error instanceof ApiError && error.code === 'FILE_SIZE');
+  assert.equal(requiredSubmissionType('audio'), 'audio');
 });
 
 test('legacy assignments keep text, images, PDF, and videos without accepting empty submissions', () => {

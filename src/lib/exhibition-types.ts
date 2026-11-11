@@ -32,6 +32,8 @@ export type ExhibitionArtwork = {
   width: number; height: number; url: string; thumbnailUrl: string;
   /** Homework videos synced into the room play from here; url and thumbnailUrl are the poster. */
   videoUrl?: string;
+  /** A sound file uploaded with the photo (separate from the docent recording). */
+  audioUrl?: string; audioFileName?: string;
   createdAt: string; reviewedAt: string | null; ownReaction?: ArtReaction;
   /** Only the author and owning teacher receive this private encouragement summary. */
   reactionCounts?: ArtReactionCounts;
