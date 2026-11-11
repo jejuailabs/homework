@@ -9,12 +9,13 @@ import {fillCopy} from '@/lib/cards-class-copy';
 import '@/styles/cards-p2.css';
 import {cardsRequest, CardsDialog} from './cards-shared';
 import {CardModeIcon} from './cards-visuals';
+import OpenRooms from '@/modules/playground/open-rooms';
 
 /** Opens a live team room from this set. The server rebuilds the questions itself; nothing here goes to students. */
 export default function CardsTeamSetup({set, classId, className, classes = [], onClose}: {set: CardSet; classId: string; className: string; classes?: {id: string; name: string}[]; onClose: () => void}) {
   const {t, locale} = useCardsCopy(), router = useRouter(), p = useCardsP2Copy();
   const [versus, setVersus] = useState<string[]>([]), [typed, setTyped] = useState(false), others = classes.filter(room => room.id !== classId);
-  const [direction, setDirection] = useState<CardDirection>('front-back'), [wanted, setWanted] = useState(10), [seconds, setSeconds] = useState(CARD_ROOM_SECONDS.initial), [teamCount, setTeamCount] = useState(CARD_ROOM_TEAMS.initial), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [direction, setDirection] = useState<CardDirection>('front-back'), [wanted, setWanted] = useState(10), [seconds, setSeconds] = useState(CARD_ROOM_SECONDS.initial), [teamCount, setTeamCount] = useState(CARD_ROOM_TEAMS.initial), [busy, setBusy] = useState(false), [error, setError] = useState(''), [roomsRevision, setRoomsRevision] = useState(0);
   const pending = useRef<{configuration: string; id: string} | null>(null);
   const choiceCapacity = useMemo(() => cardRoomCapacity(set.cards, direction), [set.cards, direction]), huntCapacity = useMemo(() => cardHuntCapacity(set.cards, direction), [set.cards, direction]);
   const capacity = typed ? {answers: 2, questions: huntCapacity} : choiceCapacity;
@@ -25,10 +26,11 @@ export default function CardsTeamSetup({set, classId, className, classes = [], o
     const configuration = JSON.stringify([set.id, set.version, classId, direction, rounds, seconds, teamCount, versus, typed]);
     if (pending.current?.configuration !== configuration) pending.current = {configuration, id: crypto.randomUUID()};
     try {const room = await cardsRequest<{roomId: string}>('/api/playground/rooms', {method: 'POST', body: JSON.stringify({mode: 'team', cardSetId: set.id, classId, direction, rounds, seconds, ...(versus.length ? {versusClassIds: [classId, ...versus]} : {teamCount}), ...(typed ? {answer: 'typed'} : {}), requestId: pending.current.id})}); router.push(`/teacher/playground/live/${room.roomId}?from=cards`);}
-    catch (cause) {setError(locale === 'ko' && cause instanceof Error ? cause.message : t('error')); setBusy(false);}
+    catch (cause) {setError(locale === 'ko' && cause instanceof Error ? cause.message : t('error')); setBusy(false); setRoomsRevision(value => value + 1);}
   }
   return <CardsDialog title={`${versus.length ? p.versus : t('teamGame')} · ${className}`} closeLabel={t('close')} onClose={() => {if (!busy) onClose();}}><form className="cards-publish" onSubmit={open}>
     <p className="cards-team-intro"><CardModeIcon mode="team" size={40}/><span>{t('teamGameHint')}</span></p>
+    <OpenRooms classId={classId} refresh={roomsRevision} from="cards"/>
     <fieldset className="cards-fieldset" disabled={busy}>
       <div className="cards-team-answer" role="radiogroup" aria-label={p.answerMode}><strong>{p.answerMode}</strong><label className="cards-check"><input type="radio" name="answer-mode" checked={!typed} onChange={() => setTyped(false)}/>{p.answerChoice}</label><label className="cards-check"><input type="radio" name="answer-mode" checked={typed} onChange={() => setTyped(true)}/>{p.answerTyped}</label></div>
       <label>{t('teamDirection')}<select value={direction} onChange={e => setDirection(e.target.value as CardDirection)}><option value="front-back">{t('frontBack')}</option><option value="back-front">{t('backFront')}</option></select></label>

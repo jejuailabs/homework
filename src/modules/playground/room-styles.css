@@ -13,3 +13,14 @@
 .play-room-hunt-host{text-align:center;font-size:20px;margin:20px 0}.play-room-hunt-tag{display:inline-block;margin-left:10px;font-size:14px;padding:4px 10px;border-radius:20px;background:#edf6ed;color:#40755e;vertical-align:middle}.play-room-class-tag{font-weight:700}
 [data-mode=dark] .play-room-hunt-tag{background:#354d3b;color:#a8d9b4}
 @media(max-width:600px){.play-room-hunt>div{flex-direction:column}.play-room-hunt .button{width:100%}}
+
+/* Team rooms the teacher left running: reopen or end. */
+.play-open-rooms{--room-ink:#344d46;--room-paper:#fffdf7;--room-line:#deded0;color:var(--room-ink);background:var(--room-paper);border:1px solid var(--room-line);border-radius:18px;padding:16px;margin:12px 0;display:grid;gap:10px;text-align:left}
+.play-open-rooms h3{margin:0;font-size:1rem}
+.play-open-rooms h3 small{opacity:.65;margin-left:4px}
+.play-open-room{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--room-line);padding-top:10px}
+.play-open-room>div:first-child{display:grid;gap:2px;min-width:0}
+.play-open-room span{font-size:.88rem;opacity:.75}
+.play-open-room-actions{display:flex;flex-wrap:wrap;gap:6px}
+.play-open-room-actions button:not(.button){border:1px solid var(--room-line);background:transparent;color:inherit;border-radius:999px;padding:6px 12px;cursor:pointer}
+[data-mode=dark] .play-open-rooms{--room-ink:#e5eadd;--room-paper:#25342e;--room-line:#4c5c50}
