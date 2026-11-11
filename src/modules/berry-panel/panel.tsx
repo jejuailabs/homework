@@ -1,5 +1,6 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
+import {withBanners} from './links';
 import {usePathname} from 'next/navigation';
 import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, PencilLine, PlugZap, Send, Sparkles, StickyNote, TriangleAlert, X} from 'lucide-react';
 import {abilityGroups, firstBlank, lackingFor, missingPermissions, type Ability} from './abilities';
@@ -25,12 +26,6 @@ async function api<T>(path: string, body?: object): Promise<T> {
   return data as T;
 }
 const shown = (value: unknown) => Array.isArray(value) ? value.join(', ') : value === null || value === undefined || value === '' ? null : typeof value === 'boolean' ? (value ? '예' : '아니요') : String(value);
-/** Berry's [이름](/teacher/…) links become banners under the answer; only ourclass teacher pages, never outside links. */
-const BANNER_LINK = /\[([^\]\n]{1,120})\]\((\/teacher(?:[/?][^\s)]{0,400})?)\)/g;
-function withBanners(text: string) {
-  const links = [...text.matchAll(BANNER_LINK)].map(match => ({label: match[1], href: match[2]}));
-  return {text: text.replace(BANNER_LINK, '$1'), links: [...new Map(links.map(link => [link.href, link])).values()].slice(0, 12)};
-}
 function bannerKind(href: string) {
   if (href.includes('archive=1')) return {icon: Images, label: '전시 보관함에서 보기'};
   if (href.startsWith('/teacher/exhibitions')) return {icon: Images, label: '전시실 열기'};
@@ -44,7 +39,7 @@ function Banners({links}: {links: {label: string; href: string}[]}) {
   if (!links.length) return null;
   return <div className="bp-banners">{links.map(link => <a key={link.href} className="bp-banner" href={link.href}>
     <span className="bp-banner-icon">{(() => {const Icon = bannerKind(link.href).icon; return <Icon size={17}/>;})()}</span>
-    <span><strong>{link.label}</strong><small>{bannerKind(link.href).label}</small></span>
+    <span><strong>{link.label || bannerKind(link.href).label}</strong>{link.label && <small>{bannerKind(link.href).label}</small>}</span>
     <ChevronRight size={16}/>
   </a>)}</div>;
 }
