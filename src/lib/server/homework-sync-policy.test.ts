@@ -52,3 +52,8 @@ test('a failed sync retries three times per attempt; a new attempt always syncs'
   assert.equal(syncDue({attemptId: 'a1', status: 'failed', tries: 2}, 'a1'), true);
   assert.equal(syncDue({attemptId: 'a1', status: 'failed', tries: 3}, 'a1'), false);
 });
+
+test('recording homework can feed a board but never an exhibition', () => {
+  assert.throws(() => homeworkSyncTargets({exhibition: true}, 'audio'), (error: unknown) => (error as {code?: string}).code === 'SYNC_AUDIO_EXHIBITION');
+  assert.deepEqual(homeworkSyncTargets({board: true}, 'audio'), {exhibition: false, board: true});
+});
