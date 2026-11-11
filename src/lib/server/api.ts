@@ -3,7 +3,7 @@ import {markHomeworkUploadsSubmitted, prepareHomeworkUpload, verifiedHomeworkUpl
 import {deleteSubmission, editSubmission, restoreSubmission, submissionFingerprint, submissionTrashRef} from './submission-edits';
 import {restorableSubmission} from '../submission-edit';
 import {stableReadUrl} from './signed-urls';
-import {canMarkVideoStorageTest, chosenVideoStorage} from '../video-storage';
+import {canMarkVideoStorageTest} from '../video-storage';
 import {downloadDisposition, extensionOf, friendlyFileName} from '../file-naming';
 import {assertTeacherStorage} from './teacher-storage';
 import {createVideoSubmission,studentVideoJobs,videoConfig} from './video-submissions';
@@ -395,7 +395,7 @@ async function finalize(request: Request) {
   if (!Array.isArray(input.uploadIds) || input.uploadIds.length > 10 || new Set(input.uploadIds).size !== input.uploadIds.length) throw new ApiError(400, '첨부파일은 최대 10개까지 제출할 수 있어요.');
   const uploadIds = input.uploadIds.map((value: unknown) => id(value));
   submissionContentPolicy(assignment.submissionType, answer, uploadIds.length);
-  if(assignment.submissionType==='video')return json({processing:true,videoJob:await createVideoSubmission(ctx,assignment,answer,uploadIds,chosenVideoStorage(assignment,input.videoStorage))},202);
+  if(assignment.submissionType==='video')return json({processing:true,videoJob:await createVideoSubmission(ctx,assignment,answer,uploadIds,input.videoStorage)},202);
   const fingerprint = submissionFingerprint(answer, uploadIds);
   const ref = db().doc(`submissions/${assignmentId}_${ctx.studentId}`), trashRef = submissionTrashRef(assignmentId, ctx.studentId!);
   const previous = await ref.get();

@@ -16,6 +16,7 @@ const visibility = load('./assignment-visibility-policy.ts', {'./policy': policy
 const teacher = {uid: 'teacher-1', role: 'teacher', email: null, displayName: null};
 const student = {uid: 'student-1', role: 'student', classId: 'class-a', studentId: 'pupil-1'};
 const submissionEdit = load('../submission-edit.ts');
+const videoStorage = load('../video-storage.ts');
 
 function fixture(initial) {
   const data = new Map(Object.entries(initial).map(([key, value]) => [key, structuredClone(value)]));
@@ -73,6 +74,7 @@ function fixture(initial) {
   const video = load('./video-submissions.ts', {
     ...imports, './admin': {db: () => db, bucket: () => ({file: () => ({getMetadata: async () => [{size: 1000, contentType: 'video/mp4', generation: '1'}]})})},
     'node:crypto': crypto, '../video-submission': {videoSelectionError: () => null},
+    '../video-storage': videoStorage, './r2': {r2Configured: () => false, r2Delete: async () => {}},
   });
   const learningLinks = load('./learning-links.ts', {
     ...imports, 'node:crypto': crypto, 'next/server': {NextResponse: {json: Response.json.bind(Response)}},
