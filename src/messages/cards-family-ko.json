@@ -84,6 +84,7 @@
   "rankTitle": "복습 게임 순위",
   "rankToggle": "학생에게 반 순위 보이기",
   "rankRule": "끄면 내 최고 기록만, 켜면 상위 10명과 내 순위가 보여요.",
+  "rankInline": "복습 게임 · 우리 반 전체에 바로 적용돼요",
   "rankError": "순위 설정을 저장하지 못했어요.",
   "momentFront": "선물 카드가 왔어요",
   "momentFlip": "눌러서 뒤집기",
