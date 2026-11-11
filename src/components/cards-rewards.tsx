@@ -33,8 +33,11 @@ export function CardsRewardToggle({classId}: {classId: string}) {
   </section>;
 }
 
-/** 우리 반 학습 기본값 안의 복습 게임 '반 순위 보이기' 스위치(기본 꺼짐). 보말 스위치처럼 바로 저장된다. */
-export function CardsRankingToggle({classId}: {classId: string}) {
+/**
+ * 우리 반 학습 기본값 안의 복습 게임 '반 순위 보이기' 스위치(기본 꺼짐). 보말 스위치처럼 바로 저장된다.
+ * `compact`는 배포 창 아래에 두는 조용한 한 줄짜리: 같은 반 설정을 바꾸며, 배포 폼의 변경 감지는 건드리지 않는다.
+ */
+export function CardsRankingToggle({classId, compact = false}: {classId: string; compact?: boolean}) {
   const {copy: c} = useCardsFamilyCopy();
   const [shown, setShown] = useState<boolean | null>(null), [busy, setBusy] = useState(false), [status, setStatus] = useState(''), [error, setError] = useState('');
   const path = `/api/cards/classes/${encodeURIComponent(classId)}/game-rankings`;
@@ -43,6 +46,10 @@ export function CardsRankingToggle({classId}: {classId: string}) {
     setBusy(true); setStatus(''); setError('');
     try {setShown((await request<{rankingsShown: boolean}>(path, {method: 'PATCH', body: JSON.stringify({rankingsShown: next})})).rankingsShown); setStatus(c.rewardSaved);} catch {setError(c.rankError);} finally {setBusy(false);}
   }
+  if (compact) return <div className="cards-rank-inline">
+    <label className="cards-check"><input type="checkbox" checked={!!shown} disabled={shown === null || busy} onChange={event => {event.stopPropagation(); void toggle(event.target.checked);}}/><Trophy size={14} aria-hidden/>{c.rankToggle}</label>
+    <span className="cards-muted">{status || c.rankInline}</span>{error && <span role="alert" className="cards-error">{error}</span>}
+  </div>;
   return <section className="cards-reward-settings" aria-labelledby={`card-rank-${classId}`}>
     <h3 id={`card-rank-${classId}`}><Trophy size={17}/>{c.rankTitle}</h3>
     <label className="cards-check"><input type="checkbox" checked={!!shown} disabled={shown === null || busy} onChange={event => void toggle(event.target.checked)}/>{c.rankToggle}</label>
