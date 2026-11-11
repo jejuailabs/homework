@@ -5,14 +5,16 @@ import {DoorOpen, Users, Zap, Swords} from 'lucide-react';
 import {playKinds,playLabels,type PlayKind} from './types';
 import {roomRequest} from './use-play-room';
 import type {PlayRoomMode} from './room-types';
+import OpenRooms from './open-rooms';
 import './room-styles.css';
 
 export default function RoomLauncher({classId,teacher=false,enabled=true}:{classId?:string;teacher?:boolean;enabled?:boolean}) {
-  const router=useRouter(),[code,setCode]=useState(''),[mode,setMode]=useState<PlayRoomMode>(teacher?'team':'duel'),[kind,setKind]=useState<PlayKind|'mixed'>('mixed'),[rounds,setRounds]=useState(10),[seconds,setSeconds]=useState(15),[teamCount,setTeamCount]=useState(2),[range,setRange]=useState('all'),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const router=useRouter(),[code,setCode]=useState(''),[mode,setMode]=useState<PlayRoomMode>(teacher?'team':'duel'),[kind,setKind]=useState<PlayKind|'mixed'>('mixed'),[rounds,setRounds]=useState(10),[seconds,setSeconds]=useState(15),[teamCount,setTeamCount]=useState(2),[range,setRange]=useState('all'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[roomsRevision,setRoomsRevision]=useState(0);
   const pending=useRef<{configuration:string;id:string}|null>(null);
-  async function create(){setBusy(true);setError('');const configuration=JSON.stringify([mode,kind,classId,rounds,seconds,teamCount,range]);if(pending.current?.configuration!==configuration)pending.current={configuration,id:crypto.randomUUID()};try{const room=await roomRequest<{roomId:string;code:string}>('rooms',{mode,kinds:range!=='all'?['spelling']:kind==='mixed'?[...playKinds]:[kind],requestId:pending.current.id,...(teacher?{classId,rounds,seconds,teamCount,range}:{})});router.push(teacher?`/teacher/playground/live/${room.roomId}`:`/student/playground/room/${room.code}`);}catch(cause){setError((cause as Error).message);}finally{setBusy(false);}}
+  async function create(){setBusy(true);setError('');const configuration=JSON.stringify([mode,kind,classId,rounds,seconds,teamCount,range]);if(pending.current?.configuration!==configuration)pending.current={configuration,id:crypto.randomUUID()};try{const room=await roomRequest<{roomId:string;code:string}>('rooms',{mode,kinds:range!=='all'?['spelling']:kind==='mixed'?[...playKinds]:[kind],requestId:pending.current.id,...(teacher?{classId,rounds,seconds,teamCount,range}:{})});router.push(teacher?`/teacher/playground/live/${room.roomId}`:`/student/playground/room/${room.code}`);}catch(cause){setError((cause as Error).message);setRoomsRevision(value=>value+1);}finally{setBusy(false);}}
   return <section className="play-room-launcher" aria-label={teacher?'팀전 열기':'친구와 함께 놀기'}>
     <h2><Users size={22}/>{teacher?'우리 반 팀전':'친구와 함께 놀기'}</h2>
+    {teacher&&<OpenRooms classId={classId} refresh={roomsRevision}/>}
     {!enabled&&<p>{teacher?'말놀이터를 켜면 팀전을 열 수 있어요.':'선생님이 친구 대결을 열면 방을 만들 수 있어요. 교실 팀전은 아래 코드로 참가해요.'}</p>}
     <fieldset disabled={!enabled||busy}><legend className="sr-only">새 방 설정</legend>
       {!teacher&&<div className="play-room-modes"><button type="button" aria-pressed={mode==='duel'} onClick={()=>setMode('duel')}><Swords size={18}/>1:1 대결</button><button type="button" aria-pressed={mode==='speed'} onClick={()=>setMode('speed')}><Zap size={18}/>2~4인 순발력</button></div>}
