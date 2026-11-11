@@ -295,7 +295,14 @@ async function distributionDetail(ctx: Context, request: Request, distributionId
   return json({ distribution: visible, ...(ctx.role === 'student' ? { progress: progress(state?.data(), distribution), coverage: state?.data()?.coverage ?? { memorize: {}, recall: {}, spell: {} }, cardStates: cardReviewStates(state?.data()?.cardStates), serverTime: now(), ...(testing ? { testActive: { attemptId: testing.id, startedAt: testing.startedAt, timeLimitSeconds: testing.timeLimitSeconds ?? null } } : {}) } : {}) });
 }
 
-const REVIEW_FIELDS = ['classId', 'ownerUid', 'targetStudentIds', 'allStudents', 'active', 'dueAt', 'afterDue', 'type'];
+const REVIEW_FIELDS = ['classId', 'ownerUid', 'setId', 'targetStudentIds', 'allStudents', 'active', 'dueAt', 'afterDue', 'type'];
+/** Sets the teacher moved to the archive. Their distributions leave the student list and review like 학생에게 숨기기; records stay. */
+async function archivedSetIds(setIds: unknown[]) {
+  const ids = [...new Set(setIds.filter((value): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value)))];
+  if (!ids.length) return new Set<string>();
+  const snaps = await db().getAll(...ids.map(value => db().doc(`cardSets/${value}`)), { fieldMask: ['archived'] });
+  return new Set(snaps.filter(snap => snap.data()?.archived === true).map(snap => snap.id));
+}
 /**
  * The sets whose misses this student may review across sets: still meant for them, the class owner's, not closed by a locked
  * deadline, and not hidden by the teacher's lesson order. The list row and the review session both use it, so the count on the
@@ -305,7 +312,8 @@ async function reviewableSets(ctx: Context, ownerUid: unknown, misses: unknown, 
   const hidden = new Set(readClassSettings(plan, ownerUid).plan.filter(item => item.kind === 'set' && item.hidden).map(item => item.id));
   const ids = Object.keys(misses && typeof misses === 'object' && !Array.isArray(misses) ? misses : {}).filter(key => /^[A-Za-z0-9_-]{1,128}$/.test(key) && !hidden.has(key)).slice(0, 400);
   const snaps = ids.length ? await db().getAll(...ids.map(distributionRef), { fieldMask: REVIEW_FIELDS }) : [];
-  return new Set(snaps.filter(snap => {
+  const archived = await archivedSetIds(snaps.map(snap => snap.data()?.setId));
+  return new Set(snaps.filter(snap => !archived.has(String(snap.data()?.setId))).filter(snap => {
     const value = snap.data() as (Data & { classId: string; targetStudentIds: string[]; active: boolean; dueAt: string | null }) | undefined;
     // 연습문제 sets have no card review: their questions need the drill screen, so their misses stay out of the review row.
     return !!value && value.type !== 'drill' && Array.isArray(value.targetStudentIds) && canStudyDistribution(ctx, value) && value.ownerUid === ownerUid && cardDueState(value, Date.now(), CARD_DUE_GRACE_MS) !== 'lock';
@@ -324,7 +332,9 @@ async function studentList(ctx: Context, request: Request) {
   const page = result.docs.slice(0, CARD_LIST_LIMIT);
   // Hidden rows leave the list only; the distribution and its records stay. Every page drops hidden sets and keeps the teacher's
   // order among its own sets; memos come with the first page only.
-  const visible = page.map(asDistribution).filter(value => canStudyDistribution(ctx, value) && cls.data()!.ownerUid === value.ownerUid);
+  const allowed = page.map(asDistribution).filter(value => canStudyDistribution(ctx, value) && cls.data()!.ownerUid === value.ownerUid);
+  const archived = await archivedSetIds(allowed.map(value => value.setId));
+  const visible = allowed.filter(value => !archived.has(value.setId));
   const planned = applyStudentPlan(visible, plan, cls.data()!.ownerUid), rows = planned.distributions, layout = cursor ? undefined : planned.layout;
   const [states, reviewable, notes] = await Promise.all([rows.length ? db().getAll(...rows.map(value => progressRef(value.id, ctx.studentId))) : Promise.resolve([]), reviewableSets(ctx, cls.data()!.ownerUid, missed.data()?.misses, plan), cursor ? Promise.resolve(undefined) : (await import('./cards-notes')).studentNoteSummary(ctx.classId, ctx.studentId, String(cls.data()!.ownerUid))]);
   return json({ distributions: rows.map((value, index) => ({ ...distributionSummary(value), progress: progress(states[index]?.data(), value) })), review: summarizeCardMisses(missed.data()?.misses, cardReviewDate(), reviewable), profile: { id: ctx.studentId, name: pupil.data()!.name, character: pupil.data()!.character ?? 'cat', className: cls.data()!.name }, ...(layout ? { layout } : {}), ...(notes ? { notes } : {}), nextCursor: result.size > CARD_LIST_LIMIT ? page.at(-1)!.id : null, serverTime: now() });
