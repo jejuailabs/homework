@@ -67,8 +67,23 @@ function Abilities({onPick, granted, off}: {onPick: (ability: Ability) => void; 
   const groups = abilityGroups(off);
   const [group, setGroup] = useState(groups[0].key);
   const current = groups.find(entry => entry.key === group) ?? groups[0];
+  const strip = useRef<HTMLDivElement>(null);
+  // A mouse wheel only scrolls up and down; turn it sideways so the category chips move on desktop too.
+  useEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      const max = el.scrollWidth - el.clientWidth;
+      if ((event.deltaY < 0 && el.scrollLeft <= 0) || (event.deltaY > 0 && el.scrollLeft >= max)) return;
+      event.preventDefault();
+      el.scrollLeft += event.deltaY;
+    };
+    el.addEventListener('wheel', onWheel, {passive: false});
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
   return <div className="bp-abilities">
-    <div className="bp-ability-groups" role="tablist" aria-label="할 수 있는 일 분류">{groups.map(entry => <button type="button" role="tab" key={entry.key} aria-selected={entry.key === group} onClick={() => setGroup(entry.key)}><span aria-hidden="true">{entry.emoji}</span>{entry.label}</button>)}</div>
+    <div className="bp-ability-groups" ref={strip} role="tablist" aria-label="할 수 있는 일 분류">{groups.map(entry => <button type="button" role="tab" key={entry.key} aria-selected={entry.key === group} onClick={event => {setGroup(entry.key); event.currentTarget.scrollIntoView({block: 'nearest', inline: 'nearest', behavior: 'smooth'});}}><span aria-hidden="true">{entry.emoji}</span>{entry.label}</button>)}</div>
     <div className="bp-ability-list">{current.abilities.map(ability => {
       const locked = !!granted && lackingFor(ability, granted).length > 0;
       return <button type="button" key={ability.label} className={[ability.danger ? 'is-danger' : '', locked ? 'is-locked' : ''].filter(Boolean).join(' ')} title={locked ? '다시 연결하면 쓸 수 있어요' : ability.prompt} onClick={() => onPick(ability)}>

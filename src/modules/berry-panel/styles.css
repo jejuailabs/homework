@@ -32,6 +32,7 @@
 /* 할 수 있는 일: group tabs + one-tap request buttons */
 .bp-abilities{display:flex;flex-direction:column;gap:8px;width:100%}.bp-abilities.is-compact{padding:8px 10px 0;border-top:1px solid var(--border);max-height:46%;overflow-y:auto}
 .bp-abilities .bp-ability-groups{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}.bp-ability-groups::-webkit-scrollbar{display:none}
+@media (hover:hover) and (pointer:fine){.bp-abilities .bp-ability-groups{scrollbar-width:thin;scrollbar-color:#d9c8ea transparent;padding-bottom:5px}.bp-ability-groups::-webkit-scrollbar{display:block;height:5px}.bp-ability-groups::-webkit-scrollbar-thumb{background:#d9c8ea;border-radius:999px}}
 .bp-abilities .bp-ability-groups button{display:inline-flex;align-items:center;gap:4px;flex:none;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);font-size:12px;font-weight:650;text-align:center}
 .bp-abilities .bp-ability-groups button[aria-selected=true]{background:#6f4d8c;border-color:#6f4d8c;color:#fff}
 .bp-abilities .bp-ability-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
