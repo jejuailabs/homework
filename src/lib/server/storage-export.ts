@@ -44,9 +44,12 @@ async function galleryFiles(uid: string): Promise<ExportFile[]> {
     const paths = [art.uploaderUid && fileId ? `exhibition-uploads/${art.uploaderUid}/${fileId}/original` : '', art.displayPath].filter(Boolean);
     const number = art.studentNumber ? `${String(art.studentNumber).padStart(2, '0')}_` : '', person = art.studentName || art.artistName || '선생님', index = (counts.get(person) ?? 0) + 1;
     counts.set(person, index);
-    return {paths, size: Number(art.storedBytes || 0), appendExtension: true, name: `전시실/${safeSegment(room.data().title, '전시실')}/${number}${friendlyFileName(person, room.data().title, '', index, '전시')}`};
+    const name = `전시실/${safeSegment(room.data().title, '전시실')}/${number}${friendlyFileName(person, room.data().title, '', index, '전시')}`;
+    // A sound file uploaded with the artwork is exported next to it under the same name.
+    const sound = art.audioPath ? [{paths: [String(art.audioPath)], size: Number(art.audioBytes || 0), appendExtension: true, name: `${name}_소리`}] : [];
+    return [{paths, size: Math.max(0, Number(art.storedBytes || 0) - Number(art.audioBytes || 0)), appendExtension: true, name}, ...sound];
   });}));
-  return perRoom.flat().filter(file => file.paths.length);
+  return perRoom.flat(2).filter(file => file.paths.length);
 }
 
 async function boardFiles(uid: string): Promise<ExportFile[]> {

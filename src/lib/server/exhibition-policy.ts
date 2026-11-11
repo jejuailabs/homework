@@ -75,6 +75,24 @@ export function exhibitionUploadPolicy(contentType: unknown, size: unknown) {
   if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1 || size > EXHIBITION_IMAGE_LIMIT) throw new ApiError(400, '사진 한 장은 100MB까지 올릴 수 있어요.', 'FILE_SIZE');
   return { contentType, size };
 }
+/** A sound file played with an artwork (separate from the docent recording). */
+export const EXHIBITION_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/webm', 'audio/ogg', 'audio/wav'] as const;
+export const EXHIBITION_AUDIO_LIMIT = 50 * 1024 * 1024;
+export function exhibitionAudioPolicy(contentType: unknown, size: unknown) {
+  if (typeof contentType !== 'string' || !EXHIBITION_AUDIO_TYPES.includes(contentType as (typeof EXHIBITION_AUDIO_TYPES)[number])) throw new ApiError(400, 'mp3, m4a, wav, ogg 소리 파일을 선택해 주세요.', 'FILE_TYPE');
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1 || size > EXHIBITION_AUDIO_LIMIT) throw new ApiError(400, '소리 파일은 50MB까지 올릴 수 있어요.', 'FILE_SIZE');
+  return { contentType, size };
+}
+/** The first bytes must match the declared audio format, so a renamed file cannot pose as sound. */
+export function audioHeaderMatches(contentType: string, head: Uint8Array) {
+  const ascii = String.fromCharCode(...head.subarray(0, 16));
+  if (contentType === 'audio/mp4') return ascii.slice(4, 8) === 'ftyp';
+  if (contentType === 'audio/webm') return head[0] === 0x1a && head[1] === 0x45 && head[2] === 0xdf && head[3] === 0xa3;
+  if (contentType === 'audio/ogg') return ascii.startsWith('OggS');
+  if (contentType === 'audio/wav') return ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WAVE';
+  if (contentType === 'audio/mpeg') return ascii.startsWith('ID3') || (head[0] === 0xff && (head[1] & 0xe0) === 0xe0);
+  return false;
+}
 export function canConsumeExhibitionUpload(actor: ExhibitionActor, exhibitionId: string, upload: { userUid?: unknown; exhibitionId?: unknown; status?: unknown } | undefined) {
   return !!upload && upload.userUid === actor.uid && upload.exhibitionId === exhibitionId && upload.status === 'pending';
 }

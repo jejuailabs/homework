@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   approvalCountDelta, artworkReview, artworkStudentId, artReaction, canConsumeExhibitionUpload,
   canParticipateExhibition, canSubmitExhibition, canViewArtwork, canViewArtworkFeedback, canViewExhibition, exhibitionStatus, exhibitionTheme,
-  exhibitionUploadPolicy, nextPassport, nextReactionCounts, ownsExhibition,
+  exhibitionUploadPolicy, exhibitionAudioPolicy, audioHeaderMatches, EXHIBITION_AUDIO_TYPES, nextPassport, nextReactionCounts, ownsExhibition,
   exhibitionStorageLimit, reserveExhibitionBytes, settleExhibitionBytes, releaseExhibitionBytes, exhibitionCursor, encodeExhibitionCursor, EXHIBITION_DERIVATIVE_RESERVATION, completeExhibitionWrites,
 } from './exhibition-policy';
 
@@ -165,4 +165,21 @@ test('students submit only into an opted-in open exhibition in their own class',
   assert.equal(canSubmitExhibition(student, {...enabled, status: 'draft'}), false);
   assert.equal(canSubmitExhibition({...student, classId: 'other'}, enabled), false);
   assert.equal(canSubmitExhibition(student, {...enabled, allowStudentUploads: false}), false);
+});
+
+test('artwork sound files: only real audio types up to 50MB, and the header must match the type', () => {
+  for (const type of EXHIBITION_AUDIO_TYPES) assert.deepEqual(exhibitionAudioPolicy(type, 1024), {contentType: type, size: 1024});
+  for (const type of ['image/png', 'video/mp4', 'text/html', 'audio/x-m4a', undefined]) assert.throws(() => exhibitionAudioPolicy(type, 10));
+  assert.throws(() => exhibitionAudioPolicy('audio/mpeg', 50 * 1024 * 1024 + 1));
+  assert.throws(() => exhibitionAudioPolicy('audio/mpeg', 0));
+  assert.throws(() => exhibitionUploadPolicy('audio/mpeg', 10), 'a sound file is never accepted as the artwork photo');
+  const bytes = (text: string, prefix: number[] = []) => Uint8Array.from([...prefix, ...[...text].map(char => char.charCodeAt(0))]);
+  assert.equal(audioHeaderMatches('audio/mpeg', bytes('ID3')), true);
+  assert.equal(audioHeaderMatches('audio/mpeg', Uint8Array.from([0xff, 0xfb, 0x90, 0x00])), true);
+  assert.equal(audioHeaderMatches('audio/mp4', bytes('ftypM4A ', [0, 0, 0, 0x20])), true);
+  assert.equal(audioHeaderMatches('audio/webm', Uint8Array.from([0x1a, 0x45, 0xdf, 0xa3, 0x01])), true);
+  assert.equal(audioHeaderMatches('audio/ogg', bytes('OggS')), true);
+  assert.equal(audioHeaderMatches('audio/wav', bytes('RIFF    WAVEfmt ')), true);
+  assert.equal(audioHeaderMatches('audio/wav', bytes('<html><body>')), false);
+  assert.equal(audioHeaderMatches('audio/mpeg', bytes('%PDF-1.7')), false);
 });
