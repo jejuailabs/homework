@@ -31,6 +31,10 @@ assert.deepEqual(puzzleEligible(words, 'word').map(item => [item.cardId, item.ch
 assert.equal(puzzleEligible(words, 'word')[0].hint, '나는 사과를 먹는다.', 'a Korean line in the example becomes the hint');
 assert.equal(puzzleEligible(words, 'word')[1].hint, 'word 3 · 뜻 3', 'with no Korean line the card is the hint');
 assert.equal(puzzleEligible([card(1, {example: '나는 사과를 먹는다.\n오늘 아침에.'})], 'word')[0].hint, 'word 1 · 뜻 1', 'a Korean sentence to arrange has no translation line');
+assert.deepEqual(puzzleEligible(words, 'word').map(item => item.meaning), [true, false], 'only a Korean sentence counts as a meaning to translate from');
+const mixedWords = Array.from({length: 8}, (_, index) => card(index, {example: index < 3 ? `I see the cat ${index}.
+나는 고양이 ${index}를 본다.` : `We like the dog ${index}.`}));
+for (let round = 0; round < 10; round++) assert.deepEqual(buildPuzzles(mixedWords, 'word', random).slice(0, 3).map(item => item.meaning), [true, true, true], 'puzzles with a Korean sentence come first');
 assert.equal(puzzleSpeech(['I eat', 'an apple.']), 'I eat an apple.', 'the English sentence is read whole');
 assert.equal(puzzleSpeech(['나는', '사과를', '먹는다.']), '', 'a Korean sentence is not read');
 assert.equal(puzzleCount(cards, 'word'), 0, 'word sets without examples have no puzzle');
