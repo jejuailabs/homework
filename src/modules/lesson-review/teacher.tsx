@@ -2,7 +2,8 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import {BarChart3, Eye, EyeOff, FileText, ImagePlus, LoaderCircle, Plus, Send, Sparkles, Trash2, Wand2, X} from 'lucide-react';
-import {compressImage, lessonRequest, readPdf} from './client';
+import {checkPdf, compressImage, lessonRequest, uploadLessonFiles} from './client';
+import {LESSON_IMAGE_MAX} from './upload-policy';
 import {CONCEPT_MAX, CONCEPT_MIN, QUESTION_MAX, QUESTION_MIN, SUBJECTS} from './engine';
 import type {Lesson, LessonConcept, LessonQuestion, QuestionBody, TeacherReport, TeacherState} from './types';
 import './styles.css';
@@ -47,18 +48,27 @@ function LessonList({lessons, onOpen}: {lessons: Lesson[]; onOpen: (lesson: Less
 
 function CreatePanel({classId, aiConfigured, onDraft}: {classId: string; aiConfigured: boolean; onDraft: (draft: Draft) => void}) {
   const [subject, setSubject] = useState<string>(SUBJECTS[0]), [unit, setUnit] = useState(''), [title, setTitle] = useState(''), [text, setText] = useState('');
-  const [images, setImages] = useState<string[]>([]), [pdf, setPdf] = useState<{name: string; data: string} | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [images, setImages] = useState<string[]>([]), [pdf, setPdf] = useState<{name: string; file: File} | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [stage, setStage] = useState('');
   async function addFiles(files: FileList | null) {
     setError('');
-    try {for (const file of Array.from(files || [])) {
-      if (file.type === 'application/pdf') setPdf({name: file.name, data: await readPdf(file)});
-      else if (file.type.startsWith('image/')) {const image = await compressImage(file); setImages(old => old.length >= 4 ? old : [...old, image]);}
+    const chosen = Array.from(files || []), photos = chosen.filter(file => file.type.startsWith('image/')), room = Math.max(0, LESSON_IMAGE_MAX - images.length);
+    // Over the limit: keep the first ones that fit and say so, instead of dropping the rest silently.
+    if (photos.length > room) setError(`사진은 ${LESSON_IMAGE_MAX}장까지 넣을 수 있어요. ${room ? `앞의 ${room}장만 넣었어요.` : '사진을 빼고 다시 넣어 주세요.'}`);
+    try {for (const file of chosen) {
+      if (file.type === 'application/pdf') setPdf(checkPdf(file));
+      else if (file.type.startsWith('image/') && photos.indexOf(file) < room) {const image = await compressImage(file); setImages(old => old.length >= LESSON_IMAGE_MAX ? old : [...old, image]);}
     }} catch (cause) {setError((cause as Error).message);}
   }
   async function generate() {
     setBusy(true); setError('');
-    try {const data = await lessonRequest<{lesson: Lesson}>('teacher/generate', {classId, subject, unit, title, text, images, pdf}); onDraft({...data.lesson});}
-    catch (cause) {setError((cause as Error).message);} finally {setBusy(false);}
+    try {
+      const total = images.length + (pdf ? 1 : 0);
+      if (total) setStage(`사진·PDF 올리는 중 0/${total}`);
+      const uploaded = await uploadLessonFiles(classId, images, pdf?.file ?? null, (done, count) => setStage(`사진·PDF 올리는 중 ${Math.floor(done)}/${count}`));
+      setStage('');
+      const data = await lessonRequest<{lesson: Lesson}>('teacher/generate', {classId, subject, unit, title, text, ...uploaded, ...(pdf ? {pdfName: pdf.name} : {})}); onDraft({...data.lesson});
+    }
+    catch (cause) {setError((cause as Error).message);} finally {setBusy(false); setStage('');}
   }
   const ready = subject && unit.trim() && title.trim();
   return <section className="lr-card lr-create"><h2><Wand2 size={20}/>오늘 배운 내용 넣기</h2>
@@ -67,10 +77,10 @@ function CreatePanel({classId, aiConfigured, onDraft}: {classId: string; aiConfi
       <label><span>단원<span className="lr-required" aria-hidden="true">*</span></span><input required value={unit} maxLength={80} onChange={event => setUnit(event.target.value)} placeholder="예: 2. 물의 여행"/></label>
       <label><span>차시 제목<span className="lr-required" aria-hidden="true">*</span></span><input required value={title} maxLength={80} onChange={event => setTitle(event.target.value)} placeholder="예: 물은 어떻게 순환할까요?"/></label></div>
     <label className="lr-wide">수업 내용<textarea value={text} rows={8} maxLength={20000} onChange={event => setText(event.target.value)} placeholder="교과서 본문, 판서 내용, 핵심 정리를 붙여 넣어 주세요. 사진이나 PDF만 넣어도 돼요."/></label>
-    <div className="lr-files"><label className="button"><ImagePlus size={16}/>사진·PDF 넣기<input type="file" accept="image/*,application/pdf" multiple hidden onChange={event => {void addFiles(event.target.files); event.target.value = '';}}/></label><small>사진 4장, PDF 1개(2.5MB)까지. 사진은 자동으로 줄여서 보내요.</small></div>
+    <div className="lr-files"><label className="button"><ImagePlus size={16}/>사진·PDF 넣기<input type="file" accept="image/*,application/pdf" multiple hidden onChange={event => {void addFiles(event.target.files); event.target.value = '';}}/></label><small>사진 {LESSON_IMAGE_MAX}장, PDF 1개(2.5MB)까지. 사진은 자동으로 줄여서 올려요. 지금 {images.length}/{LESSON_IMAGE_MAX}장</small></div>
     {(images.length > 0 || pdf) && <div className="lr-previews">{images.map((image, index) => <span key={index}><img src={image} alt={`넣은 사진 ${index + 1}`}/><button type="button" aria-label="사진 빼기" onClick={() => setImages(old => old.filter((_, at) => at !== index))}><X size={14}/></button></span>)}{pdf && <span className="is-pdf"><FileText size={22}/>{pdf.name}<button type="button" aria-label="PDF 빼기" onClick={() => setPdf(null)}><X size={14}/></button></span>}</div>}
     {error && <p className="lr-error" role="alert">{error}</p>}
-    <div className="lr-actions"><button type="button" className="button primary" disabled={busy || !ready || !aiConfigured || (!text.trim() && !images.length && !pdf)} onClick={() => void generate()}>{busy ? <LoaderCircle size={16} className="spin"/> : <Sparkles size={16}/>}{busy ? 'AI가 문제를 만들고 있어요 (최대 1~2분)' : 'AI로 개념·문제 초안 만들기'}</button>
+    <div className="lr-actions"><button type="button" className="button primary" disabled={busy || !ready || !aiConfigured || (!text.trim() && !images.length && !pdf)} onClick={() => void generate()}>{busy ? <LoaderCircle size={16} className="spin"/> : <Sparkles size={16}/>}{busy ? stage || 'AI가 문제를 만들고 있어요 (최대 1~2분)' : 'AI로 개념·문제 초안 만들기'}</button>
       <button type="button" className="button" disabled={busy || !ready} onClick={() => onDraft({subject, unit, title, status: 'draft', source: 'manual', concepts: Array.from({length: CONCEPT_MIN}, (_, index) => blankConcept(index)), questions: Array.from({length: QUESTION_MIN}, (_, index) => blankQuestion(index))})}>직접 만들기</button></div>
     {!aiConfigured && <p className="lr-note">AI 연결이 설정되지 않아 지금은 직접 만들기만 쓸 수 있어요.</p>}
     <p className="lr-note">AI 초안은 아이들에게 바로 가지 않아요. 내용과 정답을 확인한 뒤 배포해 주세요.</p>

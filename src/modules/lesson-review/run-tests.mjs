@@ -18,3 +18,4 @@ function moduleUrl(filename) {
 }
 const root = path.dirname(fileURLToPath(import.meta.url));
 await import(moduleUrl(path.join(root, 'engine.test.ts')));
+await import(moduleUrl(path.join(root, 'upload-policy.test.ts')));

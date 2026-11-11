@@ -9,6 +9,7 @@ import {completedAiText, providerFailure, readBoundedJson} from '@/lib/server/ai
 import {addPointBalance, pointBalance} from '@/lib/server/points-policy';
 import {cardsFor, DAILY_REVIEW_LIMIT, effectiveRating, finalRatings, isRating, LESSON_REWARD, LessonReviewError, nextReview, phaseComplete, publicQuestion, questionBody, reviewDate, scheduleItem, validateContent, validateMeta, weakQuestions} from './engine';
 import {lessonReviewRequest, lessonReviewResult, lessonSource} from './ai-request';
+import {discardLessonUpload, loadLessonUploads, prepareLessonUpload} from './uploads';
 import type {AnswerRecord, DueReview, Lesson, LessonRun, ReviewItem, RunView, StudentHome, TeacherReport, TeacherState} from './types';
 
 type Data = Record<string, unknown>;
@@ -67,9 +68,12 @@ async function teacherState(ctx: Context, classId: string): Promise<TeacherState
   return {lessons: docs.docs.map(lessonOf).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), rewardsEnabled: settings.data()?.rewardsEnabled === true, aiConfigured: Boolean(process.env.OPENAI_API_KEY?.trim())};
 }
 async function generate(ctx: Context, request: Request) {
-  const value = await body(request, 4_400_000), classId = id(value.classId), cls = await teacherClass(ctx, classId), meta = validateMeta(value);
-  const source = lessonSource(value, meta, String(cls.data()?.grade ?? ''));
+  // Photos and PDFs arrive as Firebase Storage upload ids, never inside this request.
+  const value = await body(request, 300_000), classId = id(value.classId), cls = await teacherClass(ctx, classId), meta = validateMeta(value);
   if (!process.env.OPENAI_API_KEY?.trim()) throw new ApiError(503, 'AI 연결 설정을 확인해 주세요. 문제를 직접 만들 수도 있어요.', 'AI_NOT_CONFIGURED');
+  const files = await loadLessonUploads(ctx.uid, classId, value);
+  try {
+  const source = lessonSource({text: value.text, images: files.images, pdf: files.pdf}, meta, String(cls.data()?.grade ?? ''));
   const model = AI_MODEL(), fingerprint = createHash('sha256').update(JSON.stringify(['lesson-review-v1', source])).digest('hex');
   const content = await runMeteredAi(ctx.uid, 'lesson-review', model, fingerprint, async observe => {
     const response = await fetch('https://api.openai.com/v1/responses', {method: 'POST', headers: {Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json'}, body: JSON.stringify(lessonReviewRequest(source, model)), signal: AbortSignal.timeout(110_000), cache: 'no-store'});
@@ -80,6 +84,12 @@ async function generate(ctx: Context, request: Request) {
   const ref = db().collection(`classes/${classId}/lessonReviews`).doc(randomUUID()), stamp = now();
   await ref.create({...meta, ...content, classId, ownerUid: ctx.uid, status: 'draft', source: 'ai', createdAt: stamp, updatedAt: stamp, publishedAt: null});
   return json({lesson: lessonOf(await ref.get())}, 201);
+  } finally {await Promise.allSettled(files.ids.map(discardLessonUpload));}
+}
+async function upload(ctx: Context, request: Request) {
+  const value = await body(request, 4_000), classId = id(value.classId);
+  await teacherClass(ctx, classId);
+  return json(await prepareLessonUpload(ctx.uid, classId, value, new URL(request.url).origin), 201);
 }
 async function save(ctx: Context, request: Request) {
   const value = await body(request), classId = id(value.classId);
@@ -268,6 +278,7 @@ export async function handleLessonReview(request: Request, segments: string[]) {
       if (!a && request.method === 'GET') return json(await teacherState(ctx, id(url.searchParams.get('classId'))));
       if (a === 'report' && request.method === 'GET') return json(await report(ctx, id(url.searchParams.get('classId')), id(url.searchParams.get('lessonId'))));
       if (request.method === 'POST' && a === 'generate') return await generate(ctx, request);
+      if (request.method === 'POST' && a === 'uploads') return await upload(ctx, request);
       if (request.method === 'POST' && a === 'save') return await save(ctx, request);
       if (request.method === 'POST' && (a === 'publish' || a === 'hide' || a === 'delete')) return await setStatus(ctx, request, a);
       if (request.method === 'POST' && a === 'settings') {const value = await body(request, 2_000), classId = id(value.classId); await teacherClass(ctx, classId); if (typeof value.rewardsEnabled !== 'boolean') throw new ApiError(400, '설정을 확인해 주세요.'); await settingsRef(classId).set({rewardsEnabled: value.rewardsEnabled, updatedAt: now()}, {merge: true}); return json({rewardsEnabled: value.rewardsEnabled});}

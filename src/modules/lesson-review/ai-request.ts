@@ -1,7 +1,8 @@
 import {CONCEPT_MAX, CONCEPT_MIN, LessonReviewError, QUESTION_MAX, QUESTION_MIN, validateContent} from './engine';
 import type {LessonContent} from './types';
 
-export const SOURCE_TEXT_MAX = 20_000, IMAGE_MAX = 4, IMAGE_BYTES_MAX = 900_000, PDF_BYTES_MAX = 2_500_000;
+import {LESSON_IMAGE_BYTES_MAX, LESSON_IMAGE_MAX, LESSON_PDF_BYTES_MAX} from './upload-policy';
+export const SOURCE_TEXT_MAX = 20_000, IMAGE_MAX = LESSON_IMAGE_MAX, IMAGE_BYTES_MAX = LESSON_IMAGE_BYTES_MAX, PDF_BYTES_MAX = LESSON_PDF_BYTES_MAX;
 export type LessonSource = {subject: string; unit: string; title: string; grade: string; text: string; images: string[]; pdf: {name: string; data: string} | null};
 
 const body = {type: 'object', additionalProperties: false, required: ['prompt', 'choices', 'answer', 'explanation'], properties: {
