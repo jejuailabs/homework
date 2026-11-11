@@ -6,11 +6,8 @@ export const SITE_ALT_NAMES = ['모두의교실', '교실.com', 'ourclass', 'Our
 export const SITE_ONE_LINER =
   '모두의 교실(ourclass, 교실.com)은 초등 학급을 위한 온라인 교실입니다. 숙제 제출과 피드백, 학급 작품 전시실, 교사용 AI 비서 베리, 참여보드·학급 투표·단어 카드 같은 수업 활동을 한곳에서 운영합니다.';
 
-/**
- * Public pages stay out of search until the owner approves the preview.
- * Flip to true together with the robots/sitemap step.
- */
-export const PUBLIC_SITE_INDEXABLE = false;
+/** Public pages (/, /guide) are open to search. Set false to hide them again. */
+export const PUBLIC_SITE_INDEXABLE = true;
 
 export const CATEGORIES: {id: CategoryId; name: string; blurb: string}[] = [
   {id: 'start', name: '시작하기', blurb: '가입부터 첫 숙제까지, 처음 쓰는 선생님을 위한 안내'},
