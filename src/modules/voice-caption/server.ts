@@ -3,10 +3,11 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { bucket, db } from '@/lib/server/admin';
 import { ApiError, id, text } from '@/lib/server/policy';
 import type { ModuleTarget } from '../artwork-extensions/server-contract';
-import { boundedBytes, consumeModuleRate, digest, moduleJson } from '../artwork-extensions/server-utils';
-import { VOICE_MAX_BYTES, wavDuration } from './wav';
+import { consumeModuleRate, digest, moduleJson } from '../artwork-extensions/server-utils';
+import { VOICE_MAX_BYTES, VOICE_RATE, wavDuration } from './wav';
 import { transcribeVoice } from './provider';
 type Data = Record<string, any>;
+const UPLOAD_WINDOW = 15 * 60000;
 export async function voiceCaption(request: Request, t: ModuleTarget, segments: string[]): Promise<object | Response> {
     if (!t.options.voice.enabled || t.publicView && !t.options.voice.publicAudio)
         throw new ApiError(404, '음성 도슨트가 꺼져 있어요.', 'MODULE_DISABLED');
@@ -22,20 +23,9 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
             const snapshot = await ref!.get(), v = snapshot.data();
             if (!v || v.uploadStatus !== 'ready' || !(v.status === 'approved' && state.activeId === recordId || canEdit(v) && v.uploadStatus !== 'deleted'))
                 throw new ApiError(404, '음성을 찾을 수 없어요.');
-            const [bytes] = await bucket().file(audioPath(v)).download();
-            let start = 0, end = bytes.length - 1, status = 200;
-            const range = request.headers.get('range');
-            if (range) {
-                const match = /^bytes=(\d+)-(\d*)$/.exec(range);
-                if (!match)
-                    return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${bytes.length}` } });
-                start = Number(match[1]);
-                end = match[2] ? Math.min(Number(match[2]), end) : end;
-                if (start > end || start >= bytes.length)
-                    return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${bytes.length}` } });
-                status = 206;
-            }
-            return new Response(Uint8Array.from(bytes.subarray(start, end + 1)), { status, headers: { 'Content-Type': 'audio/wav', 'Content-Length': String(end - start + 1), 'Accept-Ranges': 'bytes', 'Cache-Control': 'private,no-store', ...(status === 206 ? { 'Content-Range': `bytes ${start}-${end}/${bytes.length}` } : {}) } });
+            // Long recordings exceed the hosting response limit, so the browser fetches Storage directly.
+            const [audioUrl] = await bucket().file(audioPath(v)).getSignedUrl({ version: 'v4', action: 'read', expires: Date.now() + 60 * 60000 });
+            return new Response(null, { status: 302, headers: { Location: audioUrl, 'Cache-Control': 'private,no-store' } });
         }
         const snapshots = await Promise.all((state.recordIds || []).map((key: string) => records.doc(key).get()));
         const all = snapshots.filter((d: any) => d.exists).map((d: any) => d.data() as Data), active = all.find((v: Data) => v.id === state.activeId && v.status === 'approved'), draft = all.find((v: Data) => v.id === state.draftId && canEdit(v) && v.uploadStatus !== 'deleted');
@@ -43,60 +33,69 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
     }
     if (!ref)
         throw new ApiError(400, '녹음 번호를 확인해 주세요.');
+    // Audio goes straight from the browser to Firebase Storage; this server only signs and verifies.
     if (request.method === 'POST' && !segments[1]) {
         if (!t.record || !t.actor.uid)
             throw new ApiError(403, '내 작품에 음성을 남겨 주세요.');
-        const bytes = await boundedBytes(request, VOICE_MAX_BYTES);
-        let duration: number;
-        try {
-            duration = wavDuration(bytes);
-        }
-        catch {
-            throw new ApiError(400, '60초 이내 음성을 다시 녹음해 주세요.', 'AUDIO_INVALID');
-        }
-        const fingerprint = digest(bytes);
+        const size = Number((await moduleJson(request)).size);
+        if (!Number.isInteger(size) || size < 44 + VOICE_RATE || size > VOICE_MAX_BYTES || (size - 44) % 2)
+            throw new ApiError(400, '3분 이내 음성을 다시 녹음해 주세요.', 'AUDIO_INVALID');
         await consumeModuleRate([{ key: 'voice-upload:' + t.actor.key, limit: 20, windowMs: 86400000 }]);
-        const already = await db().runTransaction(async (tx) => {
+        const existing = await db().runTransaction(async (tx) => {
             await t.assertFresh(tx, 'record');
             const [old, state, usage] = await Promise.all([tx.get(ref), tx.get(root), tx.get(quota)]);
             if (old.exists) {
                 const v = old.data()!;
-                if (v.fingerprint !== fingerprint || v.actorKey !== t.actor.key || ['deleting', 'deleted'].includes(v.uploadStatus))
+                if (v.size !== size || v.actorKey !== t.actor.key || ['deleting', 'deleted'].includes(v.uploadStatus))
                     throw new ApiError(409, '새 녹음으로 다시 시도해 주세요.');
                 if (v.uploadStatus === 'uploading')
-                    tx.update(ref, { uploadLeaseUntil: Date.now() + 90000 });
-                return v.uploadStatus === 'ready';
+                    tx.update(ref, { uploadLeaseUntil: Date.now() + UPLOAD_WINDOW });
+                return v;
             }
             const s = state.data() || {}, q = usage.data() || {}, limit = Number(process.env.VOICE_STORAGE_LIMIT_BYTES) || 104857600;
             if (s.draftId)
                 throw new ApiError(409, '기존 녹음 초안을 먼저 저장·공개하거나 삭제해 주세요.');
             if ((s.recordIds || []).length >= 10)
                 throw new ApiError(409, '이전 녹음 일부를 삭제한 뒤 다시 녹음해 주세요.');
-            if ((q.usedBytes || 0) + (q.reservedBytes || 0) + bytes.length > limit)
+            if ((q.usedBytes || 0) + (q.reservedBytes || 0) + size > limit)
                 throw new ApiError(413, '음성 저장 공간이 가득 찼어요.');
-            tx.set(quota, { usedBytes: q.usedBytes || 0, reservedBytes: (q.reservedBytes || 0) + bytes.length });
-            tx.set(ref, { id: recordId, ownerUid: t.ownerUid, classId: t.classId, actorKey: t.actor.key, fingerprint, duration, size: bytes.length, uploadStatus: 'uploading', uploadLeaseUntil: Date.now() + 90000, quotaBucket: 'reservedBytes', status: 'draft', caption: '', transcription: 'idle', createdAt: new Date().toISOString(), version: crypto.randomUUID() });
+            tx.set(quota, { usedBytes: q.usedBytes || 0, reservedBytes: (q.reservedBytes || 0) + size });
+            tx.set(ref, { id: recordId, ownerUid: t.ownerUid, classId: t.classId, actorKey: t.actor.key, size, uploadStatus: 'uploading', uploadLeaseUntil: Date.now() + UPLOAD_WINDOW, quotaBucket: 'reservedBytes', status: 'draft', caption: '', transcription: 'idle', createdAt: new Date().toISOString(), version: crypto.randomUUID() });
             tx.set(root, { ownerUid: t.ownerUid, classId: t.classId, containerKey: t.containerKey, targetId: t.targetId, title: t.title, draftId: recordId, recordIds: FieldValue.arrayUnion(recordId) }, { merge: true });
-            return false;
+            return null;
         });
-        if (!already) {
-            const file = bucket().file(audioPath({ id: recordId }));
-            try {
-                await file.save(bytes, { resumable: false, preconditionOpts: { ifGenerationMatch: 0 }, metadata: { contentType: 'audio/wav', cacheControl: 'private,no-store', metadata: { fingerprint } } });
-            }
-            catch (e) {
-                if (Number((e as {
-                    code?: number;
-                }).code) !== 412)
-                    throw e;
-                const [metadata] = await file.getMetadata();
-                if (metadata.metadata?.fingerprint !== fingerprint)
-                    throw new ApiError(409, '녹음 파일이 달라요.');
-            }
-            await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const [current, usage] = await Promise.all([tx.get(ref), tx.get(quota)]); const v = current.data()!; if (v.uploadStatus === 'ready')
-                return; if (v.uploadStatus !== 'uploading')
-                throw new ApiError(409, '녹음 상태가 바뀌었어요.'); tx.update(ref, { uploadStatus: 'ready', uploadLeaseUntil: 0, quotaBucket: 'usedBytes' }); tx.update(quota, { reservedBytes: (usage.data()?.reservedBytes || 0) - bytes.length, usedBytes: (usage.data()?.usedBytes || 0) + bytes.length }); });
+        if (existing?.uploadStatus === 'ready')
+            return { recording: view(existing), alreadyUploaded: true, uploadUrl: '', headers: {} };
+        const [uploadUrl] = await bucket().file(audioPath({ id: recordId })).getSignedUrl({ version: 'v4', action: 'write', expires: Date.now() + UPLOAD_WINDOW, contentType: 'audio/wav', extensionHeaders: { 'content-length': String(size) } });
+        return { alreadyUploaded: false, uploadUrl, method: 'PUT', headers: { 'Content-Type': 'audio/wav' } };
+    }
+    if (request.method === 'POST' && segments[1] === 'finalize') {
+        if (!t.record || !t.actor.uid)
+            throw new ApiError(403, '내 작품에 음성을 남겨 주세요.');
+        const v = (await ref.get()).data();
+        if (!v || v.actorKey !== t.actor.key || ['deleting', 'deleted'].includes(v.uploadStatus))
+            throw new ApiError(404, '녹음을 찾을 수 없어요.');
+        if (v.uploadStatus === 'ready')
+            return { recording: view(v) };
+        const file = bucket().file(audioPath(v));
+        let bytes: Uint8Array, duration: number;
+        try {
+            [bytes] = await file.download();
+            if (bytes.length !== v.size)
+                throw new Error('AUDIO_SIZE');
+            duration = wavDuration(bytes);
         }
+        catch {
+            // A missing or tampered file is discarded so the student can simply record again.
+            await file.delete({ ignoreNotFound: true });
+            await db().runTransaction(async (tx) => { const [current, usage, state] = await Promise.all([tx.get(ref), tx.get(quota), tx.get(root)]); if (current.data()?.uploadStatus !== 'uploading')
+                return; tx.update(quota, { reservedBytes: Math.max(0, (usage.data()?.reservedBytes || 0) - v.size) }); tx.update(ref, { uploadStatus: 'deleted', status: 'hidden' }); tx.set(root, { recordIds: FieldValue.arrayRemove(recordId), ...(state.data()?.draftId === recordId ? { draftId: null } : {}) }, { merge: true }); });
+            throw new ApiError(400, '녹음 파일을 받지 못했어요. 다시 녹음해 주세요.', 'AUDIO_INVALID');
+        }
+        const fingerprint = digest(bytes);
+        await db().runTransaction(async (tx) => { await t.assertFresh(tx, 'record'); const [current, usage] = await Promise.all([tx.get(ref), tx.get(quota)]); const c = current.data()!; if (c.uploadStatus === 'ready')
+            return; if (c.uploadStatus !== 'uploading')
+            throw new ApiError(409, '녹음 상태가 바뀌었어요.'); tx.update(ref, { uploadStatus: 'ready', uploadLeaseUntil: 0, quotaBucket: 'usedBytes', duration, fingerprint }); tx.update(quota, { reservedBytes: Math.max(0, (usage.data()?.reservedBytes || 0) - c.size), usedBytes: (usage.data()?.usedBytes || 0) + c.size }); });
         return { recording: view((await ref.get()).data()!) };
     }
     // Audio storage and manual captions never implicitly enable a paid AI call.
@@ -162,8 +161,7 @@ export async function voiceCaption(request: Request, t: ModuleTarget, segments: 
     if (request.method === 'DELETE') {
         const value = await db().runTransaction(async (tx) => { await t.assertFresh(tx, t.manage ? 'manage' : 'record'); const v = (await tx.get(ref)).data(); if (!v || !canEdit(v))
             throw new ApiError(404, '녹음을 찾을 수 없어요.'); if (v.uploadStatus === 'deleted')
-            return v; if (v.uploadStatus === 'uploading' && v.uploadLeaseUntil > Date.now())
-            throw new ApiError(409, '음성 전송을 정리하고 있어요. 잠시 후 다시 삭제해 주세요.'); tx.update(ref, { uploadStatus: 'deleting', status: 'hidden', version: crypto.randomUUID() }); return v; });
+            return v; tx.update(ref, { uploadStatus: 'deleting', status: 'hidden', version: crypto.randomUUID() }); return v; });
         if (value.uploadStatus !== 'deleted') {
             await bucket().file(audioPath(value)).delete({ ignoreNotFound: true });
             await db().runTransaction(async (tx) => { const [current, usage, state] = await Promise.all([tx.get(ref), tx.get(quota), tx.get(root)]); if (current.data()?.uploadStatus === 'deleted')
