@@ -15,7 +15,7 @@ assert.equal(connectorAllowed({mode: 'all', teacherUids: []}, 't1', 'teacher', u
 
 assert.deepEqual(parseScopes(undefined), ['classes:read', 'homework:read', 'workspace:read', 'events:read', 'classroom:read'], 'defaults are read-only and name-free');
 assert.equal(checkedByDefault('classroom:read'), true, 'class activity summaries are read-only, so checked by default');
-assert.equal(checkedByDefault('classroom:write'), false, 'opening rooms for students is opt-in');
+assert.equal(checkedByDefault('classroom:write'), true, 'writes are checked by default: each one still needs the confirm card');
 assert.equal(toolAllowed({scope: 'classroom:read'}, ['classroom:write']), false, 'the write scope does not unlock the summaries');
 assert.deepEqual(parseScopes('names homework:read classes:read'), ['classes:read', 'homework:read', 'names'], 'catalog order, de-duplicated');
 assert.throws(() => parseScopes('homework:write'), /지원하지 않는 권한/);
@@ -95,7 +95,7 @@ assert.equal(trustedRedirectHost('https://other.a.run.app/cb', ['berry-brain-x.a
 // Write scopes: never default, unchecked on consent, cannot be added on refresh.
 assert.deepEqual(parseScopes('notebook:write calendar:write workspace:read'), ['workspace:read', 'calendar:write', 'notebook:write']);
 assert.ok(parseScopes(undefined).every(scope => !scope.endsWith(':write')));
-assert.deepEqual(['classes:read', 'names', 'calendar:write', 'workspace:write', 'notebook:write', 'workspace:read'].map(scope => checkedByDefault(scope as never)), [true, false, false, false, false, true]);
+assert.deepEqual(['classes:read', 'names', 'calendar:write', 'workspace:write', 'notebook:write', 'workspace:read'].map(scope => checkedByDefault(scope as never)), [true, false, true, true, true, true]);
 assert.equal(scopesWithin(['workspace:read'], ['workspace:write']), false, 'a read grant never widens to write');
 assert.equal(toolAllowed({scope: ['calendar:write', 'workspace:write']}, ['workspace:write']), true);
 assert.equal(toolAllowed({scope: 'workspace:read'}, ['calendar:write']), false);

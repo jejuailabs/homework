@@ -20,7 +20,7 @@ export default function BerryConsent() {
       const body = await r.json();
       if (!r.ok) throw Error(body.error_description || '요청을 확인할 수 없어요.');
       return body as Info;
-    }).then(data => {if (data) {setInfo(data); setChosen(data.scopes.map(s => s.scope).filter(scope => scope !== 'names' && !isWrite(scope)));}}).catch(e => setError(e instanceof Error ? e.message : '요청을 확인할 수 없어요.'));
+    }).then(data => {if (data) {setInfo(data); setChosen(data.scopes.map(s => s.scope).filter(scope => scope !== 'names'));}}).catch(e => setError(e instanceof Error ? e.message : '요청을 확인할 수 없어요.'));
   }, []);
   async function decide(decision: 'approve' | 'deny') {
     if (!info || busy) return;
@@ -60,7 +60,7 @@ export default function BerryConsent() {
           <div className="bcx-grid">{reads.map(row)}</div>
         </div>
         {writes.length > 0 && <div className="bcx-group">
-          <h2>쓰기 <span>선택 · 미리보기 후 선생님이 확정해야 저장</span><button type="button" className="bcx-all" disabled={busy} onClick={() => setChosen(list => [...new Set([...list, ...writes.map(item => item.scope)])])}>쓰기 모두 선택</button></h2>
+          <h2>쓰기 <span>미리보기 후 선생님이 확정해야 저장</span><button type="button" className="bcx-all" disabled={busy} onClick={() => setChosen(list => [...new Set([...list, ...writes.map(item => item.scope)])])}>쓰기 모두 선택</button></h2>
           <div className="bcx-grid">{writes.map(row)}</div>
         </div>}
         {names && <div className="bcx-group is-warning">{row(names)}{chosen.includes('names') && <p className="bcx-warn"><ShieldAlert size={13}/>{names.warning}</p>}</div>}
