@@ -136,6 +136,8 @@
     "videoStorageTestHint": "Administrators only. Applies to video homework and lets the student choose where the video is stored.",
     "submissionTypeLabel": "Submission type",
     "submissionTypeHint": "Choose how students should submit this assignment.",
+    "submissionTypeEditHint": "You can change the submission type while no student has submitted.",
+    "submissionTypeLocked": "Students have already submitted, so the submission type cannot change. Open a new homework room instead.",
     "syncTitle": "Auto-share submissions",
     "syncExhibition": "Create an exhibition and add submissions",
     "syncExhibitionHint": "Photo and video submissions hang in an exhibition with the same name.",

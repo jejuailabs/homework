@@ -26,6 +26,8 @@ const GROUPS: GroupSource[] = [
     {label: '안 낸 학생', prompt: '오늘 마감 숙제 안 낸 학생 알려 줘'},
     {label: '숙제 내기', prompt: '[학급]에 [숙제 제목] 숙제 내 줘. 제출은 [사진/글/동영상], 마감은 [날짜]', write: true, needs: ['classes:read', 'classroom:write']},
     {label: '마감 바꾸기', prompt: '[숙제 이름] 마감을 [날짜]로 바꿔 줘', write: true},
+    {label: '제출 방식 바꾸기', prompt: '[숙제 이름] 제출 방식을 [사진/글/동영상/녹음]으로 바꿔 줘', write: true},
+    {label: '전시실·보드 연동', prompt: '[숙제 이름] [전시실/참여보드] 연동을 [켜/꺼] 줘', write: true},
     {label: '검사 완료 한꺼번에', prompt: '[숙제 이름] 제출한 학생 모두 검사 완료로 해 줘', write: true},
     {label: '다시 하기 요청', prompt: '[숙제 이름]에서 [번호]번 학생 다시 하기로 돌려 줘. 피드백: [내용]', write: true},
     {label: '숙제 숨기기', prompt: '[숙제 이름] 학생 화면에서 숨겨 줘', write: true},

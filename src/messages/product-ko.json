@@ -136,6 +136,8 @@
     "videoStorageTestHint": "관리자 전용입니다. 영상 숙제에만 적용되고, 학생이 저장 위치를 고를 수 있어요.",
     "submissionTypeLabel": "제출 방식",
     "submissionTypeHint": "아이들이 숙제를 제출할 방식을 하나 골라 주세요.",
+    "submissionTypeEditHint": "제출한 학생이 없을 때는 제출 방식을 바꿀 수 있어요.",
+    "submissionTypeLocked": "이미 제출한 학생이 있어 제출 방식을 바꿀 수 없어요. 새 숙제방을 열어 주세요.",
     "syncTitle": "숙제 자동 연동",
     "syncExhibition": "전시실 자동 생성 및 제출물 연동",
     "syncExhibitionHint": "사진·동영상 제출물이 같은 이름의 전시실에 바로 걸려요.",
