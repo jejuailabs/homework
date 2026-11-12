@@ -101,7 +101,7 @@ export function exhibitionStatus(value: unknown): ExhibitionStatus {
   return value;
 }
 export function exhibitionTheme(value: unknown): ExhibitionTheme {
-  if (value !== 'cozy' && value !== 'forest' && value !== 'sky' && value !== 'ocean') throw new ApiError(400, '전시실 테마를 선택해 주세요.');
+  if (value !== 'cozy' && value !== 'forest' && value !== 'sky' && value !== 'ocean' && value !== 'earth' && value !== 'moon' && value !== 'saturn') throw new ApiError(400, '전시실 테마를 선택해 주세요.');
   return value;
 }
 export function artworkStudentId(value: unknown) {

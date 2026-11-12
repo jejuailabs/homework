@@ -163,11 +163,16 @@
   "receivedReactions": "받은 응원",
   "privateReactionsHint": "작가와 선생님에게만 보이는 따뜻한 응원이에요.",
   "roomTheme": "전시실 분위기",
+  "classicMode": "기본 전시실",
+  "spaceMode": "우주 미술관 · 3D",
   "themes": {
     "cozy": "포근한 미술실",
     "forest": "초록 숲",
     "sky": "구름 하늘",
-    "ocean": "반짝 바다"
+    "ocean": "반짝 바다",
+    "earth": "지구 궤도 관측실",
+    "moon": "달 분화구 미술관",
+    "saturn": "토성 고리 회랑"
   },
   "galleryTotal": "전체 작품",
   "linkedArtists": "작가 연결",

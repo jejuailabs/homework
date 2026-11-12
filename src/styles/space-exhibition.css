@@ -1,0 +1,44 @@
+/* Space-mode exhibition (지구 · 달 · 토성). Same frame size as .ex-world; dark glass controls from the design kit. */
+.sx-world{position:relative;isolation:isolate;width:100%;height:clamp(560px,73vh,840px);min-height:540px;overflow:hidden;border-radius:28px;background:#0c1015;color:#f4f4f2;font-synthesis:none}
+.sx-canvas{position:absolute;inset:0;touch-action:none;outline:0}
+.sx-canvas canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none;outline:0}
+.sx-world button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.sx-world button:disabled{opacity:.35;cursor:default}
+.sx-world button:focus-visible{outline:3px solid #8ddbf7;outline-offset:3px}
+.sx-glass{display:inline-flex;align-items:center;gap:7px;color:#f4f4f2;border:1px solid #ffffff42;border-radius:15px;background:rgba(16,24,31,.86);box-shadow:0 4px 21px #02060f21;backdrop-filter:blur(12px)}
+button.sx-glass{padding:9px 15px;min-height:42px;font-size:.87rem;font-weight:650}
+.sx-upper{position:absolute;z-index:3;top:16px;left:16px;right:16px;display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:start;pointer-events:none}
+.sx-upper>*{pointer-events:auto}.sx-upper>button{justify-self:start}
+.sx-upper-right{justify-self:end;display:flex;gap:7px}
+.sx-location{flex-direction:column;gap:2px;padding:8px 22px 10px;text-align:center;min-width:150px;max-width:min(48vw,440px);line-height:1.25}
+.sx-location span{font-size:.66rem;letter-spacing:.04em;color:#c2cbd4}
+.sx-location strong{font-size:clamp(.98rem,1.5vw,1.3rem);font-weight:650;letter-spacing:-.04em;word-break:keep-all}
+.sx-lower{position:absolute;z-index:3;left:50%;bottom:18px;transform:translateX(-50%);display:flex;flex-direction:column-reverse;align-items:center;gap:8px;max-width:calc(100% - 300px)}
+.sx-action{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;min-height:44px;border-radius:15px;border:1px solid #f2f7f4;background:#e6eee9;color:#15201b!important;font-weight:700;box-shadow:0 6px 24px #02060f40}
+.sx-nearby{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem!important}
+.sx-pages{padding:3px;white-space:nowrap}.sx-pages button{display:grid;place-items:center;min-width:36px;min-height:36px;border:0;border-radius:11px;background:none}
+.sx-pages button:not(:disabled):hover,.sx-view button:hover{background:#d9e8f12a}
+.sx-pages span{font-size:.81rem;margin:0 6px;font-variant-numeric:tabular-nums}
+.sx-view{position:absolute;z-index:3;right:16px;bottom:18px;padding:3px}
+.sx-view button{display:grid;place-items:center;min-width:36px;min-height:36px;border:0;border-radius:11px;background:none}
+.sx-world .ex-world-joystick{background:radial-gradient(circle,#1b2530b0 0 45%,#10181f8c 46% 100%);border-color:#ffffff42;color:#c9d4dd}
+.sx-world .ex-stick-knob{background:linear-gradient(145deg,#f1f4f6,#c9d2d9);border-color:#fff;box-shadow:0 3px 0 #7b8790,0 6px 12px #0006}
+.sx-world--paused .ex-world-joystick{pointer-events:none}
+.sx-status{position:absolute;z-index:3;top:50%;left:50%;transform:translate(-50%,-50%);padding:14px 19px;max-width:85%;line-height:1.5;margin:0;text-align:center;word-break:keep-all}
+.sx-list{position:absolute;z-index:5;inset:12px;display:flex;flex-direction:column;border:1px solid #555c63;border-radius:18px;background:#171d22f5;backdrop-filter:blur(8px);overflow:hidden}
+.sx-list-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px}
+.sx-list-head h2{margin:0;font-size:1.02rem;letter-spacing:-.03em}
+.sx-list-head button{display:grid;place-items:center;width:36px;height:36px;border:1px solid #ffffff42;border-radius:50%;background:none}
+.sx-list-items{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:9px;padding:0 16px 16px;align-content:start}
+.sx-list-items button{display:flex;flex-direction:column;gap:6px;text-align:left;padding:7px 7px 10px;border:1px solid #52606b;border-radius:10px;background:#222a30}
+.sx-list-items img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#0c1014;border-radius:6px}
+.sx-list-items span{font-size:.84rem;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sx-list-items small{font-size:.74rem;color:#bdc8d2}
+@media(max-width:760px){
+  .sx-world{height:clamp(440px,70vh,720px);min-height:420px;border-radius:20px}
+  .sx-upper{top:10px;left:10px;right:10px;grid-template-columns:max-content minmax(0,1fr) max-content;gap:6px}
+  .sx-location{min-width:0;max-width:100%;padding:6px 12px 8px}
+  button.sx-glass{padding:7px 11px;min-height:38px;font-size:.8rem}
+  .sx-lower{bottom:118px;max-width:calc(100% - 24px)}
+  .sx-view{right:10px;bottom:14px}
+}

@@ -163,11 +163,16 @@
   "receivedReactions": "Encouragement received",
   "privateReactionsHint": "Only the artist and teacher can see this encouragement.",
   "roomTheme": "Room atmosphere",
+  "classicMode": "Classic room",
+  "spaceMode": "Space museum · 3D",
   "themes": {
     "cozy": "Cozy art room",
     "forest": "Green forest",
     "sky": "Cloudy sky",
-    "ocean": "Sparkling ocean"
+    "ocean": "Sparkling ocean",
+    "earth": "Earth orbit",
+    "moon": "Lunar crater",
+    "saturn": "Saturn ring"
   },
   "galleryTotal": "All artwork",
   "linkedArtists": "Artists connected",
