@@ -21,7 +21,7 @@ type Listing = {
 };
 /** idle → studio(원고 쓰기) → countdown → recording(프롬프터) → review(미리 듣기) → 저장 */
 type Mode = 'idle' | 'studio' | 'countdown' | 'recording' | 'review';
-const MAX_SECONDS = 60, SCRIPT_MAX = 1000, CHARS_PER_SECOND = 5, FONT_SIZES = [20, 26, 32], SCROLL_SPEEDS = [0, 14, 26];
+const MAX_SECONDS = 180, SCRIPT_MAX = 2000, CHARS_PER_SECOND = 5, FONT_SIZES = [20, 26, 32], SCROLL_SPEEDS = [0, 14, 26];
 const readStored = (key: string) => { try {
     return localStorage.getItem(key) || '';
 }
@@ -174,11 +174,23 @@ export default function VoiceCaption({ endpoint, en = false, title, artist, getP
     async function save() { if (!local)
         return; const selected = local, text = caption.trim(), replace = data?.draft;
         const ok = await action(async () => {
-            if (replace)
+            if (replace && replace.id !== selected.id)
                 await moduleRequest(url('/' + replace.id), { method: 'DELETE' });
-            const saved = await moduleRequest<{
+            // The recording goes straight to file storage; the app server only signs and checks it.
+            const start = await moduleRequest<{
+                alreadyUploaded: boolean;
+                uploadUrl: string;
+                headers: Record<string, string>;
+                recording?: Recording;
+            }>(url('/' + selected.id), jsonRequest('POST', { size: selected.bytes.length }));
+            if (!start.alreadyUploaded) {
+                const sent = await fetch(start.uploadUrl, { method: 'PUT', headers: start.headers, body: new Blob([Uint8Array.from(selected.bytes)], { type: 'audio/wav' }) }).catch(() => null);
+                if (!sent?.ok)
+                    throw new Error(say('녹음을 보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.', 'Upload failed. Check your connection and try again.'));
+            }
+            const saved = start.recording ? { recording: start.recording } : await moduleRequest<{
                 recording: Recording;
-            }>(url('/' + selected.id), { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: Uint8Array.from(selected.bytes).buffer });
+            }>(url('/' + selected.id + '/finalize'), jsonRequest('POST', {}));
             discardLocal();
             if (text)
                 await moduleRequest(url('/' + selected.id), jsonRequest('PATCH', { caption: text, version: saved.recording.version }));
@@ -200,7 +212,7 @@ export default function VoiceCaption({ endpoint, en = false, title, artist, getP
     const studio = <div className="am-studio">
         {mode === 'studio' && <>
             <label>{say('내 원고 (써도 되고, 안 써도 돼요)', 'My script (optional)')}<textarea value={script} rows={5} maxLength={SCRIPT_MAX} placeholder={say('예) 안녕하세요, 제 작품은 바다에 사는 고래예요. 고래가 친구를 찾으러 가는 모습을 그렸어요.', 'e.g. Hi! My artwork is a whale looking for a friend in the sea.')} onChange={e => changeScript(e.target.value)}/></label>
-            <p className="am-script-meta"><span>{script.length}/{SCRIPT_MAX}{say('자', ' chars')}</span>{script.trim() && <span className={estimate > MAX_SECONDS ? 'am-warn' : ''}>{say(`읽는 데 약 ${estimate}초`, `About ${estimate}s to read`)}{estimate > MAX_SECONDS && say(' · 60초가 넘을 수 있어요. 조금 줄여 볼까요?', ' · may go over 60s')}</span>}</p>
+            <p className="am-script-meta"><span>{script.length}/{SCRIPT_MAX}{say('자', ' chars')}</span>{script.trim() && <span className={estimate > MAX_SECONDS ? 'am-warn' : ''}>{say(`읽는 데 약 ${estimate}초`, `About ${estimate}s to read`)}{estimate > MAX_SECONDS && say(' · 3분이 넘을 수 있어요. 조금 줄여 볼까요?', ' · may go over 3 min')}</span>}</p>
             <p className="am-note">{say('원고를 쓰면 녹음할 때 프롬프터처럼 큰 글씨로 보여 줘요. 원고 없이 바로 녹음해도 괜찮아요. 연락처·주소 같은 개인 정보는 말하지 않아요.', 'Your script will scroll in large type like a teleprompter while you record. You can also record without one. Please keep private details out of your story.')}</p>
             <div className="am-actions"><button className="am-primary am-big" type="button" disabled={busy} onClick={() => void begin()}><Mic size={18}/>{script.trim() ? say('원고 보면서 녹음 시작', 'Start recording') : say('바로 녹음 시작', 'Start recording')}</button><button type="button" disabled={busy} onClick={closeStudio}><X size={15}/>{say('닫기', 'Close')}</button></div>
         </>}
@@ -231,8 +243,8 @@ export default function VoiceCaption({ endpoint, en = false, title, artist, getP
  {!active && !draft && !data.viewer.record && <p className="am-note">{say('작가의 이야기를 준비하고 있어요.', 'The artist’s story is being prepared.')}</p>}
  {draft && <div className="am-voice-draft"><span className="am-badge">{say('내 녹음 · 선생님 확인 중', 'My recording · waiting for teacher')}</span>{draft.uploadStatus === 'ready' ? <><VoicePlayer src={draft.audioUrl} label={say('내 녹음 듣기', 'Play my recording')} en={en} transcript={draft.transcript}/>{subtitles(draft)}
   {editing ? captionEditor(draft) : draft.caption ? <p className="am-draft-text">{draft.caption}</p> : <p className="am-note">{say('함께 보여 줄 글이 없어요. 목소리만 올라가요.', 'No text yet — only your voice will be shared.')}</p>}
-  {!editing && !inStudio && <div className="am-actions">{data.viewer.manage && <button type="button" className="am-primary" disabled={busy} onClick={() => void action(() => moduleRequest(url('/' + draft.id), jsonRequest('PATCH', { status: 'approved', version: draft.version })), say('작가의 이야기를 공개했어요.', 'Story shared.'))}><Check size={15}/>{say('승인하고 공개', 'Approve & share')}</button>}<button type="button" disabled={busy} onClick={() => { setCaption(draft.caption); setEditing(true); }}><Pencil size={14}/>{draft.caption ? say('글 고치기', 'Edit text') : say('글 쓰기', 'Add text')}</button>{data.viewer.record && <button type="button" disabled={busy} onClick={openStudio}><Mic size={14}/>{say('다시 녹음하기', 'Record again')}</button>}<button type="button" className="am-delete" disabled={busy} onClick={() => remove(draft)}><Trash2 size={14}/>{say('삭제', 'Delete')}</button></div>}</> : <><p className="am-note">{say('전송이 끝나지 않은 녹음이에요. 잠시 후 삭제하고 다시 녹음해 주세요.', 'The upload did not finish. Delete it and record again shortly.')}</p><button type="button" className="am-delete" disabled={locked} onClick={() => remove(draft)}><Trash2 size={14}/>{say('삭제', 'Delete')}</button></>}</div>}
- {data.viewer.record && !active && !draft && !inStudio && <div className="am-recorder"><p>{say('내 작품을 목소리로 소개해 볼까요? 60초까지 녹음할 수 있어요.', 'Introduce your artwork in your own voice — up to 60 seconds.')}</p><div className="am-actions"><button className="am-primary am-big" type="button" disabled={busy} onClick={openStudio}><Mic size={18}/>{say('내 이야기 녹음하기', 'Record my story')}</button></div></div>}
+  {!editing && !inStudio && <div className="am-actions">{data.viewer.manage && <button type="button" className="am-primary" disabled={busy} onClick={() => void action(() => moduleRequest(url('/' + draft.id), jsonRequest('PATCH', { status: 'approved', version: draft.version })), say('작가의 이야기를 공개했어요.', 'Story shared.'))}><Check size={15}/>{say('승인하고 공개', 'Approve & share')}</button>}<button type="button" disabled={busy} onClick={() => { setCaption(draft.caption); setEditing(true); }}><Pencil size={14}/>{draft.caption ? say('글 고치기', 'Edit text') : say('글 쓰기', 'Add text')}</button>{data.viewer.record && <button type="button" disabled={busy} onClick={openStudio}><Mic size={14}/>{say('다시 녹음하기', 'Record again')}</button>}<button type="button" className="am-delete" disabled={busy} onClick={() => remove(draft)}><Trash2 size={14}/>{say('삭제', 'Delete')}</button></div>}</> : <><p className="am-note">{say('전송이 끝나지 않은 녹음이에요. 삭제하고 다시 녹음해 주세요.', 'The upload did not finish. Delete it and record again.')}</p><button type="button" className="am-delete" disabled={locked} onClick={() => remove(draft)}><Trash2 size={14}/>{say('삭제', 'Delete')}</button></>}</div>}
+ {data.viewer.record && !active && !draft && !inStudio && <div className="am-recorder"><p>{say('내 작품을 목소리로 소개해 볼까요? 3분까지 녹음할 수 있어요.', 'Introduce your artwork in your own voice — up to 3 minutes.')}</p><div className="am-actions"><button className="am-primary am-big" type="button" disabled={busy} onClick={openStudio}><Mic size={18}/>{say('내 이야기 녹음하기', 'Record my story')}</button></div></div>}
  {data.viewer.record && inStudio && studio}
  {data.history.length > 0 && <details className="am-voice-history"><summary>{say('이전 녹음 관리', 'Earlier recordings')} · {data.history.length}</summary>{data.history.map(item => <div key={item.id}><span>{item.caption.slice(0, 60) || say('이전 녹음', 'Earlier recording')} · {Math.round(item.duration)}{say('초', 's')}</span><button type="button" disabled={locked} onClick={() => remove(item)}><Trash2 size={14}/>{say('삭제', 'Delete')}</button></div>)}</details>}
  {data.viewer.manage && getPublicLink && <ArtworkQrLabel getLink={getPublicLink} title={title} artist={artist} en={en}/>}</>}

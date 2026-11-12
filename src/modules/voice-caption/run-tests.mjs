@@ -81,7 +81,10 @@ function fixture() {
     getMetadata: async () => [files.get(path)?.metadata],
     download: async () => {stats.downloads++; assert.ok(files.has(path)); return [files.get(path).bytes];},
     delete: async () => {files.delete(path);},
+    getSignedUrl: async config => [`https://storage.test/${config.action}/${path}`],
   })};
+  // Stands in for the browser PUT to the signed Storage URL.
+  const put = (url, bytes) => {const path = url.replace('https://storage.test/write/', ''); files.set(path, {bytes: Buffer.from(bytes)}); stats.uploads++;};
   const utils = load('../artwork-extensions/server-utils.ts', {'node:crypto': nodeCrypto, 'firebase-admin/firestore': {Timestamp: {fromMillis: milliseconds => ({milliseconds})}}, '@/lib/server/admin': {db: () => db}, '@/lib/server/policy': policy});
   const adapter = load('../artwork-extensions/exhibition-adapter.ts', {
     'node:crypto': nodeCrypto,
@@ -102,12 +105,17 @@ function fixture() {
     const req = request(who, method, segments, body);
     return server.voiceCaption(req, await target(who, req), segments);
   }
-  async function upload(id = 'voice1', who = student) {return (await invoke(who, 'POST', [id], audio)).recording;}
+  async function upload(id = 'voice1', who = student, bytes = audio) {
+    const start = await invoke(who, 'POST', [id], {size: bytes.length});
+    if (start.alreadyUploaded) return start.recording;
+    put(start.uploadUrl, bytes);
+    return (await invoke(who, 'POST', [id, 'finalize'], {})).recording;
+  }
   async function caption(id = 'voice1', who = student, text = '바다와 섬을 그렸어요.') {
     await invoke(who, 'PATCH', [id], {caption: text, version: data.get(recordingPath(id)).version});
   }
   async function approve(id = 'voice1') {await invoke(teacher, 'PATCH', [id], {status: 'approved', version: data.get(recordingPath(id)).version});}
-  return {data, stats, invoke, target, request, server, upload, caption, approve};
+  return {data, stats, files, invoke, target, request, server, upload, caption, approve, put};
 }
 const rejectsStatus = (promise, status, code) => assert.rejects(promise, error => error instanceof policy.ApiError && error.status === status && (!code || error.code === code));
 
@@ -143,8 +151,8 @@ test('voice: upload, manual caption, approval and playback work without an AI ke
   const listing = await f.invoke(other);
   assert.equal(listing.active.id, 'voice1'); assert.equal(listing.draft, null);
   const response = await f.invoke(other, 'GET', ['voice1', 'audio']);
-  assert.equal(response.status, 200);
-  assert.deepEqual(new Uint8Array(await response.arrayBuffer()), audio);
+  assert.equal(response.status, 302); // Playback is served by Storage, not the app server.
+  assert.match(response.headers.get('Location'), /^https:\/\/storage\.test\/read\/module-voice\//);
   assert.equal(f.stats.ai, 0);
 }));
 
@@ -197,7 +205,7 @@ test('voice: narration requires the actual student link and respects exhibition 
 test('voice: fresh permission checks reject a recording when the exhibition closes after loading', () => offline(async () => {
   const f = fixture(), stale = await f.target(student);
   f.data.set(roomPath, {...f.data.get(roomPath), status: 'closed'});
-  await rejectsStatus(f.server.voiceCaption(f.request(student, 'POST', ['voice1'], audio), stale, ['voice1']), 403);
+  await rejectsStatus(f.server.voiceCaption(f.request(student, 'POST', ['voice1'], {size: audio.length}), stale, ['voice1']), 403);
   assert.equal(f.stats.uploads, 0); assert.equal(f.data.has(recordingPath('voice1')), false);
 }));
 
@@ -234,7 +242,7 @@ test('voice: an enabled timed transcript is made once, kept beside the caption a
   await environment({VOICE_AI_TRANSCRIPTION_ENABLED: 'true'}, async () => {
     const f = fixture();
     await f.upload(); await f.caption();
-    assert.equal(f.stats.ai, 0); assert.equal(f.stats.downloads, 0); // Uploading alone never calls the AI.
+    assert.equal(f.stats.ai, 0); assert.equal(f.stats.downloads, 1); // Only the upload check reads the file; uploading never calls the AI.
     assert.equal((await f.invoke(student)).viewer.transcribe, true);
     assert.equal((await f.invoke(teacher)).viewer.transcribe, true);
     const before = {...f.stats};
@@ -280,3 +288,19 @@ test('voice: provider bodies become bounded, ordered subtitles with or without t
   assert.equal(timedTranscript({text: '  '}, 5), null);
   assert.equal(activeSegment(timed.segments, 0.5), 0); assert.equal(activeSegment(timed.segments, 4), 1);
 });
+
+test('voice: three-minute recordings upload directly; longer or tampered files are rejected', () => offline(async () => {
+  const f = fixture();
+  const long = wav.pcmWav(new Float32Array(wav.VOICE_RATE * 180));
+  assert.ok(long.length > 4.5 * 1024 * 1024); // Larger than the hosting request limit, so it must bypass the app server.
+  const saved = await f.upload('voice1', student, long);
+  assert.equal(saved.uploadStatus, 'ready'); assert.equal(saved.duration, 180);
+  await f.invoke(student, 'DELETE', ['voice1']);
+  await rejectsStatus(f.invoke(student, 'POST', ['voice2'], {size: long.length + wav.VOICE_RATE * 2}), 400, 'AUDIO_INVALID');
+  const start = await f.invoke(student, 'POST', ['voice3'], {size: audio.length});
+  f.put(start.uploadUrl, new Uint8Array(audio.length)); // Right size, not a valid WAV.
+  await rejectsStatus(f.invoke(student, 'POST', ['voice3', 'finalize'], {}), 400, 'AUDIO_INVALID');
+  assert.equal(f.data.get(recordingPath('voice3')).uploadStatus, 'deleted');
+  assert.deepEqual(f.data.get('moduleVoiceStorage/teacher1'), {usedBytes: 0, reservedBytes: 0});
+  assert.equal((await f.upload('voice4')).uploadStatus, 'ready'); // Draft slot is free again.
+}));

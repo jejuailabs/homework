@@ -1,4 +1,4 @@
-export const VOICE_MAX_SECONDS = 60, VOICE_RATE = 16000, VOICE_MAX_BYTES = 44 + VOICE_RATE * 2 * VOICE_MAX_SECONDS;
+export const VOICE_MAX_SECONDS = 180, VOICE_RATE = 16000, VOICE_MAX_BYTES = 44 + VOICE_RATE * 2 * VOICE_MAX_SECONDS;
 /** Canonical PCM prevents lying about compressed recording duration or appending hidden audio. */
 export function wavDuration(bytes: Uint8Array): number {
     if (bytes.length < 44 || bytes.length > VOICE_MAX_BYTES)

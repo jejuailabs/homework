@@ -1,8 +1,8 @@
 'use client';
 import { pcmWav, wavDuration, VOICE_RATE, VOICE_MAX_SECONDS } from './wav';
 export async function normalizeRecording(blob: Blob) {
-    if (blob.size > 8 * 1024 * 1024)
-        throw new Error('녹음이 너무 커요. 60초 안으로 다시 녹음해 주세요.');
+    if (blob.size > 24 * 1024 * 1024)
+        throw new Error('녹음이 너무 커요. 3분 안으로 다시 녹음해 주세요.');
     const buffer = await blob.arrayBuffer(), bytes = new Uint8Array(buffer);
     try {
         wavDuration(bytes);
@@ -21,7 +21,7 @@ export async function normalizeRecording(blob: Blob) {
         if (!Number.isFinite(decoded.duration) || decoded.duration < .5)
             throw new Error('녹음이 너무 짧아요. 조금 더 길게 다시 녹음해 주세요.');
         if (decoded.duration > VOICE_MAX_SECONDS + .5)
-            throw new Error('녹음은 60초 안으로 해 주세요.');
+            throw new Error('녹음은 3분 안으로 해 주세요.');
         const length = Math.min(VOICE_RATE * VOICE_MAX_SECONDS, Math.floor(decoded.duration * VOICE_RATE)), offline = new Offline(1, length, VOICE_RATE), source = offline.createBufferSource();
         source.buffer = decoded;
         source.connect(offline.destination);
