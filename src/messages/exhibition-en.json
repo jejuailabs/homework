@@ -251,5 +251,14 @@
   "deleting": "Deleting…",
   "deleteFailed": "The room could not be deleted. Please try again.",
   "roomDeleted": "Room deleted.",
-  "deleteSummary": "Removes the room with its artworks, voices and guestbooks. This cannot be undone."
+  "deleteSummary": "Removes the room with its artworks, voices and guestbooks. This cannot be undone.",
+  "deleteTypeHint": "To delete, type '{phrase}' exactly in the box below.",
+  "deleteBuilding": "Delete building",
+  "deleteBuildingWarning": "Deleting \"{name}\" cannot be undone. A building that still has students or class records such as homework cannot be deleted.",
+  "deleteBuildingFailed": "The building could not be deleted. Please try again.",
+  "buildingDeleted": "Building deleted.",
+  "deleteBuildingRoomsTitle": "{more, select, more {More than {count} rooms are still in this building} other {{count} rooms are still in this building}}",
+  "deleteBuildingRoomsWarning": "Deleting \"{name}\" also deletes the rooms below with their artworks, voice docents, guestbooks and QR links. Please check nothing needs to be kept.",
+  "deleteBuildingRoomsMore": "…and the other rooms too",
+  "deleteBuildingRoomsConfirm": "Delete the rooms too"
 }
