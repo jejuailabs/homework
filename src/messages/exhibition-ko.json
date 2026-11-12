@@ -251,5 +251,14 @@
   "deleting": "삭제하고 있어요…",
   "deleteFailed": "전시실을 삭제하지 못했어요. 다시 시도해 주세요.",
   "roomDeleted": "전시실을 삭제했어요.",
-  "deleteSummary": "전시실과 작품·음성·방명록을 모두 지워요. 되돌릴 수 없어요."
+  "deleteSummary": "전시실과 작품·음성·방명록을 모두 지워요. 되돌릴 수 없어요.",
+  "deleteTypeHint": "정말 지우려면 아래 칸에 '{phrase}'를 그대로 입력해 주세요.",
+  "deleteBuilding": "건물 삭제",
+  "deleteBuildingWarning": "\"{name}\" 건물을 지우면 되돌릴 수 없어요. 학생이나 숙제 같은 반 기록이 남아 있으면 지워지지 않아요.",
+  "deleteBuildingFailed": "건물을 삭제하지 못했어요. 다시 시도해 주세요.",
+  "buildingDeleted": "건물을 삭제했어요.",
+  "deleteBuildingRoomsTitle": "{more, select, more {이 건물에 전시실이 {count}개 넘게 남아 있어요} other {이 건물에 전시실 {count}개가 남아 있어요}}",
+  "deleteBuildingRoomsWarning": "\"{name}\" 건물을 지우면 아래 전시실도 작품·음성 도슨트·방명록·QR 공유 링크까지 함께 지워져요. 남겨야 할 작품이 없는지 한 번 더 확인해 주세요.",
+  "deleteBuildingRoomsMore": "…그 밖의 전시실도 함께 지워져요",
+  "deleteBuildingRoomsConfirm": "전시실도 함께 지울게요"
 }

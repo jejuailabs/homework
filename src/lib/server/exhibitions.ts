@@ -29,6 +29,7 @@ import {wardrobeOutfit} from './points-policy';
 import {reconcileHomeworkSync} from './homework-sync';
 import {autoTags, effectiveTags, normalizeTags} from '../exhibition-tags';
 import {archiveFiles, archiveRows, archiveTags} from './exhibition-archive';
+import {DELETE_PHRASE} from '../delete-phrase';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -279,6 +280,31 @@ async function deleteExhibition(ctx: Context, exhibition: Exhibition, request: R
   owner(ctx, exhibition);
   const input = await body(request);
   if (input.confirm !== true) throw new ApiError(400, '삭제를 한 번 더 확인해 주세요.', 'CONFIRM_REQUIRED');
+  return json({deleted: true, artworks: await purgeExhibition(ctx, exhibition)});
+}
+/** Class data that must not be orphaned: a building with any of these stays until they are cleared elsewhere. */
+const BUILDING_BLOCKERS: [string, string][] = [['assignments', '숙제'], ['submissions', '제출물'], ['participationBoards', '참여보드'], ['classCanvases', '캔버스'], ['classPolls', '투표'], ['cardClassSets', '카드 세트'], ['cardNotes', '카드 기록'], ['lessonRecords', '수업 기록'], ['teacherReports', '리포트']];
+async function deleteBuilding(ctx: Context, classId: string, request: Request) {
+  const input = await body(request);
+  if (String(input.confirmText ?? '').trim() !== DELETE_PHRASE) throw new ApiError(400, `확인 칸에 '${DELETE_PHRASE}'를 정확히 입력해 주세요.`, 'CONFIRM_REQUIRED');
+  const classRef = db().doc(`classes/${id(classId)}`), current = await classRef.get();
+  if (!current.exists) throw new ApiError(404, '건물을 찾을 수 없어요. 이미 지워졌을 수 있어요.', 'NOT_FOUND');
+  if (!canManageClass(ctx.role, ctx.uid, current.data()?.ownerUid)) throw new ApiError(403, '이 건물을 지울 권한이 없어요.', 'FORBIDDEN');
+  const counts = await Promise.all([
+    classRef.collection('students').count().get().then(snap => ['학생', snap.data().count] as const),
+    ...BUILDING_BLOCKERS.map(([collection, label]) => db().collection(collection).where('classId', '==', classId).count().get().then(snap => [label, snap.data().count] as const)),
+  ]);
+  const left = counts.filter(([, count]) => count > 0);
+  if (left.length) throw new ApiError(409, `이 반에는 ${left.map(([label, count]) => `${label} ${count}개`).join(', ')}가 있어서 건물을 지울 수 없어요. 반의 다른 기록을 지키기 위해서예요. 학생·자료를 먼저 정리한 뒤 다시 시도해 주세요.`, 'BUILDING_NOT_EMPTY');
+  const rooms = await db().collection('exhibitions').where('classId', '==', classId).get();
+  if (rooms.size && input.includeRooms !== true) throw new ApiError(409, `이 건물에 전시실 ${rooms.size}개가 남아 있어요. 전시실까지 함께 지우는 것을 먼저 확인해 주세요.`, 'ROOMS_LEFT');
+  let artworks = 0;
+  for (const doc of rooms.docs) artworks += await purgeExhibition(ctx, {id: doc.id, ...doc.data()} as Exhibition);
+  await db().recursiveDelete(classRef);
+  await db().collection('adminAudit').add({actorUid: ctx.uid, action: 'class.delete', target: classId, details: {name: current.data()?.name || '', rooms: rooms.size, artworks}, kind: 'change', outcome: 'success', createdAt: now()});
+  return json({deleted: true, rooms: rooms.size, artworks});
+}
+async function purgeExhibition(ctx: Context, exhibition: Exhibition) {
   const room = exhibitionRef(exhibition.id), ownerUid = exhibition.ownerUid, containerKey = `exhibition:${exhibition.id}`;
   const artworks = await room.collection('artworks').get();
   // 1. Queue every artwork file first, so a failure later never strands files without a cleanup job.
@@ -306,7 +332,7 @@ async function deleteExhibition(ctx: Context, exhibition: Exhibition, request: R
   await db().recursiveDelete(room);
   await cleanupReplacedArtworks(ownerUid, jobs.map(item => item.jobId));
   await db().collection('adminAudit').add({actorUid: ctx.uid, action: 'exhibition.delete', target: exhibition.id, details: {classId: exhibition.classId, title: exhibition.title, artworks: artworks.size, voices: voices.size}, kind: 'change', outcome: 'success', createdAt: now()});
-  return json({deleted: true, artworks: artworks.size});
+  return artworks.size;
 }
 export async function cleanupReplacedArtworks(ownerUid: string, jobIds?: string[]) {
   const jobs = jobIds ? (jobIds.length ? await db().getAll(...jobIds.map(jobId=>db().doc(`exhibitionAssetCleanup/${jobId}`))) : []) : (await db().collection('exhibitionAssetCleanup').where('ownerUid', '==', ownerUid).limit(30).get()).docs;
@@ -740,6 +766,11 @@ export async function handleExhibitions(request: Request, segments: string[] = [
     if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
     const ctx = await getContext(request);
     if (segments.length === 1 && segments[0] === 'cleanup' && request.method === 'POST') return await cleanup(ctx);
+    if (segments[0] === 'buildings') {
+      if (ctx.role === 'student') throw new ApiError(403, '선생님만 건물을 지울 수 있어요.', 'FORBIDDEN');
+      if (segments.length === 2 && request.method === 'DELETE') return await deleteBuilding(ctx, segments[1], request);
+      throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
+    }
     if (segments[0] === 'archive') {
       if (ctx.role === 'student') throw new ApiError(403, '선생님만 전시 보관함을 쓸 수 있어요.', 'FORBIDDEN');
       if (segments.length === 1 && request.method === 'GET') return json({rows: await archiveRows(ctx.uid)});
