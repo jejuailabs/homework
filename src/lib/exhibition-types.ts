@@ -2,7 +2,9 @@
 import type {ArtworkModuleOptions} from '@/modules/artwork-extensions/types';
 import type {WorldCompanion} from './whiteknee-world-model';
 export type ExhibitionStatus = 'draft' | 'open' | 'closed';
-export type ExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean';
+/** cozy/forest/sky/ocean are the classic room; earth/moon/saturn open the space-mode 3D museum. */
+export type ExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean' | 'earth' | 'moon' | 'saturn';
+export type ClassicExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean';
 export type ArtworkStatus = 'pending' | 'approved' | 'revision';
 export type CommentStatus = 'pending' | 'approved' | 'hidden';
 export type ArtReaction = 'colors' | 'idea' | 'story';
