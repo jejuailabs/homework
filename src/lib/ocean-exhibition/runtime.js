@@ -5,9 +5,10 @@
 import {buildOceanExterior} from './exterior.js';
 import {buildRoom} from './room.js';
 import {createPhotoCharacter} from '../space-exhibition/photo-character.js';
+import {createCaption} from '../exhibition-caption.js';
 
 /** Frames per gallery besides the main slide. */
-export const OCEAN_PAGE_SIZE = 24;
+export const OCEAN_PAGE_SIZE = 30;
 const HERO_INTERVAL = 7000;
 const keyActions = {KeyW:'up',ArrowUp:'up',KeyS:'down',ArrowDown:'down',KeyA:'left',ArrowLeft:'left',KeyD:'right',ArrowRight:'right',KeyQ:'turn-left',KeyE:'turn-right'};
 
@@ -18,7 +19,9 @@ const keyActions = {KeyW:'up',ArrowUp:'up',KeyS:'down',ArrowDown:'down',KeyA:'le
  *   isActive:()=>boolean, onState:(state:any)=>void, onSelect:(id:string)=>void, onExit:()=>void}} options
  */
 export function createOceanRuntime(options) {
-  const {T, host, theme, data, assetUrl, cat, artworks, english = false} = options;
+  const {T, host, theme, data, assetUrl, cat, english = false} = options;
+  // Every work keeps its place number (1…N) for name cards and the slide screen.
+  const artworks = options.artworks.map((work, index) => ({...work, number: index + 1}));
   const look = data.themes[theme];
   const images = Object.fromEntries(Object.entries(look.images).map(([key, path]) => [key, assetUrl(path)]));
   const pageCount = Math.max(1, Math.ceil(artworks.length / OCEAN_PAGE_SIZE));
@@ -165,12 +168,13 @@ export function createOceanRuntime(options) {
       generated.add(material);
       return material;
     }
+    const caption = createCaption(T, generated);
     // Index 0 is the main slide and uses the full image; other frames use thumbnails.
     const artTex = index => { const work = roomArt[index]; return work ? textureFrom(index === 0 ? work.hero : work.image, work) : null; };
     // The exterior windows show the exhibition's own works.
     const coverTex = index => { const work = artworks.length ? artworks[index % artworks.length] : null; return work ? textureFrom(work.image, work) : null; };
     const coverArt = index => artworks.length ? artworks[index % artworks.length] : null;
-    const ctx = {T, group, theme, stage, page, rooms: [], art: roomArt, tex, tile, img, mat, label, artTex, coverTex, coverArt, renderer,
+    const ctx = {T, group, theme, stage, page, rooms: [], art: roomArt, tex, tile, img, mat, label, caption, total: artworks.length, artTex, coverTex, coverArt, renderer,
       look, layout: data.gallery, effects: data.effects, english, roomTitle: options.roomTitle || '',
       size: key => data.sizes[look.images[key]], sizeOf: path => data.sizes[path],
       exitLabel: english ? 'Entrance' : '입구로', heroTexture: work => textureFrom(work.hero, work)};

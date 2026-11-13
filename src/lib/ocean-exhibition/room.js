@@ -8,20 +8,14 @@
 //   lagoon – white walls under a pearl wave ceiling, wide panoramic windows, white bench
 import {oceanParts} from './parts.js';
 
-const plaqueText = (index, work) => `${index + 1}. ${work?.title || ''}${work?.artist && work.artist !== work.title ? ` · ${work.artist}` : ''}`;
 export function buildRoom(C) {
   const K = oceanParts(C);
   const {T, TH, L, V, PI} = K, group = C.group, theme = C.theme;
   const G = C.layout, [W, H, D] = G.innerSize, t = G.wallThickness;
-  // Works fit their slot at their own ratio (max 1.42 × 1.26 m; the main slide 2.0 × 1.7 m).
-  const profile = (work, hero) => {
-    const a = work?.width > 0 && work?.height > 0 ? work.width / work.height : 1.3;
-    const [aw, ah] = K.fit(a, hero ? 2.0 : 1.42, hero ? 1.7 : 1.26);
-    return {artSize: [aw, ah], outerFrameSize: [aw + .22, ah + .22]};
-  };
-  // The main slide hangs on the north wall slot nearest the centre, facing the entrance.
-  const heroSlot = G.artSlots.filter(slot => slot.wall === 'north').reduce((best, slot) => Math.abs(slot.u) < Math.abs(best.u) ? slot : best);
-  const slotOrder = [heroSlot, ...G.artSlots.filter(slot => slot !== heroSlot)];
+  // One big slide screen on the north wall shows every work in turn; every other work hangs in the
+  // same frame (FRAME_W × FRAME_H) with its name card below, evenly spread over the four walls.
+  const FRAME_W = 1.0, FRAME_H = .78, STEP = 1.6, CORNER = .95, SCREEN_W = 3.4, SCREEN_H = 2.0, ART_Y = 1.85;
+  const fitArt = work => K.fit(work?.width > 0 && work?.height > 0 ? work.width / work.height : 1.3, FRAME_W, FRAME_H);
   const brass = () => K.surface('trim', '#e2b979', {metalness: .8, roughness: .3});
   const steel = () => K.surface('trim', '#d6dbe0', {metalness: .9, roughness: .25});
   const S = {
@@ -44,12 +38,8 @@ export function buildRoom(C) {
   const wallGroups = {};
   for (const [name, w] of Object.entries(walls)) {
     const doors = G.entry.wall === name ? [{u: G.entry.u, kind: 'back', view: 'exteriorPlate', title: C.exitLabel}] : [];
-    // Each window grows to the space its neighbouring works leave free, at the reference's proportions.
-    const slots = G.artSlots.filter(a => a.wall === name);
-    const windows = G.windows.filter(v => v.wall === name).map(v => {
-      const free = Math.min(...slots.map(a => Math.abs(a.u - v.u) - (a === heroSlot ? 1.3 : .95)), w.len / 2 - Math.abs(v.u) - .3);
-      return {u: v.u, y: v.position[1] + S.winY, maxW: Math.min(2 * free, v.maxSize[0] * S.win), maxH: S.winH, aspect: TH.windowAspect};
-    });
+    // Windows keep their designed size; the works are placed around them (see wallSlots).
+    const windows = G.windows.filter(v => v.wall === name).map(v => ({u: v.u, y: v.position[1] + S.winY, maxW: Math.min(v.maxSize[0] * S.win, w.len - 2 * Math.abs(v.u) - .6), maxH: S.winH, aspect: TH.windowAspect}));
     wallGroups[name] = K.wall({...w, height: H - S.cove, thick: t, mat: S.wall, trim: S.trim, doors, windows, sleeve: S.sleeve});
     if (S.cove) K.cove(wallGroups[name], w.len, H, S.cove, S.wall, '#fff0d4');
     if (S.led) K.box(wallGroups[name], 0, H - .12, .06, w.len, .03, .05, K.glow(S.led));
@@ -78,20 +68,68 @@ export function buildRoom(C) {
   }
   // Artworks: the profile gives the art and outer frame size in metres; a track spot pools light on each.
   const art = C.art, heads = {north: [], south: [], east: [], west: []};
+  // Wall position u → room coordinates, facing into the room.
+  const onWall = (wall, u) => wall === 'north' ? {wall, u, position: [u, ART_Y, -D / 2 + .057], rotationY: 0}
+    : wall === 'east' ? {wall, u, position: [W / 2 - .057, ART_Y, u], rotationY: -PI / 2}
+    : wall === 'south' ? {wall, u, position: [-u, ART_Y, D / 2 - .057], rotationY: PI}
+    : {wall, u, position: [-W / 2 + .057, ART_Y, -u], rotationY: PI / 2};
+  const blocked = {north: [], east: [], south: [], west: []};
+  for (const v of G.windows) blocked[v.wall].push([v.u - v.maxSize[0] * S.win / 2 - .6, v.u + v.maxSize[0] * S.win / 2 + .6]);
+  blocked[G.entry.wall].push([G.entry.u - 1.7, G.entry.u + 1.7]);
+  const free = (wall, a, b) => blocked[wall].every(([x, y]) => b < x || a > y);
+  // The slide screen: on the north wall, as near the centre as the window allows.
+  const northEnd = W / 2 - CORNER - SCREEN_W / 2;
+  let screenU = 0;
+  for (let step = 0; step <= northEnd * 10; step++) {
+    const pick = [step / 10, -step / 10].find(u => free('north', u - SCREEN_W / 2 - .45, u + SCREEN_W / 2 + .45));
+    if (pick !== undefined) {screenU = pick; break;}
+  }
+  blocked.north.push([screenU - SCREEN_W / 2 - .45, screenU + SCREEN_W / 2 + .45]);
+  const heroSlot = onWall('north', screenU);
+  // Every free stretch of wall gets evenly spaced places, walking round the room: north, east, south, west.
+  const places = [];
+  for (const wall of ['north', 'east', 'south', 'west']) {
+    const half = (wall === 'north' || wall === 'south' ? W : D) / 2 - CORNER, cuts = [...blocked[wall]].sort((a, b) => a[0] - b[0]);
+    let start = -half;
+    for (const [x, y] of [...cuts, [half, half]]) {
+      const a = start, b = Math.min(x, half);
+      if (b - a >= FRAME_W + .2) {
+        const n = Math.floor((b - a - FRAME_W - .2) / STEP) + 1, offset = (b - a - (n - 1) * STEP) / 2;
+        for (let k = 0; k < n; k++) places.push(onWall(wall, a + offset + k * STEP));
+      }
+      start = Math.max(start, y);
+    }
+  }
+  // Fewer works than places: spread them evenly round the room instead of crowding the first walls.
+  const count = Math.min(art.length - 1, places.length);
+  const slots = Array.from({length: Math.max(0, count)}, (_, k) => places[count >= places.length ? k : Math.round(k * (places.length - 1) / Math.max(1, count - 1))]);
   let heroHang = null;
+  const bezel = new T.MeshStandardMaterial({color: '#15161c', roughness: .45, metalness: .35});
+  function nameCard(g, work, top, width, opts) {
+    if (!C.caption || !work) return;
+    const card = C.caption(work, opts), h = width / card.aspect;
+    K.plane(g, 0, top - h / 2, -.03, width, h, card.material).renderOrder = 2;
+  }
   function hang(slot, index, work, texture) {
-    const prof = profile(work, index === 0);
-    const g = K.grp(group, slot.position[0], 0, slot.position[2], slot.rotationY);
-    K.lightPool(g, 0, slot.position[1] + .5, -.05, Math.max(1.5, prof.outerFrameSize[0] * 1.45), 2.6, theme === 'abyss' ? .36 : .3);
-    const f = K.framedArt(g, texture, 0, slot.position[1] + (index === 0 ? .12 : 0), -.057, prof.artSize[0], prof.artSize[1], prof.outerFrameSize[0], prof.outerFrameSize[1]);
-    // Name plate under the frame (number · title · artist); the rotating main slide shows its name in the bottom card.
-    if (index !== 0 && C.label) {
-      const w = Math.min(Math.max(prof.outerFrameSize[0], 1.05), 1.75), h = .16, text = plaqueText(index, work);
-      K.plane(g, 0, slot.position[1] - prof.outerFrameSize[1] / 2 - .16, -.04, w, h, C.label(text, {width: Math.max(256, Math.round(w / h * 96)), height: 96, color: '#3c3a33', background: '#fbf6ec', font: '700 52px "Malgun Gothic",sans-serif'}));
+    const g = K.grp(group, slot.position[0], 0, slot.position[2], slot.rotationY), y = slot.position[1];
+    let f;
+    if (index === 0) {
+      const y0 = y + .2, a = work?.width > 0 && work?.height > 0 ? work.width / work.height : 1.3, [iw, ih] = K.fit(a, SCREEN_W, SCREEN_H);
+      K.lightPool(g, 0, y0 + .5, -.05, SCREEN_W * 1.3, 2.6, theme === 'abyss' ? .36 : .3);
+      f = K.grp(g, 0, y0, -.05);
+      K.box(f, 0, 0, 0, SCREEN_W + .2, SCREEN_H + .2, .06, bezel);
+      K.plane(f, 0, 0, .032, SCREEN_W + .04, SCREEN_H + .04, new T.MeshBasicMaterial({color: '#0b0c10', toneMapped: false}));
+      K.plane(f, 0, 0, .036, iw, ih, new T.MeshBasicMaterial({map: texture, toneMapped: false}));
+      nameCard(g, work, y0 - SCREEN_H / 2 - .16, 2.4, {screen: true, total: C.total});
+    } else {
+      const [aw, ah] = fitArt(work);
+      K.lightPool(g, 0, y + .5, -.05, 1.6, 2.6, theme === 'abyss' ? .36 : .3);
+      f = K.framedArt(g, texture, 0, y, -.057, aw, ah, FRAME_W + .22, FRAME_H + .22);
+      nameCard(g, work, y - (FRAME_H + .22) / 2 - .06, 1.05, {});
     }
     return {g, target: {mesh: f, kind: 'art', index}};
   }
-  slotOrder.forEach((slot, index) => {
+  [heroSlot, ...slots].forEach((slot, index) => {
     const work = art[index]; if (!work) return;
     const placed = hang(slot, index, work, C.artTex(index));
     if (index === 0) heroHang = placed;
