@@ -1,5 +1,6 @@
 // Three different galleries, each constructed as continuous walkable architecture.
 // Local display coordinates use +Z out of the hanging face and +Y up.
+const plaqueText = (index, work) => `${index + 1}. ${work?.title || ''}${work?.artist && work.artist !== work.title ? ` · ${work.artist}` : ''}`;
 export function buildRoom(C) {
   const {T,group,theme,art,artTex}=C;
   const solids=[],targets=[],painted=new Set(),cache=new Map();
@@ -68,7 +69,8 @@ export function buildRoom(C) {
   }
   function plaque(p,x,y,z,title,opts={}) {
     if(!C.label)return;
-    const o=plane(p,x,y,z,opts.w||1.15,opts.h||.17,C.label(title,{width:512,height:72,color:opts.color||'#403a2d',font:'600 37px sans-serif'}));
+    const w=opts.w||1.15,h=opts.h||.17,height=opts.bg?96:72,width=opts.bg?Math.max(256,Math.round(w/h*height)):512;
+    const o=plane(p,x,y,z,w,h,C.label(title,{width,height,color:opts.color||'#403a2d',background:opts.bg,font:opts.bg?'700 52px "Malgun Gothic",sans-serif':'600 37px sans-serif'}));
     o.material.transparent=true;return o;
   }
   let heroSlot=null;
@@ -85,6 +87,8 @@ export function buildRoom(C) {
     box(g,0,0,.015,iw+pad*2,ih+pad*2,.031,matte);
     border(g,0,0,.022,iw+pad*2+edge*2,ih+pad*2+edge*2,edge,.036,.010,trim);
     plane(g,0,0,.038,iw,ih,new T.MeshBasicMaterial({map:image,toneMapped:false}));
+    // Name plate under the frame (number · title · artist), as in the classic rooms.
+    if(index!==0&&a)plaque(g,0,-(ih/2+pad+edge+.13),.04,plaqueText(index,a),{w:Math.min(Math.max(iw+pad*2,1.05),1.75),h:.16,bg:'#fbf4e6',color:'#4a3b2c'});
     const target={mesh:g,kind:'art',index};
     if(swap)return target;
     targets.push(target);painted.add(index);

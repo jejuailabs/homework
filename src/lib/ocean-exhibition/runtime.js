@@ -43,7 +43,7 @@ export function createOceanRuntime(options) {
   let roomArt = [];
   function nearbyLabel() {
     if (!nearby) return null;
-    if (nearby.kind === 'art') return {kind: 'art', title: roomArt[nearby.index]?.title || ''};
+    if (nearby.kind === 'art') return {kind: 'art', title: roomArt[nearby.index]?.title || '', id: roomArt[nearby.index]?.id || ''};
     return {kind: nearby.kind};
   }
   function emit() {

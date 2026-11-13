@@ -190,6 +190,23 @@ async function create(ctx: Context, request: Request) {
   await keepHall(ctx.uid, hallOf(value.theme as Exhibition['theme']), createdAt);
   return json({ exhibition: { ...value, id: ref.id } }, 201);
 }
+/**
+ * Cover picture per room: its first approved artwork (oldest first), so a room card shows what is inside.
+ * Only rooms the viewer may see; rooms with no approved artwork are left out and keep their theme picture.
+ */
+async function roomCovers(ctx: Context, request: Request) {
+  const ids = [...new Set((new URL(request.url).searchParams.get('ids') || '').split(',').filter(Boolean))].slice(0, 40).map(value => id(value));
+  const covers: Record<string, string> = {};
+  await Promise.all(ids.map(async roomId => {
+    const snapshot = await exhibitionRef(roomId).get();
+    if (!snapshot.exists || !canViewExhibition(ctx, asExhibition(snapshot))) return;
+    const works = await exhibitionRef(roomId).collection('artworks').orderBy('createdAt').limit(12).get();
+    const first = works.docs.map(doc => doc.data()).find(value => value.status === 'approved' && (value.thumbnailPath || value.displayPath));
+    if (first) covers[roomId] = await stableReadUrl(first.thumbnailPath || first.displayPath).catch(() => '');
+    if (!covers[roomId]) delete covers[roomId];
+  }));
+  return covers;
+}
 async function detail(ctx: Context, exhibition: Exhibition, request: Request) {
   // A room fed by a homework room catches up on submissions finished while nobody watched (throttled per minute).
   if (exhibition.linkedAssignmentId) after(() => reconcileHomeworkSync(exhibition.linkedAssignmentId!));
@@ -795,6 +812,7 @@ export async function handleExhibitions(request: Request, segments: string[] = [
     if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
     const ctx = await getContext(request);
     if (segments.length === 1 && segments[0] === 'cleanup' && request.method === 'POST') return await cleanup(ctx);
+    if (segments.length === 1 && segments[0] === 'covers' && request.method === 'GET') return json({covers: await roomCovers(ctx, request)});
     if (segments[0] === 'halls') {
       if (ctx.role === 'student') throw new ApiError(403, '선생님만 전시관을 관리할 수 있어요.', 'FORBIDDEN');
       if (segments.length === 2 && isHallKind(segments[1]) && request.method === 'GET') return json({rooms: await hallRooms(ctx.uid, segments[1])});
