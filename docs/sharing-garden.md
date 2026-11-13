@@ -1,5 +1,7 @@
 # 함께 모은 성장 꽃 → 나눔 꽃밭
 
+> **상태: 보류(2026-11-13).** `claude/sharing-garden` 브랜치에만 있고 main·운영에는 넣지 않았다. 런칭할 때 origin/main 위로 다시 맞춘 뒤 PR → 색인 배포(`firebase deploy --only firestore:indexes`) → 병합 순서로 진행한다.
+
 2026-11-13, origin/main `08316ac`에서 확인한 구조와 이번에 더한 학급 나눔 적립을 정리한다.
 
 ## 1. 지금까지의 성장 꽃 (학생 개인 값)

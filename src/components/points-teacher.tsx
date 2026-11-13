@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
-import {Check, Gift, RotateCcw, Settings2, Shell} from 'lucide-react';
+import {Check, Flower2, Gift, RotateCcw, Settings2, Shell} from 'lucide-react';
 import type {PointGrantResult, PointSettings, PointStudent} from '@/lib/points-types';
 import {notifyPointsChanged} from '@/lib/use-point-sync';
 import AccessGate from './access-gate';
@@ -64,7 +64,7 @@ function Teacher({initialClassId}: {initialClassId: string}) {
   const label = settings ? pointLabel(settings, locale) : copy('보말', 'Bomal'), revoking = mode === 'revoke', canAdjust = revoking || !!state?.settings.enabled;
   const insufficient = revoking && chosen.some(student => student.points < amount), validAmount = Number.isSafeInteger(amount) && amount > 0;
   return <main className="points-page">
-    <header className="points-heading"><div><span className="points-eyebrow">{copy('우리 반의 작은 성장 보상', 'Small rewards for growing together')}</span><h1><Shell size={30}/>{copy('포인트와 캐릭터 꾸미기', 'Points & character wardrobe')}</h1><p>{copy('참여와 노력을 격려하고, 모은 보말로 친구와 작은 세상을 꾸며요.', 'Celebrate effort and participation. Students decorate their friends and little worlds with Bomal.')}</p></div>{classes.length > 0 && <select aria-label={copy('학급 선택', 'Choose class')} value={classId} disabled={busy} onChange={e => setClassId(e.target.value)}>{classes.map(cls => <option key={cls.id} value={cls.id}>{cls.name} · {cls.year}</option>)}</select>}</header>
+    <header className="points-heading"><div><span className="points-eyebrow">{copy('우리 반의 작은 성장 보상', 'Small rewards for growing together')}</span><h1><Shell size={30}/>{copy('포인트와 캐릭터 꾸미기', 'Points & character wardrobe')}</h1><p>{copy('참여와 노력을 격려하고, 모은 보말로 친구와 작은 세상을 꾸며요.', 'Celebrate effort and participation. Students decorate their friends and little worlds with Bomal.')}</p><Link className="button soft points-garden-link" href="/teacher/sharing-garden"><Flower2 size={16}/>{copy('나눔 꽃밭 · 반이 모은 성장 꽃으로 함께 기부', 'Sharing garden · our flowers become a donation')}</Link></div>{classes.length > 0 && <select aria-label={copy('학급 선택', 'Choose class')} value={classId} disabled={busy} onChange={e => setClassId(e.target.value)}>{classes.map(cls => <option key={cls.id} value={cls.id}>{cls.name} · {cls.year}</option>)}</select>}</header>
     {error && <p className="points-error" role="alert">{error}<button className="button" onClick={() => void action(load)}>{copy('다시 불러오기', 'Reload')}</button></p>}{notice && <p className="points-notice" role="status"><Check size={17}/>{notice}</p>}
     {loading ? <p role="status">{copy('학급을 불러오고 있어요.', 'Loading classes…')}</p> : !classes.length ? <section className="points-empty"><h2>{copy('먼저 학급을 만들어 주세요', 'Create a class first')}</h2><Link className="button primary" href="/teacher">{copy('학급 관리', 'Manage classes')}</Link></section> : !state || !settings ? <p role="status">{copy('포인트 정보를 불러오고 있어요.', 'Loading point settings…')}</p> : <>
       <div className="points-teacher-layout">
