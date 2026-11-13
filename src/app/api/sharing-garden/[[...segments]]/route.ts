@@ -14,10 +14,10 @@ async function handle(request: Request, {params}: {params: Promise<{segments?: s
     const s = (await params).segments || [], url = new URL(request.url);
     let result: unknown;
     if (request.method === 'GET' && !s.length) result = await garden.dashboard(await optionalContext(request), url.searchParams.get('month'));
-    else if (request.method === 'PUT' && s[0] === 'classes' && s.length === 3 && s[2] === 'visibility') {
+    else if (request.method === 'PUT' && s[0] === 'classes' && s.length === 3 && s[2] === 'settings') {
       assertOrigin(request);
-      const input = await readBoundedJson(request, 2000) as Record<string, unknown> | null;
-      result = await garden.setShowName(await requireTeacher(request), s[1], input?.showName);
+      const input = await readBoundedJson(request, 2000);
+      result = await garden.saveSettings(await requireTeacher(request), s[1], input);
     } else throw new ApiError(404, '나눔 꽃밭 기능을 찾을 수 없어요.');
     return NextResponse.json(result, {headers});
   } catch (error) {

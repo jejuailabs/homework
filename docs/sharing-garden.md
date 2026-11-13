@@ -21,16 +21,20 @@
 
 개인 xp 로직은 그대로 두고, 같은 숙제 확인 트랜잭션에서 **학급 월 합계**를 따로 쌓는다.
 
+- **참여는 학급별 선택이다(기본 꺼짐).** 선생님이 `/teacher/sharing-garden`에서 참여를 켜고 시·도를 골라야 적립된다. 켠 시점부터 쌓이고 지난 기록은 더하지 않는다. 끄면 새 적립이 멈추고 순위에서 빠지지만, 이미 모은 그달 기록은 정산 기록으로 남는다.
+- 학급 설정: `classes/{id}.sharingGarden = {joined, region(시·도 코드), school, visibility('region'|'school'|'class'), joinedAt}`
+
 - 문서: `classes/{classId}/growthMonthly/{YYYY-MM}` (한국 시간 기준 월)
+  - `region`: 시·도 코드(지역 집계용, 설정을 바꾸면 그달 문서도 따라 바뀜)
   - `points`: 이번 달 반이 모은 전체 점수(상한 없음, 기록용)
   - `credited`: 나눔에 반영되는 점수 = `min(points, 1500)` → 1점 = 1원
   - `full`, `filledAt`: 1,500점 도달 여부와 시각
   - `paid`: 유료 학급 여부(지금은 결제가 없어 항상 `false`, 자리만 둠)
 - 상한 처리: `reviewSubmission()` 트랜잭션 안에서 읽고(`readClassGarden`) 계산해 씀(`writeClassGarden`). 읽기는 보말 지급(쓰기)보다 먼저 해야 해서 그 앞에 둔다.
-- 규칙 함수(순수): `src/modules/sharing-garden/policy.ts` — `creditMonth`, `seoulMonth`, `gardenStage`, `publicClassLabel`, `sharingConfig`
-- 서버: `src/modules/sharing-garden/server.ts` — 전국 집계는 collection group 합계·개수 쿼리, 인스턴스당 1분 캐시
-- API: `GET /api/sharing-garden`(로그인 없이도 전국 현황, 로그인하면 우리 반), `PUT /api/sharing-garden/classes/{id}/visibility`(선생님이 반 이름 공개)
-- 화면: `/sharing-garden` 전국 나눔 대시보드, 학생 홈 성장 꽃 아래 "우리 반이 이번 달 모은 나눔 꽃" 띠(`strip.tsx`)
+- 규칙 함수(순수): `src/modules/sharing-garden/policy.ts` — `creditMonth`, `seoulMonth`, `gardenStage`, `publicClassLabel`, `gardenSettings`, `settingsInput`, `REGIONS`, `sharingConfig`
+- 서버: `src/modules/sharing-garden/server.ts` — 전국·시·도별(17곳) 집계는 collection group 합계·개수 쿼리, 인스턴스당 1분 캐시
+- API: `GET /api/sharing-garden`(로그인 없이도 전국 현황, 로그인하면 우리 반), `PUT /api/sharing-garden/classes/{id}/settings`(선생님이 참여·지역·학교·공개 범위 저장)
+- 화면: `/sharing-garden` 전국 나눔 대시보드(지역별 나눔 지도 포함), `/teacher/sharing-garden` 선생님용(같은 화면 + 학급별 참여 설정), 학생 홈 성장 꽃 아래 "우리 반이 이번 달 모은 나눔 꽃" 띠(`strip.tsx`, 참여한 반만 보임)
 - 사업계획서용 예시 화면: `/sharing-garden?demo=1` (화면 위에 "예시 화면" 표시, 서버 호출 없음)
 - 베리: `나눔 꽃밭` 메뉴와 `get_sharing_garden` 읽기 도구
 
@@ -44,7 +48,7 @@
 
 ## 4. 개인정보·운영 원칙
 
-- 학생 이름은 어디에도 나가지 않는다. 반 이름은 선생님이 켠 경우에만 순위에 보이고, 아니면 "4학년 어느 반"처럼 표시한다.
+- 학생 이름은 어디에도 나가지 않는다. 공개 범위 기본값은 **지역만**("제주 · 4학년 어느 반")이다. 선생님이 고르면 "제주 · 한빛초 4학년"(학교), "제주 · 한빛초 햇살반"(반 이름)까지 보인다. 학교와 반 이름이 함께 나오면 반이 특정되므로 기본으로 켜지 않는다.
 - 적립은 돈이 오가는 것이 아니라 월말 정산용 기록이다. 실제 기부 집행과 기부처 선정은 운영자가 따로 한다.
 - 결제(`classes/{id}.billing.paid`)가 생기면 그 값을 `true`로 쓰고 `SHARING_GARDEN_REQUIRE_PAID=true`로 바꾼다. 월 문서의 `paid`는 적립할 때마다 그 시점 값으로 바뀌므로, 월 중간에 결제한 학급은 다음 숙제 확인부터 반영된다.
 - Firestore 규칙은 클라이언트 접근을 막고(서버 전용), 색인은 `firestore.indexes.json`의 `growthMonthly` 항목이다. 운영 반영 시 색인 배포가 먼저 끝나야 전국 집계가 동작한다.

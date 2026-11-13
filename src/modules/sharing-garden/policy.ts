@@ -47,11 +47,58 @@ export function creditMonth(previous: {points?: unknown; credited?: unknown} | u
 /** Billing placeholder: a class becomes paid when a future billing flow sets `billing.paid`. */
 export function isPaidClass(cls: {billing?: {paid?: unknown}} | undefined) { return cls?.billing?.paid === true; }
 
-/** Teachers opt in before their class name appears anywhere public. Student names never appear. */
-export function publicClassLabel(cls: {name?: unknown; grade?: unknown; sharingGarden?: {showName?: unknown}} | undefined) {
-  if (cls?.sharingGarden?.showName === true && typeof cls.name === 'string' && cls.name.trim()) return cls.name.trim().slice(0, 40);
+/** 시·도 17곳. `row`/`col` place each one on the small tile map of Korea in the dashboard. */
+export const REGIONS = [
+  {code: 'seoul', name: '서울', row: 1, col: 3}, {code: 'gangwon', name: '강원', row: 1, col: 4},
+  {code: 'incheon', name: '인천', row: 2, col: 2}, {code: 'gyeonggi', name: '경기', row: 2, col: 3}, {code: 'chungbuk', name: '충북', row: 2, col: 4},
+  {code: 'chungnam', name: '충남', row: 3, col: 2}, {code: 'sejong', name: '세종', row: 3, col: 3}, {code: 'daejeon', name: '대전', row: 3, col: 4}, {code: 'gyeongbuk', name: '경북', row: 3, col: 5},
+  {code: 'jeonbuk', name: '전북', row: 4, col: 2}, {code: 'daegu', name: '대구', row: 4, col: 4}, {code: 'ulsan', name: '울산', row: 4, col: 5},
+  {code: 'gwangju', name: '광주', row: 5, col: 2}, {code: 'jeonnam', name: '전남', row: 5, col: 3}, {code: 'gyeongnam', name: '경남', row: 5, col: 4}, {code: 'busan', name: '부산', row: 5, col: 5},
+  {code: 'jeju', name: '제주', row: 6, col: 2},
+] as const;
+export type RegionCode = (typeof REGIONS)[number]['code'];
+export const regionName = (code: unknown) => REGIONS.find(region => region.code === code)?.name ?? '';
+
+/** How much of the class appears in public: the region only (default), plus the school, plus the class name. */
+export const VISIBILITY = ['region', 'school', 'class'] as const;
+export type Visibility = (typeof VISIBILITY)[number];
+export type GardenSettings = {joined: boolean; region: RegionCode | ''; school: string; visibility: Visibility};
+
+/** Whatever is stored, a class only takes part when its teacher turned it on and picked a region. */
+export function gardenSettings(raw: unknown): GardenSettings {
+  const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const region = REGIONS.some(item => item.code === value.region) ? value.region as RegionCode : '';
+  const school = typeof value.school === 'string' ? cleanSchool(value.school) : '';
+  const visibility = VISIBILITY.includes(value.visibility as Visibility) ? value.visibility as Visibility : 'region';
+  return {joined: value.joined === true && !!region, region, school, visibility};
+}
+const cleanSchool = (text: string) => text.replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 30);
+
+/** Validates what a teacher sends from the settings card. */
+export function settingsInput(raw: unknown): GardenSettings {
+  if (!raw || typeof raw !== 'object') throw new Error('설정 내용을 확인해 주세요.');
+  const value = raw as Record<string, unknown>;
+  if (typeof value.joined !== 'boolean') throw new Error('참여 여부를 골라 주세요.');
+  if (!REGIONS.some(item => item.code === value.region)) { if (value.joined) throw new Error('시·도를 골라 주세요.'); }
+  if (value.school !== undefined && typeof value.school !== 'string') throw new Error('학교 이름을 확인해 주세요.');
+  if (typeof value.school === 'string' && value.school.trim().length > 30) throw new Error('학교 이름은 30자까지 적을 수 있어요.');
+  if (!VISIBILITY.includes(value.visibility as Visibility)) throw new Error('공개 범위를 골라 주세요.');
+  const school = typeof value.school === 'string' ? cleanSchool(value.school) : '';
+  if (value.visibility !== 'region' && !school) throw new Error('학교까지 공개하려면 학교 이름을 적어 주세요.');
+  return {joined: value.joined, region: REGIONS.some(item => item.code === value.region) ? value.region as RegionCode : '', school, visibility: value.visibility as Visibility};
+}
+
+/** The public name of a class. Student names never appear; school and class name only when the teacher chose so. */
+export function publicClassLabel(cls: {name?: unknown; grade?: unknown; sharingGarden?: unknown} | undefined) {
+  const settings = gardenSettings(cls?.sharingGarden), region = regionName(settings.region);
   const grade = typeof cls?.grade === 'string' ? cls.grade.replace(/[^0-9]/g, '').slice(0, 1) : '';
-  return grade ? `${grade}학년 어느 반` : '이름을 숨긴 반';
+  const gradeText = grade ? `${grade}학년` : '';
+  const className = typeof cls?.name === 'string' ? cls.name.trim().slice(0, 30) : '';
+  const parts = [region];
+  if (settings.visibility === 'region' || !settings.school) parts.push(gradeText ? `${gradeText} 어느 반` : '어느 반');
+  else if (settings.visibility === 'school') parts.push([settings.school, gradeText || '어느 반'].join(' '));
+  else parts.push([settings.school, className || gradeText || '어느 반'].join(' '));
+  return parts.filter(Boolean).join(' · ');
 }
 
 export const GARDEN_STAGES = [
@@ -80,5 +127,6 @@ export type NationalView = {
   /** True when the national totals could not be read this time; the class garden still shows. */
   unavailable?: boolean;
   ranking: {rank: number; label: string; won: number; full: boolean; mine?: boolean}[];
+  regions: {code: RegionCode; name: string; won: number; classes: number}[];
 };
-export type ClassView = {month: string; points: number; credited: number; cap: number; stage: ReturnType<typeof gardenStage>; showName: boolean; label: string; paid: boolean};
+export type ClassView = {month: string; points: number; credited: number; cap: number; stage: ReturnType<typeof gardenStage>; settings: GardenSettings; label: string; paid: boolean};

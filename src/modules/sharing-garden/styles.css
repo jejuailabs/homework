@@ -69,6 +69,40 @@
 .sg-how li p{margin:0;font-size:12px;color:var(--muted);line-height:1.6;word-break:keep-all}
 .sg-petals{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .sg-petals span{position:absolute;top:-30px;font-size:18px;animation:sg-fall 4.2s linear infinite}
+.sg-class.is-off{background:var(--surface-alt)}
+.sg-settings{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border);display:grid;gap:10px}
+.sg-settings label{margin:0;font-size:12px;font-weight:700;color:var(--muted);display:grid;gap:5px}
+.sg-settings select,.sg-settings input{padding:9px 11px;font-size:13px;border-radius:10px}
+.sg-settings-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sg-settings-note,.sg-settings-preview{margin:0;font-size:12px;color:var(--muted);line-height:1.6;word-break:keep-all}
+.sg-settings-preview b{color:var(--text)}
+.sg-settings .button{justify-self:start;min-height:38px;padding:8px 18px}
+.sg-switch{display:flex!important;align-items:center;gap:10px!important;cursor:pointer;color:var(--text)!important;font-size:14px!important}
+.sg-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.sg-switch span{width:44px;height:26px;border-radius:20px;background:var(--border);position:relative;transition:.2s;flex:none}
+.sg-switch span:after{content:'';position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:.2s}
+.sg-switch input:checked+span{background:var(--sg-pink-strong)}
+.sg-switch input:checked+span:after{left:21px}
+.sg-switch input:focus-visible+span{outline:3px solid var(--accent);outline-offset:2px}
+.sg-region-wrap{background:var(--surface);border:1px solid var(--border);border-radius:22px;padding:22px 24px}
+.sg-region-body{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(220px,1fr);gap:22px;align-items:start}
+.sg-map{display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(6,auto);gap:6px;padding:14px;border-radius:18px;background:linear-gradient(180deg,#eef5fb,#e8f2ee)}
+[data-mode=dark] .sg-map{background:linear-gradient(180deg,#1f2b33,#1d2a23)}
+.sg-tile{border-radius:12px;padding:8px 6px;text-align:center;background:var(--surface);border:1px solid var(--border);display:grid;gap:1px;min-width:0}
+.sg-tile b{font-size:13px}
+.sg-tile span{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sg-tile small{font-size:10px;color:var(--muted);min-height:14px}
+.sg-tile.l1{background:#fdf1f4}.sg-tile.l2{background:#f9d8e2}.sg-tile.l3{background:#f2b3c6}.sg-tile.l4{background:#df7c9c;color:#fff;border-color:#df7c9c}
+.sg-tile.l4 small{color:#fff}
+[data-mode=dark] .sg-tile.l1{background:#3a2a30}[data-mode=dark] .sg-tile.l2{background:#56313f}[data-mode=dark] .sg-tile.l3{background:#7a3a52}
+.sg-tile.is-mine{outline:3px solid var(--sg-sun);outline-offset:1px}
+.sg-region-rank{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.sg-region-rank li{display:grid;grid-template-columns:28px 1fr auto auto;gap:10px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--surface-alt)}
+.sg-region-rank b{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--sg-sun);color:#5a4210;font-size:12px}
+.sg-region-rank span{font-weight:700}
+.sg-region-rank small{color:var(--muted);font-size:12px}
+.sg-region-rank strong{font-size:13px}
+@media(max-width:860px){.sg-settings-grid{grid-template-columns:1fr}.sg-region-body{grid-template-columns:1fr}.sg-tile span{font-size:10px}}
 /* Student home: the class garden under 함께 모은 성장 꽃. */
 .sg-strip{display:flex;align-items:center;gap:14px;margin:10px 0 0;padding:14px 18px;border-radius:20px;background:#fdeef3;border:2px solid var(--surface);text-decoration:none;color:inherit}
 [data-mode=dark] .sg-strip{background:#3d2a33}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {MONTHLY_CAP, creditMonth, gardenStage, isPaidClass, percentOf, publicClassLabel, seoulMonth, sharingConfig, validMonth} from './policy';
+import {MONTHLY_CAP, REGIONS, creditMonth, gardenSettings, settingsInput, gardenStage, isPaidClass, percentOf, publicClassLabel, seoulMonth, sharingConfig, validMonth} from './policy';
 
 test('a class month keeps every point but credits at most 1,500', () => {
   assert.deepEqual(creditMonth(undefined, 10), {points: 10, credited: 10, added: 10, full: false, justFilled: false});
@@ -19,10 +19,28 @@ test('months follow Korea time', () => {
   assert.equal(seoulMonth(new Date('2026-11-30T14:59:00Z')), '2026-11');
   assert.ok(validMonth('2026-01')); assert.ok(!validMonth('2026-13')); assert.ok(!validMonth('../x'));
 });
-test('class names appear only when the teacher opts in', () => {
-  assert.equal(publicClassLabel({name: '햇살반', grade: '4', sharingGarden: {showName: true}}), '햇살반');
-  assert.equal(publicClassLabel({name: '햇살반', grade: '4학년'}), '4학년 어느 반');
-  assert.equal(publicClassLabel({name: '햇살반'}), '이름을 숨긴 반');
+test('public names show only what the teacher chose, never students', () => {
+  const at = (visibility: string, school = '한빛초') => ({name: '햇살반', grade: '4', sharingGarden: {joined: true, region: 'jeju', school, visibility}});
+  assert.equal(publicClassLabel(at('region')), '제주 · 4학년 어느 반');
+  assert.equal(publicClassLabel(at('school')), '제주 · 한빛초 4학년');
+  assert.equal(publicClassLabel(at('class')), '제주 · 한빛초 햇살반');
+  assert.equal(publicClassLabel(at('class', '')), '제주 · 4학년 어느 반', 'no school typed → region only');
+  assert.equal(publicClassLabel({name: '햇살반'}), '어느 반');
+});
+test('a class takes part only when the teacher turned it on with a region', () => {
+  assert.equal(gardenSettings(undefined).joined, false);
+  assert.equal(gardenSettings({joined: true}).joined, false, 'no region yet');
+  assert.equal(gardenSettings({joined: true, region: 'mars'}).joined, false);
+  assert.deepEqual(gardenSettings({joined: true, region: 'busan', school: ' 바다  초<b> ', visibility: 'nope'}), {joined: true, region: 'busan', school: '바다 초b', visibility: 'region'});
+  assert.equal(REGIONS.length, 17);
+});
+test('settings input is checked before saving', () => {
+  assert.throws(() => settingsInput({joined: 'yes', visibility: 'region'}), /참여 여부/);
+  assert.throws(() => settingsInput({joined: true, region: '', visibility: 'region'}), /시·도/);
+  assert.throws(() => settingsInput({joined: true, region: 'seoul', visibility: 'school', school: ''}), /학교 이름/);
+  assert.throws(() => settingsInput({joined: true, region: 'seoul', visibility: 'all'}), /공개 범위/);
+  assert.deepEqual(settingsInput({joined: false, region: '', visibility: 'region'}), {joined: false, region: '', school: '', visibility: 'region'});
+  assert.deepEqual(settingsInput({joined: true, region: 'seoul', school: '한강초', visibility: 'class'}), {joined: true, region: 'seoul', school: '한강초', visibility: 'class'});
 });
 test('stages, progress and the paid placeholder', () => {
   assert.equal(gardenStage(0).label, '씨앗'); assert.equal(gardenStage(300).label, '새싹'); assert.equal(gardenStage(1499).label, '꽃'); assert.equal(gardenStage(9999).label, '꽃밭 완성');
