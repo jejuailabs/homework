@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>수중 미술관</title>
+  <style>{{STYLE}}</style>
+</head>
+<body>
+  <section id="destinations" aria-labelledby="main-title">
+    <header class="portal-head"><h1 id="main-title">수중 미술관</h1><p>바닷속 전시관 네 곳 중 하나를 고르세요.</p></header>
+    <div id="theme-list"></div>
+  </section>
+  <main id="explorer" hidden>
+    <div id="world" tabindex="0" role="region" aria-label="3D 전시 공간"></div>
+    <div class="upper controls">
+      <button id="back" class="glass" type="button"><span aria-hidden="true">←</span> <span id="back-label">전시관 선택</span></button>
+      <div class="location glass"><span id="location-type"></span><h1 id="location-title"></h1></div>
+      <div class="upper-right"><button id="room-list" class="glass" type="button" hidden>전시실 목록</button><button id="works-list" class="glass" type="button" hidden>작품 목록</button><button id="help" class="glass help" type="button" aria-label="조작 방법">?</button></div>
+    </div>
+    <div class="lower controls">
+      <div class="walking">
+        <div class="dpad" role="group" aria-label="캐릭터 이동"><button type="button" data-step="up" aria-label="앞으로">↑</button><button type="button" data-step="left" aria-label="왼쪽으로">←</button><button type="button" data-step="down" aria-label="뒤로">↓</button><button type="button" data-step="right" aria-label="오른쪽으로">→</button></div>
+      </div>
+      <div class="stage-actions">
+        <button type="button" id="enter-hub" class="action" hidden>전시관 들어가기 <span aria-hidden="true">→</span></button>
+        <nav id="pages" class="glass" aria-label="중앙 홀 전시실 페이지" hidden><button id="page-prev" type="button" aria-label="이전 전시실 페이지">‹</button><span id="page-title"></span><button id="page-next" type="button" aria-label="다음 전시실 페이지">›</button></nav>
+        <button type="button" id="nearby" class="glass" hidden></button>
+      </div>
+      <div class="view-controls glass"><button type="button" data-step="turn-left" aria-label="시선 왼쪽으로">↶</button><button type="button" data-step="turn-right" aria-label="시선 오른쪽으로">↷</button><button type="button" id="reset" aria-label="처음 위치로" title="처음 위치로">⌂</button></div>
+    </div>
+    <p id="loading" class="glass" role="status" hidden></p>
+  </main>
+  <dialog id="list-dialog" aria-labelledby="list-title"><div class="dialog-head"><h2 id="list-title"></h2><button class="close" type="button" data-close aria-label="목록 닫기">×</button></div><div id="items"></div></dialog>
+  <dialog id="art-dialog" aria-labelledby="art-title">
+    <div class="dialog-head"><div><p id="art-context"></p><h2 id="art-title"></h2></div><button class="close" type="button" data-close aria-label="작품 닫기">×</button></div>
+    <div class="art-stage"><img id="art-image" alt=""></div>
+    <footer class="art-foot"><p id="art-medium"></p><nav class="art-nav" aria-label="작품 이동"><button id="prev-art" type="button" aria-label="이전 작품">‹</button><span id="art-count"></span><button id="next-art" type="button" aria-label="다음 작품">›</button></nav></footer>
+  </dialog>
+  <dialog id="help-dialog" aria-labelledby="help-title"><div class="dialog-head"><h2 id="help-title">조작 방법</h2><button class="close" type="button" data-close aria-label="조작 방법 닫기">×</button></div><dl class="instructions"><dt>걷기</dt><dd>W A S D, 방향키 또는 화면 왼쪽의 화살표</dd><dt>둘러보기</dt><dd>화면을 드래그하거나 Q · E로 좌우 회전</dd><dt>문과 작품</dt><dd>문으로 걸어 들어가거나, 화면에서 누르거나, 가까이 서서 Enter를 누르세요. E를 짧게 눌러도 열립니다.</dd></dl></dialog>
+  <script>{{SCRIPT}}</script>
+</body>
+</html>
