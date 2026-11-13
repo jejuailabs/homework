@@ -167,3 +167,16 @@ dialog .ex-delete-zone{margin-top:0}
 .ex-sky-fx b+b{top:18%;left:35%;animation-delay:5.5s;animation-duration:11s}
 @keyframes ex-shoot{0%,86%{opacity:0;translate:0 0}88%{opacity:1}96%{opacity:0;translate:-320px 170px}100%{opacity:0;translate:-320px 170px}}
 @media (prefers-reduced-motion:reduce){.ex-sky-fx i,.ex-sky-fx b{animation:none}.ex-sky-fx b{display:none}}
+/* 전시관 heading: the title never breaks letter by letter; the hint wraps under it on phones. */
+.ex-halls .ex-buildings-heading{flex-wrap:wrap;align-items:baseline}
+.ex-halls .ex-buildings-heading h2{flex:none;white-space:nowrap;word-break:keep-all}
+.ex-halls .ex-buildings-heading .ex-form-hint{flex:1 1 240px;min-width:0;margin:0;word-break:keep-all}
+@media(max-width:760px){.ex-halls .ex-buildings-heading{flex-direction:column;align-items:flex-start;gap:6px}.ex-halls .ex-buildings-heading .ex-form-hint{flex:none}}
+/* One classic sticker sits centered and whole inside the cover. */
+.ex-hall-cover .ex-hall-thumb.is-classic img:only-child{left:50%;top:50%;right:auto;bottom:auto;width:auto;height:72%;max-width:80%;object-fit:contain;transform:translate(-50%,-50%)}
+/* Small covers: LATEST on top, '보는 중' on the bottom so they never collide. */
+@media(max-width:520px){
+ .ex-hall-cover .ex-latest{top:6px;left:6px;font-size:9px;padding:2px 5px}
+ .ex-hall-picked{top:auto;bottom:6px;right:6px;font-size:9px;padding:2px 6px}
+ .ex-hall-copy strong{white-space:normal;word-break:keep-all}
+}

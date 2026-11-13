@@ -63,3 +63,4 @@
 .bp-abilities .bp-ability-list button.is-locked{border-color:var(--border);background:var(--surface-alt);color:var(--muted)}.bp-abilities .bp-ability-list button.is-locked svg{color:var(--muted)}
 .bp-back{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:none;width:100%;min-height:38px;border:1px solid #d8c7ea;border-radius:12px;background:#f3ebfa;color:#6f4d8c;font-size:12.5px;font-weight:700;cursor:pointer}
 [data-mode=dark] .bp-back{border-color:#5a4770;background:#3a2d47;color:#dcc8ef}
+@media(max-width:520px){.bp-fab{width:52px;height:52px;bottom:calc(64px + env(safe-area-inset-bottom))}.bp-fab img{width:40px;height:40px}body:has(.bp-fab){padding-bottom:calc(140px + env(safe-area-inset-bottom))}}

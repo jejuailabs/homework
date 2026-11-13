@@ -245,6 +245,16 @@ export function createOceanRuntime(options) {
     if (!spec) return;
     pos.set(spec.spawn[0], spec.spawn[1]);
     yaw = spec.yaw ?? 0; actorYaw = Math.PI - yaw;
+    // Phones: step in from the back wall so the follow camera has room behind the character.
+    if (stage !== 'exterior' && camera && camera.aspect < .82) {
+      const vx = -Math.sin(yaw), vz = Math.cos(yaw), b = spec.bounds, want = (spec.camera?.distance ?? 3.75) * 1.02;
+      for (let i = 0; i < 40; i++) {
+        let room = Infinity;
+        for (const [p, v, lo, hi] of [[pos.x, vx, b[0], b[1]], [pos.y, vz, b[2], b[3]]]) { if (v > .00001) room = Math.min(room, (hi - .12 - p) / v); if (v < -.00001) room = Math.min(room, (lo + .12 - p) / v); }
+        if (room >= want || !legal(pos.x - vx * .1, pos.y - vz * .1)) break;
+        pos.set(pos.x - vx * .1, pos.y - vz * .1);
+      }
+    }
     tilt = spec.camera?.pitch ?? (stage === 'exterior' ? -.085 : -.057);
     clock.then = 0; clock.walk = 0; clock.actionCheck = 0;
     intro = spec.establishing ? {mode: 'overview', at: 0} : null;
@@ -389,7 +399,7 @@ export function createOceanRuntime(options) {
       player.group.visible = true;
       return;
     }
-    const desired = (opts.distance ?? (outdoor ? 4.8 : 3.75)) * (narrow ? 1.08 : 1);
+    const desired = (opts.distance ?? (outdoor ? 4.8 : 3.75)) * (narrow ? 1.2 : 1);
     const vx = -Math.sin(yaw), vz = Math.cos(yaw), b = spec.bounds;
     let dist = desired;
     if (!outdoor) for (const [p, v, lo, hi] of [[pos.x, vx, b[0], b[1]], [pos.y, vz, b[2], b[3]]]) {
@@ -400,8 +410,13 @@ export function createOceanRuntime(options) {
     dist = Math.max(.08, dist);
     const ratio = Math.min(1, dist / desired);
     const height = opts.height ?? (outdoor ? 2.00 : 1.65);
-    camera.position.set(pos.x + vx * dist, 1.30 + (height - 1.30) * ratio, pos.y + vz * dist);
-    camera.rotation.set(tilt, -yaw, 0, 'YXZ');
+    // Phones: when a wall pushes the camera in, rise and look down instead of sinking to the character's height.
+    const lift = narrow && !outdoor ? (1 - ratio) * .9 : 0;
+    const camY = narrow && !outdoor ? height + lift : 1.30 + (height - 1.30) * ratio;
+    // Aim down at the character by as much as the rise needs, keeping the visitor's own tilt on top.
+    const aimDown = lift ? Math.atan2(camY - .7, Math.max(.35, dist)) - Math.atan2(height - .7, desired) : 0;
+    camera.position.set(pos.x + vx * dist, camY, pos.y + vz * dist);
+    camera.rotation.set(tilt - aimDown, -yaw, 0, 'YXZ');
     let fov = (opts.fov ?? (outdoor ? 54 : 51)) + (narrow ? 9 : 0) + (1 - ratio) * 6;
     if (intro?.mode === 'transition') {
       const t = Math.min(1, (now - intro.at) / 760), easing = t * t * (3 - 2 * t);
@@ -412,7 +427,7 @@ export function createOceanRuntime(options) {
     }
     if (Math.abs(camera.fov - fov) > .025) { camera.fov = fov; camera.updateProjectionMatrix(); }
     camera.updateMatrixWorld();
-    player.group.visible = dist > 1.04;
+    player.group.visible = dist > (lift ? .3 : 1.04);
   }
   function isVisibleMesh(object) { for (let obj = object; obj; obj = obj.parent) if (!obj.visible) return false; return true; }
   function objectHitTarget() {

@@ -41,6 +41,6 @@ export default function TestZone() {
       {canPreviewRegionQuest(viewer?.role) && <RegionQuestBeta embedded/>}
       <small>교사·관리자 미리보기</small>
     </div>
-    <button ref={trigger} type="button" className="test-zone-trigger" aria-controls="test-zone-panel" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}><FlaskConical size={17}/><span>Test Zone</span><ChevronUp size={15} className={expanded ? 'is-open' : ''}/></button>
+    <button ref={trigger} type="button" className="test-zone-trigger" aria-label="Test Zone" aria-controls="test-zone-panel" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}><FlaskConical size={17}/><span>Test Zone</span><ChevronUp size={15} className={expanded ? 'is-open' : ''}/></button>
   </div>;
 }
