@@ -262,7 +262,7 @@
     "title": "Our halls",
     "hint": "Pick a room theme and the room joins the matching hall.",
     "roomCount": "{count} rooms",
-    "preview": "Preview rooms",
+    "preview": "List rooms",
     "previewTitle": "Rooms in {hall}",
     "emptyHall": "No rooms in this hall yet. Create one.",
     "emptyHallTitle": "This hall is empty",
@@ -272,7 +272,8 @@
     "studentView": "See children's view",
     "previewNote": "This is what children see. Only open rooms appear.",
     "newestFirst": "newest first",
-    "picked": "Viewing"
+    "picked": "Viewing",
+    "manageRoom": "Manage artworks"
   },
   "entry": {
     "recent": "Newly opened rooms",
