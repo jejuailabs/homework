@@ -28,6 +28,7 @@ import {companionProfile} from '@/modules/my-space/profile';
 import {ownedItems, roomCompanionAppearance} from '@/modules/my-space/policy';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
 import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
+import {readClassGarden, writeClassGarden} from '@/modules/sharing-garden/server';
 import {createLinkedRooms, resyncHomeworkRooms, setSyncedWithdrawn, syncSubmission} from './homework-sync';
 import {editedHomeworkSync, homeworkSyncTargets, submissionTypeChange} from './homework-sync-policy';
 
@@ -473,12 +474,15 @@ async function reviewSubmission(ctx: Context, task: FirebaseFirestore.DocumentSn
     const value = doc.data()!;
     if (!attemptId || attemptId !== value.attemptId) throw new ApiError(409, '새 제출물이 있어요. 새로 확인한 뒤 검사해 주세요.', 'STALE_ATTEMPT');
     const decision = nextReview(status, !!value.rewardGranted);
+    // The class sharing garden is read before the point award, which already writes inside this transaction.
+    const garden = decision.reward ? await readClassGarden(tx, value.classId) : null;
     const pointAward = decision.reward ? await awardHomeworkPoints(tx, {classId: value.classId, studentId, assignmentId, actorUid: ctx.uid}) : value.pointAward;
     const updated = { ...value, status: decision.status, feedback, reviewedAt: now(), reviewerUid: ctx.uid, rewardGranted: !!value.rewardGranted || decision.reward > 0, ...(pointAward ? {pointAward} : {}) };
     tx.update(ref, updated);
     tx.update(ref.collection('attempts').doc(value.attemptId), { status: decision.status, feedback, reviewedAt: updated.reviewedAt, reviewerUid: ctx.uid });
     if (value.status === 'submitted') tx.update(task.ref, { reviewedCount: FieldValue.increment(1) });
     if (decision.reward) tx.update(db().doc(`classes/${value.classId}/students/${studentId}`), { xp: FieldValue.increment(decision.reward) });
+    if (garden) writeClassGarden(tx, garden, decision.reward);
     return updated;
   });
 }

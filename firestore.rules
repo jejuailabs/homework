@@ -65,6 +65,8 @@ service cloud.firestore {
       match /readerGrants/{uid} { allow read, write: if false; }
       match /settlements/{settlement} { allow read, write: if false; }
     }
+    // 나눔 꽃밭 class months are settlement records written only inside the homework review transaction.
+    match /classes/{classId}/growthMonthly/{month} { allow read, write: if false; }
     // All application access goes through authenticated, authorized server APIs.
     // Admin SDK bypasses these rules: server ownership checks remain mandatory.
     match /{document=**} { allow read, write: if false; }

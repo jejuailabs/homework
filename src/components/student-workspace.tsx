@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode} from "react";
+import ClassGardenStrip from '@/modules/sharing-garden/strip';
 import Link from "next/link";
 import {useLocale, useTranslations} from "next-intl";
 import {sendUpload, discardUpload, type UploadTransfer} from "@/lib/upload-transfer";
@@ -394,6 +395,7 @@ export default function StudentWorkspace() {
     </section>
     <section className="ws-friends-section" aria-labelledby="friends-heading"><div className="ws-friends-copy"><span className="sd-section-icon"><Heart size={24}/></span><div><h2 id="friends-heading">{t("student.pickFriend")}</h2><p>{t("student.pickHint")}</p></div></div><div className="ws-friend-picker" aria-busy={changingFriend}>{friends.map(friend => <button key={friend.id} className="ws-friend" onClick={() => void chooseFriend(friend.id)} aria-pressed={character.id === friend.id} disabled={changingFriend} aria-label={`${t(`characters.${friend.id}`)} · ${t(`characters.${friend.id}Species`)}`}><span className="sd-friend-portrait"><img src={`/characters/${friend.file}.webp`} alt=""/></span><strong>{t(`characters.${friend.id}`)}</strong><span>{t(`characters.${friend.id}Species`)}</span>{character.id === friend.id && <Check className="ws-friend-check" size={13}/>}</button>)}</div></section>
     <section className="ws-growth-strip" aria-label={t("student.growth")}><div className="ws-growth-icon"><Flower2 size={27}/></div><div className="ws-growth-copy"><strong>{t("student.growth")}</strong><span>{t("student.growthHint")}</span></div><div className="ws-growth-right"><div className="ws-flower-stamps" aria-label={t("student.growthPoints", {points: xp})}>{[0,1,2,3,4].map(index => <Flower2 key={index} size={25} className={index < flowers % 5 || flowers >= 5 && flowers % 5 === 0 ? "is-earned" : ""}/>)}</div><span>{t("student.growthPoints", {points: xp})}</span></div></section>
+    <ClassGardenStrip/>
     <div className="ws-kind-footer"><Heart size={14}/>{t("student.tasksSubtitle")}</div>
     {selected && <TaskDialog title={selected.title} onClose={clearTaskDraft} busy={sending||selectingVideo||changing}>
       <div className="ws-dialog-body"><div className="ws-task-detail-meta"><span className={`ws-status ws-status-${selected.status}`}>{selected.videoJob&&["queued","processing"].includes(selected.videoJob.status)?t("student.videoPending"):t(`common.${selected.status}`)}</span><span className="ws-small">{date(selected.dueAt)}</span></div><div className="sd-task-type-heading"><SubmissionTypeBadge type={submissionType}/>{submissionType !== "legacy" && <p>{t(`submissionTypes.${submissionType}Hint`)}</p>}</div><div className="ws-instructions"><h3>{t("student.taskDescription")}</h3><p>{selected.description}</p></div><AssignmentMaterials materials={selected.materials} onRefresh={()=>void load()}/>

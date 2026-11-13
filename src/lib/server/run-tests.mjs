@@ -94,6 +94,7 @@ await import('../run-neighborhood-tests.mjs');
 await import('../../modules/artwork-extensions/run-tests.mjs');
 await import('../../modules/digital-artbook/run-tests.mjs');
 await import('../../modules/my-space/run-tests.mjs');
+await import('../../modules/sharing-garden/run-tests.mjs');
 await import('../../modules/my-space/run-seahorse-server-tests.mjs');
 await import('../../modules/my-space/run-seahorse-view-tests.mjs');
 await import('../../modules/daily-quiz/run-tests.mjs');
