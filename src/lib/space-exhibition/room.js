@@ -1,6 +1,5 @@
 // Three different galleries, each constructed as continuous walkable architecture.
 // Local display coordinates use +Z out of the hanging face and +Y up.
-const plaqueText = (index, work) => `${index + 1}. ${work?.title || ''}${work?.artist && work.artist !== work.title ? ` · ${work.artist}` : ''}`;
 export function buildRoom(C) {
   const {T,group,theme,art,artTex}=C;
   const solids=[],targets=[],painted=new Set(),cache=new Map();
@@ -73,26 +72,50 @@ export function buildRoom(C) {
     const o=plane(p,x,y,z,w,h,C.label(title,{width,height,color:opts.color||'#403a2d',background:opts.bg,font:opts.bg?'700 52px "Malgun Gothic",sans-serif':'600 37px sans-serif'}));
     o.material.transparent=true;return o;
   }
+  // Every work hangs in the same frame (FRAME_W × FRAME_H) with its name card below;
+  // only index 0 differs: the big slide screen that shows every work in turn.
+  const FRAME_W=1.0,FRAME_H=.78,CARD_W=1.05,CARD_GAP=.05;
+  const bezel=new T.MeshStandardMaterial({color:'#15161c',roughness:.45,metalness:.35});
   let heroSlot=null;
+  function nameCard(g,a,y,width,opts){
+    if(!C.caption||!a)return;
+    const card=C.caption(a,opts),w=width,h=w/card.aspect;
+    plane(g,0,y-h/2,.045,w,h,card.material).renderOrder=2;
+  }
   function artwork(p,index,x,y,w,h,z=.095,swap) {
     if(!swap&&(index>=art.length||painted.has(index)))return;
-    // The largest frame (index 0) is the rotating main slide; remember its slot.
     if(index===0&&!swap)heroSlot={p,x,y,w,h,z};
     const image=swap?swap.texture:artTex(index),a=swap?swap.art:art[index],dim=image?.image||{};
     const aspect=(a.width||dim.naturalWidth||dim.width||1)/(a.height||dim.naturalHeight||dim.height||1);
-    const iw=Math.min(w,h*aspect),ih=iw/aspect;
-    const pad=Math.min(.061,Math.max(.031,iw*.035)),edge=theme==='moon'?.025:.030;
     const g=new T.Group();g.position.set(x,y,z);p.add(g);
-    box(g,.010,-.014,-.009,iw+pad*2+.035,ih+pad*2+.035,.037,dark);
-    box(g,0,0,.015,iw+pad*2,ih+pad*2,.031,matte);
-    border(g,0,0,.022,iw+pad*2+edge*2,ih+pad*2+edge*2,edge,.036,.010,trim);
-    plane(g,0,0,.038,iw,ih,new T.MeshBasicMaterial({map:image,toneMapped:false}));
-    // Name plate under the frame (number · title · artist), as in the classic rooms.
-    if(index!==0&&a)plaque(g,0,-(ih/2+pad+edge+.13),.04,plaqueText(index,a),{w:Math.min(Math.max(iw+pad*2,1.05),1.75),h:.16,bg:'#fbf4e6',color:'#4a3b2c'});
+    if(index===0){
+      // The slide screen: a dark bezel of fixed size, each work letterboxed inside it.
+      const iw=Math.min(w,h*aspect),ih=iw/aspect;
+      box(g,0,0,.0,w+.2,h+.2,.06,bezel);
+      box(g,0,0,.032,w+.04,h+.04,.004,matColor('#0b0c10'));
+      plane(g,0,0,.036,iw,ih,new T.MeshBasicMaterial({map:image,toneMapped:false}));
+      border(g,0,0,.03,w+.26,h+.26,.045,.04,.03,trim);
+      nameCard(g,a,-(h/2+.2),Math.min(w+.2,2.4),{screen:true,total:C.total});
+    }else{
+      // Same frame for everyone; the picture fits inside the mount at its own ratio.
+      const fw=Math.min(w,FRAME_W),fh=Math.min(h,FRAME_H),iw=Math.min(fw,fh*aspect),ih=iw/aspect;
+      const pad=.06,edge=theme==='moon'?.026:.032;
+      box(g,.010,-.014,-.009,fw+pad*2+.035,fh+pad*2+.035,.037,dark);
+      box(g,0,0,.015,fw+pad*2,fh+pad*2,.031,matte);
+      border(g,0,0,.022,fw+pad*2+edge*2,fh+pad*2+edge*2,edge,.036,.010,trim);
+      plane(g,0,0,.038,iw,ih,new T.MeshBasicMaterial({map:image,toneMapped:false}));
+      nameCard(g,a,-(fh/2+pad+edge+CARD_GAP),CARD_W,{});
+    }
     const target={mesh:g,kind:'art',index};
     if(swap)return target;
     targets.push(target);painted.add(index);
   }
+  // Rows of equal frames across a wall: indices fill row by row; ys are the frame centres.
+  function hangGrid(parent,indices,width,ys,z=.095) {
+    const cols=Math.ceil(indices.length/ys.length),cell=width/cols;
+    indices.forEach((i,k)=>artwork(parent,i,(k%cols+.5)*cell-width/2,ys[Math.floor(k/cols)],Math.min(cell-.24,FRAME_W),FRAME_H,z));
+  }
+  const range=(from,count)=>Array.from({length:count},(_,k)=>from+k);
   // Replace the main slide's frame with another work, sized to its own ratio.
   function swapHero(texture,info){
     if(!heroSlot)return null;
@@ -107,9 +130,6 @@ export function buildRoom(C) {
     solidFrom(p,w,thick);
     const front=new T.Group(),back=new T.Group();front.position.z=thick/2;back.position.z=-thick/2;back.rotation.y=PI;p.add(front,back);
     return {p,front,back};
-  }
-  function hangLine(parent,indices,width,height=1.38,maxW=1.35,cy=1.56) {
-    indices.forEach((i,j)=>artwork(parent,i,(j+.5)*width/indices.length-width/2,cy,Math.min(width/indices.length-.15,maxW),height));
   }
   function hangingDoor(p,x=0,width=1.52,height=2.35,z=.11) {
     const doorway=new T.Group();doorway.position.set(x,0,z);p.add(doorway);
@@ -277,16 +297,11 @@ export function buildRoom(C) {
     spot(hero.front,1.44,3.29,.74,1.46,1.32,0,14,.77);
     box(hero.p,0,3.33,.14,6.49,.15,.20,trim);
     box(hero.p,0,3.245,.233,6.20,.025,.029,luminous);
-    artwork(hero.front,0,.22,1.78,2.88,1.98);
-    artwork(hero.front,1,-2.00,2.16,1.05,.98);
-    artwork(hero.front,2,-2.00,1.02,1.05,1.00);
-    artwork(hero.front,3,2.47,1.73,.98,1.59);
-    hangLine(hero.back,[4,5,6,7],5.93,1.37,1.2);
-    hangLine(segments[2].p,[8,9,10,11,12],7.94,1.43,1.31);
-    hangLine(segments[4].p,[13,14,15,16,17,18],11.55,1.57,1.49);
-    hangLine(segments[0].p,[19,20,21],4.73,1.40,1.30);
+    artwork(hero.front,0,0,1.95,3.7,2.08);
+    hangGrid(hero.back,range(1,8),5.9,[2.65,1.22]);
+    hangGrid(segments[2].p,range(9,10),8.2,[2.7,1.27]);
+    hangGrid(segments[4].p,range(19,12),11.6,[2.7,1.27]);
     const rear=segments[6].p;hangingDoor(rear);
-    [-3.86,-2.12,2.93].forEach((x,j)=>artwork(rear,22+j,x,1.62,1.26,1.42,.19));
     return {swapHero,spawn:[-.54,.02],yaw:-.02,camera:{distance:4.29},bounds:[-6.72,6.45,-7.41,7.32],solids,targets};
   }
   function domeShell() {
@@ -320,21 +335,18 @@ export function buildRoom(C) {
     const first=panel(-2.79,-.94,.27,4.64,3.34,.22,matte);
     bayImage(first.front,4.60,3.25,1.68,.011);
     spot(first.front,-.80,3.37,.86,-.96,1.55,0,18,.78);
-    artwork(first.front,0,-.54,2.15,2.47,1.43);
-    artwork(first.front,1,1.34,2.30,1.00,1.09);
-    artwork(first.front,2,1.34,1.00,1.00,1.01);
-    artwork(first.front,3,-.57,.79,1.34,.87);
+    artwork(first.front,0,0,2.05,3.3,1.85);
     lamp(first.front,-1.05,3.38,.17,.28);lamp(first.front,1.32,3.38,.17,.28);
-    hangLine(first.back,[4,5,6,7],4.37,1.15,.90);
+    hangGrid(first.back,range(1,6),4.4,[2.65,1.22]);
     const second=panel(2.18,-4.34,-.095,5.02,2.94,.22,matte);
     bayImage(second.front,4.98,2.86,1.48,.012);
     spot(second.front,1.04,2.99,.77,1.07,1.15,0,14,.82);
-    [8,9,10,11].forEach((id,j)=>artwork(second.front,id,(j-1.5)*1.15,2.01,.94,.96));
-    [12,13,14].forEach((id,j)=>artwork(second.front,id,(j-1)*1.28,.92,1.07,.89));
+    // The second panel is lower, so it takes one row a side; the perimeter walls take the rest.
+    hangGrid(second.front,range(7,4),4.8,[1.75]);
     for(const xx of [-1.87,0,1.90])lamp(second.front,xx,2.99,.17,.24);
-    hangLine(second.back,[15,16,17],4.58,1.30,1.16);
-    [3,6,9,12,15,18,21].forEach((s,j)=>{
-      artwork(sections[s].p,18+j,0,1.55,1.34,1.36,.17);lamp(sections[s].p,0,2.58,.16,.20);
+    hangGrid(second.back,range(11,4),4.8,[1.75]);
+    [2,3,5,6,8,9,11,12,14,15,17,18,20,21,22,23].forEach((s,j)=>{
+      artwork(sections[s].p,15+j,0,1.72,FRAME_W,FRAME_H,.17);lamp(sections[s].p,0,2.58,.16,.20);
     });
     // A low continuous upholstered seat under the opening leaves a generous walking ring.
     const cx=1.23,cz=-.70,rb=1.34;
@@ -393,11 +405,12 @@ export function buildRoom(C) {
       const b=TAU*(i+.5)/n;
       for(const r of [Ri,Ro])solid(cx+r*Math.cos(b),cz+r*Math.sin(b),2*r*Math.sin(PI/n)+.07,.19,PI/2-b);
     }
-    const wallHeight=3.62,wallWidth=4.16;
+    // Six walls stand on one inner circle, turned toward the visitor walking the ring:
+    // following the corridor once passes every wall face-on, with no weaving between walls.
+    const wallHeight=3.62,wallWidth=4.16,bayRadius=8.35,tilt=.45;
     for(let i=0;i<6;i++){
-      const a=[-.23,-.68,-1.49,-2.42,-3.54,-4.59][i];
-      const bayRadius=i===0?7.70:i===1?10.48:8.65;
-      const yaw=i===1?.94:PI/2-(a+.99);
+      const a=-.42-i*.86;
+      const yaw=PI/2-(a+tilt);
       const bay=panel(cx+bayRadius*Math.cos(a),cz+bayRadius*Math.sin(a),yaw,wallWidth,wallHeight,.42,plum);
       // A recessed warm exhibition liner sits inside the deep burgundy bay.
       const f=bay.front;box(f,0,1.83,.032,3.54,2.98,.079,matte);
@@ -405,18 +418,14 @@ export function buildRoom(C) {
       border(f,0,1.83,.084,3.59,3.03,.062,.047,.105,trim);
       box(f,0,.14,.066,3.94,.15,.089,trim);
       box(f,0,.057,.117,3.72,.019,.022,luminous);
-      if(i%2===0){
-        artwork(f,i*4,0,2.27,2.83,1.53,.143);
-        for(let j=0;j<3;j++)artwork(f,i*4+j+1,(j-1)*1.07,.97,.90,.82,.143);
-      }else{
-        for(let j=0;j<4;j++)artwork(f,i*4+j,(j%2-.5)*1.56,j<2?2.41:1.14,1.33,1.03,.143);
-      }
+      if(i===0)artwork(f,0,0,2.05,3.1,1.95,.143);
+      else hangGrid(f,range(1+(i-1)*6,6),3.5,[2.65,1.22],.143);
       lamp(f,0,3.42,.23,.33);
       if(i===0||i===1)spot(f,0,3.48,.85,0,1.47,0,18,.75);
     }
     const last=.77,doorNode=at(cx+8.58*Math.cos(last),cz+8.58*Math.sin(last),PI/2-(last+.94));
     box(doorNode,0,1.64,0,3.82,3.28,.23,plum,true);solidFrom(doorNode,3.82,.23);
-    artwork(doorNode,24,-.98,1.63,1.26,1.52,.17);hangingDoor(doorNode,.86,1.56,2.35,.14);
+    hangingDoor(doorNode,0,1.56,2.35,.14);
     return {swapHero,spawn:[.04,0],yaw:-.10,camera:{distance:4.27},bounds:[cx-Ro,cx+Ro,cz-Ro,cz+Ro],solids,targets};
   }
   return theme==='moon'?moon():theme==='saturn'?saturn():earth();
