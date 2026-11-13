@@ -1,5 +1,5 @@
 import {artScreenSize} from './exhibition-world-layout';
-export type ScreenArtwork = {id:string;title:string;artistName?:string;studentName?:string;url?:string;thumbnailUrl?:string;width?:number;height?:number};
+export type ScreenArtwork = {id:string;title:string;artistName?:string;studentName?:string;url?:string;thumbnailUrl?:string;videoUrl?:string;width?:number;height?:number};
 export type ArtScreenFrame = {index:number;overview:boolean};
 export function createArtScreenPainter(canvas:HTMLCanvasElement,artworks:ScreenArtwork[],onPaint:(size:ReturnType<typeof artScreenSize>)=>void){
  const ctx=canvas.getContext('2d')!,images=new Map<string,HTMLImageElement>();let disposed=false,frame:ArtScreenFrame={index:0,overview:false};
