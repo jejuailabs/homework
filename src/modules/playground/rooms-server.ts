@@ -10,20 +10,20 @@ import {cardDirection, ownsCardResource} from '@/lib/server/cards-policy';
 import type {CardEntry} from '@/lib/cards-types';
 import {accessStudent, teacherClass, loadItems, settingsOf, settingsRef, requirePlayEnabled} from './server-access';
 import {addDays, choicesFor, emptyScore, gradeBand, isItemAnswer, playDate, schoolYear, weekStart} from './engine';
-import {CARD_ROOM_SECONDS, CARD_ROOM_TEAMS, cardHuntCapacity, cardHuntItems, cardRoomCapacity, cardRoomItems, versusClassIds} from './cards-room';
-import {HUNT_POINTS, HUNT_TRIES, isHuntRoom, isVersusRoom, roomHasClass} from './room-types';
+import {CARD_RACE_SECONDS, CARD_ROOM_SECONDS, CARD_ROOM_TEAMS, cardHuntCapacity, cardHuntItems, cardRoomCapacity, cardRoomItems, versusClassIds} from './cards-room';
+import {HUNT_POINTS, HUNT_TRIES, RACE_POINTS, isHuntRoom, isRaceRoom, isTeacherRun, isVersusRoom, roomHasClass} from './room-types';
 import {isCorrectCardAnswer} from '@/lib/cards-logic';
 import {cardTeamEnabled, playgroundLive, roomEngineEnabled} from './flags';
 import {playKinds, type PlayItem, type PlayScore, type PlaySettings} from './types';
-import {activeKeys, canAnswer, huntResults, minPlayers, missedRounds, namedTeams, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
-import type {PlayRoom, PlayRoomMode, RoomAnswer, RoomCardSource, RoomBootstrap, RoomPlayer, RoomPlayerSummary, PublicRoomRound} from './room-types';
+import {activeKeys, canAnswer, canRaceAnswer, huntResults, minPlayers, missedRounds, namedTeams, raceOrder, raceProgress, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
+import type {PlayRoom, PlayRoomMode, RaceAnswerResult, RaceMiss, RaceView, RoomAnswer, RoomCardSource, RoomBootstrap, RoomPlayer, RoomPlayerSummary, PublicRoomRound} from './room-types';
 
 type Data = Record<string, unknown>;
 type RoomAction = 'start'|'tick'|'next'|'pause'|'end';
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const refFor = (roomId: string) => db().collection('playRooms').doc(id(roomId));
 const keyFor = (ctx: Context) => ctx.role === 'student' ? ctx.studentId! : `teacher_${ctx.uid}`;
-const summary = ({key,name,character,imageSrc,outfit,spaceOutfit,team,score,lastSeen,forfeited,reaction}: RoomPlayer): RoomPlayerSummary => ({key,name,character,...(imageSrc?{imageSrc}:{}),outfit,spaceOutfit,team,score,lastSeen,forfeited,reaction});
+const summary = ({key,name,character,imageSrc,outfit,spaceOutfit,team,score,lastSeen,forfeited,reaction,answered,raceCorrect,raceLastAt}: RoomPlayer): RoomPlayerSummary => ({key,name,character,...(imageSrc?{imageSrc}:{}),outfit,spaceOutfit,team,score,lastSeen,forfeited,reaction,...(raceCorrect!==undefined?{answered,raceCorrect,...(raceLastAt!==undefined?{raceLastAt}:{})}:{})});
 const terminal = (room: PlayRoom) => room.status === 'finished' || room.status === 'closed';
 /** Card rooms run on their own switch and on no class setting, because their menu is the card set, not the playground. */
 const requireRoomOpen = (room: PlayRoom) => {if (room.cards ? !cardTeamEnabled() : !playgroundLive()) throw new ApiError(404,'지금은 이 방을 이용할 수 없어요.');};
@@ -82,8 +82,11 @@ async function listOpenRooms(ctx: Context, classValue: string | null) {
 }
 async function createRoom(ctx: Context, data: Data) {
   const now = Date.now(), mode = data.mode as PlayRoomMode, cardSetId = data.cardSetId === undefined ? '' : id(data.cardSetId);
-  if (cardSetId ? !cardTeamEnabled() || ctx.role === 'student' || mode !== 'team' : !playgroundLive()) throw new ApiError(404, '지금은 이 방을 열 수 없어요.');
-  if (!['duel','speed','team'].includes(mode) || ctx.role === 'student' && mode === 'team' || ctx.role !== 'student' && mode !== 'team') throw new ApiError(400, '놀이 모드를 다시 선택해 주세요.');
+  const race = mode === 'race';
+  if (cardSetId ? !cardTeamEnabled() || ctx.role === 'student' || mode !== 'team' && !race : !playgroundLive()) throw new ApiError(404, '지금은 이 방을 열 수 없어요.');
+  if (!['duel','speed','team','race'].includes(mode) || race && !cardSetId || ctx.role === 'student' && isTeacherRun({mode}) || ctx.role !== 'student' && !isTeacherRun({mode})) throw new ApiError(400, '놀이 모드를 다시 선택해 주세요.');
+  // 개인전 is multiple choice in one class: 반대항전 and 먼저 쓰기 are team games.
+  if (race && (data.versusClassIds !== undefined || data.answer === 'typed')) throw new ApiError(400, '개인전은 우리 반 객관식으로 열려요.');
   const classId = ctx.role === 'student' ? ctx.classId! : id(data.classId), requestId = id(data.requestId), ref = refFor(digest(`${ctx.uid}:${requestId}`));
   const direction = cardSetId ? cardDirection(data.direction) : 'front-back';
   // 반대항전: the teacher's other classes join the same card room, one team per class.
@@ -93,7 +96,7 @@ async function createRoom(ctx: Context, data: Data) {
   const typed = !!cardSetId && data.answer === 'typed';
   if (versus && !versus.length) throw new ApiError(400, '반대항전은 두 반에서 여섯 반까지 고를 수 있어요.');
   const kinds = cardSetId ? ['vocab'] as PlayRoom['kinds'] : Array.isArray(data.kinds) && data.kinds.length && data.kinds.every(kind => playKinds.includes(kind)) ? [...new Set(data.kinds)] as PlayRoom['kinds'] : [...playKinds];
-  const rounds = mode === 'duel' ? 7 : mode === 'speed' ? 10 : bounded(data.rounds,10,cardSetId?1:3,30), seconds = mode === 'duel' ? 15 : mode === 'speed' ? 10 : bounded(data.seconds,CARD_ROOM_SECONDS.initial,CARD_ROOM_SECONDS.min,CARD_ROOM_SECONDS.max), teamCount = versus?.length || bounded(data.teamCount,CARD_ROOM_TEAMS.initial,CARD_ROOM_TEAMS.min,CARD_ROOM_TEAMS.max);
+  const rounds = mode === 'duel' ? 7 : mode === 'speed' ? 10 : bounded(data.rounds,10,cardSetId?1:3,30), seconds = mode === 'duel' ? 15 : mode === 'speed' ? 10 : race ? bounded(data.seconds,CARD_RACE_SECONDS.initial,CARD_RACE_SECONDS.min,CARD_RACE_SECONDS.max) : bounded(data.seconds,CARD_ROOM_SECONDS.initial,CARD_ROOM_SECONDS.min,CARD_ROOM_SECONDS.max), teamCount = race ? 1 : versus?.length || bounded(data.teamCount,CARD_ROOM_TEAMS.initial,CARD_ROOM_TEAMS.min,CARD_ROOM_TEAMS.max);
   // A class-scoped code is reserved in the same transaction as the room.
   for (let attempt=0; attempt<12; attempt++) {
     const code = String(randomInt(1000,10000)), codeRef = db().doc(`classes/${classId}/playRoomCodes/${code}`), codeRefs = (versus ?? [classId]).map(value => db().doc(`classes/${value}/playRoomCodes/${code}`));
@@ -169,9 +172,9 @@ export async function joinRoom(ctx: Context, code: unknown, expectedRoomId?: str
     const old=await tx.get(ref.collection('players').doc(ctx.studentId!));
     if(old.exists){if(old.data()!.uid!==ctx.uid || old.data()!.forfeited)throw new ApiError(403,'이 판에서 나왔어요. 다음 판에 함께해 주세요.');if(invite)tx.update(invite.ref,{status:'accepted'});writeGrant(tx,ref,ctx,room.classId,now);return {roomId:room.id,code:room.code};}
     if(room.status!=='lobby' || room.playerKeys.length>=(room.mode==='duel'?2:room.mode==='speed'?4:40*(room.classIds?.length||1)))throw new ApiError(409,'이미 시작했거나 자리가 모두 찼어요.');
-    if(room.mode!=='team'&&!access.settings.allowDuels)throw new ApiError(403,'지금은 친구 대결을 이용할 수 없어요.');
+    if(!isTeacherRun(room)&&!access.settings.allowDuels)throw new ApiError(403,'지금은 친구 대결을 이용할 수 없어요.');
     const space=await tx.get(access.pupil.ref.collection('mySpace').doc('room'));
-    const player=playerFrom(ctx,access.pupil.data()!,now,space.data());if(isVersusRoom(room)){player.team=Math.max(0,room.classIds!.indexOf(ctx.classId!));player.classId=ctx.classId;}else player.team=room.playerKeys.length%room.teamCount;
+    const player=playerFrom(ctx,access.pupil.data()!,now,space.data());if(isRaceRoom(room)){player.raceCorrect=0;}else if(isVersusRoom(room)){player.team=Math.max(0,room.classIds!.indexOf(ctx.classId!));player.classId=ctx.classId;}else player.team=room.playerKeys.length%room.teamCount;
     room.playerKeys.push(player.key);room.players.push(summary(player));room.updatedAt=now;
     tx.create(old.ref,player);tx.set(ref,room);if(invite)tx.update(invite.ref,{status:'accepted'});writeGrant(tx,ref,ctx,room.classId,now);return {roomId:room.id,code:room.code};
   }, {maxAttempts:20});
@@ -189,7 +192,7 @@ async function bootstrap(ctx: Context, roomId: string): Promise<RoomBootstrap> {
 async function heartbeat(ctx: Context, roomId: string) {
   return db().runTransaction(async tx=>{
     const {ref,room,player}=await roomAccess(ctx,roomId,tx),now=Date.now();
-    if(player && !player.forfeited){if(now-player.lastSeen>30000 && room.status!=='lobby')player.eligibleFrom=room.round+1;player.lastSeen=now;tx.set(ref.collection('players').doc(player.key),player);if(room.status==='lobby'&&room.mode!=='team')tx.update(ref,{players:room.players.map(member=>member.key===player.key?summary(player):member)});}
+    if(player && !player.forfeited){if(now-player.lastSeen>30000 && room.status!=='lobby')player.eligibleFrom=room.round+1;player.lastSeen=now;tx.set(ref.collection('players').doc(player.key),player);if(room.status==='lobby'&&!isTeacherRun(room))tx.update(ref,{players:room.players.map(member=>member.key===player.key?summary(player):member)});}
     writeGrant(tx,ref,ctx,room.classId,now);return {serverTime:now,player:player||null};
   });
 }
@@ -204,7 +207,7 @@ async function submitTyped(ctx: Context, roomId: string, data: Data) {
   const result=await db().runTransaction(async tx=>{
     const {ref,room,player}=await roomAccess(ctx,roomId,tx);
     if(!player)throw new ApiError(403,'참가 학생만 답할 수 있어요.');
-    if(!isHuntRoom(room))throw new ApiError(400,'화면에 나온 보기 중에서 골라 주세요.');
+    if(!isHuntRoom(room)||isRaceRoom(room))throw new ApiError(400,'화면에 나온 보기 중에서 골라 주세요.');
     const answerRef=ref.collection('answers').doc(`${round}_${player.key}`),firstRef=ref.collection('answers').doc(`${round}_first`);
     const [existing,first]=await Promise.all([tx.get(answerRef),tx.get(firstRef)]),previous=existing.data() as RoomAnswer|undefined;
     if(previous?.correct)return {accepted:true,correct:true,first:true,triesLeft:0};
@@ -230,6 +233,7 @@ async function submitAnswer(ctx: Context, roomId: string, data: Data) {
   const result=await db().runTransaction(async tx=>{
     const {ref,room,player}=await roomAccess(ctx,roomId,tx);
     if(!player)throw new ApiError(403,'참가 학생만 답할 수 있어요.');
+    if(isRaceRoom(room))throw new ApiError(409,'개인전 문제를 다시 불러와 주세요.');
     const answerRef=ref.collection('answers').doc(`${round}_${player.key}`),existing=await tx.get(answerRef);
     if(existing.exists)return {accepted:true,serverTime:receivedAt,mode:room.mode};
     if(round!==room.round || !canAnswer(room,player,receivedAt))throw new ApiError(409,'이 문제의 답안 시간이 끝났어요. 다음 문제에 참여해 주세요.');
@@ -243,7 +247,7 @@ async function submitAnswer(ctx: Context, roomId: string, data: Data) {
     return {accepted:true,serverTime:receivedAt,mode:room.mode};
   });
   // Up to four players: reveal as soon as every connected player answered. The teacher screen does this for team rooms.
-  if(result.mode!=='team')await step(roomId,'tick',{}).catch(error=>console.error('Playground early reveal failed',(error as {code?: string}).code||'INTERNAL'));
+  if(result.mode!=='team'&&result.mode!=='race')await step(roomId,'tick',{}).catch(error=>console.error('Playground early reveal failed',(error as {code?: string}).code||'INTERNAL'));
   return {accepted:result.accepted,serverTime:result.serverTime};
 }
 async function advance(ctx: Context, roomId: string, action: RoomAction, data: Data) {
@@ -259,6 +263,7 @@ async function step(roomId: string, action: RoomAction, data: Data, ctx?: Contex
       ({ref,room}=await roomAccess(ctx,roomId,tx));
       if(action!=='tick' && ctx.role==='student' && (room.hostKey!==keyFor(ctx)||!['start','end'].includes(action)))throw new ApiError(403,'방장이나 선생님이 진행할 수 있어요.');
       if(action==='tick' && room.mode==='team' && ctx.role==='student')throw new ApiError(403,'팀전은 선생님이 진행해요.');
+      if(action==='next' && isRaceRoom(room) && ctx.role==='student')throw new ApiError(403,'개인전은 선생님이 마쳐요.');
     } else {
       const snapshot=await tx.get(ref);
       if(!snapshot.exists||action!=='tick')return;
@@ -267,19 +272,22 @@ async function step(roomId: string, action: RoomAction, data: Data, ctx?: Contex
     // A delayed button request cannot advance or pause a newer phase.
     if(data.status!==undefined&&data.status!==room.status || data.round!==undefined&&data.round!==room.round)return;
     const playerDocs=await tx.get(ref.collection('players')),players=playerDocs.docs.map(doc=>doc.data() as RoomPlayer).filter(player=>room.playerKeys.includes(player.key));
-    const answerDocs=room.round>=0?await tx.get(ref.collection('answers').where('round','==',room.round)):null;
+    const race=isRaceRoom(room);
+    // 개인전 has no shared rounds: each answer is graded on its own, so only the players' progress matters here.
+    const answerDocs=room.round>=0&&!race?await tx.get(ref.collection('answers').where('round','==',room.round)):null;
     const allAnswers=answerDocs?.docs.map(doc=>doc.data() as RoomAnswer)||[],answers=allAnswers.filter(answer=>!answer.first),hunt=isHuntRoom(room),won=hunt&&allAnswers.some(answer=>answer.first);
-    const active=activeKeys(room,players,now);
+    const active=activeKeys(room,players,now),progress=race?raceProgress(room,players,now):null;
     // 먼저 쓰기 ends the question at the first right answer, or once every connected student is right or out of tries.
-    const done=hunt?(won?Math.max(1,active.size):answers.filter(answer=>active.has(answer.key)&&(answer.correct||(answer.tries??0)>=HUNT_TRIES)).length):answers.filter(answer=>active.has(answer.key)).length;
-    const next=roomTransition(room,action,now,done,active.size);
+    const done=progress?progress.done:hunt?(won?Math.max(1,active.size):answers.filter(answer=>active.has(answer.key)&&(answer.correct||(answer.tries??0)>=HUNT_TRIES)).length):answers.filter(answer=>active.has(answer.key)).length;
+    const next=roomTransition(room,action,now,done,progress?progress.active:active.size);
     if(next.status===room.status && next.round===room.round)return;
     if(action==='start' && next.status==='countdown') {
       // A 1:1 needs both friends. Larger rooms start without a closed laptop; that player joins from the next question on reconnecting.
       const offline=players.filter(player=>player.forfeited||now-player.lastSeen>30000);
       if(room.mode==='duel'&&offline.length)throw new ApiError(409,'두 친구가 모두 연결된 뒤 시작해 주세요.');
       if(players.length-offline.length<minPlayers(room))throw new ApiError(409,room.mode==='duel'?'연결된 친구가 두 명일 때 시작할 수 있어요.':'연결된 친구가 있을 때 시작할 수 있어요.');
-      if(room.mode==='team'&&isVersusRoom(room)) {
+      if(race) {next.teams=[];next.players=players.map(summary);}
+      else if(room.mode==='team'&&isVersusRoom(room)) {
         // Each class is a team: nobody is moved, and the score is the class average so class sizes may differ.
         if(new Set(players.map(player=>player.team)).size<2)throw new ApiError(400,'두 반 이상의 학생이 들어와야 시작할 수 있어요.');
         next.teams=namedTeams(teamScores(players,room.teamCount),room);next.players=players.map(summary);
@@ -292,8 +300,8 @@ async function step(roomId: string, action: RoomAction, data: Data, ctx?: Contex
         next.teams=teamScores(players,room.teamCount);next.players=players.map(summary);
       }
     }
-    const secret=next.status==='question'||next.status==='reveal'?(await tx.get(ref.collection('secrets').doc(String(next.round)))).data()?.item as PlayItem|undefined:null;
-    if((next.status==='question'||next.status==='reveal')&&!secret)throw new ApiError(409,'다음 문제를 찾을 수 없어요.');
+    const secret=!race&&(next.status==='question'||next.status==='reveal')?(await tx.get(ref.collection('secrets').doc(String(next.round)))).data()?.item as PlayItem|undefined:null;
+    if(!race&&(next.status==='question'||next.status==='reveal')&&!secret)throw new ApiError(409,'다음 문제를 찾을 수 없어요.');
     if(next.status==='reveal'&&room.status==='question'&&secret){
       const results=hunt?huntResults(next,allAnswers,HUNT_POINTS):roundResults(next,answers),question=roundPublic(secret,next.round,next.id);
       const correctChoice=question.choices.find(choice=>isItemAnswer(secret,choice.label));
@@ -303,6 +311,7 @@ async function step(roomId: string, action: RoomAction, data: Data, ctx?: Contex
       tx.set(ref.collection('rounds').doc(String(next.round)),question);
     }else if(next.status==='question'&&room.status!=='paused'&&secret)tx.set(ref.collection('rounds').doc(String(next.round)),roundPublic(secret,next.round,next.id));
     if(next.status==='reveal'&&room.status==='question'||action==='start')players.forEach(player=>tx.set(ref.collection('players').doc(player.key),player));
+    if(race&&next.status==='finished')next.players=players.map(summary);
     tx.set(ref,next);
   });
   await settleRoom(roomId);
@@ -331,6 +340,7 @@ async function roomReview(ctx: Context, roomId: string) {
   if(!room||room.expiresAtMs<=Date.now())throw new ApiError(410,'이 방은 종료되었어요.');
   if(room.ownerUid!==ctx.uid)await teacherClass(ctx,room.classId);
   if(room.round<0)return {review:[]};
+  if(isRaceRoom(room)){if(room.status!=='finished')throw new ApiError(409,'개인전이 끝나면 볼 수 있어요.');return {review:missedRounds(await raceRounds(room))};}
   const rows=await db().getAll(...Array.from({length:room.round+1},(_,round)=>ref.collection('rounds').doc(String(round))));
   return {review:missedRounds(rows.flatMap(row=>row.exists?[row.data() as PublicRoomRound]:[]))};
 }
@@ -341,7 +351,7 @@ async function settleRoom(roomId: string) {
     const now=Date.now(),date=playDate(),week=weekStart(date),settings=settingsOf((await tx.get(settingsRef(room.classId))).data());
     const players=(await tx.get(ref.collection('players'))).docs.map(doc=>doc.data() as RoomPlayer).filter(player=>room.playerKeys.includes(player.key));
     if(room.mode==='duel')players.forEach(player=>{if(now-player.lastSeen>30000)player.forfeited=true;});
-    const pairs=room.mode==='team'?[]:players.flatMap((player,i)=>players.slice(i+1).map(other=>({id:digest([date,...[player.key,other.key].sort()].join(':')),keys:[player.key,other.key]})));
+    const pairs=isTeacherRun(room)?[]:players.flatMap((player,i)=>players.slice(i+1).map(other=>({id:digest([date,...[player.key,other.key].sort()].join(':')),keys:[player.key,other.key]})));
     const pairDocs=await Promise.all(pairs.map(pair=>tx.get(db().doc(`classes/${room.classId}/playPairDays/${pair.id}`))));
     const states=await Promise.all(players.map(async player=>{
       const pupilRef=db().doc(`classes/${player.classId??room.classId}/students/${player.key}`),dayRef=pupilRef.collection('playgroundYears').doc(String(schoolYear(date))).collection('days').doc(date),scoreRef=pupilRef.collection('playgroundScores').doc(week),receiptRef=pupilRef.collection('pointLedger').doc(`playground_room_${roomId}`);
@@ -352,12 +362,12 @@ async function settleRoom(roomId: string) {
       if(!pupil.exists||pupil.data()?.disabled||pupil.data()?.authUid!==player.uid)continue;
       const record={...emptyScore(),...score.data()} as PlayScore;
       const completed=room.completion==='complete'||room.completion==='forfeit';
-      const ranked=completed && room.mode!=='team' && pairs.every((pair,index)=>!pair.keys.includes(player.key)||(pairDocs[index].data()?.count||0)<3);
+      const ranked=completed && !isTeacherRun(room) && pairs.every((pair,index)=>!pair.keys.includes(player.key)||(pairDocs[index].data()?.count||0)<3);
       const won=!player.forfeited&&player.score===maxScore,draw=won&&eligible.filter(other=>other.score===maxScore).length>1;
       if(ranked){if(draw)record.draws++;else if(won)record.wins++;else record.losses++;}
       if(completed){record.games++;record.days=[...new Set([...record.days,date])];}
       const complete=room.completion==='complete'&&!player.forfeited&&player.answered>=room.roundsTotal-room.skippedRounds.length&&room.round+1>=room.roundsTotal;
-      const paid=Number(day.data()?.duelRewardPaid||0),amount=room.mode!=='team'&&complete&&settings.rewardsEnabled&&!receipt.exists?Math.min(settings.duelReward,Math.max(0,3-paid)):0;
+      const paid=Number(day.data()?.duelRewardPaid||0),amount=!isTeacherRun(room)&&complete&&settings.rewardsEnabled&&!receipt.exists?Math.min(settings.duelReward,Math.max(0,3-paid)):0;
       // A card room is not a playground game: it must not fill the playground's weekly scores or daily counts.
       if(!room.cards){tx.set(score.ref,record,{merge:true});tx.set(day.ref,{duelGames:Number(day.data()?.duelGames||0)+(completed?1:0),duelRewardPaid:paid+amount},{merge:true});}
       if(amount){const balance=addPointBalance(pointBalance(pupil.data()?.points),amount);tx.update(pupil.ref,{points:balance,pointsEarnedTotal:addPointBalance(pointBalance(pupil.data()?.pointsEarnedTotal),amount)});tx.create(receipt.ref,{amount,kind:'earn',source:'playground',sourceId:roomId,reason:'말놀이터 대결 참여',balanceAfter:balance,createdAt:new Date(now).toISOString(),classId:room.classId,studentId:player.key,actorUid:player.uid});}
@@ -380,15 +390,92 @@ async function leaveOrReact(ctx: Context, roomId: string, data: Data, leave: boo
 async function rewardTeam(ctx: Context, roomId: string, data: Data) {
   const amount=bounded(data.amount,0,0,1000);
   return db().runTransaction(async tx=>{
-    const {ref,room,settings}=await roomAccess(ctx,roomId,tx);if(ctx.role==='student'||room.mode!=='team'||room.status!=='finished')throw new ApiError(403,'팀전을 마친 선생님이 지급할 수 있어요.');
+    const {ref,room,settings}=await roomAccess(ctx,roomId,tx);if(ctx.role==='student'||!isTeacherRun(room)||room.status!=='finished')throw new ApiError(403,'팀전이나 개인전을 마친 선생님이 지급할 수 있어요.');
     if(isVersusRoom(room))throw new ApiError(403,'반대항전은 보말을 지급하지 않아요. 반마다 따로 지급해 주세요.');
     if(!settings.rewardsEnabled)throw new ApiError(403,'설정에서 보말 연결을 먼저 켜 주세요.');
     const receipt=await tx.get(ref.collection('settlements').doc('teacher-reward'));
     if(receipt.exists){if(receipt.data()!.amount!==amount)throw new ApiError(409,'이 판의 보말은 이미 지급했어요.');return {ok:true};}
     const players=(await tx.get(ref.collection('players'))).docs.map(doc=>doc.data() as RoomPlayer).filter(player=>room.playerKeys.includes(player.key)&&!player.forfeited&&player.answered>0);
     const pupils=await Promise.all(players.map(player=>tx.get(db().doc(`classes/${room.classId}/students/${player.key}`))));
-    pupils.forEach((pupil,index)=>{if(!pupil.exists||pupil.data()?.disabled||pupil.data()?.authUid!==players[index].uid)return;const balance=addPointBalance(pointBalance(pupil.data()?.points),amount);if(amount){tx.update(pupil.ref,{points:balance,pointsEarnedTotal:addPointBalance(pointBalance(pupil.data()?.pointsEarnedTotal),amount)});tx.create(pupil.ref.collection('pointLedger').doc(`playground_team_${roomId}`),{amount,kind:'earn',source:'playground',sourceId:roomId,reason:room.cards?'카드 팀전 참여':'말놀이터 팀전 참여',balanceAfter:balance,createdAt:new Date().toISOString(),classId:room.classId,studentId:pupil.id,actorUid:ctx.uid});}});
+    pupils.forEach((pupil,index)=>{if(!pupil.exists||pupil.data()?.disabled||pupil.data()?.authUid!==players[index].uid)return;const balance=addPointBalance(pointBalance(pupil.data()?.points),amount);if(amount){tx.update(pupil.ref,{points:balance,pointsEarnedTotal:addPointBalance(pointBalance(pupil.data()?.pointsEarnedTotal),amount)});tx.create(pupil.ref.collection('pointLedger').doc(`playground_team_${roomId}`),{amount,kind:'earn',source:'playground',sourceId:roomId,reason:isRaceRoom(room)?'카드 개인전 참여':room.cards?'카드 팀전 참여':'말놀이터 팀전 참여',balanceAfter:balance,createdAt:new Date().toISOString(),classId:room.classId,studentId:pupil.id,actorUid:ctx.uid});}});
     tx.create(receipt.ref,{amount,actorUid:ctx.uid,at:Date.now()});return {ok:true};
+  });
+}
+/** 개인전: the student's own question at `step`, read from the secret bank without its answer. */
+async function raceQuestion(room: PlayRoom, player: RoomPlayer, step: number, get: (ref: FirebaseFirestore.DocumentReference) => Promise<FirebaseFirestore.DocumentSnapshot>): Promise<PublicRoomRound|null> {
+  if(step>=room.roundsTotal)return null;
+  const index=raceOrder(room.roundsTotal,`${room.id}:${player.key}`)[step];
+  const item=(await get(refFor(room.id).collection('secrets').doc(String(index)))).data()?.item as PlayItem|undefined;
+  if(!item)throw new ApiError(409,'문제를 다시 불러와 주세요.');
+  return roundPublic(item,index,room.id);
+}
+const raceViewOf=(room: PlayRoom, player: RoomPlayer, question: PublicRoomRound|null): RaceView=>({step:Math.min(player.answered,room.roundsTotal),total:room.roundsTotal,question,score:player.score,correct:player.raceCorrect??0});
+async function raceCurrent(ctx: Context, roomId: string): Promise<RaceView> {
+  return db().runTransaction(async tx=>{
+    const {room,player}=await roomAccess(ctx,roomId,tx);
+    if(!player||!isRaceRoom(room))throw new ApiError(403,'개인전에 참가한 학생만 볼 수 있어요.');
+    // Questions appear only while the clock runs, so nobody reads ahead in the lobby or during a pause.
+    const open=room.status==='question'&&!player.forfeited;
+    return raceViewOf(room,player,open?await raceQuestion(room,player,player.answered,value=>tx.get(value)):null);
+  });
+}
+/**
+ * 개인전 answer. `step` must be the student's current step; a retry of an answered step returns the saved result,
+ * so a lost response never counts twice or skips a question.
+ */
+async function raceAnswer(ctx: Context, roomId: string, data: Data): Promise<RaceAnswerResult> {
+  const receivedAt=Date.now(),at=bounded(data.step,-1,0,29),choiceId=id(data.choiceId);
+  const result=await db().runTransaction(async tx=>{
+    const {ref,room,player}=await roomAccess(ctx,roomId,tx);
+    if(!player||!isRaceRoom(room))throw new ApiError(403,'개인전에 참가한 학생만 답할 수 있어요.');
+    const index=raceOrder(room.roundsTotal,`${room.id}:${player.key}`)[at];
+    if(index===undefined)throw new ApiError(400,'문제 번호를 확인해 주세요.');
+    const answerRef=ref.collection('answers').doc(`race_${player.key}_${at}`),secretRef=ref.collection('secrets').doc(String(index));
+    const [existing,secretDoc]=await Promise.all([tx.get(answerRef),tx.get(secretRef)]),item=secretDoc.data()?.item as PlayItem|undefined;
+    if(!item)throw new ApiError(409,'문제를 다시 불러와 주세요.');
+    const choices=choicesFor(item,`${room.id}:${index}`),correctChoiceId=choices.find(choice=>isItemAnswer(item,choice.label))?.id||'';
+    const open=room.status==='question';
+    if(existing.exists){const saved=existing.data() as RoomAnswer;return {correct:saved.correct,correctChoiceId,reveal:item.reveal,next:raceViewOf(room,player,open?await raceQuestion(room,player,player.answered,value=>tx.get(value)):null),finished:false};}
+    if(at!==player.answered)throw new ApiError(409,'문제를 다시 불러와 주세요.','RACE_STEP');
+    if(!canRaceAnswer(room,player,receivedAt))throw new ApiError(409,room.status==='paused'?'선생님이 잠깐 멈췄어요.':'개인전 시간이 끝났어요.','RACE_CLOSED');
+    const selected=choices.find(choice=>choice.id===choiceId);
+    if(!selected)throw new ApiError(400,'화면에 나온 보기 중에서 골라 주세요.');
+    const correct=isItemAnswer(item,selected.label),elapsedMs=Math.max(0,receivedAt-room.roundStartsAt);
+    const updated: RoomPlayer={...player,answered:player.answered+1,answeredRound:room.round,lastSeen:receivedAt,score:player.score+(correct?RACE_POINTS:0),raceCorrect:(player.raceCorrect??0)+(correct?1:0),...(correct?{raceLastAt:elapsedMs}:{})};
+    // Firestore transactions read everything before the first write.
+    const following=await raceQuestion(room,updated,updated.answered,value=>tx.get(value));
+    tx.create(answerRef,{key:player.key,round:index,step:at,choiceId,receivedAt,elapsedMs,correct,race:true} satisfies RoomAnswer);
+    tx.set(ref.collection('players').doc(player.key),updated);
+    return {correct,correctChoiceId,reveal:item.reveal,next:raceViewOf(room,updated,following),finished:updated.answered>=room.roundsTotal};
+  });
+  // The last student to finish ends the game early; the server re-checks everyone's progress.
+  if(result.finished)await step(roomId,'tick',{}).catch(error=>console.error('Card race finish failed',(error as {code?: string}).code||'INTERNAL'));
+  const {finished:_finished,...answer}=result;void _finished;
+  return answer;
+}
+/** 개인전 결과: only this student's own wrong answers, and only after the game, so nobody collects answers mid-game. */
+async function raceMisses(ctx: Context, roomId: string): Promise<{misses: RaceMiss[]}> {
+  const {room,player}=await db().runTransaction(tx=>roomAccess(ctx,roomId,tx));
+  if(!player||!isRaceRoom(room))throw new ApiError(403,'개인전에 참가한 학생만 볼 수 있어요.');
+  if(room.status!=='finished')throw new ApiError(409,'개인전이 끝나면 볼 수 있어요.');
+  const ref=refFor(roomId),answers=(await ref.collection('answers').where('key','==',player.key).get()).docs.map(doc=>doc.data() as RoomAnswer).filter(answer=>answer.race&&!answer.correct).sort((a,b)=>(a.step??0)-(b.step??0));
+  if(!answers.length)return {misses:[]};
+  const secrets=await db().getAll(...answers.map(answer=>ref.collection('secrets').doc(String(answer.round))));
+  return {misses:answers.flatMap((answer,index)=>{
+    const item=secrets[index].data()?.item as PlayItem|undefined;if(!item)return [];
+    const choices=choicesFor(item,`${room.id}:${answer.round}`);
+    return [{prompt:item.prompt,answer:choices.find(choice=>isItemAnswer(item,choice.label))?.label||'',chosen:choices.find(choice=>choice.id===answer.choiceId)?.label||'',reveal:item.reveal}];
+  })};
+}
+/** 개인전 has no revealed rounds, so the host review is counted from the answers of every student once the game is over. */
+async function raceRounds(room: PlayRoom): Promise<PublicRoomRound[]> {
+  const ref=refFor(room.id);
+  const [answers,secrets]=await Promise.all([ref.collection('answers').where('race','==',true).get(),db().getAll(...Array.from({length:room.roundsTotal},(_,index)=>ref.collection('secrets').doc(String(index))))]);
+  const rows=answers.docs.map(doc=>doc.data() as RoomAnswer);
+  return secrets.flatMap((secret,index)=>{
+    const item=secret.data()?.item as PlayItem|undefined;if(!item)return [];
+    const question=roundPublic(item,index,room.id),mine=rows.filter(answer=>answer.round===index);
+    return [{...question,correctChoiceId:question.choices.find(choice=>isItemAnswer(item,choice.label))?.id||'',reveal:item.reveal,distribution:Object.fromEntries(question.choices.map(choice=>[choice.id,mine.filter(answer=>answer.choiceId===choice.id).length]))}];
   });
 }
 export async function handleRoomRequest(request: Request, ctx: Context, segments: string[], data: Data = {}) {
@@ -399,12 +486,15 @@ export async function handleRoomRequest(request: Request, ctx: Context, segments
   if(segments.length===2&&segments[1]==='open'&&request.method==='GET')return listOpenRooms(ctx,new URL(request.url).searchParams.get('classId'));
   if(segments.length===2&&request.method==='GET')return bootstrap(ctx,id(segments[1]));
   if(segments.length===3&&segments[2]==='review'&&request.method==='GET')return roomReview(ctx,id(segments[1]));
+  if(segments.length===3&&segments[2]==='race'&&request.method==='GET')return raceCurrent(ctx,id(segments[1]));
+  if(segments.length===3&&segments[2]==='race-misses'&&request.method==='GET')return raceMisses(ctx,id(segments[1]));
   if(segments.length===3&&segments[2]==='state'&&request.method==='GET'){const known=new URL(request.url).searchParams.get('known');return roomState(ctx,id(segments[1]),known&&known.length<=40?known:null);}
   if(segments.length===3&&request.method==='POST'){
     const roomId=id(segments[1]),action=segments[2];
     if(action==='heartbeat')return heartbeat(ctx,roomId);
     if(action==='answer')return submitAnswer(ctx,roomId,data);
     if(action==='type')return submitTyped(ctx,roomId,data);
+    if(action==='race')return raceAnswer(ctx,roomId,data);
     if(['start','tick','next','pause','end'].includes(action))return advance(ctx,roomId,action as RoomAction,data);
     if(action==='leave'||action==='react')return leaveOrReact(ctx,roomId,data,action==='leave');
     if(action==='reward')return rewardTeam(ctx,roomId,data);
