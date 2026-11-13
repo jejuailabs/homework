@@ -6,6 +6,8 @@ import type {PlayItem} from './types';
 export const CARD_ROOM_MAX_QUESTIONS = 30;
 export const CARD_ROOM_SECONDS = {min: 10, max: 30, initial: 15};
 export const CARD_ROOM_TEAMS = {min: 2, max: 6, initial: 2};
+/** 개인전: one clock for the whole game, in seconds. */
+export const CARD_RACE_SECONDS = {min: 30, max: 300, initial: 120};
 /** 먼저 쓰기 asks any card with an answer: no choices are needed, so a set of one card can run. */
 export function cardHuntCapacity(cards: CardEntry[], direction: CardDirection) {
   return Math.min(CARD_ROOM_MAX_QUESTIONS, cards.filter(card => normalizeCardAnswer(cardAnswer(card, direction))).length);

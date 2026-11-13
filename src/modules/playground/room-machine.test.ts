@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {activeKeys, canAnswer, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
+import {activeKeys, canAnswer, canRaceAnswer, raceOrder, raceProgress, raceStandings, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
 import type {PlayRoom, RoomPlayer} from './room-types';
 
 const player = (key: string): RoomPlayer => ({key, uid: key, name: key, character: 'cat', outfit: {}, spaceOutfit: {}, team: 0, score: 0, lastSeen: 1000, forfeited: false, answered: 0, eligibleFrom: 0, joinedAt: 1000, lastReactionAt: 0, reaction: '', answeredRound: -1});
@@ -78,4 +78,56 @@ test('a single student can start any room except a 1:1 duel', () => {
   assert.equal(roomTransition({...room(), playerKeys: ['a']}, 'start', 1000).status, 'countdown');
   assert.equal(roomTransition({...room(), mode: 'duel', playerKeys: ['a']}, 'start', 1000).status, 'lobby');
   assert.equal(roomTransition({...room(), playerKeys: []}, 'start', 1000).status, 'lobby');
+});
+
+test('개인전 order is a fixed shuffle per student', () => {
+  const a = raceOrder(10, 'room:a'), b = raceOrder(10, 'room:b');
+  assert.deepEqual([...a].sort((x, y) => x - y), Array.from({length: 10}, (_, i) => i));
+  assert.deepEqual(a, raceOrder(10, 'room:a'));
+  assert.notDeepEqual(a, b);
+  assert.deepEqual(raceOrder(1, 'x'), [0]);
+});
+test('개인전 runs one clock and ends when time is up, everyone is done, or the teacher ends it', () => {
+  const lobby = {...room(), mode: 'race' as const, roundsTotal: 5, questionMs: 120000};
+  const counting = roomTransition(lobby, 'start', 1000);
+  assert.equal(counting.status, 'countdown');
+  const running = roomTransition(counting, 'tick', 4000);
+  assert.equal(running.status, 'question'); assert.equal(running.round, 0); assert.equal(running.roundEndsAt, 124000);
+  assert.equal(roomTransition(running, 'tick', 60000, 1, 2).status, 'question');
+  const allDone = roomTransition(running, 'tick', 60000, 2, 2);
+  assert.equal(allDone.status, 'finished'); assert.equal(allDone.completion, 'complete');
+  assert.equal(roomTransition(running, 'tick', 124600).status, 'finished');
+  assert.equal(roomTransition(running, 'next', 30000).completion, 'complete');
+  assert.equal(roomTransition(running, 'end', 30000).completion, 'cancelled');
+  const paused = roomTransition(running, 'pause', 30000);
+  assert.equal(paused.status, 'paused');
+  const resumed = roomTransition(paused, 'pause', 40000);
+  assert.equal(resumed.status, 'question'); assert.equal(resumed.roundEndsAt, 134000);
+  assert.equal(roomDue(running, 124501), true);
+});
+test('개인전 answers are open while the clock runs and the student has questions left', () => {
+  const running = {...room(), mode: 'race' as const, status: 'question' as const, round: 0, roundsTotal: 3, roundStartsAt: 1000, roundEndsAt: 61000};
+  const p = {...player('a'), eligibleFrom: 5, lastSeen: 0};
+  assert.equal(canRaceAnswer(running, p, 2000), true);
+  assert.equal(canRaceAnswer(running, {...p, answered: 3}, 2000), false);
+  assert.equal(canRaceAnswer(running, {...p, forfeited: true}, 2000), false);
+  assert.equal(canRaceAnswer(running, p, 61600), false);
+  assert.equal(canRaceAnswer({...running, status: 'paused'}, p, 2000), false);
+  assert.equal(canRaceAnswer({...running, mode: 'team'}, p, 2000), false);
+});
+test('개인전 progress counts finished students even if their screen went quiet', () => {
+  const running = {...room(), mode: 'race' as const, status: 'question' as const, round: 0, roundsTotal: 3, playerKeys: ['a', 'b', 'c']};
+  const players = [{...player('a'), answered: 3, lastSeen: 0}, {...player('b'), answered: 1, lastSeen: 50000}, {...player('c'), answered: 0, lastSeen: 0}];
+  assert.deepEqual(raceProgress(running, players, 50000), {active: 2, done: 1});
+});
+test('개인전 standings: score first, then who got there sooner; leavers last', () => {
+  const rows = raceStandings([
+    {key: 'a', score: 300, forfeited: false, raceLastAt: 50000},
+    {key: 'b', score: 300, forfeited: false, raceLastAt: 40000},
+    {key: 'c', score: 500, forfeited: true, raceLastAt: 1000},
+    {key: 'd', score: 100, forfeited: false, raceLastAt: 9000},
+    {key: 'e', score: 100, forfeited: false, raceLastAt: 9000},
+    {key: 'f', score: 0, forfeited: false},
+  ]);
+  assert.deepEqual(rows.map(row => `${row.key}${row.place}`), ['b1', 'a2', 'd3', 'e3', 'f5', 'c0']);
 });

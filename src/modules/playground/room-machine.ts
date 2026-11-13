@@ -1,5 +1,5 @@
-import type {PlayRoom, PublicRoomRound, RoomAnswer, RoomPlayer, RoomReviewItem, RoomRoundResult, RoomTeam} from './room-types';
-import {roomTeamColors, roomTeamNames} from './room-types';
+import type {PlayRoom, PublicRoomRound, RoomAnswer, RoomPlayer, RoomPlayerSummary, RoomReviewItem, RoomRoundResult, RoomTeam} from './room-types';
+import {isRaceRoom, isTeacherRun, roomTeamColors, roomTeamNames} from './room-types';
 
 export const ANSWER_GRACE_MS = 500;
 export const TIE_WINDOW_MS = 150;
@@ -24,7 +24,7 @@ export function roomTransition(previous: PlayRoom, action: 'start'|'tick'|'next'
   const finish = (completion: 'complete'|'cancelled' = 'cancelled') => {room.status = room.round < 0 ? 'closed' : 'finished'; room.completion=completion; room.statusEndsAt = 0; room.expiresAtMs = now + 30 * 60_000;};
   const question = () => {room.status = 'question'; room.round++; room.roundStartsAt = now; room.roundEndsAt = now + room.questionMs; room.statusEndsAt = room.roundEndsAt + ANSWER_GRACE_MS;};
   if (action === 'end') finish();
-  else if (action === 'pause' && room.mode === 'team') {
+  else if (action === 'pause' && isTeacherRun(room)) {
     if (room.status === 'paused' && room.pausedFrom) {
       const elapsed = now - room.pausedAt; room.status = room.pausedFrom; room.statusEndsAt += elapsed; room.roundStartsAt += elapsed; room.roundEndsAt += elapsed; room.pausedFrom = null;
     } else if (room.status === 'countdown' || room.status === 'question' || room.status === 'reveal') {room.pausedFrom = room.status; room.pausedAt = now; room.status = 'paused';}
@@ -32,6 +32,8 @@ export function roomTransition(previous: PlayRoom, action: 'start'|'tick'|'next'
     if (action === 'start' && room.playerKeys.length >= minPlayers(room)) {room.status = 'countdown'; room.statusEndsAt = now + 3000;}
     else if (now >= room.statusEndsAt) {room.status = 'closed'; room.expiresAtMs = now;}
   } else if (room.status === 'countdown' && now >= room.statusEndsAt) question();
+  // 개인전 is one long question: it ends when the clock runs out, when every connected student has finished, or when the teacher ends it.
+  else if (isRaceRoom(room)) {if (room.status === 'question' && (now > room.roundEndsAt + ANSWER_GRACE_MS || answered > 0 && answered >= active || action === 'next')) finish('complete');}
   else if (room.status === 'question' && (now > room.roundEndsAt + ANSWER_GRACE_MS || answered > 0 && answered >= active || action === 'next')) {
     if (action === 'next') room.skippedRounds.push(room.round);
     room.status = 'reveal'; room.statusEndsAt = now + 4000;
@@ -81,4 +83,33 @@ export function missedRounds(rounds: PublicRoomRound[], limit = 5): RoomReviewIt
     const common = round.choices.filter(choice => choice.id !== correctId).reduce((best, choice) => (counts[choice.id] || 0) > (counts[best.id] || 0) ? choice : best);
     return [{round: round.round, prompt: round.prompt, answer: round.choices.find(choice => choice.id === correctId)?.label || '', reveal: round.reveal || '', total, wrong, commonWrong: common.label, commonWrongCount: counts[common.id] || 0}];
   }).sort((a, b) => b.wrong - a.wrong || b.wrong / b.total - a.wrong / a.total || a.round - b.round).slice(0, limit);
+}
+
+/** 개인전: a fixed shuffle of the questions per student, so neighbours do not see the same question at the same time. */
+export function raceOrder(total: number, seed: string): number[] {
+  let state = 2166136261;
+  for (const char of seed) state = Math.imul(state ^ char.charCodeAt(0), 16777619);
+  const next = () => {state = (state + 0x6d2b79f5) >>> 0; let t = state; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296;};
+  const order = Array.from({length: total}, (_, index) => index);
+  for (let i = total - 1; i > 0; i--) {const j = Math.floor(next() * (i + 1)); [order[i], order[j]] = [order[j], order[i]];}
+  return order;
+}
+/** 개인전 has one shared clock; a student who reconnects carries on from where they were. */
+export function canRaceAnswer(room: PlayRoom, player: RoomPlayer, now: number) {
+  return isRaceRoom(room) && room.status === 'question' && now >= room.roundStartsAt && now <= room.roundEndsAt + ANSWER_GRACE_MS && !player.forfeited && player.answered < room.roundsTotal;
+}
+/** Connected students still in the game, and how many of them have answered every question. */
+export function raceProgress(room: PlayRoom, players: RoomPlayer[], now: number) {
+  const active = players.filter(player => room.playerKeys.includes(player.key) && !player.forfeited && (now - player.lastSeen <= 30_000 || player.answered >= room.roundsTotal));
+  return {active: active.length, done: active.filter(player => player.answered >= room.roundsTotal).length};
+}
+type RaceRanked = Pick<RoomPlayerSummary, 'key' | 'score' | 'forfeited' | 'raceLastAt'>;
+/** Higher score first; on the same score, whoever reached it sooner. Players who left go last. */
+export function raceStandings<T extends RaceRanked>(players: T[]): (T & {place: number})[] {
+  const lastAt = (player: T) => player.raceLastAt ?? Number.MAX_SAFE_INTEGER;
+  const sorted = [...players].sort((a, b) => Number(a.forfeited) - Number(b.forfeited) || b.score - a.score || lastAt(a) - lastAt(b) || a.key.localeCompare(b.key));
+  return sorted.map((player, index) => {
+    const first = sorted.findIndex(other => other.forfeited === player.forfeited && other.score === player.score && lastAt(other) === lastAt(player));
+    return {...player, place: player.forfeited ? 0 : first + 1};
+  });
 }
