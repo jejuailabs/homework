@@ -100,9 +100,10 @@ export function exhibitionStatus(value: unknown): ExhibitionStatus {
   if (value !== 'draft' && value !== 'open' && value !== 'closed') throw new ApiError(400, '전시 상태를 확인해 주세요.');
   return value;
 }
+const EXHIBITION_THEMES: readonly ExhibitionTheme[] = ['cozy', 'forest', 'sky', 'ocean', 'earth', 'moon', 'saturn', 'coral', 'kelp', 'abyss', 'lagoon'];
 export function exhibitionTheme(value: unknown): ExhibitionTheme {
-  if (value !== 'cozy' && value !== 'forest' && value !== 'sky' && value !== 'ocean' && value !== 'earth' && value !== 'moon' && value !== 'saturn') throw new ApiError(400, '전시실 테마를 선택해 주세요.');
-  return value;
+  if (typeof value !== 'string' || !EXHIBITION_THEMES.includes(value as ExhibitionTheme)) throw new ApiError(400, '전시실 테마를 선택해 주세요.');
+  return value as ExhibitionTheme;
 }
 export function artworkStudentId(value: unknown) {
   if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) return '';
