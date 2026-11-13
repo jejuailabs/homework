@@ -61,3 +61,11 @@
 }
 
 .ex-visit-title .ex-visit-date{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+/* Phones: the opening date lives in the … menu so the room title is readable. */
+.ex-visit-menu-date{display:none}
+@media(max-width:760px),(max-height:520px) and (pointer:coarse){
+ .ex-visit-dialog .ex-visit-title .ex-visit-date{display:none}
+ .ex-visit-dialog .ex-visit-title h2{font-size:15px;flex:0 1 auto}
+ .ex-visit-dialog .ex-visit-menu-date{display:flex;align-items:center;gap:6px;width:100%;padding:2px 4px 8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:12px}
+ .ex-visit-dialog .ex-visit-controls .ex-icon-btn{border:0;box-shadow:none}
+}

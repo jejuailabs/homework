@@ -1,6 +1,7 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {ArrowDown, ArrowLeft, ArrowRight, ArrowUp} from 'lucide-react';
+import '@/styles/world-joystick.css';
 export default function WorldJoystick({disabled, english, onMove}: {disabled: boolean; english: boolean; onMove: (x: number, y: number) => void}) {
   const pointer = useRef<number | null>(null), keys = useRef(new Set<string>());
   const [knob, setKnob] = useState({x: 0, y: 0});

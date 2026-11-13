@@ -7,3 +7,5 @@
 .test-zone-item:hover{border-color:var(--accent);background:var(--accent-soft)}.test-zone-item>svg{color:var(--accent-strong);flex:none}
 @media(max-width:600px){.test-zone{right:12px;bottom:calc(12px + env(safe-area-inset-bottom))}.test-zone-panel{max-height:calc(100dvh - 100px - env(safe-area-inset-bottom));width:min(306px,calc(100vw - 24px))}}
 @media(prefers-reduced-motion:reduce){.test-zone-trigger>svg{transition:none}}
+/* Phones: compact chip, and pages get room to scroll past the floating buttons. */
+@media(max-width:600px){.test-zone-trigger{min-height:40px;padding:9px 12px}.test-zone-trigger>span{display:none}body:has(.test-zone){padding-bottom:calc(150px + env(safe-area-inset-bottom))}}

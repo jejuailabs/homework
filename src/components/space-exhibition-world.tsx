@@ -1,7 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useRef, useState} from "react";
-import {ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, Images, Presentation, RotateCcw, Undo2, Redo2, X} from "lucide-react";
+import {ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, Eye, Images, LocateFixed, Presentation, X} from "lucide-react";
 import ExhibitionScreen from "./exhibition-screen";
 import WorldJoystick from "./world-joystick";
 import {SPACE_THEME_TEXT, spaceCatUrl, spaceThemeImages, type SpaceTheme} from "@/lib/space-exhibition/themes";
@@ -81,12 +81,12 @@ export default function SpaceExhibitionWorld(props: SpaceExhibitionWorldProps) {
   return <section ref={rootRef} className={`sx-world sx-theme-${theme}${paused ? " sx-world--paused" : ""}`} aria-label={english ? `${text.en} 3D gallery` : `${text.ko} 3D 전시`}>
     <div ref={hostRef} className="sx-canvas"/>
     <div className="sx-upper">
-      <button type="button" className="sx-glass" onClick={() => stage === "gallery" ? runtime.current?.back() : props.onExit()}><ArrowLeft size={16}/>{stage === "gallery" ? (english ? "Entrance" : "입구로") : (english ? "Leave" : "나가기")}</button>
+      <button type="button" className="sx-glass sx-back" aria-label={stage === "gallery" ? (english ? "Entrance" : "입구로") : (english ? "Leave" : "나가기")} onClick={() => stage === "gallery" ? runtime.current?.back() : props.onExit()}><ArrowLeft size={16}/><span className="sx-label">{stage === "gallery" ? (english ? "Entrance" : "입구로") : (english ? "Leave" : "나가기")}</span></button>
       <div className="sx-glass sx-location"><span>{english ? text.en : text.ko}</span><strong>{roomTitle || (english ? "Exhibition" : "전시")}</strong></div>
-      <div className="sx-upper-right">{stage === "gallery" && !!works.length && <button type="button" className="sx-glass" onClick={() => setScreen(value => ({signal: value.signal + 1, start: state?.hero?.index ?? 0}))}><Presentation size={16}/>{english ? "Slideshow" : "작품 슬라이드"}</button>}{stage === "gallery" && !!works.length && <button type="button" className="sx-glass" onClick={() => setListOpen(true)}><Images size={16}/>{english ? "Works" : "작품 목록"}</button>}</div>
+      <div className="sx-upper-right">{stage === "gallery" && !!works.length && <button type="button" className="sx-glass" aria-label={english ? "Slideshow" : "작품 슬라이드"} onClick={() => setScreen(value => ({signal: value.signal + 1, start: state?.hero?.index ?? 0}))}><Presentation size={16}/><span className="sx-label">{english ? "Slideshow" : "작품 슬라이드"}</span></button>}{stage === "gallery" && !!works.length && <button type="button" className="sx-glass" aria-label={english ? "Works" : "작품 목록"} onClick={() => setListOpen(true)}><Images size={16}/><span className="sx-label">{english ? "Works" : "작품 목록"}</span></button>}</div>
     </div>
     <WorldJoystick disabled={paused || !state || !!failed} english={english} onMove={moveStick}/>
-    <div className="sx-lower">
+    <div className={`sx-lower sx-lower--${stage}`}>
       {stage === "exterior" && state && !failed && <button type="button" className="sx-action" onClick={() => runtime.current?.enterGallery()}><DoorOpen size={17}/>{english ? "Enter the gallery" : "전시실 들어가기"}</button>}
       {stage === "gallery" && nearbyArt ? <button type="button" className="sx-glass sx-nearby sx-nearby-art" onClick={() => runtime.current?.activateNearby()}><strong>{nearbyArt.title}</strong>{nearbyArtist && nearbyArtist !== nearbyArt.title && <span>{nearbyArtist}</span>}<em>{english ? "Tap to view large" : "눌러서 크게 보기"}</em></button>
         : stage === "gallery" && nearbyText && <button type="button" className="sx-glass sx-nearby" onClick={() => runtime.current?.activateNearby()}>{nearbyText}</button>}
@@ -96,10 +96,11 @@ export default function SpaceExhibitionWorld(props: SpaceExhibitionWorldProps) {
         <button type="button" disabled={state.page >= state.pageCount - 1} onClick={() => runtime.current?.setPage(1)} aria-label={english ? "Next room" : "다음 전시실"}><ChevronRight size={17}/></button>
       </nav>}
     </div>
-    <div className="sx-glass sx-view">
-      <button type="button" onClick={() => runtime.current?.turn(-1)} aria-label={english ? "Look left" : "왼쪽 보기"}><Undo2 size={16}/></button>
-      <button type="button" onClick={() => runtime.current?.turn(1)} aria-label={english ? "Look right" : "오른쪽 보기"}><Redo2 size={16}/></button>
-      <button type="button" onClick={() => runtime.current?.reset()} aria-label={english ? "Back to start" : "처음 위치로"}><RotateCcw size={16}/></button>
+    <div className="sx-glass sx-view" role="group" aria-label={english ? "Look around" : "둘러보기"}>
+      <button type="button" onClick={() => runtime.current?.turn(-1)} aria-label={english ? "Look left" : "왼쪽 보기"} title={english ? "Look left" : "왼쪽 보기"}><ChevronLeft size={18}/></button>
+      <span className="sx-view-label" aria-hidden="true"><Eye size={14}/><small>{english ? "Look" : "보기"}</small></span>
+      <button type="button" onClick={() => runtime.current?.turn(1)} aria-label={english ? "Look right" : "오른쪽 보기"} title={english ? "Look right" : "오른쪽 보기"}><ChevronRight size={18}/></button>
+      <button type="button" className="sx-view-home" onClick={() => runtime.current?.reset()} aria-label={english ? "Back to start" : "처음 위치로"} title={english ? "Back to start" : "처음 위치로"}><LocateFixed size={16}/></button>
     </div>
     {(!state || state.loading) && !failed && <p className="sx-glass sx-status" role="status">{english ? "Opening the space gallery…" : "우주 전시실을 여는 중…"}</p>}
     {failed && <p className="sx-glass sx-status" role="alert">{english ? "This device cannot show the 3D gallery. Use the grid view instead." : "이 기기에서는 3D 전시를 열 수 없어요. 목록 보기로 감상해 주세요."}</p>}
