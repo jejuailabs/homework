@@ -302,7 +302,7 @@ export function buildRoom(C) {
     hangGrid(segments[2].p,range(9,10),8.2,[2.7,1.27]);
     hangGrid(segments[4].p,range(19,12),11.6,[2.7,1.27]);
     const rear=segments[6].p;hangingDoor(rear);
-    return {swapHero,spawn:[-.54,.02],yaw:-.02,camera:{distance:4.29},bounds:[-6.72,6.45,-7.41,7.32],solids,targets};
+    return {swapHero,stars:{avoid:[{dir:[-.61,-.33,-.72],angle:72}]},spawn:[-.54,.02],yaw:-.02,camera:{distance:4.29},bounds:[-6.72,6.45,-7.41,7.32],solids,targets};
   }
   function domeShell() {
     const p=[],uv=[],indices=[],n=96,rows=14;
@@ -366,7 +366,7 @@ export function buildRoom(C) {
     for(let i=0;i<14;i++){
       const a=TAU*i/14;solid(cx+Math.cos(a)*rb*.70,cz+Math.sin(a)*rb*.70,rb*.69,rb*.69,a);
     }
-    return {swapHero,spawn:[.02,1.76],yaw:.018,camera:{distance:4.28},bounds:[-R,R,-R,R],solids,targets};
+    return {swapHero,stars:{minElevation:38},spawn:[.02,1.76],yaw:.018,camera:{distance:4.28},bounds:[-R,R,-R,R],solids,targets};
   }
   function annularHorizontal(cx,cz,r1,r2,y,m,faceUp=true) {
     const n=112,p=[],uv=[],indices=[];
@@ -426,7 +426,7 @@ export function buildRoom(C) {
     const last=.77,doorNode=at(cx+8.58*Math.cos(last),cz+8.58*Math.sin(last),PI/2-(last+.94));
     box(doorNode,0,1.64,0,3.82,3.28,.23,plum,true);solidFrom(doorNode,3.82,.23);
     hangingDoor(doorNode,0,1.56,2.35,.14);
-    return {swapHero,spawn:[.04,0],yaw:-.10,camera:{distance:4.27},bounds:[cx-Ro,cx+Ro,cz-Ro,cz+Ro],solids,targets};
+    return {swapHero,stars:{avoid:[{dir:[.33,.09,-.935],angle:38}]},spawn:[.04,0],yaw:-.10,camera:{distance:4.27},bounds:[cx-Ro,cx+Ro,cz-Ro,cz+Ro],solids,targets};
   }
   return theme==='moon'?moon():theme==='saturn'?saturn():earth();
 }

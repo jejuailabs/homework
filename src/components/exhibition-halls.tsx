@@ -121,6 +121,8 @@ export function ExhibitionEntry({rooms, visited, mine, locale, onOpen}: {rooms: 
 }
 
 
+/** Twinkling points for the space hall picture: left %, top %, delay s, duration s, size px (fixed so server and browser agree). */
+const SKY_STARS: [number, number, number, number, number][] = Array.from({length: 36}, (_, i) => [(i * 37 + 11) % 97, (i * 23 + 7) % 48, (i * 0.37) % 3.2, 1.8 + (i * 0.53) % 2.6, i % 7 === 0 ? 4 : i % 3 === 0 ? 3 : 2]);
 /**
  * Space and ocean halls have no shared 3D building: their 3D worlds are one room each (exterior → door → gallery).
  * So walking into those halls shows the hall's own scenery with a door per room; a door opens that room's 3D world.
@@ -131,6 +133,7 @@ export function ThemedHallLobby({kind, rooms, locale, onOpen}: {kind: HallKind; 
   const covers = useRoomCovers(rooms.map(room => room.id));
   return <div className={`ex-hall-lobby is-${hallFamily(kind)}`}>
     <img className="ex-hall-lobby-bg" src={backdrop} alt=""/>
+    {hallFamily(kind) === 'space' && <span className="ex-sky-fx" aria-hidden="true">{SKY_STARS.map((star, index) => <i key={index} style={{left: `${star[0]}%`, top: `${star[1]}%`, animationDelay: `${star[2]}s`, animationDuration: `${star[3]}s`, width: star[4], height: star[4]}}/>)}<b/><b/></span>}
     <div className="ex-hall-lobby-inner">
       <p className="ex-hall-lobby-sign"><HallIcon kind={kind} size={16}/>{hallName(kind, locale)} · {t('halls.lobbyHint')}</p>
       <div className="ex-hall-lobby-doors">{rooms.map(room => <button type="button" key={room.id} className="ex-hall-door" onClick={() => onOpen(room.id)}>
