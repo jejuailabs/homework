@@ -1,7 +1,7 @@
 'use client';
 import {useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode} from 'react';
 import {useTranslations} from 'next-intl';
-import {ArrowLeft, ChevronLeft, ChevronRight, Eye, LoaderCircle, Rocket, Sparkles, Star, Home, Users, Fish} from 'lucide-react';
+import {ArrowLeft, ChevronLeft, ChevronRight, Eye, LoaderCircle, Rocket, Sparkles, Star, Home, Users, Fish, DoorOpen} from 'lucide-react';
 import {CLASSIC_STICKER, hallName, hallOf, summarizeHalls, type HallKind} from '@/lib/exhibition-halls';
 import {isSpaceTheme, spaceThemePreview} from '@/lib/space-exhibition/themes';
 import {isOceanTheme, oceanThemePreview} from '@/lib/ocean-exhibition/themes';
@@ -98,3 +98,23 @@ export function ExhibitionEntry({rooms, visited, mine, locale, onOpen}: {rooms: 
   </section>;
 }
 
+
+/**
+ * Space and ocean halls have no shared 3D building: their 3D worlds are one room each (exterior → door → gallery).
+ * So walking into those halls shows the hall's own scenery with a door per room; a door opens that room's 3D world.
+ */
+export function ThemedHallLobby({kind, rooms, locale, onOpen}: {kind: HallKind; rooms: Exhibition[]; locale: string; onOpen: (id: string) => void}) {
+  const t = useTranslations('exhibition');
+  const backdrop = kind === 'ocean' ? oceanThemePreview(isOceanTheme(rooms[0]?.theme) ? rooms[0].theme : 'coral') : spaceThemePreview(isSpaceTheme(rooms[0]?.theme) ? rooms[0].theme : 'saturn');
+  return <div className={`ex-hall-lobby is-${kind}`}>
+    <img className="ex-hall-lobby-bg" src={backdrop} alt=""/>
+    <div className="ex-hall-lobby-inner">
+      <p className="ex-hall-lobby-sign"><HallIcon kind={kind} size={16}/>{hallName(kind, locale)} · {t('halls.lobbyHint')}</p>
+      <div className="ex-hall-lobby-doors">{rooms.map(room => <button type="button" key={room.id} className="ex-hall-door" onClick={() => onOpen(room.id)}>
+        <RoomThumb theme={room.theme}/>
+        <span className="ex-hall-door-copy"><strong title={room.title}>{room.title}</strong><small>{room.className} · {t(room.status)}</small></span>
+        <span className="ex-hall-door-go"><DoorOpen size={15}/>{t('halls.enterRoom')}</span>
+      </button>)}</div>
+    </div>
+  </div>;
+}

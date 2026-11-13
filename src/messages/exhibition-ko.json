@@ -273,7 +273,9 @@
     "previewNote": "아이들에게 보이는 화면이에요. 열린 전시실만 보여요.",
     "newestFirst": "최근 만든 순",
     "picked": "보는 중",
-    "manageRoom": "작품 관리"
+    "manageRoom": "작품 관리",
+    "lobbyHint": "문을 눌러 전시실로 들어가요",
+    "enterRoom": "들어가기"
   },
   "entry": {
     "recent": "새로 열린 전시실",
