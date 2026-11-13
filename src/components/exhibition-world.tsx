@@ -816,7 +816,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       <button type="button" className={`ex-world-pill ex-world-index-toggle${indexVisible ? " is-active" : ""}`} aria-label={indexTitle} onClick={() => setIndexOpen(value => !value)} aria-expanded={indexVisible}><Images size={17} /><span>{indexTitle}</span></button>
     </div>
 
-    {stage==='gallery'&&<ExhibitionScreen key={contextKey} artworks={artworks} english={english} paused={paused||indexOpen} onFrame={showScreen} onExpanded={setScreenExpanded} openSignal={screenOpenSignal}/>}
+    {stage==='gallery'&&<ExhibitionScreen key={contextKey} artworks={artworks} english={english} paused={paused||indexOpen} onFrame={showScreen} onExpanded={setScreenExpanded} openSignal={screenOpenSignal} onSelectArtwork={props.onSelectArtwork}/>}
     {status === "loading" && <div className="ex-world-loading" role="status"><span className="ex-world-loading-paw">🐾</span><strong>{english ? "Moa is opening the door…" : "모아가 문을 열고 있어요…"}</strong></div>}
     {entering && <div className="ex-world-entering" role="status"><DoorOpen size={23} /><span>{english ? "Come on in!" : "안으로 들어가요!"}</span></div>}
 
