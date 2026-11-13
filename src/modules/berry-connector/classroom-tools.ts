@@ -253,7 +253,7 @@ async function cardGamePlayers(id: string, classId: string) {
 
 /** 스피킹이 켜졌는지와 녹음을 남긴 학생 수만 알린다. 녹음 파일과 학생 이름은 베리에 주지 않는다. */
 async function cardSpeakingSummary(id: string, value: Record<string, any>) {
-  if (value.speaking !== true) return {on: false, students: 0};
+  if (value.speaking === false || value.type === 'drill') return {on: false, students: 0};
   const rows = (await db().collection('cardSpeaking').where('distributionId', '==', id).select('classId', 'takes').get()).docs;
   return {on: true, students: rows.filter(doc => doc.data().classId === value.classId && Object.keys(doc.data().takes ?? {}).length > 0).length};
 }

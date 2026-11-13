@@ -59,7 +59,11 @@ const quota = () => state.docs.get('cardSpeakingStorage/owner')?.usedBytes ?? 0;
 const turnOn = () => call(teacher, 'PATCH', undefined, JSON.stringify({enabled: true}));
 
 seed();
-await fails(call(minsu, 'POST', 'a', audio()), 'SPEAKING_OFF', 'nothing can be recorded until the teacher turns it on');
+// 스피킹 is a study tool that is open by default; the teacher can turn it off.
+assert.equal((await call(minsu, 'GET')).value.enabled, true, 'open without the teacher doing anything');
+assert.equal((await call(teacher, 'PATCH', undefined, JSON.stringify({enabled: false}))).value.enabled, false);
+await fails(call(minsu, 'POST', 'a', audio()), 'SPEAKING_OFF', 'nothing can be recorded once the teacher turns it off');
+await fails(call(minsu, 'POST', undefined, JSON.stringify({step: 'read', cardIds: ['a']})), 'SPEAKING_OFF', 'and no step is counted');
 assert.equal(state.files.size, 0, 'and no file is kept');
 await fails(call(minsu, 'PATCH', undefined, JSON.stringify({enabled: true})), 'NOT_FOUND', 'a student cannot turn it on');
 assert.equal((await turnOn()).value.enabled, true);
@@ -79,10 +83,32 @@ assert.equal(state.files.size, 1);
 const size = audio().length;
 assert.equal(quota(), size);
 
+// 낭독 keeps its own take beside the 녹음 take, and the teacher's list stays the 녹음 step.
+const aloud = await call(minsu, 'POST', 'a', audio(), '?kind=aloud');
+assert.equal(aloud.value.recorded, 1, '낭독 does not change the 녹음 count');
+assert.equal(state.files.size, 2);
+assert.deepEqual(Object.keys((await call(minsu, 'GET')).value.aloud), ['a']);
+await call(minsu, 'POST', 'a', audio(), '?kind=aloud');
+assert.equal(state.files.size, 2, 'a new 낭독 replaces the old one');
+assert.equal(quota(), size * 2);
+await call(minsu, 'DELETE', 'a'); await call(minsu, 'POST', 'a', audio());
+const firstAgain = (await call(minsu, 'GET')).value.takes.a;
+
+// Step counts only grow, per card, and only for cards of this set.
+assert.deepEqual((await call(minsu, 'POST', undefined, JSON.stringify({step: 'read', cardIds: ['a', 'b']}))).value.counts, {read: {a: 1, b: 1}});
+assert.deepEqual((await call(minsu, 'POST', undefined, JSON.stringify({step: 'read', cardIds: ['a']}))).value.counts, {read: {a: 2, b: 1}});
+await fails(call(minsu, 'POST', undefined, JSON.stringify({step: 'dance', cardIds: ['a']})), 'SPEAKING_INPUT', 'only the six steps');
+await fails(call(minsu, 'POST', undefined, JSON.stringify({step: 'read', cardIds: ['zzz']})), 'NOT_FOUND', 'only cards of this set');
+assert.equal(state.docs.get('cardSpeaking/d1_s1').takes.a.takeId, firstAgain.takeId, 'counting keeps the recordings');
+assert.deepEqual((await call(teacher, 'PATCH', undefined, JSON.stringify({required: {read: 2, comp: 50}}))).value.required, {read: 2, comp: 10, listen: 0, aloud: 0, shadow: 0, record: 0}, 'the teacher sets 필수 횟수, at most 10');
+assert.deepEqual((await call(minsu, 'GET')).value.required.read, 2);
+assert.equal((await call(teacher, 'GET')).value.students[0].percent, 25, 'progress counts only the 필수 steps (입해석, 입영작): a has 입해석 twice, nothing else is done');
+await call(teacher, 'PATCH', undefined, JSON.stringify({required: {}}));
+
 const second = await call(minsu, 'POST', 'a', audio());
-assert.equal(state.files.size, 1, 'recording again replaces the old file');
+assert.equal(state.files.size, 2, 'recording again replaces the old file (the 낭독 take stays)');
 assert.notEqual(second.value.take.takeId, first.value.take.takeId, 'at a new address, so nothing plays the old audio from cache');
-assert.equal(quota(), size, 'and the storage figure does not grow');
+assert.equal(quota(), size * 2, 'and the storage figure does not grow (낭독 and 녹음)');
 
 await fails(call(minsu, 'GET', undefined, undefined, '?all=1'), 'SPEAKING_INCOMPLETE', 'a student downloads only after every card');
 await call(minsu, 'POST', 'b', audio());
@@ -114,7 +140,7 @@ state.locked = false;
 await call(jia, 'DELETE', 'a');
 assert.equal(state.docs.get('cardSpeaking/d1_s2').distributionId, SET, 'removing one recording keeps the record findable');
 assert.deepEqual(state.docs.get('cardSpeaking/d1_s2').takes, {});
-assert.equal(quota(), size * 2);
+assert.equal(quota(), size * 3);
 
 await fails(call(minsu, 'DELETE'), 'NOT_FOUND', 'a student cannot clear the class');
 await call(teacher, 'DELETE');

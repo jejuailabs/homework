@@ -32,7 +32,7 @@
   "downloading": "내려받는 중 {done} / {total}",
   "downloadFailed": "내려받지 못했어요. 다시 시도해 주세요.",
   "teacherTitle": "스피킹 녹음",
-  "teacherHint": "켜면 학생이 카드마다 소리 내어 읽고 녹음할 수 있어요. 녹음은 선생님과 본인만 들을 수 있어요.",
+  "teacherHint": "스피킹은 학생 학습 도구에 기본으로 열려 있어요(입해석·입영작·집중듣기·낭독·쉐도잉·녹음). 단계마다 필수 횟수를 정할 수 있고, 녹음은 선생님과 본인만 들을 수 있어요.",
   "teacherSwitch": "학생에게 스피킹 열기",
   "teacherCount": "녹음한 학생 {done} / {total}명",
   "teacherDownloadAll": "전체 다운로드",
