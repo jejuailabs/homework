@@ -88,7 +88,8 @@ assert.equal(rainStep(small, 5000, ['only'], random).drops.filter(drop => drop.c
 const ok = (result: ReturnType<typeof checkGameResult>) => result.ok ? result.record : result.reason;
 assert.deepEqual(ok(checkGameResult('pair', {pairs: 6, elapsedMs: 20_000, mistakes: 2}, cards, 'word')), {score: 24_000, timeMs: 20_000}, 'a pairs round is scored as time plus mistakes');
 assert.equal(ok(checkGameResult('pair', {pairs: 5, elapsedMs: 20_000, mistakes: 0}, cards, 'word')), 'pairs', 'the pair count follows the set');
-assert.equal(ok(checkGameResult('pair', {pairs: 6, elapsedMs: 1000, mistakes: 0}, cards, 'word')), 'too-fast', 'six pairs in a second is not possible');
+assert.equal(typeof ok(checkGameResult('pair', {pairs: 6, elapsedMs: 1000, mistakes: 0}, cards, 'word')), 'object', 'a very fast pair round is still saved');
+assert.equal(typeof ok(checkGameResult('pair', {pairs: 6, elapsedMs: 2900, mistakes: 0}, cards, 'word')), 'object', 'under three seconds is saved');
 assert.equal(ok(checkGameResult('pair', {pairs: 6, elapsedMs: 20_000.5, mistakes: 0}, cards, 'word')), 'elapsed', 'times are whole milliseconds');
 assert.equal(ok(checkGameResult('pair', {pairs: 6, elapsedMs: 30 * 60_000, mistakes: 0}, cards, 'word')), 'elapsed', 'a round over twenty minutes is refused');
 assert.equal(ok(checkGameResult('pair', {pairs: 2, elapsedMs: 9000, mistakes: 0}, cards.slice(0, 2), 'word')), 'cards', 'a set too small for pairs has no record');
