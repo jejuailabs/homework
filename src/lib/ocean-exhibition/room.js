@@ -8,6 +8,7 @@
 //   lagoon – white walls under a pearl wave ceiling, wide panoramic windows, white bench
 import {oceanParts} from './parts.js';
 
+const plaqueText = (index, work) => `${index + 1}. ${work?.title || ''}${work?.artist && work.artist !== work.title ? ` · ${work.artist}` : ''}`;
 export function buildRoom(C) {
   const K = oceanParts(C);
   const {T, TH, L, V, PI} = K, group = C.group, theme = C.theme;
@@ -83,6 +84,11 @@ export function buildRoom(C) {
     const g = K.grp(group, slot.position[0], 0, slot.position[2], slot.rotationY);
     K.lightPool(g, 0, slot.position[1] + .5, -.05, Math.max(1.5, prof.outerFrameSize[0] * 1.45), 2.6, theme === 'abyss' ? .36 : .3);
     const f = K.framedArt(g, texture, 0, slot.position[1] + (index === 0 ? .12 : 0), -.057, prof.artSize[0], prof.artSize[1], prof.outerFrameSize[0], prof.outerFrameSize[1]);
+    // Name plate under the frame (number · title · artist); the rotating main slide shows its name in the bottom card.
+    if (index !== 0 && C.label) {
+      const w = Math.min(Math.max(prof.outerFrameSize[0], 1.05), 1.75), h = .16, text = plaqueText(index, work);
+      K.plane(g, 0, slot.position[1] - prof.outerFrameSize[1] / 2 - .16, -.04, w, h, C.label(text, {width: Math.max(256, Math.round(w / h * 96)), height: 96, color: '#3c3a33', background: '#fbf6ec', font: '700 52px "Malgun Gothic",sans-serif'}));
+    }
     return {g, target: {mesh: f, kind: 'art', index}};
   }
   slotOrder.forEach((slot, index) => {

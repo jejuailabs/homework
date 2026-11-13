@@ -158,3 +158,5 @@ dialog .ex-delete-zone{margin-top:0}
 .ex-hall-thumb.is-classic img:only-child,.ex-hall-cover .ex-hall-thumb.is-classic img:only-child{left:50%;top:50%;right:auto;bottom:auto;width:46%;height:auto;max-height:80%;object-fit:contain;transform:translate(-50%,-50%)}
 .ex-hall-thumb.ex-thumb-cozy{background:#f5e2cc}.ex-hall-thumb.ex-thumb-forest{background:#e0edd5}.ex-hall-thumb.ex-thumb-sky{background:#e3e8f5}.ex-hall-thumb.ex-thumb-ocean{background:#d9eeeb}
 .ex-entry .ex-hall-lobby{min-height:min(60vh,520px);border-radius:16px}
+.ex-room-thumb.is-cover{background:#f4efe6}.ex-room-thumb.is-cover img{width:100%;height:100%;object-fit:cover}
+.ex-hall-door-copy small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

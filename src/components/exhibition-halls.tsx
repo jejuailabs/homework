@@ -11,8 +11,25 @@ import {exhibitionDateLabel} from '@/lib/exhibition-date';
 type DialogProps = {title: string; children: ReactNode; onClose: () => void; busy?: boolean; wide?: boolean};
 export type HallRoom = Pick<Exhibition, 'id' | 'title' | 'className' | 'classId' | 'status' | 'theme' | 'approvedCount' | 'createdAt'>;
 
-/** Room picture: the space rooms show their exterior, classic rooms a sticker on their colour. */
-export function RoomThumb({theme}: {theme?: Exhibition['theme']}) {
+/** First approved artwork per room, fetched once per page for the cards on screen. */
+const coverCache = new Map<string, string | null>();
+export function useRoomCovers(ids: string[]) {
+  const key = ids.join(',');
+  const [covers, setCovers] = useState<Record<string, string | null>>({});
+  useEffect(() => {
+    const list = key ? key.split(',') : [], need = list.filter(roomId => !coverCache.has(roomId)).slice(0, 40);
+    const apply = () => setCovers(Object.fromEntries(list.map(roomId => [roomId, coverCache.get(roomId) ?? null])));
+    if (!need.length) {apply(); return;}
+    let alive = true;
+    fetch(`/api/exhibitions/covers?ids=${need.join(',')}`, {cache: 'no-store'}).then(response => response.ok ? response.json() : {covers: {}}).then(data => {need.forEach(roomId => coverCache.set(roomId, data.covers?.[roomId] ?? null)); if (alive) apply();}).catch(() => undefined);
+    return () => {alive = false;};
+  }, [key]);
+  return covers;
+}
+
+/** Room picture: its first artwork when there is one; otherwise the space/ocean exterior or a classic sticker. */
+export function RoomThumb({theme, cover}: {theme?: Exhibition['theme']; cover?: string | null}) {
+  if (cover) return <span className="ex-room-thumb is-cover"><img src={cover} alt="" loading="lazy"/></span>;
   if (isSpaceTheme(theme)) return <span className="ex-room-thumb is-space"><img src={spaceThemePreview(theme)} alt="" loading="lazy"/></span>;
   if (isOceanTheme(theme)) return <span className="ex-room-thumb is-space is-ocean"><img src={oceanThemePreview(theme)} alt="" loading="lazy"/></span>;
   return <span className={`ex-room-thumb ex-thumb-${theme || 'cozy'}`}><img src={CLASSIC_STICKER[theme || 'cozy'] || CLASSIC_STICKER.cozy} alt="" loading="lazy"/></span>;
@@ -61,10 +78,10 @@ export function HallPreview({kind, locale, DialogComponent, onClose, onOpen}: {k
   </DialogComponent>;
 }
 
-function RoomCard({room, locale, isNew, mine, onOpen}: {room: Exhibition; locale: string; isNew: boolean; mine: boolean; onOpen: (id: string) => void}) {
+function RoomCard({room, locale, isNew, mine, cover, onOpen}: {room: Exhibition; locale: string; isNew: boolean; mine: boolean; cover?: string | null; onOpen: (id: string) => void}) {
   const t = useTranslations('exhibition');
   return <button type="button" className="ex-entry-card" onClick={() => onOpen(room.id)}>
-    <span className="ex-entry-thumb"><RoomThumb theme={room.theme}/>{isNew && <em className="ex-new">NEW</em>}{mine && <em className="ex-mine"><Star size={11}/>{t('entry.mine')}</em>}</span>
+    <span className="ex-entry-thumb"><RoomThumb theme={room.theme} cover={cover}/>{isNew && <em className="ex-new">NEW</em>}{mine && <em className="ex-mine"><Star size={11}/>{t('entry.mine')}</em>}</span>
     <span className="ex-entry-title" title={room.title}>{room.title}</span>
     <span className="ex-entry-meta"><HallIcon kind={hallOf(room.theme)} size={12}/>{hallName(hallOf(room.theme), locale)}</span>
   </button>;
@@ -84,16 +101,18 @@ export function ExhibitionEntry({rooms, visited, mine, locale, onOpen}: {rooms: 
   const recent = shown.slice(0, 6), strip = useRef<HTMLDivElement>(null);
   const page = (direction: number) => {const row = strip.current; if (row) row.scrollBy({left: direction * row.clientWidth, behavior: 'smooth'});};
   const fresh = (rooms: Exhibition[]) => rooms.some(room => !seen.has(room.id));
+  const opened = hall ? halls.find(item => item.kind === hall) : null;
+  const covers = useRoomCovers([...new Set([...recent, ...(opened?.rooms || [])].map(room => room.id))]);
   if (!shown.length) return <section className="ex-entry"><div className="ex-entry-empty"><img src="/characters/otter-moa.webp" alt=""/><p>{t('emptyStudent')}</p></div></section>;
   const open = hall ? halls.find(item => item.kind === hall) : null;
   if (open) return <section className="ex-entry">
     <div className="ex-entry-head"><button type="button" className="ex-button" onClick={() => setHall(null)}><ArrowLeft size={16}/>{t('entry.back')}</button><h2><HallIcon kind={open.kind} size={18}/>{hallName(open.kind, locale)}</h2><span className="ex-entry-count">{t('halls.roomCount', {count: open.count})}</span></div>
     {/* Space and ocean halls show their own scenery with a door per room, like the teacher's view. */}
-    {hallFamily(open.kind) !== 'classic' ? <ThemedHallLobby kind={open.kind} rooms={open.rooms} locale={locale} onOpen={onOpen}/> : <div className="ex-entry-grid">{open.rooms.map(room => <RoomCard key={room.id} room={room} locale={locale} isNew={!seen.has(room.id)} mine={own.has(room.id)} onOpen={onOpen}/>)}</div>}
+    {hallFamily(open.kind) !== 'classic' ? <ThemedHallLobby kind={open.kind} rooms={open.rooms} locale={locale} onOpen={onOpen}/> : <div className="ex-entry-grid">{open.rooms.map(room => <RoomCard key={room.id} room={room} locale={locale} isNew={!seen.has(room.id)} mine={own.has(room.id)} cover={covers[room.id]} onOpen={onOpen}/>)}</div>}
   </section>;
   return <section className="ex-entry">
     <div className="ex-entry-head"><h2>{t('entry.recent')}</h2>{recent.length > 2 && <span className="ex-entry-arrows"><button type="button" className="ex-icon-btn" aria-label={t('entry.prev')} onClick={() => page(-1)}><ChevronLeft size={18}/></button><button type="button" className="ex-icon-btn" aria-label={t('entry.next')} onClick={() => page(1)}><ChevronRight size={18}/></button></span>}</div>
-    <div className="ex-entry-strip" ref={strip}>{recent.map(room => <RoomCard key={room.id} room={room} locale={locale} isNew={!seen.has(room.id)} mine={own.has(room.id)} onOpen={onOpen}/>)}</div>
+    <div className="ex-entry-strip" ref={strip}>{recent.map(room => <RoomCard key={room.id} room={room} locale={locale} isNew={!seen.has(room.id)} mine={own.has(room.id)} cover={covers[room.id]} onOpen={onOpen}/>)}</div>
     <div className="ex-entry-head ex-entry-halls-head"><h2>{t('entry.halls')}</h2></div>
     <div className="ex-entry-halls">{halls.map(item => <button type="button" key={item.kind} className="ex-entry-hall" onClick={() => setHall(item.kind)}>
       <HallThumb kind={item.kind}/><span className="ex-hall-copy"><strong><HallIcon kind={item.kind}/>{hallName(item.kind, locale)}{fresh(item.rooms) && <em className="ex-new">NEW</em>}</strong><small>{t('halls.roomCount', {count: item.count})}</small></span><ChevronRight size={18}/>
@@ -109,12 +128,13 @@ export function ExhibitionEntry({rooms, visited, mine, locale, onOpen}: {rooms: 
 export function ThemedHallLobby({kind, rooms, locale, onOpen}: {kind: HallKind; rooms: Exhibition[]; locale: string; onOpen: (id: string) => void}) {
   const t = useTranslations('exhibition');
   const backdrop = isOceanTheme(kind) ? oceanThemePreview(kind) : isSpaceTheme(kind) ? spaceThemePreview(kind) : '';
+  const covers = useRoomCovers(rooms.map(room => room.id));
   return <div className={`ex-hall-lobby is-${hallFamily(kind)}`}>
     <img className="ex-hall-lobby-bg" src={backdrop} alt=""/>
     <div className="ex-hall-lobby-inner">
       <p className="ex-hall-lobby-sign"><HallIcon kind={kind} size={16}/>{hallName(kind, locale)} · {t('halls.lobbyHint')}</p>
       <div className="ex-hall-lobby-doors">{rooms.map(room => <button type="button" key={room.id} className="ex-hall-door" onClick={() => onOpen(room.id)}>
-        <RoomThumb theme={room.theme}/>
+        <RoomThumb theme={room.theme} cover={covers[room.id]}/>
         <span className="ex-hall-door-copy"><strong title={room.title}>{room.title}</strong><small>{room.className} · {t(room.status)}</small></span>
         <span className="ex-hall-door-go"><DoorOpen size={15}/>{t('halls.enterRoom')}</span>
       </button>)}</div>

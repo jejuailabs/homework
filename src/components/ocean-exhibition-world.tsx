@@ -17,7 +17,7 @@ type Runtime = {
 };
 type RuntimeState = {
   stage: "exterior" | "gallery"; page: number; pageCount: number; loading: boolean; failed: boolean;
-  nearby: {kind: string; title?: string} | null; hero: {index: number; total: number} | null;
+  nearby: {kind: string; title?: string; id?: string} | null; hero: {index: number; total: number} | null;
 };
 
 export type OceanExhibitionWorldProps = {
@@ -38,7 +38,7 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
   const runtime = useRef<Runtime | null>(null), callbacks = useRef(props), pausedRef = useRef(paused);
   const [state, setState] = useState<RuntimeState | null>(null), [error, setError] = useState(false), [listOpen, setListOpen] = useState(false);
   const works = artworks.filter(work => work.url || work.thumbnailUrl);
-  const worksKey = JSON.stringify(works.map(work => [work.id, work.title, work.url, work.thumbnailUrl, work.width, work.height]));
+  const worksKey = JSON.stringify(works.map(work => [work.id, work.title, work.url, work.thumbnailUrl, work.width, work.height, work.artistName || work.studentName || ""]));
   const text = OCEAN_THEME_TEXT[theme];
 
   useEffect(() => { callbacks.current = props; });
@@ -49,14 +49,14 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
     if (!host) return;
     let cancelled = false;
     setError(false); setState(null);
-    const list = JSON.parse(worksKey) as [string, string, string | undefined, string | undefined, number | undefined, number | undefined][];
+    const list = JSON.parse(worksKey) as [string, string, string | undefined, string | undefined, number | undefined, number | undefined, string][];
     void Promise.all([import("three"), import("@/lib/ocean-exhibition/runtime.js")]).then(([T, module]) => {
       if (cancelled) return;
       runtime.current = module.createOceanRuntime({
         T, host, theme, english, roomTitle,
         data: oceanData, assetUrl: oceanAssetUrl,
         cat: {url: spaceCatUrl(), rects: catRects},
-        artworks: list.map(([id, title, url, thumbnailUrl, width, height]) => ({id, title, image: thumbnailUrl || url || "", hero: url || thumbnailUrl || "", width, height})),
+        artworks: list.map(([id, title, url, thumbnailUrl, width, height, artist]) => ({id, title, artist, image: thumbnailUrl || url || "", hero: url || thumbnailUrl || "", width, height})),
         isActive: () => {
           if (pausedRef.current) return false;
           const root = rootRef.current, open = document.querySelector("dialog[open],[role=dialog][aria-modal=true]");
@@ -73,6 +73,9 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
   const moveStick = useCallback((x: number, y: number) => runtime.current?.setStick(x, y), []);
   const stage = state?.stage || "exterior";
   const failed = error || state?.failed;
+  // The artwork you stand by: its title and artist, large enough to read at a glance.
+  const nearbyArt = state?.nearby?.kind === "art" ? artworks.find(work => work.id === state.nearby?.id) || {title: state.nearby.title || "", artistName: "", studentName: ""} : null;
+  const nearbyArtist = nearbyArt ? nearbyArt.artistName || nearbyArt.studentName || "" : "";
   const nearbyText = state?.nearby ? state.nearby.kind === "art" ? (english ? `View · ${state.nearby.title}` : `작품 감상 · ${state.nearby.title}`) : state.nearby.kind === "back" ? (english ? "Back to entrance" : "입구로") : null : null;
 
   return <section ref={rootRef} className={`sx-world sx-theme-${theme}${paused ? " sx-world--paused" : ""}`} aria-label={english ? `${text.en} 3D gallery` : `${text.ko} 3D 전시`}>
@@ -85,7 +88,8 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
     <WorldJoystick disabled={paused || !state || !!failed} english={english} onMove={moveStick}/>
     <div className="sx-lower">
       {stage === "exterior" && state && !failed && <button type="button" className="sx-action" onClick={() => runtime.current?.enterGallery()}><DoorOpen size={17}/>{english ? "Enter the gallery" : "전시실 들어가기"}</button>}
-      {stage === "gallery" && nearbyText && <button type="button" className="sx-glass sx-nearby" onClick={() => runtime.current?.activateNearby()}>{nearbyText}</button>}
+      {stage === "gallery" && nearbyArt ? <button type="button" className="sx-glass sx-nearby sx-nearby-art" onClick={() => runtime.current?.activateNearby()}><strong>{nearbyArt.title}</strong>{nearbyArtist && nearbyArtist !== nearbyArt.title && <span>{nearbyArtist}</span>}<em>{english ? "Tap to view large" : "눌러서 크게 보기"}</em></button>
+        : stage === "gallery" && nearbyText && <button type="button" className="sx-glass sx-nearby" onClick={() => runtime.current?.activateNearby()}>{nearbyText}</button>}
       {stage === "gallery" && state && state.pageCount > 1 && <nav className="sx-glass sx-pages" aria-label={english ? "Gallery rooms" : "전시실 이동"}>
         <button type="button" disabled={state.page === 0} onClick={() => runtime.current?.setPage(-1)} aria-label={english ? "Previous room" : "이전 전시실"}><ChevronLeft size={17}/></button>
         <span>{english ? `Room ${state.page + 1} / ${state.pageCount}` : `${state.page + 1} / ${state.pageCount}실`}</span>
