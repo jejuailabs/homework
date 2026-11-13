@@ -139,3 +139,4 @@ dialog .ex-delete-zone{margin-top:0}
 @media(max-width:900px){.ex-hall-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.ex-hall-list{grid-template-columns:1fr}.ex-hall-main{flex-direction:row;align-items:center}.ex-hall-cover{flex:none;width:120px}}
 .ex-room-thumb.is-ocean,.ex-hall-thumb.is-ocean{background:#0f3b4f}
+.ex-hall-rooms-anchor{scroll-margin-top:90px}

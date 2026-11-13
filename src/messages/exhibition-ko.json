@@ -262,7 +262,7 @@
     "title": "우리 전시관",
     "hint": "전시실 테마를 고르면 맞는 전시관에 저절로 들어가요.",
     "roomCount": "전시실 {count}개",
-    "preview": "전시실 미리보기",
+    "preview": "전시실 목록 보기",
     "previewTitle": "{hall} 전시실",
     "emptyHall": "아직 이 전시관에 전시실이 없어요. 전시실을 만들어 보세요.",
     "emptyHallTitle": "빈 전시관이에요",
@@ -272,7 +272,8 @@
     "studentView": "아이들 화면 보기",
     "previewNote": "아이들에게 보이는 화면이에요. 열린 전시실만 보여요.",
     "newestFirst": "최근 만든 순",
-    "picked": "보는 중"
+    "picked": "보는 중",
+    "manageRoom": "작품 관리"
   },
   "entry": {
     "recent": "새로 열린 전시실",
