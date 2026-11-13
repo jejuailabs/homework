@@ -107,13 +107,17 @@ test('private teacher feedback and encouragement totals remain restricted to the
 });
 test('encouragement counts replace prior choices and do not grow on retries', () => {
   const initial = nextReactionCounts(undefined, undefined, 'colors');
-  assert.deepEqual(initial, { colors: 1, idea: 0, story: 0 });
+  assert.deepEqual(initial, { music: 0, colors: 1, idea: 0, story: 0 });
   assert.deepEqual(nextReactionCounts(initial, 'colors', 'colors'), initial);
   const changed = nextReactionCounts(initial, 'colors', 'story');
-  assert.deepEqual(changed, { colors: 0, idea: 0, story: 1 });
+  assert.deepEqual(changed, { music: 0, colors: 0, idea: 0, story: 1 });
   const otherChild = nextReactionCounts(changed, undefined, 'story');
-  assert.deepEqual(otherChild, { colors: 0, idea: 0, story: 2 });
-  assert.deepEqual(nextReactionCounts(otherChild, 'story', 'idea'), { colors: 0, idea: 1, story: 1 });
+  assert.deepEqual(otherChild, { music: 0, colors: 0, idea: 0, story: 2 });
+  assert.deepEqual(nextReactionCounts(otherChild, 'story', 'music'), { music: 1, colors: 0, idea: 0, story: 1 });
+  // An older 'idea' pick is released when the child switches to one of the three subjects.
+  assert.deepEqual(nextReactionCounts({ idea: 1 }, 'idea', 'music'), { music: 1, colors: 0, idea: 0, story: 0 });
+  assert.throws(() => artReaction('idea'));
+  assert.equal(artReaction('music'), 'music');
 });
 test('storage quota is bounded, counts pending originals and leaves no unlimited setting', () => {
   // The teacher's 200GB plan is the real limit; the gallery ledger only keeps a ceiling.

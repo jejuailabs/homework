@@ -114,7 +114,7 @@ export function artworkReview(value: unknown): 'approved' | 'revision' {
   return value;
 }
 export function artReaction(value: unknown): ArtReaction {
-  if (value !== 'colors' && value !== 'idea' && value !== 'story') throw new ApiError(400, '응원 종류를 선택해 주세요.');
+  if (value !== 'music' && value !== 'colors' && value !== 'story') throw new ApiError(400, '응원 종류를 선택해 주세요.');
   return value;
 }
 export function approvalCountDelta(previous: ArtworkStatus, next: ArtworkStatus) {
@@ -124,7 +124,7 @@ export function canViewArtworkFeedback(actor: ExhibitionActor, exhibition: Exhib
   return ownsExhibition(actor, exhibition) || (!!studentId && studentAudienceMatches(actor, exhibition) && actor.studentId === studentId);
 }
 export function nextReactionCounts(current: Partial<ArtReactionCounts> | undefined, previous: ArtReaction | undefined, next: ArtReaction): ArtReactionCounts {
-  const counts = { colors: current?.colors ?? 0, idea: current?.idea ?? 0, story: current?.story ?? 0 };
+  const counts = { music: current?.music ?? 0, colors: current?.colors ?? 0, idea: current?.idea ?? 0, story: current?.story ?? 0 };
   if (previous === next) return counts;
   if (previous) counts[previous] = Math.max(0, counts[previous] - 1);
   counts[next] += 1;
