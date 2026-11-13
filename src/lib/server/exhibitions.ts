@@ -91,7 +91,7 @@ async function signedArtwork(ctx: Context, exhibition: Exhibition, value: Data, 
     width: value.width, height: value.height, url, thumbnailUrl, ...(videoUrl ? {videoUrl} : {}), ...(audioUrl ? {audioUrl, audioFileName: String(value.audioFileName || '')} : {}),
     createdAt: value.createdAt, reviewedAt: value.reviewedAt,
     ...(ownReaction ? { ownReaction: artReaction(ownReaction) } : {}),
-    ...(canViewArtworkFeedback(ctx, exhibition, value.studentId) ? { reactionCounts: { colors: value.reactionCounts?.colors ?? 0, idea: value.reactionCounts?.idea ?? 0, story: value.reactionCounts?.story ?? 0 } } : {}),
+    ...(canViewArtworkFeedback(ctx, exhibition, value.studentId) ? { reactionCounts: { music: value.reactionCounts?.music ?? 0, colors: value.reactionCounts?.colors ?? 0, idea: value.reactionCounts?.idea ?? 0, story: value.reactionCounts?.story ?? 0 } } : {}),
   };
 }
 
@@ -593,7 +593,7 @@ async function finalize(ctx: Context, exhibition: Exhibition, request: Request) 
       studentId, studentName: freshStudent?.data()?.name ?? '', studentNumber: freshStudent?.data()?.number ?? 0,
       title, description, artworkDate, artistName: ctx.role === 'student' ? freshStudent?.data()?.name ?? '' : artistName || freshStudent?.data()?.name || '', status: ctx.role === 'student' ? 'pending' : 'approved', feedback: '', ...image,
       ...(audio ? {audioUploadId: audio.id, audioPath: audio.path, audioContentType: audio.contentType, audioFileName: audio.fileName, audioBytes: audio.size, storedBytes: image.storedBytes + audio.size} : {}),
-      createdAt: now(), reviewedAt: ctx.role === 'student' ? null : now(), commentCount: previous.data()?.commentCount || 0, reactionCounts: previous.data()?.reactionCounts || { colors: 0, idea: 0, story: 0 },
+      createdAt: now(), reviewedAt: ctx.role === 'student' ? null : now(), commentCount: previous.data()?.commentCount || 0, reactionCounts: previous.data()?.reactionCounts || { music: 0, colors: 0, idea: 0, story: 0 },
     };
     const usage = settleExhibitionBytes(storageValue(quota.data()), (freshUpload.data()!.reservedBytes ?? 0) + (freshAudio?.data()?.reservedBytes ?? 0), image.storedBytes + (audio?.size ?? 0));
     if (audioRef && audio) tx.update(audioRef, { status: 'submitted', artworkId: ref.id, submittedAt: now(), reservedBytes: 0, storedBytes: audio.size, cleanupAt: null });

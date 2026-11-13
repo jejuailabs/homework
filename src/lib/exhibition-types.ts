@@ -8,7 +8,8 @@ export type ExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean' | 'earth' | 'm
 export type ClassicExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean';
 export type ArtworkStatus = 'pending' | 'approved' | 'revision';
 export type CommentStatus = 'pending' | 'approved' | 'hidden';
-export type ArtReaction = 'colors' | 'idea' | 'story';
+/** Students pick one of music/colors/story. 'idea' stays only so older saved reactions keep counting. */
+export type ArtReaction = 'music' | 'colors' | 'story' | 'idea';
 export type ArtReactionCounts = Record<ArtReaction, number>;
 
 export type Exhibition = {
