@@ -140,3 +140,20 @@ dialog .ex-delete-zone{margin-top:0}
 @media(max-width:520px){.ex-hall-list{grid-template-columns:1fr}.ex-hall-main{flex-direction:row;align-items:center}.ex-hall-cover{flex:none;width:120px}}
 .ex-room-thumb.is-ocean,.ex-hall-thumb.is-ocean{background:#0f3b4f}
 .ex-hall-rooms-anchor{scroll-margin-top:90px}
+.ex-hall-lobby{position:relative;min-height:min(70vh,640px);height:100%;overflow:hidden;background:#0b1024;display:flex}
+.ex-hall-lobby.is-ocean{background:#082a3a}
+.ex-hall-lobby-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(1.05)}
+.ex-hall-lobby:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,#00000010 30%,#000000a0 100%)}
+.ex-hall-lobby-inner{position:relative;z-index:1;margin-top:auto;width:100%;padding:22px;display:flex;flex-direction:column;gap:14px}
+.ex-hall-lobby-sign{display:inline-flex;align-self:flex-start;align-items:center;gap:7px;margin:0;padding:8px 14px;border-radius:999px;background:#ffffffe6;color:#2d3a33;font-size:13px;font-weight:800}
+.ex-hall-lobby-doors{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.ex-hall-door{display:flex;flex-direction:column;gap:8px;padding:8px 8px 10px;border:1px solid #ffffff55;border-radius:16px;background:#ffffffe8;color:#26322b;text-align:left;cursor:pointer;backdrop-filter:blur(6px);transition:transform .15s,box-shadow .15s}
+.ex-hall-door:hover{transform:translateY(-3px);box-shadow:0 12px 30px #0000004d}
+.ex-hall-door .ex-room-thumb{border-radius:11px}
+.ex-hall-door-copy{display:flex;flex-direction:column;gap:2px;padding:0 4px;min-width:0}
+.ex-hall-door-copy strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ex-hall-door-copy small{font-size:11px;color:#6b746d}
+.ex-hall-door-go{display:inline-flex;align-items:center;gap:5px;align-self:flex-start;margin-left:4px;padding:4px 10px;border-radius:999px;background:#2d7375;color:#fff;font-size:11px;font-weight:800}
+@media(max-width:760px){.ex-hall-lobby-inner{padding:14px}.ex-hall-lobby-doors{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}}
+.ex-hall-thumb.is-classic img:only-child,.ex-hall-cover .ex-hall-thumb.is-classic img:only-child{left:50%;top:50%;right:auto;bottom:auto;width:46%;height:auto;max-height:80%;object-fit:contain;transform:translate(-50%,-50%)}
+.ex-hall-thumb.ex-thumb-cozy{background:#f5e2cc}.ex-hall-thumb.ex-thumb-forest{background:#e0edd5}.ex-hall-thumb.ex-thumb-sky{background:#e3e8f5}.ex-hall-thumb.ex-thumb-ocean{background:#d9eeeb}

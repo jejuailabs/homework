@@ -260,7 +260,7 @@
   "deleteTypeHint": "To delete, type '{phrase}' exactly in the box below.",
   "halls": {
     "title": "Our halls",
-    "hint": "Pick a room theme and the room joins the matching hall.",
+    "hint": "Each room theme is its own hall; rooms with the same theme gather in the same hall.",
     "roomCount": "{count} rooms",
     "preview": "List rooms",
     "previewTitle": "Rooms in {hall}",
@@ -268,12 +268,14 @@
     "emptyHallTitle": "This hall is empty",
     "firstRoom": "Create your first room and its themed hall appears.",
     "rooms": "Rooms in this hall",
-    "themeHint": "Classic themes go to the classic hall, space themes to the space hall, ocean themes to the ocean hall. A new hall appears if needed.",
+    "themeHint": "The theme you pick is the hall. Rooms join the hall of the same theme, or a new hall appears.",
     "studentView": "See children's view",
     "previewNote": "This is what children see. Only open rooms appear.",
     "newestFirst": "newest first",
     "picked": "Viewing",
-    "manageRoom": "Manage artworks"
+    "manageRoom": "Manage artworks",
+    "lobbyHint": "Tap a door to enter a room",
+    "enterRoom": "Enter"
   },
   "entry": {
     "recent": "Newly opened rooms",

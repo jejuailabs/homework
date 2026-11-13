@@ -60,7 +60,7 @@ export type ExhibitionListResponse = {
   /** Listing is intentionally bounded; old exhibitions are kept in storage. */
   limit: number; hasMore: boolean; nextCursor: string | null; storageUsage?: ExhibitionStorageUsage;
   /** Teacher: their 전시관 (theme halls) with room counts. */
-  halls?: {kind: 'classic' | 'space' | 'ocean'; count: number}[];
+  halls?: {kind: ExhibitionTheme; count: number}[];
   /** Student: rooms they have opened, and rooms holding their own artwork. */
   visited?: string[]; mine?: string[];
 };
