@@ -1,14 +1,15 @@
 'use client';
 
-import {useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState, type MouseEvent} from 'react';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyboard, Lightbulb, LoaderCircle, RefreshCw, RotateCcw, Shuffle, Star, Volume2, X} from 'lucide-react';
+import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyboard, LoaderCircle, RefreshCw, RotateCcw, Shuffle, Star, Volume2, X} from 'lucide-react';
 import {usePreferences} from './providers';
 import {CardIllustration, CardIllustrationToggle} from './card-illustration';
 
 import {characterFiles, type Character} from '@/lib/characters';
-import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, cardRevealSpeech, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, settleStudyBatch, spellHint, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
+import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, cardRevealSpeech, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, sentenceWords, settleStudyBatch, SPELL_SPEEDS, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
+import {SPELL_METHODS, useSpellCopy, SpellBoard, SpellFeedbackBar, SpellHint, SpellMethodPicker, type SpellMethod, type SpellToken} from './cards-spell';
 import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardReviewItem, CardSetType, CardStudyMode} from '@/lib/cards-types';
 import ko from '@/messages/cards-study-ko.json';
 import en from '@/messages/cards-study-en.json';
@@ -63,7 +64,13 @@ const textFor = (card: CardEntry, direction: CardDirection) => ({prompt: directi
 function mixed<T>(items: T[]): T[] {const result = [...items]; for (let i = result.length - 1; i > 0; i--) {const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]];} return result;}
 function stableMixed<T>(items: T[], seed: number): T[] {const result = [...items]; for (let i = result.length - 1; i > 0; i--) {seed = (Math.imul(seed + 1, 1664525) + 1013904223) >>> 0; const j = seed % (i + 1); [result[i], result[j]] = [result[j], result[i]];} return result;}
 
-type PracticeSession = {queue: string[]; index: number; direction: CardDirection; outcomes: {cardId: string; correct: boolean}[]; feedback?: {correct: boolean; expected: string; answer?: string}; finished?: boolean};
+/**
+ * Spell sessions add the 클래스카드 rhythm: retry marks that this card's first try is already recorded (지금 재시도 tries again unrecorded),
+ * hinted that 힌트 보기 was used, cleared the cards answered right, tries reshuffles the word chips, method the sentence-set 학습 방법.
+ */
+type PracticeSession = {queue: string[]; index: number; direction: CardDirection; outcomes: {cardId: string; correct: boolean}[]; feedback?: {correct: boolean; expected: string; answer?: string; hinted?: boolean}; finished?: boolean; retry?: boolean; hinted?: boolean; cleared?: string[]; tries?: number; method?: SpellMethod};
+const SPELL_HINT_ANSWER = '(힌트 보기)';
+const spellMethodKey = 'cards-spell-method';
 const newRequestId = () => crypto.randomUUID();
 type PracticeProps = {title: string; cards: CardEntry[]; mode: CardStudyMode; type?: CardSetType; character?: Character; distributionId?: string; studentId?: string; requirement?: CardModeRequirement; progress?: CardProgress; from?: string; to?: string; onProgress?: (progress: CardProgress) => void; onClose?: () => void; speechRate?: number | null};
 
@@ -85,7 +92,12 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
   const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(speechRate || 1);
   const [voiceUsed, setVoiceUsed] = useState(false);
-  const [hintIndex, setHintIndex] = useState<number | null>(null), sound = useCardSound();
+  const sound = useCardSound();
+  // 문장 세트 스펠 always builds the English sentence from its meaning, whatever direction the teacher chose for the other modes.
+  const sentenceSpell = mode === 'spell' && type === 'sentence', spellCopy = useSpellCopy();
+  const [spellMethod, setSpellMethod] = useState<SpellMethod>('scramble'), [hintOpen, setHintOpen] = useState(false), [wrongToken, setWrongToken] = useState<number | null>(null);
+  useEffect(() => {try {const saved = localStorage.getItem(spellMethodKey) as SpellMethod | null; if (saved && SPELL_METHODS.includes(saved)) setSpellMethod(saved);} catch {}}, []);
+  const chooseSpellMethod = (value: SpellMethod) => {setSpellMethod(value); try {localStorage.setItem(spellMethodKey, value);} catch {}};
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
   const sessionRef = useRef<PracticeSession | null>(null), resumeRef = useRef<PracticeSession | null>(null), outboxRef = useRef<StudyOutbox>(emptyStudyOutbox()), flushing = useRef<Promise<void> | null>(null), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), failures = useRef(0), progressCallback = useRef(onProgress);
@@ -137,16 +149,16 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     if (storageKey) {try {
       const value = JSON.parse(sessionStorage.getItem(storageKey) || 'null') as (PracticeSession & {v?: number; pending?: StudyBatch; outbox?: unknown}) | null;
       const legacy = value && !value.v ? value.pending : undefined, restored = restoreStudyOutbox(value?.outbox, mode, legacy);
-      if (value && !value.finished && Array.isArray(value.queue) && value.queue.length && value.queue.every(id => cards.some(card => card.id === id)) && Number.isInteger(value.index) && value.index >= 0 && value.index < value.queue.length && (!fixed || value.direction === requirement?.direction)) {
+      if (value && !value.finished && Array.isArray(value.queue) && value.queue.length && value.queue.every(id => cards.some(card => card.id === id)) && Number.isInteger(value.index) && value.index >= 0 && value.index < value.queue.length && (sentenceSpell ? value.direction === 'back-front' : !fixed || value.direction === requirement?.direction)) {
         const {v: _v, pending: _pending, outbox: _outbox, ...saved} = value, waiting = legacy?.responses?.[0], waitingCard = cards.find(card => card.id === waiting?.cardId);
         // A session saved before batching was waiting for the server's verdict on this card; it can now be graded here.
-        if (waiting && waitingCard && !saved.feedback) {const {correct, expected} = gradeCardAnswer(waitingCard, mode, saved.direction, waiting.answer); saved.feedback = {correct, expected, answer: waiting.answer}; saved.outcomes = [...saved.outcomes, {cardId: waitingCard.id, correct}];}
+        if (waiting && waitingCard && !saved.feedback) {const {correct, expected} = gradeCardAnswer(waitingCard, mode, saved.direction, waiting.answer, type); saved.feedback = {correct, expected, answer: waiting.answer}; saved.outcomes = [...saved.outcomes, {cardId: waitingCard.id, correct}];}
         resumeRef.current = saved; setResume(saved);
       }
       writeOutbox(restored); if (studyOutboxSize(restored)) void drainRef.current();
     } catch {}}
     return () => {ttsPlayer().stop(); if ('speechSynthesis' in window) window.speechSynthesis.cancel();};
-  }, [storageKey, cards, fixed, requirement?.direction, mode, writeOutbox]);
+  }, [storageKey, cards, fixed, requirement?.direction, mode, writeOutbox, sentenceSpell, type]);
   useEffect(() => {
     if (!distributionId) return;
     // Hidden pages and client navigation can end at any moment, so every batch goes out with keepalive. Retries are idempotent.
@@ -165,8 +177,10 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     const others = cardDistractors(card, cards, session.direction);
     return stableMixed([expected, ...stableMixed(others, session.index + 12).slice(0, 3)], session.index + 41);
   }, [card, cards, session?.direction, session?.index]);
-  const tokens = useMemo(() => content ? stableMixed(content.expected.split(/\s+/).filter(Boolean).map((text, id) => ({text, id})), (session?.index || 0) + 18) : [], [content?.expected, session?.index]);
+  // 어순배열 chips are the sentence's words without punctuation, reshuffled on every new try.
+  const tokens: SpellToken[] = useMemo(() => !content ? [] : sentenceSpell ? stableMixed(sentenceWords(content.expected).map((text, id) => ({text, id})), (session?.index || 0) * 31 + (session?.tries || 0) * 7 + 18) : stableMixed(content.expected.split(/\s+/).filter(Boolean).map((text, id) => ({text, id})), (session?.index || 0) + 18), [content?.expected, session?.index, session?.tries, sentenceSpell]);
   const sentenceRecall = mode === 'recall' && type === 'sentence';
+  const spellTotal = session ? new Set(session.queue).size : 0;
   const feedback = session?.feedback;
   const last = progress?.lastPosition?.mode === mode ? cards.findIndex(item => item.id === progress.lastPosition?.cardId) : -1;
 
@@ -178,15 +192,62 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     if (!chosen.length) {setError(c.noCards); return;}
     let queue = Array.from({length: Math.max(1, Math.min(10, repeat))}, () => shuffle ? mixed(chosen) : chosen).flat().map(item => item.id);
     if (resumeServer && last >= 0) {const index = queue.indexOf(cards[last].id); if (index >= 0 && index < queue.length - 1) queue = queue.slice(index + 1);}
-    resumeRef.current = null; setResume(null); setHintIndex(null);
-    updateSession({queue, index: 0, direction, outcomes: []}); setRevealed(false); setAnswer(''); setSelectedTokens([]);
+    resumeRef.current = null; setResume(null); setHintOpen(false); setWrongToken(null);
+    updateSession({queue, index: 0, direction: sentenceSpell ? 'back-front' : direction, outcomes: [], ...(mode === 'spell' ? {cleared: [], tries: 0, method: sentenceSpell ? spellMethod : undefined} : {})}); setRevealed(false); setAnswer(''); setSelectedTokens([]);
+  }
+  /** Queues one answer for the server, which grades it again. */
+  function record(cardId: string, value: string, studyDirection: CardDirection) {
+    if (isPreview) return;
+    const outbox = addStudyResponse(outboxRef.current, {cardId, answer: value, direction: studyDirection}, mode, newRequestId);
+    outboxRef.current = outbox; setUnsaved(studyOutboxSize(outbox));
+    if (outbox.sealed.length) void pump();
+    schedule(STUDY_IDLE_MS);
+  }
+  // 스펠: only the first try at each turn of a card is recorded. A hit after 힌트 보기 still sends the card round again.
+  function spellCheck(current: PracticeSession, value: string) {
+    if (!card) return;
+    const {correct, expected} = gradeCardAnswer(card, mode, current.direction, value, type), counted = correct && !current.hinted;
+    sound.play(counted ? 'good' : 'bad');
+    if (!current.retry) record(card.id, value, current.direction);
+    const cleared = counted && !current.cleared?.includes(card.id) ? [...(current.cleared ?? []), card.id] : current.cleared;
+    updateSession({...current, retry: true, cleared, outcomes: current.retry ? current.outcomes : [...current.outcomes, {cardId: card.id, correct}], feedback: {correct: counted, expected, answer: value, hinted: !!current.hinted && correct}});
+    if (sentenceSpell) speak(expected);
+  }
+  function resetTry() {setAnswer(''); setSelectedTokens([]); setWrongToken(null); setRevealed(false); setError('');}
+  /** 지금 재시도: the same card again, unrecorded, with the chips reshuffled. */
+  function retryNow() {const current = sessionRef.current; if (!current?.feedback) return; updateSession({...current, feedback: undefined, hinted: false, tries: (current.tries ?? 0) + 1}); resetTry();}
+  /** 나중에 다시 / 한번 더: the card goes to the back of the queue and the next one comes up. */
+  function requeue() {
+    const current = sessionRef.current; if (!current?.feedback || !card) return;
+    updateSession({...current, queue: [...current.queue, card.id], index: current.index + 1, feedback: undefined, retry: false, hinted: false, tries: 0}); resetTry();
+  }
+  /** 힌트 보기 shows the whole answer. Seen before a first try, it counts as that try's miss. */
+  function openHint() {
+    const current = sessionRef.current; if (!current || current.feedback || !card) return;
+    setHintOpen(true);
+    if (current.hinted) return;
+    if (!current.retry) record(card.id, SPELL_HINT_ANSWER, current.direction);
+    updateSession({...current, hinted: true, retry: true, outcomes: current.retry ? current.outcomes : [...current.outcomes, {cardId: card.id, correct: false}]});
+  }
+  /** 어순배열: a right word stays on the line; a wrong one ends this try at once. */
+  function pick(token: SpellToken) {
+    const current = sessionRef.current; if (!current || current.feedback || !card || !content) return;
+    const words = sentenceWords(content.expected), want = words[selectedTokens.length];
+    if (want !== undefined && token.text.toLocaleLowerCase('en-US') === want.toLocaleLowerCase('en-US')) {
+      const picked = [...selectedTokens, token.id]; setSelectedTokens(picked);
+      if (picked.length === words.length) spellCheck(current, content.expected);
+      return;
+    }
+    setWrongToken(token.id);
+    spellCheck(current, [...selectedTokens.map(id => tokens.find(item => item.id === id)?.text), token.text].join(' '));
   }
   function closeSession() {resumeRef.current = null; setResume(null); updateSession(null);}
   function check(value = answer) {
     const current = sessionRef.current;
     if (!current || !card || current.feedback) return;
     if (mode !== 'memorize' && !value.trim()) return;
-    const {correct, expected} = gradeCardAnswer(card, mode, current.direction, value);
+    if (mode === 'spell') {spellCheck(current, value); return;}
+    const {correct, expected} = gradeCardAnswer(card, mode, current.direction, value, type);
     if (mode !== 'memorize') sound.play(correct ? 'good' : 'bad');
     if (isPreview) {updateSession({...current, feedback: {correct, expected}, outcomes: [...current.outcomes, {cardId: card.id, correct}]}); return;}
     const outbox = addStudyResponse(outboxRef.current, {cardId: card.id, answer: value, direction: current.direction}, mode, newRequestId);
@@ -199,10 +260,10 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     const current = sessionRef.current;
     if (!current?.feedback) return;
     const finished = current.index >= current.queue.length - 1;
-    updateSession({...current, index: finished ? current.index : current.index + 1, finished, feedback: undefined});
+    updateSession({...current, index: finished ? current.index : current.index + 1, finished, feedback: undefined, ...(mode === 'spell' ? {retry: false, hinted: false, tries: 0} : {})});
     if (finished) sound.play('end');
     if (finished && !isPreview) void drain();
-    setAnswer(''); setRevealed(false); setSelectedTokens([]); setError('');
+    resetTry();
   }
   function again() {if (!session || !card) return; updateSession({...session, queue: [...session.queue.slice(0, session.index), ...session.queue.slice(session.index + 1), card.id]}); setRevealed(false);}
   function leave(event: MouseEvent, href: string) {
@@ -229,6 +290,8 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   }
   // 카드 자동 읽기 (소리 설정, 기본 꺼짐): each new card's prompt once. The speaker button works either way.
   useEffect(() => {if (sound.autoSpeech && content && !session?.finished) speak(content.prompt);}, [session?.index, session?.direction, session?.finished, sound.autoSpeech, canSpeak]);
+  // 딕테이션 plays the sentence as each card comes up, and again on every retry.
+  useEffect(() => {if (sentenceSpell && session?.method?.startsWith('dictation') && content && !session.finished && !session.feedback) speak(content.expected);}, [session?.index, session?.tries, session?.finished, session?.method, canSpeak]); // eslint-disable-line react-hooks/exhaustive-deps
   // 자동 읽기를 켠 학생에게는 뒤집을 때 영어 예문도 한 번 읽어 준다.
   useEffect(() => {if (sound.autoSpeech && revealed && mode === 'memorize' && revealSpeech) speak(revealSpeech);}, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
   // Once sound is in use, fetch this card's answer and the next card's prompt ahead, so they play at once.
@@ -240,6 +303,13 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   }, [session?.index, session?.direction, session?.finished, sound.autoSpeech, voiceUsed, revealed, feedback]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     function key(event: KeyboardEvent) {
+      if (mode === 'spell' && session && !session.finished) {
+        if (hintOpen) {event.preventDefault(); if (!event.repeat) setHintOpen(false); return;}
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'h') {event.preventDefault(); if (!feedback && !event.repeat) openHint(); return;}
+        // Enter and Space answer the bar's two buttons, wherever the focus is.
+        if (feedback && (event.key === 'Enter' || event.code === 'Space') && !event.ctrlKey && !event.metaKey && !event.altKey) {event.preventDefault(); if (event.repeat) return; if (event.key === 'Enter') {if (feedback.correct) requeue(); else retryNow();} else if (feedback.correct) next(); else requeue(); return;}
+        if (event.key === 'Enter' || event.code === 'Space') return;
+      }
       if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || !session || session.finished) return;
       const target = event.target as HTMLElement;
       if (target.closest('button,a,select,textarea,input[type="checkbox"],input[type="radio"]')) return;
@@ -255,24 +325,28 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const saveNotice = dueClosed ? <div className="cs-alert" role="alert"><p>{c.dueLockedSave}</p></div> : rulesChanged ? <div className="cs-alert" role="alert"><p>{c.rulesChangedSave}</p></div> : saveFailed && <div className="cs-alert" role="alert"><p>{c.saveError} {c.saveKeepGoing}</p><button className="button" disabled={saving} onClick={() => void drain()}><RefreshCw size={16}/>{c.retrySave}</button></div>;
   if (!session) return <section className="cs-study"><div className="cs-study-top">{exit}<span className="cs-tag">{c[mode]}</span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<header className="cs-heading"><div><h1>{title}</h1><p>{c.settings}</p></div><CardBuddy character={character}/></header>
     <div className="cs-options"><h2>{c[mode]}</h2>{resume && <div className="cs-resume"><p>{c.savedResume} <strong>{resume.index + 1} / {resume.queue.length}</strong></p><button className="button primary" onClick={() => {resumeRef.current = null; setResume(null); updateSession(resume); setDirection(resume.direction); setAnswer(resume.feedback?.answer || ''); setRevealed(!!resume.feedback);}}><ArrowRight size={16}/>{c.continue}</button></div>}
-      <div className="cs-option-grid"><label>{c.direction}<select value={direction} disabled={fixed} onChange={event => setDirection(event.target.value as CardDirection)}><option value="front-back">{c.frontBack}</option><option value="back-front">{c.backFront}</option></select></label><label>{c.repeat}<select value={repeat} onChange={event => setRepeat(Number(event.target.value))}>{[1, 2, 3, 5, 10].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>{c.rangeStart}<input type="number" min={min} max={max} value={rangeStart} onChange={event => setRangeStart(Number(event.target.value))}/></label><label>{c.rangeEnd}<input type="number" min={min} max={max} value={rangeEnd} onChange={event => setRangeEnd(Number(event.target.value))}/></label></div>
+      {sentenceSpell && <SpellMethodPicker method={spellMethod} onChange={chooseSpellMethod} speed={speed} onSpeed={setSpeed}/>}
+      <div className="cs-option-grid">{!sentenceSpell && <label>{c.direction}<select value={direction} disabled={fixed} onChange={event => setDirection(event.target.value as CardDirection)}><option value="front-back">{c.frontBack}</option><option value="back-front">{c.backFront}</option></select></label>}<label>{c.repeat}<select value={repeat} onChange={event => setRepeat(Number(event.target.value))}>{[1, 2, 3, 5, 10].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>{c.rangeStart}<input type="number" min={min} max={max} value={rangeStart} onChange={event => setRangeStart(Number(event.target.value))}/></label><label>{c.rangeEnd}<input type="number" min={min} max={max} value={rangeEnd} onChange={event => setRangeEnd(Number(event.target.value))}/></label></div>
       {fixed && <p className="cs-muted">{c.fixed} ({min}–{max})</p>}<div className="cs-checks"><label><input type="checkbox" checked={shuffle} onChange={event => setShuffle(event.target.checked)}/><Shuffle size={16}/>{c.shuffle}</label><label><input type="checkbox" checked={starredOnly} onChange={event => setStarredOnly(event.target.checked)}/><Star size={16}/>{c.starredOnly} ({stars.length})</label>{type === 'word' && <CardIllustrationToggle/>}</div>
       {error && <p className="cs-alert" role="alert">{error}</p>}{saveNotice}<div className="cs-actions"><button className="button primary" onClick={() => start()}>{resume ? c.restart : c.start}<ArrowRight size={17}/></button>{!resume && last >= 0 && last < cards.length - 1 && <button className="button" onClick={() => start(true)}>{c.continue}</button>}</div>{!resume && last >= 0 && <p className="cs-muted">{c.lastPosition}</p>}
     </div></section>;
   if (session.finished) {const correctCount = session.outcomes.filter(item => item.correct).length, wrongCount = session.outcomes.length - correctCount; const nextMode = mode === 'memorize' ? 'recall' : mode === 'recall' ? 'spell' : 'test', nextHref = `/student/cards/${distributionId}/${nextMode}${from && nextMode !== 'test' ? `?from=${encodeURIComponent(from)}${to ? `&to=${encodeURIComponent(to)}` : ''}` : ''}`; return <section className="cs-study"><div className="cs-study-top">{exit}</div><div className="cs-finish"><CardBuddy character={character} happy/><CheckCircle2 size={34}/><h1>{c.doneTitle}</h1>{isPreview ? <p className="cs-preview-note">{c.preview}</p> : answersLost || saveFailed ? saveNotice : <p className="cs-save-status" role="status">{unsaved ? <><LoaderCircle className="spin" size={16}/>{c.saving}</> : <><Check size={16}/>{c.saved}</>}</p>}<dl className="cs-result-grid"><div><dt>{c.answered}</dt><dd>{session.outcomes.length}</dd></div><div><dt>{c.correctCount}</dt><dd>{correctCount}</dd></div><div><dt>{c.wrongCount}</dt><dd>{wrongCount}</dd></div></dl><div className="cs-actions"><button className="button" onClick={closeSession}><RotateCcw size={16}/>{c.restart}</button>{wrongCount > 0 && <button className="button" onClick={() => start(false, true)}>{c.retryWrong}</button>}{!isPreview && <Link className="button primary" href={nextHref} onClick={event => leave(event, nextHref)}>{c[nextMode]}<ArrowRight size={17}/></Link>}</div></div></section>;}
   if (!card || !content) return <CardError retry={() => setSession(null)}/>;
-  return <section className="cs-study"><div className="cs-study-top">{exit}<span>{c[mode]} <strong>{session.index + 1} / {session.queue.length}</strong></span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<progress className="cs-progress" value={session.index} max={session.queue.length} aria-label={c.progress}/><header className="cs-session-title"><h1>{title}</h1><CardBuddy character={character} happy={feedback?.correct}/></header>
+  return <section className="cs-study"><div className="cs-study-top">{exit}<span>{c[mode]} <strong>{mode === 'spell' ? `${session.cleared?.length ?? 0} / ${spellTotal}` : `${session.index + 1} / ${session.queue.length}`}</strong></span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<progress className="cs-progress" value={mode === 'spell' ? session.cleared?.length ?? 0 : session.index} max={mode === 'spell' ? spellTotal : session.queue.length} aria-label={c.progress}/><header className="cs-session-title"><h1>{title}</h1><CardBuddy character={character} happy={feedback?.correct}/></header>
     <div className="cs-flashcard"><div className="cs-card-toolbar"><span className="cs-tag">{c[mode]}</span><div>{type === 'word' && <CardIllustrationToggle/>}<button className="icon-button" aria-label={stars.includes(card.id) ? c.unstar : c.star} aria-pressed={stars.includes(card.id)} onClick={() => void toggleStar()} disabled={starBusy}><Star size={21} fill={stars.includes(card.id) ? 'currentColor' : 'none'}/></button>{canSpeak && <button className="icon-button" aria-label={c.listen} onClick={() => speak()}><Volume2 size={22}/></button>}</div></div>
-      <div className="ci-study-word"><CardIllustration card={card} type={type} enabled={mode === 'memorize' || !!feedback} showCaption={revealed || !!feedback}/><p className="cs-prompt" lang={/[가-힣]/.test(content.prompt) ? 'ko' : 'en'}>{content.prompt}</p></div>
+      {!sentenceSpell && <div className="ci-study-word"><CardIllustration card={card} type={type} enabled={mode === 'memorize' || !!feedback} showCaption={revealed || !!feedback}/><p className="cs-prompt" lang={/[가-힣]/.test(content.prompt) ? 'ko' : 'en'}>{content.prompt}</p></div>}
       {mode === 'memorize' && <div className={`cs-card-back ${revealed || feedback ? 'is-revealed' : ''}`}>{revealed || feedback ? <><p className="cs-expected">{content.expected}</p>{card.example && <p className="cs-example">{card.example}</p>}</> : <button className="cs-reveal" onClick={() => setRevealed(true)}><BookOpen size={23}/>{c.reveal}<small>Space</small></button>}</div>}
       {mode === 'recall' && !sentenceRecall && <><p className="cs-instruction">{c.choose}</p><div className="cs-choices">{choices.map((choice, index) => <button key={choice} className={`cs-choice ${feedback && normalize(choice) === normalize(feedback.expected) ? 'is-correct' : ''}`} disabled={!!feedback} onClick={() => {setAnswer(choice); check(choice);}}><kbd>{index + 1}</kbd><span>{choice}</span></button>)}</div></>}
       {sentenceRecall && <><p className="cs-instruction">{c.arrange}</p><div className="cs-token-answer" aria-label={c.sentenceAnswer}>{selectedTokens.map((id, index) => <button key={id} className="cs-token" disabled={!!feedback} onClick={() => setSelectedTokens(value => value.filter(item => item !== id))}>{tokens.find(item => item.id === id)?.text}<span className="cs-sr-only"> {index + 1}</span></button>)}</div><div className="cs-tokens">{tokens.map((token, index) => <button className="cs-token" key={token.id} disabled={selectedTokens.includes(token.id) || !!feedback} onClick={() => setSelectedTokens(value => [...value, token.id])}>{token.text}<small>{index < 9 ? index + 1 : ''}</small></button>)}</div>{!feedback && <button className="cs-text-button" onClick={() => setSelectedTokens([])}>{c.clear}</button>}</>}
-      {mode === 'spell' && <form onSubmit={(event: FormEvent) => {event.preventDefault(); check();}}><label htmlFor="card-study-answer">{c.answer}</label><input id="card-study-answer" ref={inputRef} className="cs-answer" value={answer} maxLength={STUDY_ANSWER_LIMIT} onChange={event => setAnswer(event.target.value)} disabled={!!feedback} placeholder={c.placeholder} autoComplete="off" autoCapitalize="none" spellCheck={false}/>{!feedback && <div className="cs-hint"><button type="button" className="cs-text-button" onClick={() => {setHintIndex(session.index); inputRef.current?.focus();}}><Lightbulb size={15}/>{c.hintButton}</button>{hintIndex === session.index && (() => {const hint = spellHint(content.expected); return <p role="status"><b>{hint.first}</b> {(hint.words > 1 ? c.hintLengthWords : c.hintLength).replace('{length}', String(hint.length)).replace('{words}', String(hint.words))}</p>;})()}<small>{c.spellNote}</small></div>}</form>}
-      {feedback && <div className={`cs-feedback ${feedback.correct ? 'is-correct' : 'is-incorrect'}`} role="status"><strong>{feedback.correct ? <CheckCircle2 size={20}/> : <RotateCcw size={20}/>} {feedback.correct ? c.correct : c.incorrect}</strong>{mode !== 'memorize' && <p>{c.correctAnswer}: <b>{feedback.expected}</b></p>}</div>}
+      {mode === 'spell' && <SpellBoard sentence={sentenceSpell} method={session.method ?? 'write'} meaning={content.prompt} expected={content.expected} feedback={feedback} answer={answer} onAnswer={setAnswer} onSubmit={() => check()} tokens={tokens} picked={selectedTokens} wrongToken={wrongToken} onPick={pick} canSpeak={canSpeak} onListen={() => speak(content.expected)} onHint={openHint} focusKey={`${session.index}:${session.tries ?? 0}`}/>}
+      {feedback && mode !== 'spell' && <div className={`cs-feedback ${feedback.correct ? 'is-correct' : 'is-incorrect'}`} role="status"><strong>{feedback.correct ? <CheckCircle2 size={20}/> : <RotateCcw size={20}/>} {feedback.correct ? c.correct : c.incorrect}</strong>{mode !== 'memorize' && <p>{c.correctAnswer}: <b>{feedback.expected}</b></p>}</div>}
     </div>
+    {hintOpen && <SpellHint text={content.expected} sentence={sentenceSpell} onClose={() => setHintOpen(false)}/>}
     {(error || starError) && <div className="cs-alert" role="alert"><p>{error || c.saveError}</p></div>}{saveNotice}
-    <div className="cs-study-controls">{feedback ? <><span className="cs-muted">{!answersLost && <><Check size={16}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</>}</span><button className="button primary" autoFocus onKeyDown={event => {if (event.repeat) event.preventDefault();}} onClick={next}>{c.next}<ChevronRight size={18}/></button></> : mode === 'memorize' ? revealed ? <><button className="button" onClick={again}><RotateCcw size={17}/>{c.again}</button><button className="button primary" onClick={() => check('')}><Check size={17}/>{c.remember}</button></> : <button className="button primary" onClick={() => setRevealed(true)}>{c.reveal}</button> : (mode === 'spell' || sentenceRecall) ? <button className="button primary" disabled={sentenceRecall ? selectedTokens.length !== tokens.length : !answer.trim()} onClick={() => check(sentenceRecall ? selectedTokens.map(id => tokens.find(item => item.id === id)?.text).join(' ') : answer)}>{c.check}<Check size={17}/></button> : null}</div>
-    <div className="cs-study-foot"><p><Keyboard size={16}/>{c.keyboard}</p><CardSoundSettings/>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}>{[...new Set([0.5, 0.7, 1, 1.2, 1.5, speed])].sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
+    {mode === 'spell' ? feedback ? <SpellFeedbackBar feedback={feedback} method={session.method ?? 'write'} sentence={sentenceSpell} saveNote={!answersLost && <span className="cs-muted"><Check size={14}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</span>} onEnter={feedback.correct ? requeue : retryNow} onSpace={feedback.correct ? next : requeue}/>
+      : session.method !== 'scramble' || !sentenceSpell ? <div className="cs-study-controls"><button className="button primary" disabled={!answer.trim()} onClick={() => check()}>{spellCopy.check}<Check size={17}/></button></div> : null
+    : <div className="cs-study-controls">{feedback ? <><span className="cs-muted">{!answersLost && <><Check size={16}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</>}</span><button className="button primary" autoFocus onKeyDown={event => {if (event.repeat) event.preventDefault();}} onClick={next}>{c.next}<ChevronRight size={18}/></button></> : mode === 'memorize' ? revealed ? <><button className="button" onClick={again}><RotateCcw size={17}/>{c.again}</button><button className="button primary" onClick={() => check('')}><Check size={17}/>{c.remember}</button></> : <button className="button primary" onClick={() => setRevealed(true)}>{c.reveal}</button> : sentenceRecall ? <button className="button primary" disabled={selectedTokens.length !== tokens.length} onClick={() => check(selectedTokens.map(id => tokens.find(item => item.id === id)?.text).join(' '))}>{c.check}<Check size={17}/></button> : null}</div>}
+    <div className="cs-study-foot"><p><Keyboard size={16}/>{mode === 'spell' ? 'Enter: 확인 · Ctrl+H: 힌트' : c.keyboard}</p><CardSoundSettings/>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}>{[...new Set([...SPELL_SPEEDS, speed])].sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
   </section>;
 }
 
