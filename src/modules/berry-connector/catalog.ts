@@ -30,6 +30,7 @@ export const DOMAINS: CatalogDomain[] = [
   {key: 'exhibitions', menu: '작품전시', what: '3D 전시실, 작품 승인, QR 공개, 보관함', guide: [
     '전시실 상태(준비·열림·마감), 작품 수·승인 대기, QR 공개 여부, 주제 해시태그·연 날짜·직접 올림/숙제 연동을 읽는다. 지난 전시는 보관함에서 태그·기간으로 찾는다(search_exhibitions).',
     '도슨트 녹음, 작품과 함께 올리는 소리 파일(mp3·m4a·wav·ogg), 작품 이미지·음성 감상은 화면에서 한다.',
+    '전시실은 테마로 전시관에 묶인다(기본 테마→기본관, 지구·달·토성→우주관). 전시관 삭제는 "삭제를원함" 입력이 필요해 화면에서만 한다.',
   ], metrics: ['pending_artworks', 'artworks', 'qr_open'], tools: ['manage_exhibition', 'list_exhibitions', 'search_exhibitions', 'get_moderation_queue', 'approve_artworks', 'create_exhibition'], sensitivity: '가명. 작품 이미지·음성은 화면에서만', cost: 'light', words: ['전시', '작품', '도슨트']},
   {key: 'boards', menu: '참여보드', what: '글·사진·영상 카드 보드, 승인, 댓글·반응', guide: ['보드 상태·게시물·참여자 수, 승인 대기 게시물, 숙제 연동 여부를 읽는다.'], metrics: ['pending_posts', 'posts', 'participants'], tools: ['manage_board', 'list_boards', 'get_moderation_queue', 'approve_posts', 'create_board'], sensitivity: '가명. 위치 정보·첨부 원본 제외', cost: 'light', words: ['보드', '게시물', '게시글']},
   {key: 'quiz', menu: 'Quiz', what: '매일 영어·수학·복습 퀴즈와 주간 기록', guide: ['오늘·내일 범위 설정 여부, 학생별 오늘 완료, 이번 주 맞힌 문제 수를 읽는다. 범위·학년은 manage_quiz.'], metrics: ['quiz_today_set', 'quiz_tomorrow_set', 'completed_all_today'], tools: ['manage_quiz', 'get_quiz_status'], sensitivity: '가명, 모두의 교실 기록 그대로', cost: 'medium', words: ['퀴즈']},

@@ -1,5 +1,5 @@
 'use client';
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {useTranslations} from 'next-intl';
 import {ArrowRight, LoaderCircle, Trash2} from 'lucide-react';
 import {DELETE_PHRASE} from '@/lib/delete-phrase';
@@ -39,18 +39,27 @@ export default function ExhibitionDelete({exhibitionId, title, artworkCount, onD
 }
 
 /**
- * Building (class) delete in two steps: when rooms are still inside, the teacher first confirms they go too,
- * then types the phrase for the final delete. The server refuses without both.
+ * 전시관 delete in two steps: when rooms are still inside, the teacher first sees them and confirms they go too,
+ * then types the phrase for the final delete. The server refuses without both. Classes are never touched.
  */
-export function BuildingDelete({classId, name, rooms, more, onDeleted, onCancel}: {classId: string; name: string; rooms: {id: string; title: string}[]; more: boolean; onDeleted: () => Promise<void> | void; onCancel: () => void}) {
+export function HallDelete({kind, name, onDeleted, onCancel}: {kind: string; name: string; onDeleted: () => Promise<void> | void; onCancel: () => void}) {
   const t = useTranslations('exhibition');
-  const hasRooms = rooms.length > 0 || more;
-  const [step, setStep] = useState<'rooms' | 'type'>(hasRooms ? 'rooms' : 'type');
-  if (step === 'rooms') return <section className="ex-delete-zone is-open" aria-label={t('deleteBuilding')}>
-    <div className="ex-delete-head"><div><h3><Trash2 size={15}/>{t('deleteBuildingRoomsTitle', {count: rooms.length, more: more ? 'more' : 'exact'})}</h3></div></div>
-    <p className="ex-delete-warning">{t('deleteBuildingRoomsWarning', {name})}</p>
-    <ul className="ex-delete-rooms">{rooms.slice(0, 12).map(room => <li key={room.id}>{room.title}</li>)}{(rooms.length > 12 || more) && <li className="ex-delete-rooms-more">{t('deleteBuildingRoomsMore')}</li>}</ul>
-    <div className="ex-delete-actions"><button type="button" className="ex-button" onClick={onCancel}>{t('cancel')}</button><button type="button" className="ex-button ex-danger" onClick={() => setStep('type')}>{t('deleteBuildingRoomsConfirm')}<ArrowRight size={16}/></button></div>
+  const [rooms, setRooms] = useState<{id: string; title: string}[] | null>(null), [error, setError] = useState('');
+  const [step, setStep] = useState<'rooms' | 'type'>('rooms');
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/exhibitions/halls/${kind}`, {cache: 'no-store'}).then(async response => {const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.error || t('deleteHallFailed')); if (alive) {setRooms(data.rooms || []); if (!data.rooms?.length) setStep('type');}}).catch(reason => {if (alive) setError((reason as Error).message);});
+    return () => {alive = false;};
+    // The translator can change identity on preference hydration; it must not restart the read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
+  if (error) return <p className="ex-form-error" role="alert">{error}</p>;
+  if (!rooms) return <p role="status" className="ex-hall-loading"><LoaderCircle className="spin" size={18}/>{t('loadingRooms')}</p>;
+  if (step === 'rooms') return <section className="ex-delete-zone is-open" aria-label={t('deleteHall')}>
+    <div className="ex-delete-head"><div><h3><Trash2 size={15}/>{t('deleteHallRoomsTitle', {count: rooms.length})}</h3></div></div>
+    <p className="ex-delete-warning">{t('deleteHallRoomsWarning', {name})}</p>
+    <ul className="ex-delete-rooms">{rooms.map(room => <li key={room.id}>{room.title}</li>)}</ul>
+    <div className="ex-delete-actions"><button type="button" className="ex-button" onClick={onCancel}>{t('cancel')}</button><button type="button" className="ex-button ex-danger" onClick={() => setStep('type')}>{t('deleteHallRoomsConfirm')}<ArrowRight size={16}/></button></div>
   </section>;
-  return <DeleteZone startOpen heading={t('deleteBuilding')} summary="" warning={t('deleteBuildingWarning', {name})} endpoint={`/api/exhibitions/buildings/${classId}`} payload={{includeRooms: hasRooms}} failed={t('deleteBuildingFailed')} onCancel={onCancel} onDeleted={onDeleted}/>;
+  return <DeleteZone startOpen heading={t('deleteHall')} summary="" warning={t('deleteHallWarning', {name})} endpoint={`/api/exhibitions/halls/${kind}`} payload={{includeRooms: rooms.length > 0}} failed={t('deleteHallFailed')} onCancel={onCancel} onDeleted={onDeleted}/>;
 }

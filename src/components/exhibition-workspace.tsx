@@ -12,7 +12,9 @@ import {Globe2, Moon, Orbit, Archive, ArrowLeft, ArrowRight, CalendarDays, Camer
 import ExhibitionUploadDialog from './exhibition-upload-dialog';
 import ExhibitionDateBulk from './exhibition-date-bulk';
 import ExhibitionArtistLink from './exhibition-artist-link';
-import ExhibitionDelete, {BuildingDelete} from './exhibition-delete';
+import ExhibitionDelete, {HallDelete} from './exhibition-delete';
+import {ExhibitionEntry, HallPreview, TeacherHallList} from './exhibition-halls';
+import {hallName, hallOf, latestHall, summarizeHalls, type HallKind} from '@/lib/exhibition-halls';
 import ExhibitionShare from './exhibition-share';
 import ExhibitionArchive, {TagField, archiveFilterFromUrl} from './exhibition-archive';
 import {autoTags, type ArchiveFilter} from '@/lib/exhibition-tags';
@@ -33,6 +35,8 @@ const SpaceExhibitionWorld = dynamic(() => import("./space-exhibition-world"), {
 import {isSpaceTheme, SPACE_THEMES, SPACE_THEME_TEXT, spaceThemePreview} from "@/lib/space-exhibition/themes";
 const imageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const reactionIcons = {colors: Palette, idea: Sparkles, story: Heart};
+/** Phase 2 switch: children get the new entry (recent rooms + 전시관) instead of the 3D village. */
+const KIDS_ENTRY = false;
 const roomThemeIcons = {cozy: Palette, forest: Leaf, sky: Cloud, ocean: Waves, earth: Globe2, moon: Moon, saturn: Orbit};
 function RoomThemeIcon({theme, size = 16}: {theme?: Exhibition["theme"]; size?: number}) {const Icon = roomThemeIcons[theme || "cozy"] || Palette; return <Icon size={size}/>;}
 type Role = "teacher" | "student";
@@ -104,20 +108,22 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   const [detail, setDetail] = useState<ExhibitionDetailResponse | null>(null);
   const [loading, setLoading] = useState(true), [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState(""), [notice, setNotice] = useState("");
-  const [modal, setModal] = useState<"create" | "upload" | "settings" | "building" | "share" | "review" | "artbook" | "dates" | "archive" | "deleteBuilding" | "deleteRoom" | null>(null);
+  const [modal, setModal] = useState<"create" | "upload" | "settings" | "building" | "share" | "review" | "artbook" | "dates" | "archive" | "deleteHall" | "hallPreview" | "deleteRoom" | null>(null);
   const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter | null>(null), archiveLinkRead = useRef(false);
   const [artworkId, setArtworkId] = useState<string | null>(null);
   const [reviewTarget, setReviewTarget] = useState<{id: string; kind: ArtworkReviewKind} | null>(null);
   const [filter, setFilter] = useState<ArtworkStatus | "all">("all");
-  const [manage, setManage] = useState(false);
+  const [manage, setManage] = useState(teacher);
+  const [hall, setHall] = useState<HallKind | null>(null), [previewHall, setPreviewHall] = useState<HallKind | null>(null);
   const [lobbyMenu, setLobbyMenu] = useState(false);
+  const village = !teacher && !KIDS_ENTRY && !manage;
   const visitRoot = useRef<HTMLDivElement>(null);
-  useExhibitionViewport(visitRoot, !loading && authorized && !manage);
+  useExhibitionViewport(visitRoot, !loading && authorized && village);
   useEffect(() => {
-    if (loading || !authorized || manage) return;
+    if (loading || !authorized || !village) return;
     const query = matchMedia('(max-width:760px),(max-height:520px) and (pointer:coarse)');
     return lockBodyScrollWhen(query);
-  }, [loading, authorized, manage]);
+  }, [loading, authorized, village]);
   const [place, setPlace] = useState<"campus" | "classroom">("campus");
   useEffect(() => {setLobbyMenu(false);}, [manage, place]);
   const [buildingId, setBuildingId] = useState("");
@@ -155,37 +161,37 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     return true;
   }, [router, clearViewer]);
   const loadRooms = useCallback(async (classId: string, append = false) => {
-    if (teacher && !classId || append && (!nextCursor.current || pageBusy.current)) return;
+    if (append && (!nextCursor.current || pageBusy.current)) return;
     const cursor = append ? nextCursor.current : null;
     const sequence = ++listRequest.current;
     pageBusy.current = true;
     if (append) setMoreLoading(true);
     else {setRoomsLoading(true); setMoreLoading(false); setHasMoreRooms(false); nextCursor.current = null;}
     const query = new URLSearchParams();
-    if (teacher) query.set("classId", classId);
     if (cursor) query.set("cursor", cursor);
     try {
       const data = await request<ExhibitionListResponse>(`/api/exhibitions${query.size ? `?${query}` : ""}`);
-      if (!viewerActive.current || window.location.pathname !== path || sequence !== listRequest.current || teacher && classId !== activeBuilding.current) return;
+      if (!viewerActive.current || window.location.pathname !== path || sequence !== listRequest.current) return;
       if (data.viewerRole !== role) throw new ExhibitionRequestError("FORBIDDEN", 403);
       publishViewer(data);
       setRooms(previous => append ? [...new Map([...previous, ...data.exhibitions].map(show => [show.id, show])).values()] : data.exhibitions);
       setHasMoreRooms(data.hasMore && !!data.nextCursor); nextCursor.current = data.nextCursor || null;
-      setHome(previous => previous ? {...previous, classes: data.classes || previous.classes, profile: data.profile || previous.profile, storageUsage: data.storageUsage || previous.storageUsage} : data);
+      setHome(previous => previous ? {...previous, halls: data.halls || previous.halls, visited: data.visited || previous.visited, mine: data.mine || previous.mine, classes: data.classes || previous.classes, profile: data.profile || previous.profile, storageUsage: data.storageUsage || previous.storageUsage} : data);
       setError("");
-    } catch (cause) {if (sequence === listRequest.current && (!teacher || classId === activeBuilding.current) && !handleAccessError(cause)) setError(loadErrorText.current);}
+    } catch (cause) {if (sequence === listRequest.current && !handleAccessError(cause)) setError(loadErrorText.current);}
     finally {if (sequence === listRequest.current) {setRoomsLoading(false); setMoreLoading(false); pageBusy.current = false;}}
   }, [teacher, role, path, publishViewer, handleAccessError]);
   const loadHome = useCallback(async () => {
     const sequence = ++homeRequest.current;
     const roomSequence = ++listRequest.current;
     pageBusy.current = true; setRoomsLoading(true); setMoreLoading(false);
-    const query = new URLSearchParams({bootstrap: "1"});
+    // Teachers read all their rooms (every hall); students read their own class.
+    const query = new URLSearchParams(teacher ? {} : {bootstrap: "1"});
     if (initialClassLink.current === null) {
       const linkedClass = teacher ? new URL(window.location.href).searchParams.get("classId") || "" : "";
       initialClassLink.current = /^[A-Za-z0-9_-]{1,200}$/.test(linkedClass) ? linkedClass : "";
     }
-    const requestedClass = teacher ? activeBuilding.current || initialClassLink.current : "";
+    const requestedClass = "";
     if (requestedClass) query.set("classId", requestedClass);
     try {
       let data: ExhibitionListResponse;
@@ -224,13 +230,13 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     if (showLoading) setDetailLoading(true);
     try {
       const data = await request<ExhibitionDetailResponse>(`/api/exhibitions/${id}`);
-      if (viewerActive.current && window.location.pathname === path && activeId.current === id) {setDetail(data); activeBuilding.current = data.exhibition.classId; setBuildingId(data.exhibition.classId); setPlace("classroom"); setError("");}
+      if (viewerActive.current && window.location.pathname === path && activeId.current === id) {setDetail(data); if (!teacher) {activeBuilding.current = data.exhibition.classId; setBuildingId(data.exhibition.classId);} setPlace("classroom"); setError("");}
     } catch (cause) {if (activeId.current === id && !handleAccessError(cause)) setError(loadErrorText.current);}
     finally {if (activeId.current === id) setDetailLoading(false);}
-  }, [path, handleAccessError]);
+  }, [path, handleAccessError, teacher]);
   useEffect(() => {void loadHome();}, [loadHome]);
   useEffect(() => {
-    const sync = (refreshRooms: boolean) => {const id = new URL(window.location.href).searchParams.get("exhibition") || ""; activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); setReviewTarget(null); if (refreshRooms && !id && (activeBuilding.current || !teacher)) void loadRooms(activeBuilding.current);};
+    const sync = (refreshRooms: boolean) => {const id = new URL(window.location.href).searchParams.get("exhibition") || ""; activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); setReviewTarget(null); if (refreshRooms && !id) void loadRooms(activeBuilding.current);};
     const onPopState = () => sync(true);
     sync(false); window.addEventListener("popstate", onPopState); return () => window.removeEventListener("popstate", onPopState);
   }, [loadRooms, teacher]);
@@ -272,7 +278,7 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     activeId.current = id; setSelectedId(id); setDetail(null); setArtworkId(null); setReviewTarget(null); setError(""); setNotice(""); setFilter("all"); setPlace("classroom");
     const url = new URL(window.location.href); if (id) url.searchParams.set("exhibition", id); else url.searchParams.delete("exhibition"); window.history.pushState({}, "", url);
     window.scrollTo({top: 0, behavior: "smooth"});
-    if (!id) void loadRooms(activeBuilding.current);
+    if (!id) {if (!teacher && KIDS_ENTRY) setManage(false); void loadRooms(activeBuilding.current);}
   };
   const refreshShow = useCallback(async () => {await Promise.all([loadDetail(activeId.current), loadRooms(activeBuilding.current)]);}, [loadDetail, loadRooms]);
   const changeStatus = async (status: ExhibitionStatus) => {
@@ -282,7 +288,11 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     catch {setError(t("error"));} finally {setBusy(false);}
   };
   const currentBuilding = home?.classes?.find(item => item.id === buildingId) || home?.classes?.[0];
-  const visibleShows = rooms.filter(show => !teacher || !currentBuilding || show.classId === currentBuilding.id);
+  // 전시관 = rooms grouped by theme; the server's counts cover rooms beyond the loaded page.
+  const hallList = teacher ? home?.halls?.length ? home.halls : summarizeHalls(rooms).map(item => ({kind: item.kind, count: item.count})) : [];
+  const newestHall = latestHall(summarizeHalls(rooms));
+  const activeHall = hall && hallList.some(item => item.kind === hall) ? hall : newestHall && hallList.some(item => item.kind === newestHall) ? newestHall : hallList[0]?.kind ?? null;
+  const visibleShows = rooms.filter(show => !teacher || !activeHall || hallOf(show.theme) === activeHall);
   // Rooms keep the spot they first took: oldest first, so a new exhibition takes the next empty poster.
   const worldRooms = classroomOrder(visibleShows).map(show => ({...show, artworkCount: show.approvedCount}));
   const artworks = detail?.artworks || [];
@@ -300,16 +310,16 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
   if (forbidden) return <div className="ex-empty"><LockKeyhole size={38}/><p role="alert">{common("forbidden")}</p><button className="ex-button" onClick={() => router.replace("/")}>{common("back")}</button></div>;
   if (!home) return <div className="ex-empty"><Palette size={38}/><p role="alert">{error}</p><button className="ex-button" onClick={() => void loadHome()}><RefreshCw size={17}/>{t("retry")}</button></div>;
 
-  return <div ref={visitRoot} className={`ex-workspace${!manage ? ' is-visit-mode' : ''}${lobbyMenu ? ' is-lobby-menu-open' : ''}`}>
-    {!manage && <header className="ex-lobby-header">
+  return <div ref={visitRoot} className={`ex-workspace${village ? ' is-visit-mode' : ''}${village && lobbyMenu ? ' is-lobby-menu-open' : ''}`}>
+    {village && <header className="ex-lobby-header">
       <button className="ex-icon-btn" aria-label={place === 'classroom' ? (locale === 'en' ? 'Back to schoolyard' : '학교 앞으로') : (locale === 'en' ? 'Leave exhibition school' : '전시학교 나가기')} onClick={() => {setLobbyMenu(false); if(place === 'classroom') setPlace('campus'); else router.push(`/${role}`);}}><ArrowLeft size={21}/></button>
       <div><small>{locale === 'en' ? 'LITTLE ART SCHOOL' : '우리들의 작은 전시학교'}</small><strong>{place === 'classroom' ? worldBuildingName : (locale === 'en' ? 'Welcome to our school' : '우리 반 이야기를 만나러 가요')}</strong></div>
       <button className="ex-icon-btn" aria-label={locale === 'en' ? 'School menu' : '전시학교 메뉴'} aria-expanded={lobbyMenu} onClick={() => setLobbyMenu(value => !value)}>{lobbyMenu ? <X size={21}/> : <MoreHorizontal size={21}/>}</button>
     </header>}
     {error && <div className="ex-alert" role="alert"><span>{error}</span><button onClick={() => void (selectedId ? loadDetail(selectedId, true) : loadHome())}>{t("retry")}</button></div>}
     {notice && <div className="ex-notice" role="status"><CheckCircle2 size={18}/><span>{notice}</span><button className="ex-icon-btn" onClick={() => setNotice("")} aria-label={t("close")}><X size={16}/></button></div>}
-    <div className="ex-experience-heading"><div><span className="ex-eyebrow"><Flower2 size={15}/>{t("eyebrow")}</span><h1>{t(manage ? "visit.manageTitle" : "title")}</h1></div><div className="ex-experience-actions"><button className="ex-button" aria-pressed={manage} onClick={() => setManage(value => !value)}>{manage ? <DoorOpen size={18}/> : <LayoutGrid size={18}/>} {t(manage ? "visit.returnVisit" : teacher ? "visit.manage" : "visit.list")}</button>{teacher && <button className="ex-button" onClick={() => openArchive()}><Archive size={18}/> {locale === "en" ? "Archive" : "보관함"}</button>}{teacher && <button className="ex-button ex-primary" onClick={() => setModal(selectedId && detail ? "upload" : home.classes?.length ? "create" : "building")}>{selectedId && detail ? <ImagePlus size={18}/> : <Plus size={18}/>} {t(selectedId && detail ? "upload" : home.classes?.length ? "create" : "createBuilding")}</button>}</div></div>
-    {!manage && <>
+    <div className="ex-experience-heading"><div><span className="ex-eyebrow"><Flower2 size={15}/>{t("eyebrow")}</span><h1>{t(manage ? "visit.manageTitle" : "title")}</h1></div><div className="ex-experience-actions">{(teacher || manage || !KIDS_ENTRY) && <button className="ex-button" aria-pressed={!manage} onClick={() => setManage(value => !value)}>{manage ? <DoorOpen size={18}/> : <LayoutGrid size={18}/>} {t(manage ? teacher ? "halls.studentView" : "visit.returnVisit" : teacher ? "visit.manage" : "visit.list")}</button>}{teacher && <button className="ex-button" onClick={() => openArchive()}><Archive size={18}/> {locale === "en" ? "Archive" : "보관함"}</button>}{teacher && <button className="ex-button ex-primary" onClick={() => setModal(selectedId && detail ? "upload" : home.classes?.length ? "create" : "building")}>{selectedId && detail ? <ImagePlus size={18}/> : <Plus size={18}/>} {t(selectedId && detail ? "upload" : home.classes?.length ? "create" : "createBuilding")}</button>}</div></div>
+    {village && <>
       <div className="ex-visit-breadcrumb"><button onClick={() => setPlace("campus")} aria-current={place === "campus" ? "page" : undefined}>{t("visit.campus")}</button>{place === "classroom" && <><ChevronDown size={13}/><span>{worldBuildingName}</span></>}<span className="ex-private"><LockKeyhole size={13}/>{t("private")}</span></div>
       <ExhibitionWorld companion={home.profile?.companion} stage={place} buildings={worldBuildings} buildingName={worldBuildingName} rooms={worldRooms} artworks={[]} locale={locale} paused={!!selectedId || !!modal} onEnterBuilding={enterBuilding} onEnterRoom={selectShow} onSelectArtwork={setArtworkId} onExit={() => setPlace("campus")}/>
       <div className="ex-visit-caption"><img src="/characters/otter-moa.webp" alt=""/><p>{t(place === "campus" ? "visit.campusHint" : "visit.classroomHint")}</p>{teacher && place === "campus" && <button className="ex-button" onClick={() => setModal("building")}><Plus size={16}/>{t("createBuilding")}</button>}<button className="ex-icon-btn" onClick={() => void loadHome()} aria-label={t("refresh")}><RefreshCw size={18}/></button></div>
@@ -317,10 +327,15 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
       {place === "classroom" && !roomsLoading && !visibleShows.length && <div className="ex-visit-empty"><p>{t(teacher ? "emptyTeacher" : "emptyStudent")}</p>{teacher && <button className="ex-button ex-primary" onClick={() => setModal("create")}><Plus size={17}/>{t("create")}</button>}</div>}
       {place === "classroom" && hasMoreRooms && <div className="ex-more-rooms"><button className="ex-button" disabled={roomsLoading || moreLoading} onClick={() => void loadRooms(activeBuilding.current, true)}><ChevronDown size={17}/>{t(moreLoading ? "loadingMore" : "loadMoreRooms")}</button></div>}
     </>}
+    {!manage && !village && <>
+      {teacher && <p className="ex-form-hint ex-preview-note"><Users size={14}/>{t("halls.previewNote")}</p>}
+      {roomsLoading && !rooms.length ? <div className="ex-list-loading" role="status"><LoaderCircle size={22} className="spin"/><p>{t("loadingRooms")}</p></div> : <ExhibitionEntry rooms={rooms} visited={home.visited || []} mine={home.mine || []} locale={locale} onOpen={selectShow}/>}
+      {hasMoreRooms && <div className="ex-more-rooms"><button className="ex-button" disabled={roomsLoading || moreLoading} onClick={() => void loadRooms(activeBuilding.current, true)}><ChevronDown size={17}/>{t(moreLoading ? "loadingMore" : "loadMoreRooms")}</button></div>}
+    </>}
     {manage && (!selectedId ? <>
-      {teacher && !!home.classes?.length && <section className="ex-buildings"><div className="ex-buildings-heading"><h2>{t("ourBuildings")}</h2><button className="ex-text-button" onClick={() => setModal("building")}><Plus size={14}/>{t("createBuilding")}</button></div><div className="ex-building-list">{home.classes.map(item => <button key={item.id} aria-pressed={currentBuilding?.id === item.id} onClick={() => selectBuilding(item.id)}><span className="ex-building-glyph"><Images size={23}/></span><span><small>{t("yearLabel", {year: item.year || new Date().getFullYear()})}{/^[0-9]+$/.test(item.grade) ? ` · ${t("gradeLabel", {grade: item.grade})}` : ""}</small><strong>{item.name}</strong><em>{t("viewRooms")}</em></span>{currentBuilding?.id === item.id && <CheckCircle2 size={16}/>}</button>)}</div></section>}
-      <div className="ex-section-heading"><div><span className="ex-eyebrow">{teacher && currentBuilding ? currentBuilding.name : t("exhibitionCount", {count: visibleShows.length})}</span><h2>{t("exhibitions")}</h2></div><div className="ex-heading-actions">{teacher && !!home.classes?.length && <button className="ex-button" onClick={() => setModal("create")}><Plus size={16}/>{t("create")}</button>}{teacher && currentBuilding && <button className="ex-button ex-danger-outline" onClick={() => setModal("deleteBuilding")}><Trash2 size={16}/>{t("deleteBuilding")}</button>}<button className="ex-icon-btn" onClick={() => void loadHome()} aria-label={t("refresh")}><RefreshCw size={19}/></button></div></div>
-      {roomsLoading ? <div className="ex-list-loading" role="status"><LoaderCircle size={22} className="spin"/><p>{t("loadingRooms")}</p></div> : !visibleShows.length ? <section className="ex-empty ex-home-empty"><div className="ex-empty-frame"><Images size={36}/><Flower2 size={20}/></div><h3>{t("emptyTitle")}</h3><p>{t(teacher ? home.classes?.length ? "emptyTeacher" : "noClasses" : "emptyStudent")}</p>{teacher && home.classes?.length ? <button className="ex-button" onClick={() => setModal("create")}><Plus size={18}/>{t("create")}</button> : null}</section> : <div className="ex-show-grid">{visibleShows.map((show, index) => <button className={`ex-show-card ex-show-theme-${show.theme || "cozy"}`} key={show.id} onClick={() => selectShow(show.id)}><div className="ex-show-cover"><div className="ex-card-mini-frame"><RoomThemeIcon theme={show.theme} size={31}/><span/><span/></div><Flower2 className="ex-cover-flower" size={30}/><span className={`ex-status ex-status-${show.status}`}>{t(show.status)}</span><img src={`/characters/${index % 3 === 0 ? "otter-moa" : index % 3 === 1 ? "cat-mochi" : "hamster-kong"}.webp`} alt=""/></div><div className="ex-show-copy"><div className="ex-show-labels"><span className="ex-show-class"><Users size={13}/>{show.className}</span><span className="ex-show-theme-label"><RoomThemeIcon theme={show.theme} size={12}/>{t(`themes.${show.theme || "cozy"}`)}</span></div><h3>{show.title}</h3>{teacher && !!show.tags?.length && <div className="ex-show-tags">{show.tags.slice(0, 4).map(tag => <span key={tag} className="ex-tag">#{tag}</span>)}</div>}<p>{show.description || t("subtitle")}</p><div className="ex-show-bottom"><span>{t("artworkCount", {count: show.approvedCount})}</span><strong>{t(teacher && show.status === "draft" ? "prepare" : "view")}<ArrowRight size={16}/></strong></div></div></button>)}</div>}
+      {teacher && !!hallList.length && <section className="ex-buildings ex-halls"><div className="ex-buildings-heading"><h2>{t("halls.title")}</h2><span className="ex-form-hint">{t("halls.hint")}</span></div><TeacherHallList halls={hallList} selected={activeHall} latest={newestHall} locale={locale} onSelect={setHall} onPreview={kind => {setPreviewHall(kind); setModal("hallPreview");}}/></section>}
+      <div className="ex-section-heading"><div><span className="ex-eyebrow">{teacher && activeHall ? hallName(activeHall, locale) : t("exhibitionCount", {count: visibleShows.length})}</span><h2>{t(teacher ? "halls.rooms" : "exhibitions")}</h2></div><div className="ex-heading-actions">{teacher && !!home.classes?.length && <button className="ex-button" onClick={() => setModal("create")}><Plus size={16}/>{t("create")}</button>}{teacher && activeHall && <button className="ex-button ex-danger-outline" onClick={() => setModal("deleteHall")}><Trash2 size={16}/>{t("deleteHall")}</button>}<button className="ex-icon-btn" onClick={() => void loadHome()} aria-label={t("refresh")}><RefreshCw size={19}/></button></div></div>
+      {roomsLoading ? <div className="ex-list-loading" role="status"><LoaderCircle size={22} className="spin"/><p>{t("loadingRooms")}</p></div> : !visibleShows.length ? <section className="ex-empty ex-home-empty"><div className="ex-empty-frame"><Images size={36}/><Flower2 size={20}/></div><h3>{t(teacher && activeHall ? "halls.emptyHallTitle" : "emptyTitle")}</h3><p>{t(teacher ? home.classes?.length ? activeHall ? "halls.emptyHall" : "halls.firstRoom" : "noClasses" : "emptyStudent")}</p>{teacher && home.classes?.length ? <button className="ex-button" onClick={() => setModal("create")}><Plus size={18}/>{t("create")}</button> : null}</section> : <div className="ex-show-grid">{visibleShows.map((show, index) => <button className={`ex-show-card ex-show-theme-${show.theme || "cozy"}`} key={show.id} onClick={() => selectShow(show.id)}><div className="ex-show-cover"><div className="ex-card-mini-frame"><RoomThemeIcon theme={show.theme} size={31}/><span/><span/></div><Flower2 className="ex-cover-flower" size={30}/><span className={`ex-status ex-status-${show.status}`}>{t(show.status)}</span><img src={`/characters/${index % 3 === 0 ? "otter-moa" : index % 3 === 1 ? "cat-mochi" : "hamster-kong"}.webp`} alt=""/></div><div className="ex-show-copy"><div className="ex-show-labels"><span className="ex-show-class"><Users size={13}/>{show.className}</span><span className="ex-show-theme-label"><RoomThemeIcon theme={show.theme} size={12}/>{t(`themes.${show.theme || "cozy"}`)}</span></div><h3>{show.title}</h3>{teacher && !!show.tags?.length && <div className="ex-show-tags">{show.tags.slice(0, 4).map(tag => <span key={tag} className="ex-tag">#{tag}</span>)}</div>}<p>{show.description || t("subtitle")}</p><div className="ex-show-bottom"><span>{t("artworkCount", {count: show.approvedCount})}</span><strong>{t(teacher && show.status === "draft" ? "prepare" : "view")}<ArrowRight size={16}/></strong></div></div></button>)}</div>}
       {hasMoreRooms && <div className="ex-more-rooms"><button className="ex-button" disabled={roomsLoading || moreLoading} onClick={() => void loadRooms(activeBuilding.current, true)}>{moreLoading ? <LoaderCircle className="spin" size={17}/> : <ChevronDown size={17}/>} {t(moreLoading ? "loadingMore" : "loadMoreRooms")}</button></div>}
       <div className="ex-footer-note"><Heart size={15}/>{t("noRanking")}</div>
     </> : <>
@@ -345,10 +360,11 @@ export default function ExhibitionWorkspace({role}: {role: Role}) {
     {modal === "archive" && teacher && <ExhibitionArchive classes={home.classes || []} initialFilter={archiveFilter} DialogComponent={Dialog} onClose={closeArchive} onOpen={id => {closeArchive(); selectShow(id);}} onChanged={() => void loadRooms(activeBuilding.current)}/>}
     {modal === "share" && detail && <Dialog title={t("shareQr")} onClose={()=>{setModal(null);void refreshShow();}}><ExhibitionShare id={detail.exhibition.id}/></Dialog>}
     {modal === "building" && <BuildingForm onClose={() => setModal(null)} onSaved={async id => {activeBuilding.current = id; setBuildingId(id); setPlace("classroom"); await loadHome(); setModal("create");}}/>}
-    {modal === "create" && <ExhibitionForm tagSuggestions={[...new Set(rooms.flatMap(show => show.tags || []))]} classes={home.classes || []} initialClassId={currentBuilding?.id} onClose={() => setModal(null)} onSaved={async show => {setModal(null); await loadHome(); selectShow(show.id); setNotice(t("created"));}}/>}
-    {modal === "deleteRoom" && detail && teacher && <Dialog title={t("deleteRoom")} onClose={() => setModal(null)}><ExhibitionDelete startOpen exhibitionId={detail.exhibition.id} title={detail.exhibition.title} artworkCount={artworks.length} onCancel={() => setModal(null)} onDeleted={async () => {setModal(null); selectShow(""); await loadRooms(activeBuilding.current); setNotice(t("roomDeleted"));}}/></Dialog>}
-    {modal === "deleteBuilding" && teacher && currentBuilding && <Dialog title={t("deleteBuilding")} onClose={() => setModal(null)}><BuildingDelete classId={currentBuilding.id} name={currentBuilding.name} rooms={visibleShows.map(show => ({id: show.id, title: show.title}))} more={hasMoreRooms} onCancel={() => setModal(null)} onDeleted={async () => {setModal(null); activeBuilding.current = ""; setBuildingId(""); await loadHome(); setNotice(t("buildingDeleted"));}}/></Dialog>}
-    {modal === "settings" && detail && <ExhibitionForm tagSuggestions={[...new Set(rooms.flatMap(show => show.tags || []))]} classes={home.classes || []} exhibition={detail.exhibition} artworkCount={artworks.length} onDeleted={async () => {setModal(null); selectShow(""); await loadRooms(activeBuilding.current); setNotice(t("roomDeleted"));}} onClose={() => setModal(null)} onSaved={async () => {setModal(null); await refreshShow(); setNotice(t("saved"));}}/>}
+    {modal === "create" && <ExhibitionForm tagSuggestions={[...new Set(rooms.flatMap(show => show.tags || []))]} classes={home.classes || []} initialClassId={currentBuilding?.id} initialTheme={activeHall === "space" ? "earth" : "cozy"} onClose={() => setModal(null)} onSaved={async show => {setModal(null); setHall(hallOf(show.theme)); await loadHome(); selectShow(show.id); setNotice(t("created"));}}/>}
+    {modal === "hallPreview" && previewHall && <HallPreview kind={previewHall} locale={locale} DialogComponent={Dialog} onClose={() => setModal(null)} onOpen={id => {setModal(null); selectShow(id);}}/>}
+    {modal === "deleteRoom" && detail && teacher && <Dialog title={t("deleteRoom")} onClose={() => setModal(null)}><ExhibitionDelete startOpen exhibitionId={detail.exhibition.id} title={detail.exhibition.title} artworkCount={artworks.length} onCancel={() => setModal(null)} onDeleted={async () => {setModal(null); selectShow(""); await loadHome(); setNotice(t("roomDeleted"));}}/></Dialog>}
+    {modal === "deleteHall" && teacher && activeHall && <Dialog title={t("deleteHall")} onClose={() => setModal(null)}><HallDelete kind={activeHall} name={hallName(activeHall, locale)} onCancel={() => setModal(null)} onDeleted={async () => {setModal(null); setHall(null); await loadHome(); setNotice(t("hallDeleted"));}}/></Dialog>}
+    {modal === "settings" && detail && <ExhibitionForm tagSuggestions={[...new Set(rooms.flatMap(show => show.tags || []))]} classes={home.classes || []} exhibition={detail.exhibition} artworkCount={artworks.length} onDeleted={async () => {setModal(null); selectShow(""); await loadHome(); setNotice(t("roomDeleted"));}} onClose={() => setModal(null)} onSaved={async () => {setModal(null); await refreshShow(); setNotice(t("saved"));}}/>}
     {modal === "upload" && detail && <UploadDialog linkedStudentIds={artworks.flatMap(artwork => artwork.studentId ? [artwork.studentId] : [])} voiceEnabled={detail.exhibition.artworkModules?.voice.enabled} StorageUsageComponent={StorageUsage} DialogComponent={Dialog} studentName={home.profile?.name} storageUsage={home.storageUsage} teacher={teacher} exhibitionId={detail.exhibition.id} students={detail.students || []} onClose={() => {setModal(null); void refreshShow();}} onSaved={async () => {setModal(null); if(!teacher)setManage(true); await refreshShow(); setNotice(t(teacher ? "teacherUploadSuccess" : "uploadSuccess"));}}/>}
     {selectedArtwork && detail && <ArtworkDialog reviewKind={reviewTarget?.id===selectedArtwork.id?reviewTarget.kind:undefined} key={selectedArtwork.id} artwork={selectedArtwork} exhibition={detail.exhibition} teacher={teacher} studentId={home.profile?.id} students={detail.students || []} onClose={() => {setArtworkId(null);setReviewTarget(null);}} onChange={refreshShow}/>}
   </div>;
@@ -366,14 +382,14 @@ function BuildingForm({onClose, onSaved}: {onClose: () => void; onSaved: (id: st
   return <Dialog title={t("buildingTitle")} onClose={onClose} busy={busy}><form className="ex-form" onSubmit={submit}><p className="ex-form-hint">{t("buildingHint")}</p><div className="ex-form-pair"><label>{t("year")}<input type="number" min={2020} max={2100} value={year} required disabled={busy} onChange={event => setYear(Number(event.target.value))}/></label><label>{t("grade")}<select value={grade} disabled={busy} onChange={event => {setGrade(event.target.value); setName(locale === "ko" ? `${event.target.value}학년 1반` : `Grade ${event.target.value}, Class 1`);}}>{[1,2,3,4,5,6].map(value => <option key={value} value={value}>{t("gradeLabel", {grade: value})}</option>)}</select></label></div><label>{t("buildingName")}<input autoFocus required value={name} maxLength={80} placeholder={t("buildingNamePlaceholder")} disabled={busy} onChange={event => setName(event.target.value)}/></label>{error && <p className="ex-form-error" role="alert">{error}</p>}<div className="ex-form-actions"><button type="button" className="ex-button" onClick={onClose} disabled={busy}>{t("cancel")}</button><button className="ex-button ex-primary" disabled={busy || !name.trim()}>{busy ? <LoaderCircle className="spin" size={18}/> : <Plus size={18}/>} {t("createBuilding")}</button></div></form></Dialog>;
 }
 
-function ExhibitionForm({classes, exhibition, initialClassId, onClose, onSaved, artworkCount = 0, onDeleted, tagSuggestions = []}: {tagSuggestions?: string[]; classes: ExhibitionClass[]; exhibition?: Exhibition; initialClassId?: string; onClose: () => void; onSaved: (show: Exhibition) => Promise<void>; artworkCount?: number; onDeleted?: () => Promise<void>}) {
+function ExhibitionForm({classes, exhibition, initialClassId, initialTheme, onClose, onSaved, artworkCount = 0, onDeleted, tagSuggestions = []}: {tagSuggestions?: string[]; classes: ExhibitionClass[]; exhibition?: Exhibition; initialClassId?: string; initialTheme?: Exhibition["theme"]; onClose: () => void; onSaved: (show: Exhibition) => Promise<void>; artworkCount?: number; onDeleted?: () => Promise<void>}) {
   const t = useTranslations("exhibition");
   const [title, setTitle] = useState(exhibition?.title || ""), [description, setDescription] = useState(exhibition?.description || ""), [classId, setClassId] = useState(exhibition?.classId || initialClassId || classes[0]?.id || "");
   const [artworkModules,setArtworkModules]=useState(()=>moduleOptions(exhibition?.artworkModules));
   const moduleEnglish=useLocale()==='en';
   const [commentsEnabled, setCommentsEnabled] = useState(exhibition?.commentsEnabled ?? true), [status, setStatus] = useState<ExhibitionStatus>(exhibition?.status || "draft");
   const [allowStudentUploads,setAllowStudentUploads]=useState(exhibition?.allowStudentUploads??false),[publicSharingEnabled,setPublicSharingEnabled]=useState(exhibition?exhibition.publicSharingEnabled===true:true);
-  const [theme, setTheme] = useState<Exhibition["theme"]>(exhibition?.theme || "cozy");
+  const [theme, setTheme] = useState<Exhibition["theme"]>(exhibition?.theme || initialTheme || "cozy");
   // Untouched tags are left to the server, which makes them from the title and keeps them following renames.
   const [tags, setTags] = useState<string[]>(exhibition?.tags || []), [tagsTouched, setTagsTouched] = useState(false);
   const grade = classes.find(item => item.id === classId)?.grade;
@@ -385,7 +401,7 @@ function ExhibitionForm({classes, exhibition, initialClassId, onClose, onSaved, 
     try {const result = await request<{exhibition: Exhibition}>(`/api/exhibitions${exhibition ? `/${exhibition.id}` : ""}`, {method: exhibition ? "PATCH" : "POST", body: JSON.stringify({...(exhibition ? {title: title.trim(), description: description.trim(), commentsEnabled, status, theme, allowStudentUploads, publicSharingEnabled, artworkModules} : {title: title.trim(), description: description.trim(), classId, theme, allowStudentUploads, publicSharingEnabled, artworkModules}), ...(tagsTouched ? {tags} : {})})}); await onSaved(result.exhibition || exhibition!);}
     catch {setError(t("error"));} finally {setBusy(false);}
   };
-  return <Dialog title={t(exhibition ? "settings" : "createTitle")} onClose={onClose} busy={busy}><form className="ex-form" onSubmit={submit}><p className="ex-form-hint">{t(exhibition ? "settingsHint" : "createHint")}</p><label>{t("exhibitionTitle")}<input required autoFocus value={title} maxLength={120} placeholder={t("titlePlaceholder")} onChange={event => setTitle(event.target.value)} disabled={busy}/></label><label>{t("classroom")}<select value={classId} required onChange={event => setClassId(event.target.value)} disabled={busy || !!exhibition}><option value="">{t("selectClass")}</option>{classes.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>{t("description")}<textarea rows={3} maxLength={2000} value={description} placeholder={t("descriptionPlaceholder")} onChange={event => setDescription(event.target.value)} disabled={busy}/></label><div className="ex-tag-label"><span>{moduleEnglish ? "Hashtags" : "해시태그"}</span><TagField value={shownTags} disabled={busy} en={moduleEnglish} suggestions={[...proposed, ...tagSuggestions]} onChange={next => {setTags(next); setTagsTouched(true);}}/><small>{moduleEnglish ? "Made from the title automatically. Change them freely; they help you and Berry find this room later." : "제목에서 자동으로 만들어져요. 마음대로 고칠 수 있고, 나중에 보관함과 베리가 이 전시를 찾을 때 써요."}</small></div><fieldset className="ex-theme-field"><legend>{t("roomTheme")}</legend><p className="ex-theme-group">{t("classicMode")}</p><div>{(["cozy", "forest", "sky", "ocean"] as const).map(value => <button type="button" key={value} className={`ex-theme-tile ex-theme-${value}`} aria-pressed={theme === value} disabled={busy} onClick={() => setTheme(value)}><span><Palette size={22}/></span>{t(`themes.${value}`)}{theme === value && <Check size={13}/>}</button>)}</div><p className="ex-theme-group">{t("spaceMode")}</p><div className="ex-theme-space">{SPACE_THEMES.map(value => <button type="button" key={value} className="ex-theme-tile ex-theme-photo" aria-pressed={theme === value} disabled={busy} onClick={() => setTheme(value)}><img src={spaceThemePreview(value)} alt="" loading="lazy"/><strong>{moduleEnglish ? SPACE_THEME_TEXT[value].en : SPACE_THEME_TEXT[value].ko}</strong><small>{moduleEnglish ? SPACE_THEME_TEXT[value].enHint : SPACE_THEME_TEXT[value].koHint}</small>{theme === value && <Check size={13}/>}</button>)}</div></fieldset><label className="ex-checkbox"><input type="checkbox" checked={allowStudentUploads} disabled={busy} onChange={event=>setAllowStudentUploads(event.target.checked)}/><span>{t("allowStudentUploads")}<small>{t("studentSubmitHint")}</small></span></label><label className="ex-checkbox"><input type="checkbox" checked={publicSharingEnabled} disabled={busy} onChange={event=>setPublicSharingEnabled(event.target.checked)}/><span>{t("publicSharingEnabled")}<small>{t("publicSharingHint")}</small></span></label><ArtworkModuleSettings value={artworkModules} onChange={setArtworkModules} disabled={busy} en={moduleEnglish}/>{exhibition && <><label>{t("statusLabel")}<select value={status} onChange={event => setStatus(event.target.value as ExhibitionStatus)} disabled={busy}>{(["draft", "open", "closed"] as const).map(value => <option key={value} value={value}>{t(value)}</option>)}</select></label><label className="ex-checkbox"><input type="checkbox" checked={commentsEnabled} onChange={event => setCommentsEnabled(event.target.checked)} disabled={busy}/><span>{t("commentsEnabled")}<small>{t("commentsHint")}</small></span></label></>}{error && <p className="ex-form-error" role="alert">{error}</p>}<div className="ex-form-actions"><button type="button" className="ex-button" onClick={onClose} disabled={busy}>{t("cancel")}</button><button className="ex-button ex-primary" disabled={busy || !classId || !title.trim()}>{busy ? <LoaderCircle className="spin" size={18}/> : <Plus size={18}/>} {t(busy ? "saving" : exhibition ? "save" : "createSubmit")}</button></div>{exhibition && onDeleted && <ExhibitionDelete exhibitionId={exhibition.id} title={exhibition.title} artworkCount={artworkCount} onDeleted={onDeleted}/>}</form></Dialog>;
+  return <Dialog title={t(exhibition ? "settings" : "createTitle")} onClose={onClose} busy={busy}><form className="ex-form" onSubmit={submit}><p className="ex-form-hint">{t(exhibition ? "settingsHint" : "createHint")}</p><label>{t("exhibitionTitle")}<input required autoFocus value={title} maxLength={120} placeholder={t("titlePlaceholder")} onChange={event => setTitle(event.target.value)} disabled={busy}/></label><label>{t("classroom")}<select value={classId} required onChange={event => setClassId(event.target.value)} disabled={busy || !!exhibition}><option value="">{t("selectClass")}</option>{classes.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label><label>{t("description")}<textarea rows={3} maxLength={2000} value={description} placeholder={t("descriptionPlaceholder")} onChange={event => setDescription(event.target.value)} disabled={busy}/></label><div className="ex-tag-label"><span>{moduleEnglish ? "Hashtags" : "해시태그"}</span><TagField value={shownTags} disabled={busy} en={moduleEnglish} suggestions={[...proposed, ...tagSuggestions]} onChange={next => {setTags(next); setTagsTouched(true);}}/><small>{moduleEnglish ? "Made from the title automatically. Change them freely; they help you and Berry find this room later." : "제목에서 자동으로 만들어져요. 마음대로 고칠 수 있고, 나중에 보관함과 베리가 이 전시를 찾을 때 써요."}</small></div><fieldset className="ex-theme-field"><legend>{t("roomTheme")}</legend><p className="ex-form-hint">{t("halls.themeHint")}</p><p className="ex-theme-group">{t("classicMode")}</p><div>{(["cozy", "forest", "sky", "ocean"] as const).map(value => <button type="button" key={value} className={`ex-theme-tile ex-theme-${value}`} aria-pressed={theme === value} disabled={busy} onClick={() => setTheme(value)}><span><Palette size={22}/></span>{t(`themes.${value}`)}{theme === value && <Check size={13}/>}</button>)}</div><p className="ex-theme-group">{t("spaceMode")}</p><div className="ex-theme-space">{SPACE_THEMES.map(value => <button type="button" key={value} className="ex-theme-tile ex-theme-photo" aria-pressed={theme === value} disabled={busy} onClick={() => setTheme(value)}><img src={spaceThemePreview(value)} alt="" loading="lazy"/><strong>{moduleEnglish ? SPACE_THEME_TEXT[value].en : SPACE_THEME_TEXT[value].ko}</strong><small>{moduleEnglish ? SPACE_THEME_TEXT[value].enHint : SPACE_THEME_TEXT[value].koHint}</small>{theme === value && <Check size={13}/>}</button>)}</div></fieldset><label className="ex-checkbox"><input type="checkbox" checked={allowStudentUploads} disabled={busy} onChange={event=>setAllowStudentUploads(event.target.checked)}/><span>{t("allowStudentUploads")}<small>{t("studentSubmitHint")}</small></span></label><label className="ex-checkbox"><input type="checkbox" checked={publicSharingEnabled} disabled={busy} onChange={event=>setPublicSharingEnabled(event.target.checked)}/><span>{t("publicSharingEnabled")}<small>{t("publicSharingHint")}</small></span></label><ArtworkModuleSettings value={artworkModules} onChange={setArtworkModules} disabled={busy} en={moduleEnglish}/>{exhibition && <><label>{t("statusLabel")}<select value={status} onChange={event => setStatus(event.target.value as ExhibitionStatus)} disabled={busy}>{(["draft", "open", "closed"] as const).map(value => <option key={value} value={value}>{t(value)}</option>)}</select></label><label className="ex-checkbox"><input type="checkbox" checked={commentsEnabled} onChange={event => setCommentsEnabled(event.target.checked)} disabled={busy}/><span>{t("commentsEnabled")}<small>{t("commentsHint")}</small></span></label></>}{error && <p className="ex-form-error" role="alert">{error}</p>}<div className="ex-form-actions"><button type="button" className="ex-button" onClick={onClose} disabled={busy}>{t("cancel")}</button><button className="ex-button ex-primary" disabled={busy || !classId || !title.trim()}>{busy ? <LoaderCircle className="spin" size={18}/> : <Plus size={18}/>} {t(busy ? "saving" : exhibition ? "save" : "createSubmit")}</button></div>{exhibition && onDeleted && <ExhibitionDelete exhibitionId={exhibition.id} title={exhibition.title} artworkCount={artworkCount} onDeleted={onDeleted}/>}</form></Dialog>;
 }
 
 function StorageUsage({usage}: {usage: NonNullable<ExhibitionListResponse["storageUsage"]>}) {

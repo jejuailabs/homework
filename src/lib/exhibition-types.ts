@@ -58,6 +58,10 @@ export type ExhibitionListResponse = {
   viewerId: string;
   /** Listing is intentionally bounded; old exhibitions are kept in storage. */
   limit: number; hasMore: boolean; nextCursor: string | null; storageUsage?: ExhibitionStorageUsage;
+  /** Teacher: their 전시관 (theme halls) with room counts. */
+  halls?: {kind: 'classic' | 'space'; count: number}[];
+  /** Student: rooms they have opened, and rooms holding their own artwork. */
+  visited?: string[]; mine?: string[];
 };
 export type ExhibitionDetailResponse = {
   exhibition: Exhibition; artworks: ExhibitionArtwork[]; students?: ExhibitionStudent[];

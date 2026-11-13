@@ -30,6 +30,7 @@ import {reconcileHomeworkSync} from './homework-sync';
 import {autoTags, effectiveTags, normalizeTags} from '../exhibition-tags';
 import {archiveFiles, archiveRows, archiveTags} from './exhibition-archive';
 import {DELETE_PHRASE} from '../delete-phrase';
+import {HALL_KINDS, hallOf, hallRecordId, isHallKind, type HallKind} from '../exhibition-halls';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -94,6 +95,18 @@ async function signedArtwork(ctx: Context, exhibition: Exhibition, value: Data, 
   };
 }
 
+/** A teacher's 전시관: saved records plus any hall that already has rooms (recorded on first sight, never rewritten). */
+async function teacherHalls(ownerUid: string) {
+  const [records, themes] = await Promise.all([
+    db().collection('exhibitionHalls').where('ownerUid', '==', ownerUid).get(),
+    db().collection('exhibitions').where('ownerUid', '==', ownerUid).select('theme').get(),
+  ]);
+  const counts = HALL_KINDS.map(kind => themes.docs.filter(doc => hallOf(doc.data().theme) === kind).length);
+  const saved = new Set(records.docs.map(doc => doc.data().kind as HallKind));
+  const missing = HALL_KINDS.filter((kind, index) => counts[index] > 0 && !saved.has(kind));
+  await Promise.all(missing.map(kind => keepHall(ownerUid, kind)));
+  return HALL_KINDS.filter((kind, index) => saved.has(kind) || counts[index] > 0).map(kind => ({kind, count: counts[HALL_KINDS.indexOf(kind)]}));
+}
 async function list(ctx: Context, request: Request) {
   const student = ctx.role === 'student';
   const params = new URL(request.url).searchParams;
@@ -127,7 +140,12 @@ async function list(ctx: Context, request: Request) {
     const selected = room ? companionProfile(profile.data()!, room.data()) : null;
     const worn = wardrobeOutfit(profile.data()?.wardrobeOutfit, profile.data()?.wardrobeOwned);
     const companion = selected?.pet === 'animal-whiteknee' ? {pet: selected.pet, outfit: selected.outfit, wardrobe: {head: worn.head, face: worn.face, neck: worn.neck}} : null;
-    return json({ ...page, viewerRole: 'student', viewerId: ctx.uid, selectedClassId: ctx.classId, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '', companion } });
+    const [visits, passports] = await Promise.all([
+      db().doc(`exhibitionVisits/${ctx.uid}`).get(),
+      page.exhibitions.length ? db().getAll(...page.exhibitions.map(show => passportRef(show.id, ctx.studentId!))) : [],
+    ]);
+    const visited = Object.keys(visits.data()?.rooms || {}), mine = passports.filter(doc => doc.data()?.artist).map(doc => doc.ref.parent.parent!.id);
+    return json({ ...page, visited, mine, viewerRole: 'student', viewerId: ctx.uid, selectedClassId: ctx.classId, profile: { ...studentValue(profile), classId: ctx.classId, className: cls.data()?.name ?? '', companion } });
   }
   const readTeacherPage = async () => {
     const classQuery = db().collection('classes').where('ownerUid', '==', ctx.uid).limit(100);
@@ -149,8 +167,8 @@ async function list(ctx: Context, request: Request) {
     ]);
     return { page, classes, selectedClassId: selectedClass ?? null };
   };
-  const [{ page, classes, selectedClassId }, quota] = await Promise.all([readTeacherPage(), quotaRef(ctx.uid).get()]);
-  return json({ ...page, viewerRole: 'teacher', viewerId: ctx.uid, selectedClassId, classes: classes.docs.map(doc => ({ id: doc.id, name: doc.data().name, grade: String(doc.data().grade ?? '').trim() || doc.data().name, studentCount: doc.data().studentCount ?? 0, year: doc.data().year })), storageUsage: storageValue(quota.data()) });
+  const [{ page, classes, selectedClassId }, quota, halls] = await Promise.all([readTeacherPage(), quotaRef(ctx.uid).get(), teacherHalls(ctx.uid)]);
+  return json({ ...page, halls, viewerRole: 'teacher', viewerId: ctx.uid, selectedClassId, classes: classes.docs.map(doc => ({ id: doc.id, name: doc.data().name, grade: String(doc.data().grade ?? '').trim() || doc.data().name, studentCount: doc.data().studentCount ?? 0, year: doc.data().year })), storageUsage: storageValue(quota.data()) });
 }
 async function create(ctx: Context, request: Request) {
   if (ctx.role === 'student') throw new ApiError(403, '선생님만 전시회를 만들 수 있어요.', 'FORBIDDEN');
@@ -168,6 +186,7 @@ async function create(ctx: Context, request: Request) {
     artworkCount: 0, approvedCount: 0, createdAt, updatedAt: createdAt,
   };
   const ref = await db().collection('exhibitions').add(value);
+  await keepHall(ctx.uid, hallOf(value.theme as Exhibition['theme']), createdAt);
   return json({ exhibition: { ...value, id: ref.id } }, 201);
 }
 async function detail(ctx: Context, exhibition: Exhibition, request: Request) {
@@ -176,6 +195,8 @@ async function detail(ctx: Context, exhibition: Exhibition, request: Request) {
   // Cheap check used by the live refresh of linked rooms: one document read when nothing changed.
   if (new URL(request.url).searchParams.get('since') === exhibition.updatedAt) return json({exhibition, unchanged: true});
   const isOwner = ownsExhibition(ctx, exhibition);
+  // Remembers which rooms a student has opened, so their entry page can mark the rest NEW.
+  if (ctx.role === 'student') after(() => db().doc(`exhibitionVisits/${ctx.uid}`).set({rooms: {[exhibition.id]: now()}}, {merge: true}).then(() => undefined, () => undefined));
   const [works, roster, passport, reactions] = await Promise.all([
     exhibitionRef(exhibition.id).collection('artworks').limit(EXHIBITION_ARTWORK_LIMIT).get(),
     isOwner ? db().collection(`classes/${exhibition.classId}/students`).get() : null,
@@ -198,7 +219,7 @@ async function edit(ctx: Context, exhibition: Exhibition, request: Request) {
   if ('title' in input) changes.title = text(input.title, '전시 이름', 120);
   if ('description' in input) changes.description = text(input.description, '전시 소개', 2000, true);
   if ('status' in input) changes.status = exhibitionStatus(input.status);
-  if ('theme' in input) changes.theme = exhibitionTheme(input.theme);
+  if ('theme' in input) {changes.theme = exhibitionTheme(input.theme); await keepHall(exhibition.ownerUid, hallOf(changes.theme));}
   if ('artworkModules' in input) {if(!input.artworkModules||typeof input.artworkModules!=='object'||Array.isArray(input.artworkModules))throw new ApiError(400,'작품 기능 설정을 확인해 주세요.');changes.artworkModules=moduleOptions(input.artworkModules);}
   if ('commentsEnabled' in input) {
     if (typeof input.commentsEnabled !== 'boolean') throw new ApiError(400, '감상 허용 설정을 확인해 주세요.');
@@ -282,29 +303,36 @@ async function deleteExhibition(ctx: Context, exhibition: Exhibition, request: R
   if (input.confirm !== true) throw new ApiError(400, '삭제를 한 번 더 확인해 주세요.', 'CONFIRM_REQUIRED');
   return json({deleted: true, artworks: await purgeExhibition(ctx, exhibition)});
 }
-/** Class data that must not be orphaned: a building with any of these stays until they are cleared elsewhere. */
-const BUILDING_BLOCKERS: [string, string][] = [['assignments', '숙제'], ['submissions', '제출물'], ['participationBoards', '참여보드'], ['classCanvases', '캔버스'], ['classPolls', '투표'], ['cardClassSets', '카드 세트'], ['cardNotes', '카드 기록'], ['lessonRecords', '수업 기록'], ['teacherReports', '리포트']];
-async function deleteBuilding(ctx: Context, classId: string, request: Request) {
+const hallRef = (ownerUid: string, kind: HallKind) => db().doc(`exhibitionHalls/${hallRecordId(ownerUid, kind)}`);
+/** Keeps the teacher's 전시관 record; only ever adds, so a hall stays until the teacher deletes it. */
+async function keepHall(ownerUid: string, kind: HallKind, createdAt = now()) {
+  await hallRef(ownerUid, kind).create({ownerUid, kind, createdAt}).catch(error => {if (error?.code !== 6) throw error;});
+}
+/** A teacher's rooms, optionally of one hall. The hall is read from each room's theme (rooms with no theme are classic). */
+async function ownerRooms(ownerUid: string, kind?: HallKind) {
+  const rooms = (await db().collection('exhibitions').where('ownerUid', '==', ownerUid).get()).docs.map(asExhibition);
+  return kind ? rooms.filter(room => hallOf(room.theme) === kind) : rooms;
+}
+/** Every room of one hall, newest first, for the hall preview list. */
+async function hallRooms(ownerUid: string, kind: HallKind) {
+  return (await ownerRooms(ownerUid, kind)).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map(room => ({id: room.id, title: room.title, className: room.className, classId: room.classId, status: room.status, theme: room.theme, approvedCount: room.approvedCount, createdAt: room.createdAt}));
+}
+/** Deletes a 전시관: the teacher confirms the rooms inside go too, then types the phrase. Classes are never touched. */
+async function deleteHall(ctx: Context, kind: HallKind, request: Request) {
   const input = await body(request);
   if (String(input.confirmText ?? '').trim() !== DELETE_PHRASE) throw new ApiError(400, `확인 칸에 '${DELETE_PHRASE}'를 정확히 입력해 주세요.`, 'CONFIRM_REQUIRED');
-  const classRef = db().doc(`classes/${id(classId)}`), current = await classRef.get();
-  if (!current.exists) throw new ApiError(404, '건물을 찾을 수 없어요. 이미 지워졌을 수 있어요.', 'NOT_FOUND');
-  if (!canManageClass(ctx.role, ctx.uid, current.data()?.ownerUid)) throw new ApiError(403, '이 건물을 지울 권한이 없어요.', 'FORBIDDEN');
-  const counts = await Promise.all([
-    classRef.collection('students').count().get().then(snap => ['학생', snap.data().count] as const),
-    ...BUILDING_BLOCKERS.map(([collection, label]) => db().collection(collection).where('classId', '==', classId).count().get().then(snap => [label, snap.data().count] as const)),
-  ]);
-  const left = counts.filter(([, count]) => count > 0);
-  if (left.length) throw new ApiError(409, `이 반에는 ${left.map(([label, count]) => `${label} ${count}개`).join(', ')}가 있어서 건물을 지울 수 없어요. 반의 다른 기록을 지키기 위해서예요. 학생·자료를 먼저 정리한 뒤 다시 시도해 주세요.`, 'BUILDING_NOT_EMPTY');
-  const rooms = await db().collection('exhibitions').where('classId', '==', classId).get();
-  if (rooms.size && input.includeRooms !== true) throw new ApiError(409, `이 건물에 전시실 ${rooms.size}개가 남아 있어요. 전시실까지 함께 지우는 것을 먼저 확인해 주세요.`, 'ROOMS_LEFT');
+  const rooms = await ownerRooms(ctx.uid, kind);
+  if (rooms.length && input.includeRooms !== true) throw new ApiError(409, `이 전시관에 전시실 ${rooms.length}개가 남아 있어요. 전시실까지 함께 지우는 것을 먼저 확인해 주세요.`, 'ROOMS_LEFT');
   let artworks = 0;
-  for (const doc of rooms.docs) artworks += await purgeExhibition(ctx, {id: doc.id, ...doc.data()} as Exhibition);
-  await db().recursiveDelete(classRef);
-  await db().collection('adminAudit').add({actorUid: ctx.uid, action: 'class.delete', target: classId, details: {name: current.data()?.name || '', rooms: rooms.size, artworks}, kind: 'change', outcome: 'success', createdAt: now()});
-  return json({deleted: true, rooms: rooms.size, artworks});
+  for (const room of rooms) artworks += await purgeExhibition(ctx, room, false);
+  await hallRef(ctx.uid, kind).delete();
+  await db().collection('adminAudit').add({actorUid: ctx.uid, action: 'exhibitionHall.delete', target: hallRecordId(ctx.uid, kind), details: {kind, rooms: rooms.length, artworks}, kind: 'change', outcome: 'success', createdAt: now()});
+  return json({deleted: true, rooms: rooms.length, artworks});
 }
-async function purgeExhibition(ctx: Context, exhibition: Exhibition) {
+async function purgeExhibition(ctx: Context, exhibition: Exhibition, keepItsHall = true) {
+  // Deleting the last room must not make the 전시관 disappear.
+  if (keepItsHall) await keepHall(exhibition.ownerUid, hallOf(exhibition.theme));
   const room = exhibitionRef(exhibition.id), ownerUid = exhibition.ownerUid, containerKey = `exhibition:${exhibition.id}`;
   const artworks = await room.collection('artworks').get();
   // 1. Queue every artwork file first, so a failure later never strands files without a cleanup job.
@@ -766,9 +794,10 @@ export async function handleExhibitions(request: Request, segments: string[] = [
     if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
     const ctx = await getContext(request);
     if (segments.length === 1 && segments[0] === 'cleanup' && request.method === 'POST') return await cleanup(ctx);
-    if (segments[0] === 'buildings') {
-      if (ctx.role === 'student') throw new ApiError(403, '선생님만 건물을 지울 수 있어요.', 'FORBIDDEN');
-      if (segments.length === 2 && request.method === 'DELETE') return await deleteBuilding(ctx, segments[1], request);
+    if (segments[0] === 'halls') {
+      if (ctx.role === 'student') throw new ApiError(403, '선생님만 전시관을 관리할 수 있어요.', 'FORBIDDEN');
+      if (segments.length === 2 && isHallKind(segments[1]) && request.method === 'GET') return json({rooms: await hallRooms(ctx.uid, segments[1])});
+      if (segments.length === 2 && isHallKind(segments[1]) && request.method === 'DELETE') return await deleteHall(ctx, segments[1], request);
       throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
     }
     if (segments[0] === 'archive') {
