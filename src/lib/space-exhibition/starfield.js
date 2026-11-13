@@ -61,7 +61,7 @@ export function createStarfield(T, options = {}) {
   stars.frustumCulled = false; stars.renderOrder = -9;
   group.add(stars);
 
-  // Shooting star: a short bright streak sliding along the sky every few seconds.
+  // Shooting star: a short bright streak sliding along the sky every 10 to 20 seconds.
   const trail = new T.BufferGeometry();
   trail.setAttribute('position', new T.Float32BufferAttribute(new Float32Array(6), 3));
   trail.setAttribute('color', new T.Float32BufferAttribute([1, 1, .95, 1, .75, .85, 1, 0], 4));
@@ -69,7 +69,7 @@ export function createStarfield(T, options = {}) {
   const streak = new T.Line(trail, trailMaterial);
   streak.frustumCulled = false; streak.visible = false; streak.renderOrder = -8;
   group.add(streak);
-  let next = performance.now() + 2500 + Math.random() * 3000, flight = null;
+  let next = performance.now() + 10000 + Math.random() * 10000, flight = null;
   const from = new T.Vector3(), axis = new T.Vector3(), head = new T.Vector3(), tail = new T.Vector3();
   function launch(now) {
     for (let tries = 0; tries < 20; tries++) {
@@ -84,7 +84,7 @@ export function createStarfield(T, options = {}) {
     if (!flight && now > next) launch(now);
     if (flight) {
       const t = (now - flight.start) / flight.duration;
-      if (t >= 1) {flight = null; streak.visible = false; next = now + 4000 + Math.random() * 6000; return;}
+      if (t >= 1) {flight = null; streak.visible = false; next = now + 10000 + Math.random() * 10000; return;}
       head.copy(from).applyAxisAngle(axis, flight.arc * t).multiplyScalar(radius - 4);
       tail.copy(from).applyAxisAngle(axis, Math.max(0, flight.arc * t - .07)).multiplyScalar(radius - 4);
       const p = trail.attributes.position;

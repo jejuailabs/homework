@@ -26,3 +26,13 @@
  .ex-world .ex-screen-dock .ex-screen-buttons{flex-wrap:nowrap;gap:3px}.ex-world .ex-screen-dock .ex-screen-buttons button{flex:0 0 40px;min-height:44px;min-width:40px;padding:7px;font-size:12px}.ex-world .ex-screen-dock .ex-screen-buttons button>span{display:none}.ex-world .ex-screen-count{min-width:38px;font-size:11px}
  .ex-world .ex-screen-dock>input{height:26px;margin:4px 0}.ex-world--gallery .ex-world-wings{bottom:calc(68px + env(safe-area-inset-bottom))}
 }
+/* Slideshow first: tap a work to see it alone, then return to the class slideshow. */
+.ex-screen-pick{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in;position:relative;color:inherit;font:inherit}
+.ex-screen-pick>img{display:block;max-width:100%;height:min(54dvh,560px);width:100%;object-fit:contain}
+.ex-screen-pick>span{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);padding:5px 12px;border-radius:999px;background:rgba(20,36,30,.62);color:#fcf4dc;font-size:12px;opacity:.85;pointer-events:none;white-space:nowrap}
+.ex-screen-pick:focus-visible{outline:3px solid #f2d27a;outline-offset:4px;border-radius:12px}
+.ex-screen-content.is-focus{position:relative}
+.ex-screen-content.is-focus figure>img{height:min(calc(100dvh - 330px),760px)}
+.ex-screen-back{position:absolute;top:12px;left:12px;z-index:1;display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border:1px solid rgba(252,244,220,.45);border-radius:999px;background:rgba(20,36,30,.7);color:#fcf4dc;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.ex-screen-back:hover{background:rgba(20,36,30,.88)}
+@media(max-width:640px){.ex-screen-pick>img{height:47dvh}.ex-screen-content.is-focus figure>img{height:calc(100dvh - 300px)}}

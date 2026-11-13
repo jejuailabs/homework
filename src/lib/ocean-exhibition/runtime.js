@@ -16,7 +16,7 @@ const keyActions = {KeyW:'up',ArrowUp:'up',KeyS:'down',ArrowDown:'down',KeyA:'le
  * @param {{T:any, host:HTMLElement, theme:'coral'|'kelp'|'abyss'|'lagoon', data:any, assetUrl:(path:string)=>string,
  *   cat:{url:string, rects:any}, roomTitle?:string,
  *   artworks:{id:string,title:string,image:string,hero:string,width?:number,height?:number}[], english?:boolean,
- *   isActive:()=>boolean, onState:(state:any)=>void, onSelect:(id:string)=>void, onExit:()=>void}} options
+ *   isActive:()=>boolean, onState:(state:any)=>void, onSelect:(id:string)=>void, onScreen?:(index:number)=>void, onExit:()=>void}} options
  */
 export function createOceanRuntime(options) {
   const {T, host, theme, data, assetUrl, cat, english = false} = options;
@@ -46,6 +46,7 @@ export function createOceanRuntime(options) {
   let roomArt = [];
   function nearbyLabel() {
     if (!nearby) return null;
+    if (nearby.kind === 'art' && nearby.index === 0 && options.onScreen) return {kind: 'screen'};
     if (nearby.kind === 'art') return {kind: 'art', title: roomArt[nearby.index]?.title || '', id: roomArt[nearby.index]?.id || ''};
     return {kind: nearby.kind};
   }
@@ -321,6 +322,7 @@ export function createOceanRuntime(options) {
   function activate(target) {
     if (!target) return;
     if (target.kind === 'enter') enter('gallery');
+    else if (target.kind === 'art' && target.index === 0 && options.onScreen) { clearInput(); options.onScreen(heroIndex % Math.max(1, artworks.length)); }
     else if (target.kind === 'art') { const work = roomArt[target.index]; if (work) { clearInput(); options.onSelect(work.id); } }
     else if (target.kind === 'back') back();
   }

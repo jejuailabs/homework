@@ -1,7 +1,8 @@
 "use client";
 
 import {useCallback, useEffect, useRef, useState} from "react";
-import {ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, Images, RotateCcw, Undo2, Redo2, X} from "lucide-react";
+import {ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, Images, Presentation, RotateCcw, Undo2, Redo2, X} from "lucide-react";
+import ExhibitionScreen from "./exhibition-screen";
 import WorldJoystick from "./world-joystick";
 import {spaceCatUrl} from "@/lib/space-exhibition/themes";
 import {OCEAN_THEME_TEXT, oceanAssetUrl, type OceanTheme} from "@/lib/ocean-exhibition/themes";
@@ -36,13 +37,13 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
   const english = locale.startsWith("en");
   const hostRef = useRef<HTMLDivElement>(null), rootRef = useRef<HTMLElement>(null);
   const runtime = useRef<Runtime | null>(null), callbacks = useRef(props), pausedRef = useRef(paused);
-  const [state, setState] = useState<RuntimeState | null>(null), [error, setError] = useState(false), [listOpen, setListOpen] = useState(false);
+  const [state, setState] = useState<RuntimeState | null>(null), [error, setError] = useState(false), [listOpen, setListOpen] = useState(false), [screen, setScreen] = useState({signal: 0, start: 0}), [screenOpen, setScreenOpen] = useState(false);
   const works = artworks.filter(work => work.url || work.thumbnailUrl);
   const worksKey = JSON.stringify(works.map(work => [work.id, work.title, work.url, work.thumbnailUrl, work.width, work.height, work.artistName || work.studentName || ""]));
   const text = OCEAN_THEME_TEXT[theme];
 
   useEffect(() => { callbacks.current = props; });
-  useEffect(() => { pausedRef.current = paused || listOpen; runtime.current?.refresh(); }, [paused, listOpen]);
+  useEffect(() => { pausedRef.current = paused || listOpen || screenOpen; runtime.current?.refresh(); }, [paused, listOpen, screenOpen]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -64,6 +65,7 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
         },
         onState: (next: RuntimeState) => { if (!cancelled) setState(next); },
         onSelect: (id: string) => callbacks.current.onSelectArtwork(id),
+        onScreen: (index: number) => setScreen(value => ({signal: value.signal + 1, start: index})),
         onExit: () => callbacks.current.onExit(),
       }) as Runtime;
     }).catch(() => { if (!cancelled) setError(true); });
@@ -76,14 +78,14 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
   // The artwork you stand by: its title and artist, large enough to read at a glance.
   const nearbyArt = state?.nearby?.kind === "art" ? artworks.find(work => work.id === state.nearby?.id) || {title: state.nearby.title || "", artistName: "", studentName: ""} : null;
   const nearbyArtist = nearbyArt ? nearbyArt.artistName || nearbyArt.studentName || "" : "";
-  const nearbyText = state?.nearby ? state.nearby.kind === "art" ? (english ? `View · ${state.nearby.title}` : `작품 감상 · ${state.nearby.title}`) : state.nearby.kind === "back" ? (english ? "Back to entrance" : "입구로") : null : null;
+  const nearbyText = state?.nearby ? state.nearby.kind === "art" ? (english ? `View · ${state.nearby.title}` : `작품 감상 · ${state.nearby.title}`) : state.nearby.kind === "screen" ? (english ? "Watch everyone's works as a slideshow" : "우리 반 작품 슬라이드 보기") : state.nearby.kind === "back" ? (english ? "Back to entrance" : "입구로") : null : null;
 
   return <section ref={rootRef} className={`sx-world sx-theme-${theme}${paused ? " sx-world--paused" : ""}`} aria-label={english ? `${text.en} 3D gallery` : `${text.ko} 3D 전시`}>
     <div ref={hostRef} className="sx-canvas"/>
     <div className="sx-upper">
       <button type="button" className="sx-glass" onClick={() => stage === "gallery" ? runtime.current?.back() : props.onExit()}><ArrowLeft size={16}/>{stage === "gallery" ? (english ? "Entrance" : "입구로") : (english ? "Leave" : "나가기")}</button>
       <div className="sx-glass sx-location"><span>{english ? text.en : text.ko}</span><strong>{roomTitle || (english ? "Exhibition" : "전시")}</strong></div>
-      <div className="sx-upper-right">{stage === "gallery" && !!works.length && <button type="button" className="sx-glass" onClick={() => setListOpen(true)}><Images size={16}/>{english ? "Works" : "작품 목록"}</button>}</div>
+      <div className="sx-upper-right">{stage === "gallery" && !!works.length && <button type="button" className="sx-glass" onClick={() => setScreen(value => ({signal: value.signal + 1, start: state?.hero?.index ?? 0}))}><Presentation size={16}/>{english ? "Slideshow" : "작품 슬라이드"}</button>}{stage === "gallery" && !!works.length && <button type="button" className="sx-glass" onClick={() => setListOpen(true)}><Images size={16}/>{english ? "Works" : "작품 목록"}</button>}</div>
     </div>
     <WorldJoystick disabled={paused || !state || !!failed} english={english} onMove={moveStick}/>
     <div className="sx-lower">
@@ -104,6 +106,7 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
     {(!state || state.loading) && !failed && <p className="sx-glass sx-status" role="status">{english ? "Opening the ocean gallery…" : "바닷속 전시실을 여는 중…"}</p>}
     {failed && <p className="sx-glass sx-status" role="alert">{english ? "This device cannot show the 3D gallery. Use the grid view instead." : "이 기기에서는 3D 전시를 열 수 없어요. 목록 보기로 감상해 주세요."}</p>}
     {stage === "gallery" && !works.length && state && <p className="sx-glass sx-status">{english ? "No works are on display yet." : "아직 전시된 작품이 없어요."}</p>}
+    <ExhibitionScreen artworks={works} english={english} paused={paused} dock={false} openSignal={screen.signal} startIndex={screen.start} onExpanded={setScreenOpen}/>
     {listOpen && <div className="sx-list" role="dialog" aria-modal="true" aria-label={english ? "Works" : "작품 목록"} onKeyDown={event => {if (event.key === "Escape") setListOpen(false);}}>
       <div className="sx-list-head"><h2>{english ? `Works · ${works.length}` : `작품 목록 · ${works.length}점`}</h2><button type="button" autoFocus onClick={() => setListOpen(false)} aria-label={english ? "Close" : "닫기"}><X size={18}/></button></div>
       <div className="sx-list-items">{works.map(work => <button type="button" key={work.id} onClick={() => {setListOpen(false); props.onSelectArtwork(work.id);}}><img src={work.thumbnailUrl || work.url} alt="" loading="lazy"/><span>{work.title}</span><small>{work.artistName || work.studentName || ""}</small></button>)}</div>
