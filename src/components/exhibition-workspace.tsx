@@ -37,8 +37,8 @@ const OceanExhibitionWorld = dynamic(() => import("./ocean-exhibition-world"), {
 import {isOceanTheme, OCEAN_THEMES, OCEAN_THEME_TEXT, oceanThemePreview} from "@/lib/ocean-exhibition/themes";
 const imageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const reactionIcons = {colors: Palette, idea: Sparkles, story: Heart};
-/** Phase 2 switch: children get the new entry (recent rooms + 전시관) instead of the 3D village. */
-const KIDS_ENTRY = false;
+/** Children get the new entry (recent rooms + 전시관) instead of the old 3D village (kept behind this switch). */
+const KIDS_ENTRY = true;
 const roomThemeIcons = {cozy: Palette, forest: Leaf, sky: Cloud, ocean: Waves, earth: Globe2, moon: Moon, saturn: Orbit, coral: Waves, kelp: Waves, abyss: Waves, lagoon: Waves};
 function RoomThemeIcon({theme, size = 16}: {theme?: Exhibition["theme"]; size?: number}) {const Icon = roomThemeIcons[theme || "cozy"] || Palette; return <Icon size={size}/>;}
 type Role = "teacher" | "student";
