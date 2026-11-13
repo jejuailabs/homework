@@ -105,7 +105,7 @@ export default function SpaceExhibitionWorld(props: SpaceExhibitionWorldProps) {
     {(!state || state.loading) && !failed && <p className="sx-glass sx-status" role="status">{english ? "Opening the space gallery…" : "우주 전시실을 여는 중…"}</p>}
     {failed && <p className="sx-glass sx-status" role="alert">{english ? "This device cannot show the 3D gallery. Use the grid view instead." : "이 기기에서는 3D 전시를 열 수 없어요. 목록 보기로 감상해 주세요."}</p>}
     {stage === "gallery" && !works.length && state && <p className="sx-glass sx-status">{english ? "No works are on display yet." : "아직 전시된 작품이 없어요."}</p>}
-    <ExhibitionScreen artworks={works} english={english} paused={paused} dock={false} openSignal={screen.signal} startIndex={screen.start} onExpanded={setScreenOpen}/>
+    <ExhibitionScreen artworks={works} english={english} paused={paused} dock={false} openSignal={screen.signal} startIndex={screen.start} onExpanded={setScreenOpen} onSelectArtwork={props.onSelectArtwork}/>
     {listOpen && <div className="sx-list" role="dialog" aria-modal="true" aria-label={english ? "Works" : "작품 목록"} onKeyDown={event => {if (event.key === "Escape") setListOpen(false);}}>
       <div className="sx-list-head"><h2>{english ? `Works · ${works.length}` : `작품 목록 · ${works.length}점`}</h2><button type="button" autoFocus onClick={() => setListOpen(false)} aria-label={english ? "Close" : "닫기"}><X size={18}/></button></div>
       <div className="sx-list-items">{works.map(work => <button type="button" key={work.id} onClick={() => {setListOpen(false); props.onSelectArtwork(work.id);}}><img src={work.thumbnailUrl || work.url} alt="" loading="lazy"/><span>{work.title}</span><small>{work.artistName || work.studentName || ""}</small></button>)}</div>
