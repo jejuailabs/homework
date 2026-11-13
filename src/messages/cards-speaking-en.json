@@ -1,6 +1,6 @@
 {
-  "entry": "Speaking",
-  "entryBody": "Read each card aloud and record it",
+  "entry": "Listen and repeat",
+  "entryBody": "Required · listen, repeat, and it records",
   "title": "Speaking",
   "back": "Back to the set",
   "loading": "Loading recordings",
@@ -32,7 +32,7 @@
   "downloading": "Downloading {done} / {total}",
   "downloadFailed": "Could not download. Please try again.",
   "teacherTitle": "Speaking recordings",
-  "teacherHint": "Speaking is open in the student study tools by default (six steps). You can set required rounds per step; recordings are heard only by you and the student.",
+  "teacherHint": "Takes from Listen and repeat (required) in the student study tools gather here: each card, heard and repeated. Only you and the student can listen.",
   "teacherSwitch": "Open speaking to students",
   "teacherCount": "{done} of {total} students recorded",
   "teacherDownloadAll": "Download all",
