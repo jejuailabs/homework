@@ -30,7 +30,7 @@ import {reconcileHomeworkSync} from './homework-sync';
 import {autoTags, effectiveTags, normalizeTags} from '../exhibition-tags';
 import {archiveFiles, archiveRows, archiveTags} from './exhibition-archive';
 import {DELETE_PHRASE} from '../delete-phrase';
-import {HALL_KINDS, hallOf, hallRecordId, isHallKind, type HallKind} from '../exhibition-halls';
+import {HALL_KINDS, hallOf, hallRecordId, isHallId, isHallKind, type HallKind} from '../exhibition-halls';
 import type { ArtReaction, ArtworkStatus, Exhibition, ExhibitionArtwork, ExhibitionComment, ExhibitionStudent, ExhibitionStorageUsage } from '../exhibition-types';
 
 type Data = Record<string, any>;
@@ -103,7 +103,7 @@ async function teacherHalls(ownerUid: string) {
   ]);
   const counts = HALL_KINDS.map(kind => themes.docs.filter(doc => hallOf(doc.data().theme) === kind).length);
   // Only per-theme records count; the earlier family records (classic/space/ocean) are left untouched and ignored.
-  const saved = new Set(records.docs.filter(doc => doc.data().scheme === 'theme').map(doc => doc.data().kind as HallKind));
+  const saved = new Set(records.docs.filter(doc => doc.data().scheme === 'theme' && isHallKind(doc.data().kind) && isHallId(doc.data().kind)).map(doc => doc.data().kind as HallKind));
   const missing = HALL_KINDS.filter((kind, index) => counts[index] > 0 && !saved.has(kind));
   await Promise.all(missing.map(kind => keepHall(ownerUid, kind)));
   return HALL_KINDS.filter((kind, index) => saved.has(kind) || counts[index] > 0).map(kind => ({kind, count: counts[HALL_KINDS.indexOf(kind)]}));

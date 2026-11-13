@@ -260,7 +260,7 @@
   "deleteTypeHint": "To delete, type '{phrase}' exactly in the box below.",
   "halls": {
     "title": "Our halls",
-    "hint": "Each room theme is its own hall; rooms with the same theme gather in the same hall.",
+    "hint": "Each space and ocean theme has its own hall; the four classic colours share one hall, the cozy art room.",
     "roomCount": "{count} rooms",
     "preview": "List rooms",
     "previewTitle": "Rooms in {hall}",
@@ -268,7 +268,7 @@
     "emptyHallTitle": "This hall is empty",
     "firstRoom": "Create your first room and its themed hall appears.",
     "rooms": "Rooms in this hall",
-    "themeHint": "The theme you pick is the hall. Rooms join the hall of the same theme, or a new hall appears.",
+    "themeHint": "Space and ocean themes go to their own hall. The four classic colours all go to the cozy art room, and you can switch the colour any time in the room settings.",
     "studentView": "See children's view",
     "previewNote": "This is what children see. Only open rooms appear.",
     "newestFirst": "newest first",
