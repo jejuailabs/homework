@@ -2,8 +2,9 @@
 import type {ArtworkModuleOptions} from '@/modules/artwork-extensions/types';
 import type {WorldCompanion} from './whiteknee-world-model';
 export type ExhibitionStatus = 'draft' | 'open' | 'closed';
-/** cozy/forest/sky/ocean are the classic room; earth/moon/saturn open the space-mode 3D museum. */
-export type ExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean' | 'earth' | 'moon' | 'saturn';
+/** cozy/forest/sky/ocean are the classic room; earth/moon/saturn open the space-mode 3D museum;
+ * coral/kelp/abyss/lagoon open the ocean-mode 3D museum. */
+export type ExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean' | 'earth' | 'moon' | 'saturn' | 'coral' | 'kelp' | 'abyss' | 'lagoon';
 export type ClassicExhibitionTheme = 'cozy' | 'forest' | 'sky' | 'ocean';
 export type ArtworkStatus = 'pending' | 'approved' | 'revision';
 export type CommentStatus = 'pending' | 'approved' | 'hidden';
@@ -59,7 +60,7 @@ export type ExhibitionListResponse = {
   /** Listing is intentionally bounded; old exhibitions are kept in storage. */
   limit: number; hasMore: boolean; nextCursor: string | null; storageUsage?: ExhibitionStorageUsage;
   /** Teacher: their 전시관 (theme halls) with room counts. */
-  halls?: {kind: 'classic' | 'space'; count: number}[];
+  halls?: {kind: 'classic' | 'space' | 'ocean'; count: number}[];
   /** Student: rooms they have opened, and rooms holding their own artwork. */
   visited?: string[]; mine?: string[];
 };

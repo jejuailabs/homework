@@ -1,16 +1,16 @@
 /**
  * 전시관(hall) = a teacher's building for one theme family; 전시실(room) = one exhibition inside it.
  * A room's hall comes from its saved theme, so existing rooms are grouped without rewriting them.
- * Ocean hall joins when the underwater museum lands; the classic 'ocean' colour stays in the basic hall.
+ * The classic 'ocean' colour theme stays in the classic hall; the underwater museums form the ocean hall.
  */
 import type {Exhibition, ExhibitionTheme} from './exhibition-types';
 
-export const HALL_KINDS = ['classic', 'space'] as const;
+export const HALL_KINDS = ['classic', 'space', 'ocean'] as const;
 export type HallKind = typeof HALL_KINDS[number];
 export const isHallKind = (value: unknown): value is HallKind => HALL_KINDS.includes(value as HallKind);
-export const HALL_THEMES: Record<HallKind, readonly ExhibitionTheme[]> = {classic: ['cozy', 'forest', 'sky', 'ocean'], space: ['earth', 'moon', 'saturn']};
-export const hallOf = (theme: ExhibitionTheme | undefined): HallKind => (HALL_THEMES.space as readonly string[]).includes(theme || '') ? 'space' : 'classic';
-export const HALL_TEXT: Record<HallKind, {ko: string; en: string}> = {classic: {ko: '기본관', en: 'Classic hall'}, space: {ko: '우주관', en: 'Space hall'}};
+export const HALL_THEMES: Record<HallKind, readonly ExhibitionTheme[]> = {classic: ['cozy', 'forest', 'sky', 'ocean'], space: ['earth', 'moon', 'saturn'], ocean: ['coral', 'kelp', 'abyss', 'lagoon']};
+export const hallOf = (theme: ExhibitionTheme | undefined): HallKind => (HALL_THEMES.space as readonly string[]).includes(theme || '') ? 'space' : (HALL_THEMES.ocean as readonly string[]).includes(theme || '') ? 'ocean' : 'classic';
+export const HALL_TEXT: Record<HallKind, {ko: string; en: string}> = {classic: {ko: '기본관', en: 'Classic hall'}, space: {ko: '우주관', en: 'Space hall'}, ocean: {ko: '오션관', en: 'Ocean hall'}};
 export const hallName = (kind: HallKind, locale: string) => HALL_TEXT[kind][locale === 'en' ? 'en' : 'ko'];
 /** The 전시관 record a teacher keeps until they delete it; rooms never depend on it. */
 export const hallRecordId = (ownerUid: string, kind: HallKind) => `${ownerUid}__${kind}`;

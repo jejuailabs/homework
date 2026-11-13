@@ -165,6 +165,7 @@
   "roomTheme": "Room atmosphere",
   "classicMode": "Classic room",
   "spaceMode": "Space museum · 3D",
+  "oceanMode": "Ocean museum · 3D",
   "themes": {
     "cozy": "Cozy art room",
     "forest": "Green forest",
@@ -172,7 +173,11 @@
     "ocean": "Sparkling ocean",
     "earth": "Earth orbit",
     "moon": "Lunar crater",
-    "saturn": "Saturn ring"
+    "saturn": "Saturn ring",
+    "coral": "Coral arch gallery",
+    "kelp": "Kelp corridor",
+    "abyss": "Deep-sea blue eye",
+    "lagoon": "White lagoon"
   },
   "galleryTotal": "All artwork",
   "linkedArtists": "Artists connected",
@@ -263,7 +268,7 @@
     "emptyHallTitle": "This hall is empty",
     "firstRoom": "Create your first room and its themed hall appears.",
     "rooms": "Rooms in this hall",
-    "themeHint": "Classic themes go to the classic hall, space themes to the space hall. A new hall appears if needed.",
+    "themeHint": "Classic themes go to the classic hall, space themes to the space hall, ocean themes to the ocean hall. A new hall appears if needed.",
     "studentView": "See children's view",
     "previewNote": "This is what children see. Only open rooms appear.",
     "newestFirst": "newest first",

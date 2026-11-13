@@ -165,6 +165,7 @@
   "roomTheme": "전시실 분위기",
   "classicMode": "기본 전시실",
   "spaceMode": "우주 미술관 · 3D",
+  "oceanMode": "수중 미술관 · 3D",
   "themes": {
     "cozy": "포근한 미술실",
     "forest": "초록 숲",
@@ -172,7 +173,11 @@
     "ocean": "반짝 바다",
     "earth": "지구 궤도 관측실",
     "moon": "달 분화구 미술관",
-    "saturn": "토성 고리 회랑"
+    "saturn": "토성 고리 회랑",
+    "coral": "산호 아치관",
+    "kelp": "켈프 회랑관",
+    "abyss": "심해 블루아이관",
+    "lagoon": "화이트 라군관"
   },
   "galleryTotal": "전체 작품",
   "linkedArtists": "작가 연결",
@@ -263,7 +268,7 @@
     "emptyHallTitle": "빈 전시관이에요",
     "firstRoom": "첫 전시실을 만들면 테마에 맞는 전시관이 생겨요.",
     "rooms": "전시관 안 전시실",
-    "themeHint": "기본 테마는 기본관에, 우주 테마는 우주관에 들어가요. 없던 전시관이면 새로 생겨요.",
+    "themeHint": "기본 테마는 기본관, 우주 테마는 우주관, 바다 테마는 오션관에 들어가요. 없던 전시관이면 새로 생겨요.",
     "studentView": "아이들 화면 보기",
     "previewNote": "아이들에게 보이는 화면이에요. 열린 전시실만 보여요.",
     "newestFirst": "최근 만든 순",

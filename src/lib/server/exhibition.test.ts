@@ -82,7 +82,8 @@ test('review and reaction inputs reject unsupported states rather than trusting 
   assert.equal(artworkReview('approved'), 'approved');
   assert.equal(exhibitionStatus('closed'), 'closed');
   assert.equal(artReaction('colors'), 'colors');
-  for (const theme of ['cozy', 'forest', 'sky', 'ocean', 'earth', 'moon', 'saturn']) assert.equal(exhibitionTheme(theme), theme);
+  for (const theme of ['cozy', 'forest', 'sky', 'ocean', 'earth', 'moon', 'saturn', 'coral', 'kelp', 'abyss', 'lagoon']) assert.equal(exhibitionTheme(theme), theme);
+  assert.throws(() => exhibitionTheme('reef'));
   assert.throws(() => artworkReview('pending'));
   assert.throws(() => exhibitionStatus('public'));
   assert.throws(() => artReaction('100-points'));

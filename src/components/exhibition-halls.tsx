@@ -1,9 +1,10 @@
 'use client';
 import {useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode} from 'react';
 import {useTranslations} from 'next-intl';
-import {ArrowLeft, ChevronLeft, ChevronRight, Eye, LoaderCircle, Rocket, Sparkles, Star, Home, Users} from 'lucide-react';
+import {ArrowLeft, ChevronLeft, ChevronRight, Eye, LoaderCircle, Rocket, Sparkles, Star, Home, Users, Fish} from 'lucide-react';
 import {CLASSIC_STICKER, hallName, hallOf, summarizeHalls, type HallKind} from '@/lib/exhibition-halls';
 import {isSpaceTheme, spaceThemePreview} from '@/lib/space-exhibition/themes';
+import {isOceanTheme, oceanThemePreview} from '@/lib/ocean-exhibition/themes';
 import type {Exhibition} from '@/lib/exhibition-types';
 import {exhibitionDateLabel} from '@/lib/exhibition-date';
 
@@ -13,13 +14,15 @@ export type HallRoom = Pick<Exhibition, 'id' | 'title' | 'className' | 'classId'
 /** Room picture: the space rooms show their exterior, classic rooms a sticker on their colour. */
 export function RoomThumb({theme}: {theme?: Exhibition['theme']}) {
   if (isSpaceTheme(theme)) return <span className="ex-room-thumb is-space"><img src={spaceThemePreview(theme)} alt="" loading="lazy"/></span>;
+  if (isOceanTheme(theme)) return <span className="ex-room-thumb is-space is-ocean"><img src={oceanThemePreview(theme)} alt="" loading="lazy"/></span>;
   return <span className={`ex-room-thumb ex-thumb-${theme || 'cozy'}`}><img src={CLASSIC_STICKER[theme || 'cozy'] || CLASSIC_STICKER.cozy} alt="" loading="lazy"/></span>;
 }
 export function HallThumb({kind}: {kind: HallKind}) {
   if (kind === 'space') return <span className="ex-hall-thumb is-space"><img src={spaceThemePreview('saturn')} alt="" loading="lazy"/></span>;
+  if (kind === 'ocean') return <span className="ex-hall-thumb is-space is-ocean"><img src={oceanThemePreview('coral')} alt="" loading="lazy"/></span>;
   return <span className="ex-hall-thumb is-classic"><img src={CLASSIC_STICKER.sky} alt="" loading="lazy"/><img src={CLASSIC_STICKER.cozy} alt="" loading="lazy"/></span>;
 }
-const HallIcon = ({kind, size = 15}: {kind: HallKind; size?: number}) => kind === 'space' ? <Rocket size={size}/> : <Home size={size}/>;
+const HallIcon = ({kind, size = 15}: {kind: HallKind; size?: number}) => kind === 'space' ? <Rocket size={size}/> : kind === 'ocean' ? <Fish size={size}/> : <Home size={size}/>;
 
 /** Teacher home: one card per 전시관 with its room count; the newest room's hall carries LATEST. */
 export function TeacherHallList({halls, selected, latest, locale, onSelect, onPreview}: {halls: {kind: HallKind; count: number}[]; selected: HallKind | null; latest: HallKind | null; locale: string; onSelect: (kind: HallKind) => void; onPreview: (kind: HallKind) => void}) {

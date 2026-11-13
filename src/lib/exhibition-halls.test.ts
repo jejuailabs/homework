@@ -8,6 +8,8 @@ test('a room joins its hall by theme; rooms with no theme stay in the classic ha
   assert.equal(hallOf('cozy'), 'classic');
   assert.equal(hallOf('ocean'), 'classic');
   assert.equal(hallOf('saturn'), 'space');
+  assert.equal(hallOf('coral'), 'ocean');
+  assert.equal(hallOf('lagoon'), 'ocean');
   assert.equal(hallOf(undefined), 'classic');
 });
 
