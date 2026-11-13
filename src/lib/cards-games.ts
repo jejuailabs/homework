@@ -16,7 +16,8 @@ const filled = (value: string) => normalizeCardAnswer(value).length > 0;
 const int = (value: unknown, min: number, max: number) => Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
 
 // 짝 맞추기: 단어 타일과 뜻 타일을 짝지어 모두 지우는 시간. 틀리면 시간이 조금 더해질 뿐 점수를 깎지 않는다.
-export const PAIR_MAX = 6, PAIR_MIN = 3, PAIR_PENALTY_MS = 2000, PAIR_MIN_MS = 500;
+// 빠른 기록도 정상으로 인정한다(2026-11-13): 짝 맞추기는 최소 시간 제한을 두지 않는다.
+export const PAIR_MAX = 6, PAIR_MIN = 3, PAIR_PENALTY_MS = 2000;
 export type PairTile = {key: string; cardId: string; side: 'front' | 'back'; text: string};
 /** Cards that can be told apart on a tile: no repeated word, no repeated meaning, and the two sides differ. */
 export function pairEligible(cards: CardEntry[]) {
@@ -165,7 +166,6 @@ export function checkGameResult(game: CardGame, input: Record<string, unknown>, 
     if (pairs < PAIR_MIN) return fail('cards');
     if (input.pairs !== pairs) return fail('pairs');
     if (!int(input.mistakes, 0, pairs * 30)) return fail('mistakes');
-    if (ms < pairs * PAIR_MIN_MS) return fail('too-fast');
     return {ok: true, record: {score: pairTime(ms, input.mistakes as number), timeMs: ms}};
   }
   if (game === 'rain') {
