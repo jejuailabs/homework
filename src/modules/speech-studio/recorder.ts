@@ -18,13 +18,13 @@ export const micProblemText: Record<MicProblem, {title: string; steps: string[]}
   unsupported: {title: '이 브라우저는 녹음을 지원하지 않아요', steps: ['최신 크롬이나 사파리에서 열어 주세요.']},
   insecure: {title: '보안 연결(https)에서만 녹음할 수 있어요', steps: ['주소가 https로 시작하는지 확인해 주세요.']},
 };
-const inAppBrowser = () => /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|Line\/|DaumApps|everytimeApp|BAND\//i.test(navigator.userAgent);
+export const inAppBrowser = () => /KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|Line\/|DaumApps|everytimeApp|BAND\//i.test(navigator.userAgent);
 
 export async function microphonePermission(): Promise<PermissionState | 'unknown'> {
   try {return (await navigator.permissions.query({name: 'microphone' as PermissionName})).state;}
   catch {return 'unknown';}
 }
-function classify(error: unknown): MicProblem {
+export function classify(error: unknown): MicProblem {
   const name = error instanceof DOMException ? error.name : '';
   if (name === 'NotAllowedError' || name === 'SecurityError') return inAppBrowser() ? 'in-app' : 'blocked';
   if (name === 'NotReadableError' || name === 'AbortError') return 'busy';
@@ -34,7 +34,7 @@ function classify(error: unknown): MicProblem {
 
 export type Take = {samples: Float32Array; wav: Uint8Array; url: string; seconds: number};
 
-async function toTake(blob: Blob, maxSeconds: number): Promise<Take> {
+export async function toTake(blob: Blob, maxSeconds: number): Promise<Take> {
   const browser = globalThis as typeof globalThis & {webkitAudioContext?: typeof AudioContext; webkitOfflineAudioContext?: typeof OfflineAudioContext};
   const Audio = browser.AudioContext || browser.webkitAudioContext, Offline = browser.OfflineAudioContext || browser.webkitOfflineAudioContext;
   if (!Audio || !Offline) throw new Error('이 브라우저에서는 녹음을 바꿀 수 없어요. 최신 크롬·사파리에서 다시 녹음해 주세요.');

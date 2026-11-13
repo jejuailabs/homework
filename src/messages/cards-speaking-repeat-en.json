@@ -23,5 +23,17 @@
   "micNote": "Find a quiet spot and speak clearly near the microphone.",
   "closed": "Recording is closed after the deadline. You can still listen.",
   "preview": "Preview · recordings are not saved",
-  "cardOf": "{n}/{total}"
+  "cardOf": "{n}/{total}",
+  "recordFailed": "Could not make the recording. Try again.",
+  "checkTitle": "Microphone check",
+  "checkBody": "Say \"one, two, three\" out loud. If the bar moves, the microphone hears you.",
+  "checkMeter": "Microphone level",
+  "checkOk": "Got it! Ready to start?",
+  "checkWaiting": "Waiting for your voice…",
+  "checkBack": "Back",
+  "checkStart": "Start cards",
+  "checkHelp": "If the bar does not move, check the headset or microphone and the sound settings.",
+  "savedGood": "Good job! Recording saved",
+  "quietAgain": "Nothing was heard. Once more!",
+  "quietStop": "Nothing was heard twice in a row. Check the microphone and try again."
 }
