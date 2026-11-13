@@ -36,3 +36,5 @@
 .ex-screen-back{position:absolute;top:12px;left:12px;z-index:1;display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border:1px solid rgba(252,244,220,.45);border-radius:999px;background:rgba(20,36,30,.7);color:#fcf4dc;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
 .ex-screen-back:hover{background:rgba(20,36,30,.88)}
 @media(max-width:640px){.ex-screen-pick>img{height:47dvh}.ex-screen-content.is-focus figure>img{height:calc(100dvh - 300px)}}
+.ex-screen-video{display:block;width:100%;max-width:100%;height:min(calc(100dvh - 330px),760px);object-fit:contain;background:#000;border-radius:12px}
+@media(max-width:640px){.ex-screen-video{height:calc(100dvh - 300px)}}
