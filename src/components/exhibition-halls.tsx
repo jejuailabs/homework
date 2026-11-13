@@ -79,7 +79,8 @@ export function ExhibitionEntry({rooms, visited, mine, locale, onOpen}: {rooms: 
   const [hall, setHall] = useState<HallKind | null>(null);
   const seen = useMemo(() => new Set(visited), [visited]), own = useMemo(() => new Set(mine), [mine]);
   const shown = useMemo(() => rooms.filter(room => room.status !== 'draft').sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [rooms]);
-  const halls = useMemo(() => summarizeHalls(shown), [shown]);
+  // Newest hall first, so the hall with the latest room sits at the top of the shelf.
+  const halls = useMemo(() => summarizeHalls(shown).sort((a, b) => b.latestAt.localeCompare(a.latestAt)), [shown]);
   const recent = shown.slice(0, 6), strip = useRef<HTMLDivElement>(null);
   const page = (direction: number) => {const row = strip.current; if (row) row.scrollBy({left: direction * row.clientWidth, behavior: 'smooth'});};
   const fresh = (rooms: Exhibition[]) => rooms.some(room => !seen.has(room.id));
@@ -87,7 +88,8 @@ export function ExhibitionEntry({rooms, visited, mine, locale, onOpen}: {rooms: 
   const open = hall ? halls.find(item => item.kind === hall) : null;
   if (open) return <section className="ex-entry">
     <div className="ex-entry-head"><button type="button" className="ex-button" onClick={() => setHall(null)}><ArrowLeft size={16}/>{t('entry.back')}</button><h2><HallIcon kind={open.kind} size={18}/>{hallName(open.kind, locale)}</h2><span className="ex-entry-count">{t('halls.roomCount', {count: open.count})}</span></div>
-    <div className="ex-entry-grid">{open.rooms.map(room => <RoomCard key={room.id} room={room} locale={locale} isNew={!seen.has(room.id)} mine={own.has(room.id)} onOpen={onOpen}/>)}</div>
+    {/* Space and ocean halls show their own scenery with a door per room, like the teacher's view. */}
+    {hallFamily(open.kind) !== 'classic' ? <ThemedHallLobby kind={open.kind} rooms={open.rooms} locale={locale} onOpen={onOpen}/> : <div className="ex-entry-grid">{open.rooms.map(room => <RoomCard key={room.id} room={room} locale={locale} isNew={!seen.has(room.id)} mine={own.has(room.id)} onOpen={onOpen}/>)}</div>}
   </section>;
   return <section className="ex-entry">
     <div className="ex-entry-head"><h2>{t('entry.recent')}</h2>{recent.length > 2 && <span className="ex-entry-arrows"><button type="button" className="ex-icon-btn" aria-label={t('entry.prev')} onClick={() => page(-1)}><ChevronLeft size={18}/></button><button type="button" className="ex-icon-btn" aria-label={t('entry.next')} onClick={() => page(1)}><ChevronRight size={18}/></button></span>}</div>
