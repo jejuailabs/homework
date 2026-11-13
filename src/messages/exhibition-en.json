@@ -265,7 +265,9 @@
     "rooms": "Rooms in this hall",
     "themeHint": "Classic themes go to the classic hall, space themes to the space hall. A new hall appears if needed.",
     "studentView": "See children's view",
-    "previewNote": "This is what children see. Only open rooms appear."
+    "previewNote": "This is what children see. Only open rooms appear.",
+    "newestFirst": "newest first",
+    "picked": "Viewing"
   },
   "entry": {
     "recent": "Newly opened rooms",

@@ -74,11 +74,6 @@ dialog .ex-delete-zone{margin-top:0}
 .ex-hall-copy small{color:var(--muted);font-size:12px}
 .ex-latest,.ex-new{display:inline-flex;align-items:center;gap:3px;font-style:normal;font-size:10px;font-weight:800;letter-spacing:.02em;padding:2px 6px;border-radius:7px;background:#fbe3dc;color:#9a3f2a}
 .ex-latest{background:#e5f0dc;color:#3f6a35}
-.ex-hall-rooms{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:60vh;overflow:auto}
-.ex-hall-rooms button{display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer}
-.ex-hall-rooms button:hover{border-color:var(--accent)}
-.ex-hall-room-title{flex:1;min-width:0;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ex-hall-room-meta{flex:none;color:var(--muted);font-size:11px}
 .ex-hall-loading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}
 .ex-preview-note{display:flex;align-items:center;gap:6px;margin:0 0 12px}
 .ex-entry{border:1px solid var(--border);border-radius:20px;background:var(--surface);padding:18px}
@@ -113,3 +108,33 @@ dialog .ex-delete-zone{margin-top:0}
 .ex-entry-head>.ex-button{flex:none}
 .ex-entry-count{flex:none;white-space:nowrap}
 @media(max-width:760px){.ex-entry-head>.ex-button{min-height:36px;padding:6px 10px;font-size:12px}}
+.ex-hall-sheet{padding:18px 22px 22px}
+.ex-hall-sheet-head{display:flex;align-items:center;gap:14px;padding:14px;margin-bottom:14px;border-radius:16px;background:var(--ex-cream)}
+.ex-hall-sheet-head .ex-hall-thumb{width:84px;height:62px}
+.ex-hall-rooms{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.ex-hall-rooms button{display:flex;align-items:center;gap:12px;width:100%;padding:8px 12px 8px 8px;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);text-align:left;cursor:pointer;transition:border-color .15s,background .15s,transform .15s}
+.ex-hall-rooms button:hover{border-color:var(--accent);background:var(--accent-soft);transform:translateY(-1px)}
+.ex-hall-room-thumb{flex:none;width:64px;border-radius:10px;overflow:hidden}
+.ex-hall-room-thumb .ex-room-thumb img{width:56%}
+.ex-hall-room-text{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.ex-hall-room-title{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ex-hall-room-meta{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden}
+.ex-hall-rooms .ex-status{position:static;flex:none}
+.ex-hall-room-go{flex:none;color:var(--muted)}
+.ex-hall-rooms button:hover .ex-hall-room-go{color:var(--accent)}
+@media(max-width:520px){.ex-hall-sheet{padding:14px 14px 18px}.ex-hall-room-thumb{width:52px}.ex-hall-rooms button{gap:9px}}
+.ex-hall-list{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.ex-hall-card{border-radius:20px;transition:transform .15s,box-shadow .15s}
+.ex-hall-card:hover{transform:translateY(-2px);box-shadow:0 10px 26px #6b4f2a14}
+.ex-hall-main{flex-direction:column;align-items:stretch;gap:12px;padding:12px 12px 14px}
+.ex-hall-cover{position:relative;display:block}
+.ex-hall-cover .ex-hall-thumb{width:100%;height:auto;aspect-ratio:16/9;border-radius:14px}
+.ex-hall-cover .ex-hall-thumb.is-classic img:first-child{left:14%;top:16%;width:42%;height:auto}
+.ex-hall-cover .ex-hall-thumb.is-classic img:last-child{right:14%;bottom:12%;width:32%;height:auto}
+.ex-hall-cover .ex-latest{position:absolute;top:10px;left:10px;box-shadow:0 2px 8px #0000001a}
+.ex-hall-picked{position:absolute;top:10px;right:10px;font-style:normal;font-size:10px;font-weight:800;padding:2px 8px;border-radius:7px;background:var(--accent);color:#fff}
+.ex-hall-main .ex-hall-copy{padding:0 4px}
+.ex-hall-main .ex-hall-copy strong{font-size:17px}
+.ex-hall-main .ex-hall-copy small{font-size:13px}
+@media(max-width:900px){.ex-hall-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.ex-hall-list{grid-template-columns:1fr}.ex-hall-main{flex-direction:row;align-items:center}.ex-hall-cover{flex:none;width:120px}}

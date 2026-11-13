@@ -1,10 +1,11 @@
 'use client';
 import {useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode} from 'react';
 import {useTranslations} from 'next-intl';
-import {ArrowLeft, ChevronLeft, ChevronRight, Eye, LoaderCircle, Rocket, Sparkles, Star, Home} from 'lucide-react';
+import {ArrowLeft, ChevronLeft, ChevronRight, Eye, LoaderCircle, Rocket, Sparkles, Star, Home, Users} from 'lucide-react';
 import {CLASSIC_STICKER, hallName, hallOf, summarizeHalls, type HallKind} from '@/lib/exhibition-halls';
 import {isSpaceTheme, spaceThemePreview} from '@/lib/space-exhibition/themes';
 import type {Exhibition} from '@/lib/exhibition-types';
+import {exhibitionDateLabel} from '@/lib/exhibition-date';
 
 type DialogProps = {title: string; children: ReactNode; onClose: () => void; busy?: boolean; wide?: boolean};
 export type HallRoom = Pick<Exhibition, 'id' | 'title' | 'className' | 'classId' | 'status' | 'theme' | 'approvedCount' | 'createdAt'>;
@@ -25,8 +26,8 @@ export function TeacherHallList({halls, selected, latest, locale, onSelect, onPr
   const t = useTranslations('exhibition');
   return <div className="ex-hall-list">{halls.map(hall => <div key={hall.kind} className="ex-hall-card" aria-current={selected === hall.kind ? 'true' : undefined}>
     <button type="button" className="ex-hall-main" onClick={() => onSelect(hall.kind)}>
-      <HallThumb kind={hall.kind}/>
-      <span className="ex-hall-copy"><strong><HallIcon kind={hall.kind}/>{hallName(hall.kind, locale)}{latest === hall.kind && <em className="ex-latest"><Sparkles size={11}/>LATEST</em>}</strong><small>{t('halls.roomCount', {count: hall.count})}</small></span>
+      <span className="ex-hall-cover"><HallThumb kind={hall.kind}/>{latest === hall.kind && <em className="ex-latest"><Sparkles size={11}/>LATEST</em>}{selected === hall.kind && <em className="ex-hall-picked">{t('halls.picked')}</em>}</span>
+      <span className="ex-hall-copy"><strong><HallIcon kind={hall.kind} size={17}/>{hallName(hall.kind, locale)}</strong><small>{t('halls.roomCount', {count: hall.count})}</small></span>
     </button>
     <button type="button" className="ex-text-button ex-hall-preview" onClick={() => onPreview(hall.kind)}><Eye size={14}/>{t('halls.preview')}</button>
   </div>)}</div>;
@@ -44,8 +45,15 @@ export function HallPreview({kind, locale, DialogComponent, onClose, onOpen}: {k
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
   return <DialogComponent title={t('halls.previewTitle', {hall: hallName(kind, locale)})} onClose={onClose}>
-    {error ? <p className="ex-form-error" role="alert">{error}</p> : !rooms ? <p role="status" className="ex-hall-loading"><LoaderCircle className="spin" size={18}/>{t('loadingRooms')}</p> : !rooms.length ? <p className="ex-form-hint">{t('halls.emptyHall')}</p> :
-      <ol className="ex-hall-rooms">{rooms.map(room => <li key={room.id}><button type="button" onClick={() => onOpen(room.id)}><span className="ex-hall-room-title">{room.title}</span><span className="ex-hall-room-meta">{room.className} · {t(room.status)}</span><ChevronRight size={15}/></button></li>)}</ol>}
+    {error ? <p className="ex-form-error ex-hall-sheet" role="alert">{error}</p> : !rooms ? <p role="status" className="ex-hall-loading ex-hall-sheet"><LoaderCircle className="spin" size={18}/>{t('loadingRooms')}</p> : !rooms.length ? <p className="ex-form-hint ex-hall-sheet">{t('halls.emptyHall')}</p> :
+      <div className="ex-hall-sheet">
+        <div className="ex-hall-sheet-head"><HallThumb kind={kind}/><span className="ex-hall-copy"><strong><HallIcon kind={kind}/>{hallName(kind, locale)}</strong><small>{t('halls.roomCount', {count: rooms.length})} · {t('halls.newestFirst')}</small></span></div>
+        <ol className="ex-hall-rooms">{rooms.map(room => <li key={room.id}><button type="button" onClick={() => onOpen(room.id)}>
+          <span className="ex-hall-room-thumb"><RoomThumb theme={room.theme}/></span>
+          <span className="ex-hall-room-text"><span className="ex-hall-room-title" title={room.title}>{room.title}</span><span className="ex-hall-room-meta"><Users size={11}/>{room.className}{exhibitionDateLabel(room.createdAt, locale) && <> · {exhibitionDateLabel(room.createdAt, locale)}</>}</span></span>
+          <span className={`ex-status ex-status-${room.status}`}>{t(room.status)}</span><ChevronRight className="ex-hall-room-go" size={16}/>
+        </button></li>)}</ol>
+      </div>}
   </DialogComponent>;
 }
 
