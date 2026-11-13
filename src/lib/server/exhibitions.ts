@@ -102,7 +102,8 @@ async function teacherHalls(ownerUid: string) {
     db().collection('exhibitions').where('ownerUid', '==', ownerUid).select('theme').get(),
   ]);
   const counts = HALL_KINDS.map(kind => themes.docs.filter(doc => hallOf(doc.data().theme) === kind).length);
-  const saved = new Set(records.docs.map(doc => doc.data().kind as HallKind));
+  // Only per-theme records count; the earlier family records (classic/space/ocean) are left untouched and ignored.
+  const saved = new Set(records.docs.filter(doc => doc.data().scheme === 'theme').map(doc => doc.data().kind as HallKind));
   const missing = HALL_KINDS.filter((kind, index) => counts[index] > 0 && !saved.has(kind));
   await Promise.all(missing.map(kind => keepHall(ownerUid, kind)));
   return HALL_KINDS.filter((kind, index) => saved.has(kind) || counts[index] > 0).map(kind => ({kind, count: counts[HALL_KINDS.indexOf(kind)]}));
@@ -306,7 +307,7 @@ async function deleteExhibition(ctx: Context, exhibition: Exhibition, request: R
 const hallRef = (ownerUid: string, kind: HallKind) => db().doc(`exhibitionHalls/${hallRecordId(ownerUid, kind)}`);
 /** Keeps the teacher's 전시관 record; only ever adds, so a hall stays until the teacher deletes it. */
 async function keepHall(ownerUid: string, kind: HallKind, createdAt = now()) {
-  await hallRef(ownerUid, kind).create({ownerUid, kind, createdAt}).catch(error => {if (error?.code !== 6) throw error;});
+  await hallRef(ownerUid, kind).create({ownerUid, kind, scheme: 'theme', createdAt}).catch(error => {if (error?.code !== 6) throw error;});
 }
 /** A teacher's rooms, optionally of one hall. The hall is read from each room's theme (rooms with no theme are classic). */
 async function ownerRooms(ownerUid: string, kind?: HallKind) {

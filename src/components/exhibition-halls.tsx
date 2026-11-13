@@ -2,7 +2,7 @@
 import {useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode} from 'react';
 import {useTranslations} from 'next-intl';
 import {ArrowLeft, ChevronLeft, ChevronRight, Eye, LoaderCircle, Rocket, Sparkles, Star, Home, Users, Fish, DoorOpen} from 'lucide-react';
-import {CLASSIC_STICKER, hallName, hallOf, summarizeHalls, type HallKind} from '@/lib/exhibition-halls';
+import {CLASSIC_STICKER, hallFamily, hallName, hallOf, summarizeHalls, type HallKind} from '@/lib/exhibition-halls';
 import {isSpaceTheme, spaceThemePreview} from '@/lib/space-exhibition/themes';
 import {isOceanTheme, oceanThemePreview} from '@/lib/ocean-exhibition/themes';
 import type {Exhibition} from '@/lib/exhibition-types';
@@ -17,12 +17,13 @@ export function RoomThumb({theme}: {theme?: Exhibition['theme']}) {
   if (isOceanTheme(theme)) return <span className="ex-room-thumb is-space is-ocean"><img src={oceanThemePreview(theme)} alt="" loading="lazy"/></span>;
   return <span className={`ex-room-thumb ex-thumb-${theme || 'cozy'}`}><img src={CLASSIC_STICKER[theme || 'cozy'] || CLASSIC_STICKER.cozy} alt="" loading="lazy"/></span>;
 }
+/** A hall's picture is its theme's own picture. */
 export function HallThumb({kind}: {kind: HallKind}) {
-  if (kind === 'space') return <span className="ex-hall-thumb is-space"><img src={spaceThemePreview('saturn')} alt="" loading="lazy"/></span>;
-  if (kind === 'ocean') return <span className="ex-hall-thumb is-space is-ocean"><img src={oceanThemePreview('coral')} alt="" loading="lazy"/></span>;
-  return <span className="ex-hall-thumb is-classic"><img src={CLASSIC_STICKER.sky} alt="" loading="lazy"/><img src={CLASSIC_STICKER.cozy} alt="" loading="lazy"/></span>;
+  if (isSpaceTheme(kind)) return <span className="ex-hall-thumb is-space"><img src={spaceThemePreview(kind)} alt="" loading="lazy"/></span>;
+  if (isOceanTheme(kind)) return <span className="ex-hall-thumb is-space is-ocean"><img src={oceanThemePreview(kind)} alt="" loading="lazy"/></span>;
+  return <span className={`ex-hall-thumb is-classic ex-thumb-${kind}`}><img src={CLASSIC_STICKER[kind] || CLASSIC_STICKER.cozy} alt="" loading="lazy"/></span>;
 }
-const HallIcon = ({kind, size = 15}: {kind: HallKind; size?: number}) => kind === 'space' ? <Rocket size={size}/> : kind === 'ocean' ? <Fish size={size}/> : <Home size={size}/>;
+const HallIcon = ({kind, size = 15}: {kind: HallKind; size?: number}) => hallFamily(kind) === 'space' ? <Rocket size={size}/> : hallFamily(kind) === 'ocean' ? <Fish size={size}/> : <Home size={size}/>;
 
 /** Teacher home: one card per 전시관 with its room count; the newest room's hall carries LATEST. */
 export function TeacherHallList({halls, selected, latest, locale, onSelect, onPreview}: {halls: {kind: HallKind; count: number}[]; selected: HallKind | null; latest: HallKind | null; locale: string; onSelect: (kind: HallKind) => void; onPreview: (kind: HallKind) => void}) {
@@ -105,8 +106,8 @@ export function ExhibitionEntry({rooms, visited, mine, locale, onOpen}: {rooms: 
  */
 export function ThemedHallLobby({kind, rooms, locale, onOpen}: {kind: HallKind; rooms: Exhibition[]; locale: string; onOpen: (id: string) => void}) {
   const t = useTranslations('exhibition');
-  const backdrop = kind === 'ocean' ? oceanThemePreview(isOceanTheme(rooms[0]?.theme) ? rooms[0].theme : 'coral') : spaceThemePreview(isSpaceTheme(rooms[0]?.theme) ? rooms[0].theme : 'saturn');
-  return <div className={`ex-hall-lobby is-${kind}`}>
+  const backdrop = isOceanTheme(kind) ? oceanThemePreview(kind) : isSpaceTheme(kind) ? spaceThemePreview(kind) : '';
+  return <div className={`ex-hall-lobby is-${hallFamily(kind)}`}>
     <img className="ex-hall-lobby-bg" src={backdrop} alt=""/>
     <div className="ex-hall-lobby-inner">
       <p className="ex-hall-lobby-sign"><HallIcon kind={kind} size={16}/>{hallName(kind, locale)} · {t('halls.lobbyHint')}</p>
