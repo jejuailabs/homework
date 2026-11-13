@@ -1,16 +1,19 @@
 /**
- * 전시관(hall) = one room theme (11 of them); 전시실(room) = one exhibition inside it.
- * A room's hall is its saved theme, so existing rooms are grouped without rewriting them.
+ * 전시관(hall) → 전시실(room). Space and ocean: each theme is its own hall.
+ * Classic: the four colour themes (cozy/forest/sky/ocean) are one hall, 포근한 미술실; the colour is just the room's look,
+ * switched with one button in the room settings as before. Rooms are grouped from their saved theme, never rewritten.
  */
 import type {Exhibition, ExhibitionTheme} from './exhibition-types';
 
 export const HALL_KINDS = ['cozy', 'forest', 'sky', 'ocean', 'earth', 'moon', 'saturn', 'coral', 'kelp', 'abyss', 'lagoon'] as const satisfies readonly ExhibitionTheme[];
 export type HallKind = typeof HALL_KINDS[number];
 export const isHallKind = (value: unknown): value is HallKind => HALL_KINDS.includes(value as HallKind);
-/** Rooms saved before themes existed are cozy. */
-export const hallOf = (theme: ExhibitionTheme | undefined): HallKind => isHallKind(theme) ? theme : 'cozy';
-/** Which 3D family a hall belongs to (classic rooms, the space museum, the underwater museum). */
+/** Which 3D family a theme belongs to (classic rooms, the space museum, the underwater museum). */
 export const hallFamily = (kind: HallKind): 'classic' | 'space' | 'ocean' => ['earth', 'moon', 'saturn'].includes(kind) ? 'space' : ['coral', 'kelp', 'abyss', 'lagoon'].includes(kind) ? 'ocean' : 'classic';
+/** A room's hall: every classic colour (and rooms saved before themes existed) is the one 포근한 미술실 hall. */
+export const hallOf = (theme: ExhibitionTheme | undefined): HallKind => {const kind = isHallKind(theme) ? theme : 'cozy'; return hallFamily(kind) === 'classic' ? 'cozy' : kind;};
+/** Only these are halls; forest/sky/ocean are looks inside 포근한 미술실. */
+export const isHallId = (kind: HallKind) => hallOf(kind) === kind;
 export const HALL_TEXT: Record<HallKind, {ko: string; en: string}> = {
   cozy: {ko: '포근한 미술실', en: 'Cozy art room'}, forest: {ko: '초록 숲', en: 'Green forest'}, sky: {ko: '구름 하늘', en: 'Cloudy sky'}, ocean: {ko: '반짝 바다', en: 'Sparkling ocean'},
   earth: {ko: '지구 궤도 관측실', en: 'Earth orbit'}, moon: {ko: '달 분화구 미술관', en: 'Lunar crater'}, saturn: {ko: '토성 고리 회랑', en: 'Saturn ring'},
