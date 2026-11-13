@@ -2,6 +2,14 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {activeKeys, canAnswer, canRaceAnswer, raceOrder, raceProgress, raceStandings, roomDue, roomTransition, roundResults, snakeTeams, teamScores} from './room-machine';
 import type {PlayRoom, RoomPlayer} from './room-types';
+import {canChangeAnswer} from './room-types';
+test('card team rooms let a student change the answer; other rooms keep the first', () => {
+  assert.equal(canChangeAnswer({mode: 'team', cards: {answer: 'choice'} as PlayRoom['cards']}), true);
+  assert.equal(canChangeAnswer({mode: 'team', cards: {answer: 'typed'} as PlayRoom['cards']}), false);
+  assert.equal(canChangeAnswer({mode: 'team', cards: undefined}), false);
+  assert.equal(canChangeAnswer({mode: 'race', cards: {answer: 'choice'} as PlayRoom['cards']}), false);
+  assert.equal(canChangeAnswer({mode: 'speed', cards: undefined}), false);
+});
 
 const player = (key: string): RoomPlayer => ({key, uid: key, name: key, character: 'cat', outfit: {}, spaceOutfit: {}, team: 0, score: 0, lastSeen: 1000, forfeited: false, answered: 0, eligibleFrom: 0, joinedAt: 1000, lastReactionAt: 0, reaction: '', answeredRound: -1});
 const room = (): PlayRoom => ({id: 'test', code: '1234', classId: 'c', ownerUid: 't', hostKey: 'a', mode: 'speed', status: 'lobby', kinds: ['riddle'], playerKeys: ['a', 'b'], players: [], teams: [], teamCount: 2, round: -1, roundsTotal: 2, questionMs: 10000, roundStartsAt: 0, roundEndsAt: 0, statusEndsAt: 600000, createdAt: 0, updatedAt: 0, expiresAtMs: 600000, settled: false, pausedFrom: null, pausedAt: 0, skippedRounds: []});

@@ -20,6 +20,8 @@ export type RoomCardSource = {setId: string; title: string; direction: CardDirec
 export const HUNT_TRIES = 3;
 export const HUNT_POINTS = 1000;
 export const isHuntRoom = (room: Pick<PlayRoom, 'cards'> | null | undefined) => room?.cards?.answer === 'typed';
+/** 카드놀이 팀전(객관식): 문제 시간 안에는 다른 보기를 다시 눌러 답을 바꿀 수 있다. 점수는 마지막 답과 그 시간으로 매긴다. */
+export const canChangeAnswer = (room: Pick<PlayRoom, 'mode' | 'cards'> | null | undefined) => room?.mode === 'team' && !!room.cards && room.cards.answer !== 'typed';
 export type RoomPlayer = {key: string; uid: string; name: string; character: string; imageSrc?: string; outfit: WardrobeOutfit; spaceOutfit: Partial<Record<'body'|'bag', string>>; team: number; score: number; lastSeen: number; forfeited: boolean; answered: number; eligibleFrom: number; joinedAt: number; lastReactionAt: number; reaction: string; answeredRound: number; classId?: string; raceCorrect?: number; raceLastAt?: number};
 export type RoomPlayerSummary = Pick<RoomPlayer, 'key' | 'name' | 'character' | 'imageSrc' | 'outfit' | 'spaceOutfit' | 'team' | 'score' | 'lastSeen' | 'forfeited' | 'reaction' | 'raceCorrect' | 'raceLastAt'> & {answered?: number};
 export type RoomTeam = {id: number; name: string; color: string; score: number; count: number};
