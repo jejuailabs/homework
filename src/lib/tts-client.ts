@@ -71,7 +71,7 @@ export function createTtsPlayer(env: TtsClientEnv) {
   /** Reads `text` once. Resolves when playback ends (or the device voice has been asked to read it). */
   async function speak(text: string, options: SpeakOptions) {
     stop();
-    const mine = token, rate = Math.min(2, Math.max(0.5, options.rate ?? 1));
+    const mine = token, rate = Math.min(2, Math.max(0.4, options.rate ?? 1));
     const ready = knownLink(text, options);
     if (ready) return play(ready, rate, mine, options.fallback);
     const url = await link(text, options);

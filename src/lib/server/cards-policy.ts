@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, id, text, type Role } from './policy';
-import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, cardMastery, cardReviewDate, cardReviewStates, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
+import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, cardMastery, cardReviewDate, cardReviewStates, gradeCardAnswer, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
 import { validPlanDate } from '../cards-planner';
 import { fitChunks } from '../cards-chunks';
 import { parseDrill, type CardDrill } from '../cards-drill';
@@ -196,7 +196,9 @@ export function answersReleased(settings: CardTestSettings, dueAt: string | null
 export function studyResponses(value: unknown, snapshot: CardSnapshot, mode: CardStudyMode, direction: CardDirection, requirements: CardRequiredModes) {
   if (!Array.isArray(value) || value.length < 1 || value.length > 100) throw new ApiError(400, '학습 응답은 1~100개씩 저장해 주세요.');
   const rule = requirements[mode];
-  if (rule.requiredCount > 0 && rule.direction !== direction) throw new ApiError(400, '선생님이 정한 카드 제시 방향으로 학습해 주세요.', 'STUDY_DIRECTION');
+  // 문장 세트 스펠 always builds the English sentence, whatever direction the teacher set for the other modes.
+  const sentenceSpell = mode === 'spell' && snapshot.type === 'sentence';
+  if (!sentenceSpell && rule.requiredCount > 0 && rule.direction !== direction) throw new ApiError(400, '선생님이 정한 카드 제시 방향으로 학습해 주세요.', 'STUDY_DIRECTION');
   const allowed = new Map(snapshot.cards.slice(rule.rangeStart - 1, rule.rangeEnd).map(card => [card.id, card]));
   const seen = new Set<string>();
   return value.map(entry => {
@@ -205,7 +207,8 @@ export function studyResponses(value: unknown, snapshot: CardSnapshot, mode: Car
     if (!card || seen.has(cardId)) throw new ApiError(400, '학습 구간 또는 중복 카드를 확인해 주세요.', 'STUDY_CARD');
     seen.add(cardId);
     const answer = text(raw.answer, '학습 답', 1000, true);
-    return { cardId, answer, correct: mode === 'memorize' || isCorrectCardAnswer(card, direction, answer), expectedAnswer: cardAnswer(card, direction) };
+    const graded = gradeCardAnswer(card, mode, direction, answer, snapshot.type);
+    return { cardId, answer, correct: graded.correct, expectedAnswer: graded.expected };
   });
 }
 export function testAnswers(value: unknown, questionIds: string[]) {

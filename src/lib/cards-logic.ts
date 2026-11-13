@@ -1,6 +1,6 @@
 // Pure card rules shared by the browser and the server, so instant practice feedback can never drift from server grading.
 import { drillAnswerText, drillQuestion, gradeDrill } from './cards-drill';
-import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardMisses, CardMissSummary, CardRequiredModes, CardReviewState, CardReviewStates, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
+import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardMisses, CardMissSummary, CardRequiredModes, CardReviewState, CardReviewStates, CardSetType, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
 
 // One set of card size limits for the server, the editor and bulk import.
 export const CARD_TEXT_LIMIT = 1000;
@@ -17,8 +17,32 @@ export function isCorrectCardAnswer(card: CardEntry, direction: CardDirection, a
   const expected = direction === 'front-back' ? [card.back, ...card.alternatives] : [card.front];
   return expected.some(value => normalizeCardAnswer(value) === normalizeCardAnswer(answer));
 }
-export function gradeCardAnswer(card: CardEntry, mode: CardStudyMode, direction: CardDirection, answer: string) {
+export function gradeCardAnswer(card: CardEntry, mode: CardStudyMode, direction: CardDirection, answer: string, type?: CardSetType) {
+  if (mode === 'spell' && type === 'sentence' && !card.drill) return { correct: isCorrectSentenceSpell(card, answer), expected: card.front };
   return { correct: mode === 'memorize' || isCorrectCardAnswer(card, direction, answer), expected: cardAnswer(card, direction) };
+}
+
+// 문장 세트 스펠 (클래스카드식 어순배열·딕테이션·영작): students always build the English sentence on the front.
+// Punctuation and spacing are not graded, nor is case. Typing only each word's first letter (the 첫 글자 option) also counts.
+export const SPELL_SPEEDS = [0.4, 0.7, 0.8, 1, 1.2, 1.3, 1.6, 2];
+export function sentenceWords(text: string) {
+  return text.normalize('NFKC').replace(/[‘’]/gu, "'").replace(/[^\p{L}\p{N}'\s-]|(?<!\p{L})'|'(?!\p{L})|(?<!\p{L})-|-(?!\p{L})/gu, ' ').split(/\s+/u).filter(Boolean);
+}
+const sentenceKey = (text: string) => sentenceWords(text).join(' ').toLocaleLowerCase('en-US');
+export const sentenceInitials = (text: string) => sentenceWords(text).map(word => Array.from(word)[0]).join('').toLocaleLowerCase('en-US');
+export function isCorrectSentenceSpell(card: Pick<CardEntry, 'front'>, answer: string) {
+  const typed = sentenceKey(answer);
+  if (!typed) return false;
+  if (typed === sentenceKey(card.front)) return true;
+  const letters = answer.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '').toLocaleLowerCase('en-US');
+  return sentenceWords(card.front).length > 1 && letters === sentenceInitials(card.front);
+}
+/** 글자단위 피드백: how much of the typed answer matches the sentence from the start (case aside), and the rest. */
+export function spellLetterDiff(expected: string, answer: string) {
+  const want = Array.from(expected.normalize('NFKC')), got = Array.from(answer.normalize('NFKC'));
+  let same = 0;
+  while (same < got.length && same < want.length && got[same].toLocaleLowerCase('en-US') === want[same].toLocaleLowerCase('en-US')) same++;
+  return { ok: got.slice(0, same).join(''), wrong: got.slice(same).join('') };
 }
 
 // Answer batches: the server takes 1-100 responses per request and no repeated cardId within one request.

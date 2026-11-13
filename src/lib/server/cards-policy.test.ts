@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, parseSpeechRate, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
-import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sealStudyBuffer, settleStudyBatch, staleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
+import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sentenceWords, spellLetterDiff, sealStudyBuffer, settleStudyBatch, staleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
 
@@ -69,6 +69,22 @@ test('practice rejects duplicate/unknown/out-of-range cards and wrong fixed dire
   const limited = parseRequirements({ memorize: { rangeStart: 10, rangeEnd: 20, requiredCount: 11 } }, 50);
   assert.throws(() => studyResponses([{ cardId: 'card-0' }], snapshot, 'memorize', 'front-back', limited));
   assert.throws(() => studyResponses([{ cardId: 'card-10' }], snapshot, 'memorize', 'back-front', limited));
+});
+test('sentence-set spell builds the English sentence: punctuation, spacing and case are not graded, first letters also count', () => {
+  const sentence = { title: 's', description: '', type: 'sentence' as const, cards: [{ id: 's-0', front: "We have nails on our hands and feet.", back: '우리의 손과 발에는 손톱, 발톱이 있다.', example: '', alternatives: [] }, { id: 's-1', front: "I don't like it, Tom!", back: '톰, 나는 그게 싫어!', example: '', alternatives: [] }] };
+  const fixedFront = parseRequirements({ spell: { requiredCount: 2, direction: 'front-back' } }, 2);
+  const graded = studyResponses([{ cardId: 's-0', answer: 'we have  nails on our hands and feet' }, { cardId: 's-1', answer: "I dont like it Tom" }], sentence, 'spell', 'back-front', fixedFront);
+  assert.deepEqual(graded.map(item => item.correct), [true, false]);
+  assert.equal(graded[0].expectedAnswer, sentence.cards[0].front);
+  assert.equal(studyResponses([{ cardId: 's-1', answer: "i don't like it, tom" }], sentence, 'spell', 'back-front', fixedFront)[0].correct, true);
+  assert.equal(studyResponses([{ cardId: 's-0', answer: 'Whnoohaf' }], sentence, 'spell', 'front-back', fixedFront)[0].correct, true);
+  assert.equal(studyResponses([{ cardId: 's-0', answer: '(힌트 보기)' }], sentence, 'spell', 'back-front', fixedFront)[0].correct, false);
+  assert.equal(studyResponses([{ cardId: 's-0', answer: '우리의 손과 발에는 손톱, 발톱이 있다.' }], sentence, 'spell', 'back-front', fixedFront)[0].correct, false);
+  assert.equal(gradeCardAnswer(sentence.cards[0], 'spell', 'front-back', 'We have nails on our hands and feet', 'sentence').correct, true);
+  assert.deepEqual(sentenceWords("I don't like it, Tom!"), ['I', "don't", 'like', 'it', 'Tom']);
+  assert.deepEqual(spellLetterDiff('We have nails', 'We havx'), { ok: 'We hav', wrong: 'x' });
+  // Word sets keep the teacher's fixed direction.
+  assert.throws(() => studyResponses([{ cardId: 'card-0', answer: 'word 0' }], snapshot, 'spell', 'back-front', parseRequirements({ spell: { requiredCount: 1, direction: 'front-back' } }, cards.length)));
 });
 test('optional practice allows either presentation direction', () => {
   const value = studyResponses([{ cardId: 'card-0', answer: 'word 0' }], snapshot, 'spell', 'back-front', requirements);
