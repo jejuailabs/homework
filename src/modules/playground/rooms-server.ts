@@ -11,7 +11,7 @@ import type {CardEntry} from '@/lib/cards-types';
 import {accessStudent, teacherClass, loadItems, settingsOf, settingsRef, requirePlayEnabled} from './server-access';
 import {addDays, choicesFor, emptyScore, gradeBand, isItemAnswer, playDate, schoolYear, weekStart} from './engine';
 import {CARD_RACE_SECONDS, CARD_ROOM_SECONDS, CARD_ROOM_TEAMS, cardHuntCapacity, cardHuntItems, cardRoomCapacity, cardRoomItems, versusClassIds} from './cards-room';
-import {HUNT_POINTS, HUNT_TRIES, RACE_POINTS, isHuntRoom, isRaceRoom, isTeacherRun, isVersusRoom, roomHasClass} from './room-types';
+import {HUNT_POINTS, HUNT_TRIES, RACE_POINTS, canChangeAnswer, isHuntRoom, isRaceRoom, isTeacherRun, isVersusRoom, roomHasClass} from './room-types';
 import {isCorrectCardAnswer} from '@/lib/cards-logic';
 import {cardTeamEnabled, playgroundLive, roomEngineEnabled} from './flags';
 import {playKinds, type PlayItem, type PlayScore, type PlaySettings} from './types';
@@ -235,15 +235,17 @@ async function submitAnswer(ctx: Context, roomId: string, data: Data) {
     if(!player)throw new ApiError(403,'참가 학생만 답할 수 있어요.');
     if(isRaceRoom(room))throw new ApiError(409,'개인전 문제를 다시 불러와 주세요.');
     const answerRef=ref.collection('answers').doc(`${round}_${player.key}`),existing=await tx.get(answerRef);
-    if(existing.exists)return {accepted:true,serverTime:receivedAt,mode:room.mode};
+    const previous=existing.data() as RoomAnswer|undefined;
+    // 카드놀이 팀전만 시간 안에 답을 바꿀 수 있다. 같은 보기의 재전송이나 다른 방의 두 번째 답은 첫 답 그대로 둔다.
+    if(previous&&(!canChangeAnswer(room)||previous.choiceId===choiceId||round!==room.round||!canAnswer(room,player,receivedAt)))return {accepted:true,serverTime:receivedAt,mode:room.mode};
     if(round!==room.round || !canAnswer(room,player,receivedAt))throw new ApiError(409,'이 문제의 답안 시간이 끝났어요. 다음 문제에 참여해 주세요.');
     const secret=(await tx.get(ref.collection('secrets').doc(String(round)))).data()?.item as PlayItem|undefined;
     if(!secret)throw new ApiError(409,'문제를 다시 불러와 주세요.');
     const selected=choicesFor(secret,`${room.id}:${round}`).find(choice=>choice.id===choiceId);
     if(!selected)throw new ApiError(400,'화면에 나온 보기 중에서 골라 주세요.');
     const correct=isItemAnswer(secret,selected.label);
-    tx.create(answerRef,{key:player.key,round,choiceId,receivedAt,elapsedMs:Math.max(0,receivedAt-room.roundStartsAt),correct} satisfies RoomAnswer);
-    tx.update(ref.collection('players').doc(player.key),{answered:player.answered+1,answeredRound:round,lastSeen:receivedAt});
+    tx.set(answerRef,{key:player.key,round,choiceId,receivedAt,elapsedMs:Math.max(0,receivedAt-room.roundStartsAt),correct} satisfies RoomAnswer);
+    tx.update(ref.collection('players').doc(player.key),previous?{lastSeen:receivedAt}:{answered:player.answered+1,answeredRound:round,lastSeen:receivedAt});
     return {accepted:true,serverTime:receivedAt,mode:room.mode};
   });
   // Up to four players: reveal as soon as every connected player answered. The teacher screen does this for team rooms.
