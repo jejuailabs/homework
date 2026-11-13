@@ -7,6 +7,7 @@ const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename,
 const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(seahorseTestImports(code)).toString('base64');
 await import('../../modules/region-quest/tests/run-tests.mjs');
 await import('./run-developer-mailbox-tests.mjs');
+await import(moduleUrl(compile('../exhibition-halls.test.ts').replace("'./exhibition-halls'", JSON.stringify(moduleUrl(compile('../exhibition-halls.ts'))))));
 const exhibitionDateUrl = moduleUrl(compile('../exhibition-date.ts'));
 await import(moduleUrl(compile('../exhibition-date.test.ts').replace("'./exhibition-date'", JSON.stringify(exhibitionDateUrl))));
 const videoStorageUrl = moduleUrl(compile('../video-storage.ts'));
