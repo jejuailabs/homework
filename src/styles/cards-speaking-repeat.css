@@ -49,3 +49,15 @@
 .rpt-list-actions{display:flex;gap:6px;flex-wrap:wrap}
 .rpt-list-actions .button{font-size:12px;min-height:36px;padding:6px 10px}
 @media(max-width:480px){.rpt-front{font-size:24px}.rpt-card{padding:32px 14px 24px;min-height:260px}.rpt-bar .button{min-width:0;flex:1}.rpt-list-actions{width:100%}.rpt-list-actions .button{flex:1}}
+.rpt-check{gap:10px}
+.rpt-check>svg{color:var(--accent)}
+.rpt-check h2{margin:0;font-size:22px}
+.rpt-check p{margin:0;line-height:1.6}
+.rpt-level-big{height:16px;margin-top:8px}
+.rpt-check-state{font-weight:700;color:var(--muted)}
+.rpt-check-state.is-ok{color:var(--success)}
+.rpt-card.is-saved{border-color:var(--success);background:color-mix(in srgb,var(--success) 8%,var(--surface))}
+.rpt-card.is-saved .rpt-state{color:var(--success);font-size:22px;animation:rpt-pop .35s ease both}
+.rpt-card.is-quiet{border-color:#e0a400}
+.rpt-card.is-quiet .rpt-state{color:#9a6b00}
+@keyframes rpt-pop{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
