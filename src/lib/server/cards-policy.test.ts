@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, parseSpeechRate, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
+import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, parseSpeechRate, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, assertSetReady, draftSave, parseCards, parseDraftCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
 import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sentenceWords, spellLetterDiff, sealStudyBuffer, settleStudyBatch, staleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
@@ -400,4 +400,27 @@ test('학습 일정: the plan date is a real Seoul calendar date or nothing', ()
   assert.deepEqual(distributionPatch({ planDate: null }, current), { planDate: null });
   assert.deepEqual(distributionPatch({ planDate: '' }, current), { planDate: null });
   for (const bad of ['2026-02-30', '2026/11/20', '2026-11-20T00:00:00Z', 20261120]) assert.throws(() => distributionPatch({ planDate: bad }, current));
+});
+test('임시저장: a draft keeps blank sides and unfinished drill questions but still checks IDs and sizes', () => {
+  assert.deepEqual(parseDraftCards([]), []);
+  const draft = parseDraftCards([{ id: 'a', front: ' apple ', back: '' }, { id: 'b', front: '', back: ' 배 ', alternatives: ['', '능금', '능금'] }, { id: 'c', drill: { kind: 'choice', choices: ['one', '', 'x'.repeat(400)], answer: 9 } }, { id: 'd', front: 'q', drill: { kind: 'nope' } }]);
+  assert.deepEqual(draft.map(card => [card.front, card.back]), [['apple', ''], ['', '배'], ['', ''], ['q', '']]);
+  assert.deepEqual(draft[1].alternatives, ['능금']);
+  assert.deepEqual(draft[2].drill, { kind: 'choice', choices: ['one', '', 'x'.repeat(300)] });
+  assert.equal(draft[3].drill, undefined);
+  for (const value of [null, [{ id: 'same' }, { id: 'same' }], [{ id: '../escape' }], [{ id: '__proto__' }], [{ front: 'a'.repeat(1001) }], [{ front: 7 }], Array.from({ length: 201 }, () => ({}))]) assert.throws(() => parseDraftCards(value));
+  // The same cards are refused by a full save, which is what clears the draft mark.
+  assert.throws(() => parseCards(draft));
+});
+test('임시저장: only a new set or a set still in draft can be saved as a draft, and a draft cannot be used', () => {
+  assert.equal(draftSave({}, undefined, false), false);
+  assert.equal(draftSave({ draft: false }, { draft: true }, false), false);
+  assert.equal(draftSave({ draft: true }, undefined, false), true);
+  assert.equal(draftSave({ draft: true }, { draft: true }, false), true);
+  assert.throws(() => draftSave({ draft: true }, { draft: false }, false), /임시저장할 수 없어요/);
+  assert.throws(() => draftSave({ draft: true }, {}, false), /임시저장할 수 없어요/);
+  assert.throws(() => draftSave({ draft: true }, { draft: true }, true));
+  assert.throws(() => draftSave({ draft: 'yes' }, undefined, false));
+  assert.throws(() => assertSetReady({ draft: true }), /임시저장/);
+  assert.doesNotThrow(() => { assertSetReady({}); assertSetReady({ draft: false }); assertSetReady(undefined); });
 });

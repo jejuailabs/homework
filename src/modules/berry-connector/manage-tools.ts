@@ -411,11 +411,12 @@ async function cards(args: Data, ctx: BearerContext): Promise<ManagePlan> {
   else {
     const words = String(args.set_title ?? '').trim().toLowerCase();
     if (!words) throw new BerryError('카드 세트 이름(set_title)을 알려 주세요.');
-    const found = (await db().collection('cardSets').where('ownerUid', '==', ctx.uid).select('title', 'archived', 'version', 'cardCount', 'ownerUid', 'type').get()).docs.filter(doc => !doc.data().archived && String(doc.data().title ?? '').toLowerCase().includes(words));
+    const found = (await db().collection('cardSets').where('ownerUid', '==', ctx.uid).select('title', 'archived', 'draft', 'version', 'cardCount', 'ownerUid', 'type').get()).docs.filter(doc => !doc.data().archived && !doc.data().draft && String(doc.data().title ?? '').toLowerCase().includes(words));
     if (found.length !== 1) throw new BerryError(found.length ? `"${args.set_title}"이(가) 들어간 세트가 ${found.length}개예요: ${found.slice(0, 5).map(doc => doc.data().title).join(', ')}. 정확한 이름을 알려 주세요.` : '그 이름의 카드 세트를 찾지 못했어요.', found.length ? 400 : 404, found.length ? 'invalid_request' : 'not_found');
     set = {id: found[0].id, ...found[0].data()};
   }
   if (set.archived) throw new BerryError('보관한 카드 세트예요.');
+  if (set.draft) throw new BerryError('임시저장한 세트예요. 카드놀이 화면에서 마저 만들고 저장한 뒤 배부할 수 있어요.');
   const cardCount = Number(set.cardCount);
   if (!Number.isInteger(cardCount) || cardCount < 1) throw new BerryError('카드가 없는 세트예요. 카드놀이 화면에서 확인해 주세요.');
   const {call, lines, dueAt} = await distributeCall(args, ctx, cls, {id: set.id, type: String(set.type ?? 'word'), cardCount, version: set.version});
