@@ -3,7 +3,7 @@ import { ApiError, id, text, type Role } from './policy';
 import { CARD_ALTERNATIVE_LIMIT, CARD_DUE_GRACE_MS, CARD_EXAMPLE_LIMIT, CARD_TEXT_LIMIT, cardAnswer, cardDueState, cardMastery, cardReviewDate, cardReviewStates, gradeCardAnswer, isCorrectCardAnswer, normalizeCardAnswer } from '../cards-logic';
 import { validPlanDate } from '../cards-planner';
 import { fitChunks } from '../cards-chunks';
-import { parseDrill, type CardDrill } from '../cards-drill';
+import { CARD_DRILL_BLANKS, CARD_DRILL_CHOICES, CARD_DRILL_KINDS, parseDrill, type CardDrill } from '../cards-drill';
 /** A drill set needs every card to be a question; any other set drops drill data it was sent. */
 export function drillConsistent<T extends { drill?: CardDrill }>(cards: T[], type: CardSetType): T[] {
   if (type === 'drill') {
@@ -80,6 +80,42 @@ export function parseCards(value: unknown): CardEntry[] {
   });
   if (new Set(cards.map(card => card.id)).size !== cards.length) throw new ApiError(400, '중복된 카드 ID가 있어요.');
   // Leave room for distribution settings and Firestore's document size overhead.
+  if (Buffer.byteLength(JSON.stringify(cards), 'utf8') > 650_000) throw new ApiError(413, '카드 내용이 너무 커요. 세트를 나누어 주세요.');
+  return cards;
+}
+/** 임시저장: a set still being written. It cannot be handed out, shared, copied or played until a full save clears the mark. */
+export function assertSetReady(set: { draft?: unknown } | undefined) {
+  if (set?.draft) throw new ApiError(409, '임시저장한 세트예요. 세트를 마저 만들고 저장한 뒤 이용해 주세요.', 'SET_DRAFT');
+}
+/** Only a new set, or one that is still a draft, can be saved as a draft; a finished set never goes back. */
+export function draftSave(input: { draft?: unknown }, old: { draft?: unknown } | undefined, duplicate: boolean) {
+  if (input.draft === undefined || input.draft === false) return false;
+  if (input.draft !== true || duplicate) throw new ApiError(400, '저장 방법을 확인해 주세요.');
+  if (old && !old.draft) throw new ApiError(409, '이미 저장을 마친 세트는 임시저장할 수 없어요.', 'DRAFT_NOT_ALLOWED');
+  return true;
+}
+/** Drill data as typed so far: shape and sizes only, because an unfinished question has no answer to check yet. */
+function draftDrill(raw: unknown): CardDrill | undefined {
+  const value = raw as Partial<CardDrill> | null;
+  if (!value || typeof value !== 'object' || !CARD_DRILL_KINDS.includes(value.kind as CardDrill['kind'])) return undefined;
+  const words = (list: unknown, max: number) => (Array.isArray(list) ? list : []).slice(0, max).map(entry => typeof entry === 'string' ? entry.slice(0, 300) : '');
+  return { kind: value.kind!, ...(Array.isArray(value.choices) ? { choices: words(value.choices, CARD_DRILL_CHOICES.max) } : {}), ...(Number.isInteger(value.answer) && value.answer! >= 0 && value.answer! < CARD_DRILL_CHOICES.max ? { answer: value.answer } : {}), ...(Array.isArray(value.blanks) ? { blanks: value.blanks.slice(0, CARD_DRILL_BLANKS).map(blank => ({ wrong: words((blank as { wrong?: unknown } | null)?.wrong, CARD_DRILL_CHOICES.max) })) } : {}) };
+}
+/** Cards of a draft: the same IDs and size limits as a finished set, but a side may be blank and the set may be empty. */
+export function parseDraftCards(value: unknown): CardEntry[] {
+  if (!Array.isArray(value) || value.length > CARD_LIMIT) throw new ApiError(400, `카드는 ${CARD_LIMIT}장까지 만들 수 있어요.`);
+  const cards = value.map((entry, index) => {
+    const raw = object(entry), label = `${index + 1}번 카드`;
+    const alternatives = raw.alternatives ?? [];
+    if (!Array.isArray(alternatives) || alternatives.length > CARD_ALTERNATIVE_LIMIT) throw new ApiError(400, `${label}의 대체 정답은 ${CARD_ALTERNATIVE_LIMIT}개까지 입력해 주세요.`);
+    const cardId = raw.id === undefined ? randomUUID() : id(raw.id, `${label} ID`);
+    if (['__proto__', 'constructor', 'prototype'].includes(cardId)) throw new ApiError(400, `${label} ID를 확인해 주세요.`);
+    const front = text(raw.front, `${label} 앞면`, CARD_TEXT_LIMIT, true);
+    if (raw.chunks !== undefined && !Array.isArray(raw.chunks)) throw new ApiError(400, `${label}의 끊어읽기 표시를 확인해 주세요.`);
+    const chunks = fitChunks(raw.chunks, front), drill = draftDrill(raw.drill);
+    return { id: cardId, front, back: text(raw.back, `${label} 뒷면`, CARD_TEXT_LIMIT, true), example: text(raw.example, `${label} 예문`, CARD_EXAMPLE_LIMIT, true), alternatives: [...new Set(alternatives.map(answer => text(answer, `${label} 대체 정답`, CARD_TEXT_LIMIT, true)).filter(Boolean))], ...(chunks.length ? { chunks } : {}), ...(drill ? { drill } : {}) };
+  });
+  if (new Set(cards.map(card => card.id)).size !== cards.length) throw new ApiError(400, '중복된 카드 ID가 있어요.');
   if (Buffer.byteLength(JSON.stringify(cards), 'utf8') > 650_000) throw new ApiError(413, '카드 내용이 너무 커요. 세트를 나누어 주세요.');
   return cards;
 }

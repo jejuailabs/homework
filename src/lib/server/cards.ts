@@ -13,7 +13,7 @@ import { readSharing } from '../cards-sharing';
 import { assertTeacherRate } from './cards-rate';
 import { cardTestActive, redactCardSnapshot, sealedAttempt } from '../cards-guard';
 import { applyStudentPlan, cardClassSettings, classSettingsRef, readClassSettings } from './cards-class-settings';
-import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
+import { answersReleased, assertDueOpen, canStudyDistribution, distributionPatch, CARD_LIST_LIMIT, cardAnswer, cardDirection, cardMode, cardMutationFingerprint, cardType, assertSetReady, draftSave, parseDraftCards, emptyModeCounts, expectedCardVersion, isCorrectCardAnswer, lateMark, object, ownsCardResource, parseAfterDue, parseCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, reportStudentIds, widenedTargets, studyResponses, testAnswers, type CardCoverage } from './cards-policy';
 import type { CardDirection, CardDistribution, CardDistributionSummary, CardEntry, CardProgress, CardReportStudent, CardReviewItem, CardSet, CardSetSummary, CardSnapshot, CardTestAttempt, CardTestQuestion, CardTestResult } from '../cards-types';
 
 type Data = Record<string, any>;
@@ -68,7 +68,7 @@ async function managedClass(ctx: Context, classId: string, tx?: FirebaseFirestor
 }
 function setSummary(snap: FirebaseFirestore.DocumentSnapshot): CardSetSummary {
   const value = snap.data()!;
-  return { id: snap.id, title: value.title, description: value.description, type: value.type, cardCount: value.cardCount, folderId: value.folderId, version: value.version, versionId: value.versionId, archived: !!value.archived, createdAt: value.createdAt, updatedAt: value.updatedAt, sharing: readSharing(value.sharing), ...(value.copiedFrom ? { copiedFrom: { title: String(value.copiedFrom.title ?? ''), ownerName: String(value.copiedFrom.ownerName ?? '') } } : {}) };
+  return { id: snap.id, title: value.title, description: value.description, type: value.type, cardCount: value.cardCount, folderId: value.folderId, version: value.version, versionId: value.versionId, archived: !!value.archived, ...(value.draft ? { draft: true } : {}), createdAt: value.createdAt, updatedAt: value.updatedAt, sharing: readSharing(value.sharing), ...(value.copiedFrom ? { copiedFrom: { title: String(value.copiedFrom.title ?? ''), ownerName: String(value.copiedFrom.ownerName ?? '') } } : {}) };
 }
 function distributionSummary(value: Distribution): CardDistributionSummary {
   return { id: value.id, classId: value.classId, className: value.className, setId: value.setId, setVersion: value.setVersion, versionId: value.versionId, title: value.title, type: value.type, cardCount: value.cardCount, targetCount: value.targetCount, requiredModes: value.requiredModes, test: value.test, dueAt: value.dueAt, afterDue: cardAfterDue(value), allStudents: !!value.allStudents, active: value.active, createdAt: value.createdAt, updatedAt: value.updatedAt, speechRate: value.speechRate ?? null, speaking: (value as { speaking?: boolean }).speaking !== false && value.type !== 'drill', speakingRequired: (value as { speakingRequired?: Partial<Record<string, number>> }).speakingRequired ?? {}, planDate: value.planDate ?? null, carriedFrom: value.carriedFrom ? { className: String(value.carriedFrom.className ?? '') } : null };
@@ -187,6 +187,7 @@ async function saveSet(ctx: Context, request: Request, setId?: string, duplicate
     const stamp = now();
     if (old && !duplicate && input.action !== undefined) {
       if (!['archive', 'restore', 'move', 'share'].includes(input.action)) throw new ApiError(400, '세트 변경 방법을 확인해 주세요.');
+      if (input.action === 'share') assertSetReady(old);
       const folderId = input.action === 'move' ? (input.folderId === null ? null : id(input.folderId)) : old.folderId;
       await checkFolder(ctx, folderId, tx);
       // 동료 공유: who may see and copy this set. It shows only inside a folder its owner shared; private is the default.
@@ -199,18 +200,20 @@ async function saveSet(ctx: Context, request: Request, setId?: string, duplicate
       return receiptFor({ ...updated, id: ref.id, cards: version.data()!.cards } as CardSet);
     }
     if (old && !duplicate && input.expectedVersion !== old.version) throw new ApiError(409, '다른 화면에서 수정된 세트예요. 새로 열어 확인해 주세요.', 'STALE_VERSION');
-    if (old && duplicate) expectedCardVersion(input.expectedVersion, old.version);
+    if (old && duplicate) { assertSetReady(old); expectedCardVersion(input.expectedVersion, old.version); }
+    // 임시저장: blanks are allowed and nothing can use the set until a full save checks it.
+    const draft = draftSave(input, old, duplicate);
     const previousVersion = old ? await tx.get(versionRef(old.versionId)) : null;
-    let cards = duplicate ? parseCards(previousVersion!.data()!.cards.map((card: CardEntry) => ({ ...card, id: randomUUID() }))) : parseCards(input.cards ?? previousVersion?.data()?.cards);
-    const title = text(input.title ?? (duplicate ? `${old!.title} (복사)`.slice(0, 120) : old?.title), '세트 제목', 120);
+    let cards = duplicate ? parseCards(previousVersion!.data()!.cards.map((card: CardEntry) => ({ ...card, id: randomUUID() }))) : (draft ? parseDraftCards : parseCards)(input.cards ?? previousVersion?.data()?.cards);
+    const title = text(input.title ?? (duplicate ? `${old!.title} (복사)`.slice(0, 120) : old?.title), '세트 제목', 120, draft) || '제목 없는 세트';
     const description = text(input.description ?? old?.description, '세트 설명', 2000, true);
     const type = cardType(input.type ?? old?.type);
-    cards = drillConsistent(cards, type);
+    if (!draft || type !== 'drill') cards = drillConsistent(cards, type);
     const folderId = input.folderId === undefined ? old?.folderId ?? null : input.folderId === null ? null : id(input.folderId);
     await checkFolder(ctx, folderId, tx);
     const version = old && !duplicate ? old.version + 1 : 1;
     const versionId = `${ref.id}_v${version}`;
-    const value = { ownerUid: ctx.uid, title, description, type, cardCount: cards.length, folderId, version, versionId, archived: duplicate ? false : old?.archived ?? false, createdAt: old && !duplicate ? old.createdAt : stamp, updatedAt: stamp };
+    const value = { ownerUid: ctx.uid, title, description, type, cardCount: cards.length, folderId, version, versionId, archived: duplicate ? false : old?.archived ?? false, draft, createdAt: old && !duplicate ? old.createdAt : stamp, updatedAt: stamp };
     tx.create(versionRef(versionId), { ownerUid: ctx.uid, setId: ref.id, version, title, description, type, cards, createdAt: stamp });
     if (old && !duplicate) tx.update(ref, value); else tx.create(ref, value);
     if (folderId) tx.update(folderRef(folderId), { updatedAt: stamp });
@@ -248,6 +251,7 @@ async function distributions(ctx: Context, request: Request) {
     owner(ctx, set.data() as { ownerUid: string } | undefined);
     expectedCardVersion(input.expectedVersion, set.data()!.version);
     if (set.data()!.archived) throw new ApiError(409, '보관된 세트를 먼저 복구해 주세요.', 'SET_ARCHIVED');
+    assertSetReady(set.data());
     const [version, roster] = await Promise.all([tx.get(versionRef(set.data()!.versionId)), tx.get(db().collection(`classes/${classId}/students`))]);
     if (!version.exists) throw new ApiError(409, '세트 버전을 확인해 주세요.', 'VERSION_MISSING');
     const activeIds = roster.docs.filter(pupil => !pupil.data().disabled).map(pupil => pupil.id);

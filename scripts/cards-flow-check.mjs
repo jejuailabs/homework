@@ -2,7 +2,7 @@
 // 가짜인 것: 세션 쿠키 검증과 Auth 사용자 조회(firebase-admin/auth), OpenAI 호출(fetch). 나머지는 운영과 같은 코드다.
 // 실행: java -Duser.language=en -Duser.country=US -jar <cloud-firestore-emulator>.jar --host 127.0.0.1 --port 8080 --rules firestore.rules --project_id demo-homework
 //       FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/cards-flow-check.mjs [구역 이름...]
-// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone sharing versus hunt chunks drill notes rate vocab. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
+// 구역: study edited tests deadline patch old room berry ai games mastery class guard family counted pages transfer clone sharing versus hunt chunks drill notes rate vocab draft. 운영 Firebase에는 절대 닿지 않도록 에뮬레이터 주소가 아니면 바로 멈춘다.
 import {registerHooks} from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1506,6 +1506,37 @@ async function assistSection() {
   } finally {globalThis.fetch = original;}
 }
 sections.assist = assistSection;
+// 구역 draft: 임시저장. 덜 만든 세트를 서버에 두고 이어서 만들며, 저장을 마치기 전에는 배부·공유·복사·팀전에 쓸 수 없다. `node scripts/cards-flow-check.mjs draft`
+async function draftSection() {
+  section('draft sets');
+  const half = [{id: 'd1', front: 'apple', back: '사과', example: '', alternatives: []}, {id: 'd2', front: 'pear', back: '', example: '', alternatives: []}];
+  refused(await call(teacher, 'POST', ['sets'], {title: '덜 만든 세트', description: '', type: 'word', folderId: null, cards: half, requestId: 'draft-full'}), 400, undefined, 'a full save still refuses a card with a blank side');
+  const made = await call(teacher, 'POST', ['sets'], {title: '', description: '', type: 'word', folderId: null, cards: half, draft: true, requestId: 'draft-1'});
+  same([made.status, made.data.set?.draft, made.data.set?.title, made.data.set?.cardCount, made.data.set?.cards?.[1]?.back], [201, true, '제목 없는 세트', 2, ''], 'a draft is saved with a blank side and a stand-in title');
+  const id = made.data.set.id;
+  same((await call(teacher, 'POST', ['sets'], {title: '', description: '', type: 'word', folderId: null, cards: half, draft: true, requestId: 'draft-1'})).data.set?.id, id, 'a retried draft save returns the same set');
+  const empty = await call(teacher, 'POST', ['sets'], {title: '빈 임시저장', description: '', type: 'drill', folderId: null, cards: [{id: 'q1', front: '', back: '', example: '', alternatives: [], drill: {kind: 'choice', choices: ['', '', '', ''], answer: 0}}], draft: true, requestId: 'draft-drill'});
+  same([empty.status, empty.data.set?.cards?.[0]?.drill?.kind], [201, 'choice'], 'an unfinished drill question is kept as typed');
+  const listed = (await call(teacher, 'GET', ['library'])).data.sets.find(item => item.id === id);
+  same([listed?.draft, (await call(teacher, 'GET', ['sets', id])).data.set.draft], [true, true], 'the library and the set page mark it as a draft');
+  refused(await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: id, expectedVersion: 1, requestId: 'draft-dist'}), 409, 'SET_DRAFT', 'a draft cannot be handed out');
+  refused(await call(teacher, 'PATCH', ['sets', id], {action: 'share', visibility: 'shared', allowCopy: true}), 409, 'SET_DRAFT', 'a draft cannot be shared');
+  refused(await call(teacher, 'POST', ['sets', id, 'duplicate'], {requestId: 'draft-copy', expectedVersion: 1}), 409, 'SET_DRAFT', 'a draft cannot be duplicated');
+  const {handleRoomRequest} = await import('@/modules/playground/rooms-server');
+  const room = await handleRoomRequest(new Request('http://cards.test/api/playground/rooms', {method: 'POST'}), {uid: teacher, email: null, displayName: null, role: 'teacher'}, ['rooms'], {mode: 'team', classId: 'class-a', direction: 'front-back', rounds: 1, seconds: 10, teamCount: 2, cardSetId: id, requestId: 'draft-room'}).then(() => null, error => error.code);
+  same(room, 'SET_DRAFT', 'a draft cannot open a team room');
+  refused(await call('teacher-b', 'GET', ['sets', id]), 404, undefined, 'another teacher cannot read the draft');
+  const again = await call(teacher, 'PATCH', ['sets', id], {expectedVersion: 1, title: '과일', description: '', type: 'word', folderId: null, cards: [...half, {id: 'd3', front: '', back: '포도', example: '', alternatives: []}], draft: true, requestId: 'draft-2'});
+  same([again.status, again.data.set?.draft, again.data.set?.version, again.data.set?.cardCount], [200, true, 2, 3], 'the draft is saved again as the teacher goes on');
+  accepted(await call(teacher, 'PATCH', ['sets', id], {action: 'move', folderId: null}), 'a draft can still be moved');
+  refused(await call(teacher, 'PATCH', ['sets', id], {expectedVersion: 2, title: '과일', description: '', type: 'word', folderId: null, cards: again.data.set.cards, requestId: 'draft-done-bad'}), 400, undefined, 'finishing with a blank side is refused');
+  const done = await call(teacher, 'PATCH', ['sets', id], {expectedVersion: 2, title: '과일', description: '', type: 'word', folderId: null, cards: [{...half[0]}, {...half[1], back: '배'}], requestId: 'draft-done'});
+  same([done.status, done.data.set?.draft, done.data.set?.version, done.data.set?.cardCount], [200, false, 3, 2], 'a full save finishes the set and clears the mark');
+  same((await call(teacher, 'GET', ['library'])).data.sets.find(item => item.id === id)?.draft, undefined, 'the library shows it as a normal set');
+  refused(await call(teacher, 'PATCH', ['sets', id], {expectedVersion: 3, cards: half, draft: true, requestId: 'draft-back'}), 409, 'DRAFT_NOT_ALLOWED', 'a finished set cannot go back to a draft');
+  accepted(await call(teacher, 'POST', ['distributions'], {classId: 'class-a', setId: id, expectedVersion: 3, requestId: 'draft-dist-2', test: {questionCount: 2, goalScore: 80, maxAttempts: 3, direction: 'back-front', answerRelease: 'immediate', format: 'written'}}), 'the finished set can be handed out');
+}
+sections.draft = draftSection;
 const chosen = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(sections);
 await seed();
 await makeSet();
