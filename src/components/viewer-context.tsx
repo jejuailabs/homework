@@ -2,7 +2,7 @@
 import {createContext, useCallback, useContext, useEffect, useState, type ReactNode} from 'react';
 import {usePathname} from 'next/navigation';
 
-export type VerifiedViewer = {uid: string; role: 'teacher' | 'student' | 'admin' | 'superadmin'};
+export type VerifiedViewer = {uid: string; role: 'teacher' | 'student' | 'admin' | 'superadmin'; viewedBy?: string; displayName?: string | null};
 type ViewerState = {viewer: VerifiedViewer; path: string} | null;
 const ViewerContext = createContext<{
   viewer: VerifiedViewer | null;

@@ -21,3 +21,5 @@
 
 @media(max-width:740px){.top-nav{overflow-x:auto;scrollbar-width:thin}.top-nav a{flex-shrink:0}}
 @media(max-width:740px){.header-inner .brand{min-width:0;flex:1}.header-inner .brand-mark{flex:none}.header-inner .brand>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.header-inner .header-actions{flex:none;margin-left:0}}
+
+.view-as-bar{position:sticky;top:0;z-index:60;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 12px;margin:0 0 14px;padding:8px 14px;border-radius:14px;background:#fff3c4;color:#4a3a00;border:1px solid #e6c95a;font-size:13px}.view-as-bar .button{padding:4px 12px;min-height:0}

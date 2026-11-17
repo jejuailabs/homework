@@ -16,6 +16,15 @@ export function id(value: unknown, label = '항목'): string {
   return result;
 }
 export function isAdmin(role: Role) { return role === 'admin' || role === 'superadmin'; }
+/**
+ * "View a teacher's screen": only a superadmin, only outside the admin and sign-in APIs, and only for reads.
+ * 'self' keeps the operator's own identity, 'view' answers as the teacher, 'blocked' refuses a write.
+ */
+export function viewAsMode(role: Role, target: string | undefined, pathname: string, method: string): 'self' | 'view' | 'blocked' {
+  if (role !== 'superadmin' || !target || !/^[A-Za-z0-9_-]{1,128}$/.test(target)) return 'self';
+  if (pathname.startsWith('/api/admin/') || pathname.startsWith('/api/auth/')) return 'self';
+  return method === 'GET' || method === 'HEAD' ? 'view' : 'blocked';
+}
 export function canManageClass(role: Role, uid: string, ownerUid: unknown) { return role !== 'student' && uid === ownerUid; }
 export function canDisableUser(actorRole: Role, actorUid: string, targetUid: string, targetRole: unknown) {
   return isAdmin(actorRole) && actorUid !== targetUid && targetRole !== 'superadmin' && (targetRole !== 'admin' || actorRole === 'superadmin');
