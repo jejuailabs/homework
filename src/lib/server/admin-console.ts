@@ -5,7 +5,7 @@ import {pipeline} from 'node:stream/promises';
 import {AggregateField,FieldPath,Timestamp} from 'firebase-admin/firestore';
 import {NextResponse} from 'next/server';
 import {auth,bucket,db} from './admin';
-import {getContext,assertOrigin,forgetContext,type Context} from './auth';
+import {getContext,contextForUid,viewAsCookie,assertOrigin,forgetContext,type Context} from './auth';
 import {ApiError,id,isAdmin,text,canDisableUser} from './policy';
 import {getAiOperations} from './ai';
 import {adminAiTokens,adminAiUsage,adminAiUsageHourly} from './admin-ai-usage';
@@ -119,7 +119,7 @@ async function accountDetail(uid:string,ctx:Context) {
   let authenticationDisabled:boolean|null=null;try{authenticationDisabled=(await auth().getUser(uid)).disabled;}catch(e){if((e as {code?:string}).code!=='auth/user-not-found')throw e;}
   const cls=isStudent&&v.classId?await db().doc('classes/'+id(v.classId)).get():null;
   const counts=isStudent?{}:Object.fromEntries(await Promise.all([['classes','classes'],['students','users'],...Object.entries(adminContent).map(([k,v])=>[k,v.collection])].map(async([key,col])=>[key,(await db().collection(col).where(key==='students'?'directoryTeacherUid':'ownerUid','==',uid).count().get()).data().count])));
-  return{account:{uid,displayName:v.displayName||'',email:isStudent?'':v.email||'',role,disabled:!!v.disabled,authenticationDisabled,stateMismatch:authenticationDisabled!==null&&authenticationDisabled!==!!v.disabled,classId:v.classId||'',className:cls?.data()?.name||'',ownerUid:cls?.data()?.ownerUid||'',studentId:v.studentId||'',number:v.directoryNumber||0,version:doc.updateTime!.valueOf(),roleVersion:roleDoc.updateTime?.valueOf()||'none',canDisable:canDisableUser(ctx.role,ctx.uid,uid,role),canChangeRole:ctx.role==='superadmin'&&ctx.uid!==uid&&role!=='superadmin'&&!isStudent},counts,checkedAt:stamp()};
+  return{account:{uid,displayName:v.displayName||'',email:isStudent?'':v.email||'',role,disabled:!!v.disabled,authenticationDisabled,stateMismatch:authenticationDisabled!==null&&authenticationDisabled!==!!v.disabled,classId:v.classId||'',className:cls?.data()?.name||'',ownerUid:cls?.data()?.ownerUid||'',studentId:v.studentId||'',number:v.directoryNumber||0,version:doc.updateTime!.valueOf(),roleVersion:roleDoc.updateTime?.valueOf()||'none',canDisable:canDisableUser(ctx.role,ctx.uid,uid,role),canChangeRole:ctx.role==='superadmin'&&ctx.uid!==uid&&role!=='superadmin'&&!isStudent,canViewAs:ctx.role==='superadmin'&&ctx.uid!==uid&&role==='teacher'&&!v.disabled},counts,checkedAt:stamp()};
 }
 async function classDetail(classId:string) {
   const doc=await db().doc('classes/'+id(classId)).get();if(!doc.exists)throw new ApiError(404,'학급을 찾을 수 없어요.');const v=doc.data()!,owner=await names([v.ownerUid]);
@@ -204,12 +204,23 @@ async function combineCsv(paths:string[],target:string){
   }
 }
 
+// A superadmin opens one teacher's screen read-only for an hour. Every start is written to the audit trail.
+async function viewAs(ctx:Context,input:Data) {
+  const base={httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax' as const,path:'/'};
+  if(input.uid==null){const done=json({ok:true});done.cookies.set(viewAsCookie,'',{...base,maxAge:0});return done;}
+  if(ctx.role!=='superadmin')throw new ApiError(403,'최상위 운영자만 교사 화면을 볼 수 있어요.','FORBIDDEN');
+  const uid=id(input.uid),target=uid===ctx.uid?null:await contextForUid(uid).catch(()=>null);
+  if(!target||target.role!=='teacher')throw new ApiError(409,'이용 중인 교사 계정만 볼 수 있어요.','VIEW_AS_UNAVAILABLE');
+  await audit(ctx,'teacher.view-as',uid,{type:'accounts',readOnly:true});
+  const started=json({ok:true});started.cookies.set(viewAsCookie,uid,{...base,maxAge:3600});return started;
+}
 export async function handleAdminConsole(request:Request,path:string[]) {
   let actor:Context|undefined;
   try{
     if(!['GET','HEAD'].includes(request.method))assertOrigin(request);const ctx=actor=await context(request),p=new URL(request.url).searchParams;
     if(request.method!=='GET'){
       const input=await body(request);
+      if(path[0]==='view-as')return await viewAs(ctx,input);
       if(path[0]==='jobs'){if(!path[1])countCache.clear();return json(await adminJob(ctx,path,input));}
       return json(await change(ctx,path,input));
     }

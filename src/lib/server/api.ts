@@ -13,7 +13,7 @@ import { AggregateField, FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { assignmentSubmissionType } from '../assignment-submission';
 import { auth, db } from './admin';
 import { getAiOperations } from './ai';
-import { assertOrigin, contextForUid, cookieName, forgetContext, getContext, requireStudent, requireTeacher, type Context } from './auth';
+import { assertOrigin, contextForUid, cookieName, viewAsCookie, forgetContext, getContext, requireStudent, requireTeacher, type Context } from './auth';
 import { ApiError, batchReviewItems, canDisableUser, canManageClass, homeworkThumbnailSize, characters, id, isAdmin, nextReview, requiredSubmissionType, submissionContentPolicy, text, uploadPolicy } from './policy';
 import {awardHomeworkPoints} from './points';
 import {pointBalance, pointSettings, wardrobeOutfit} from './points-policy';
@@ -125,6 +125,7 @@ async function session(request: Request) {
   if (request.method === 'DELETE') {
     const response = json({ ok: true });
     response.cookies.set(cookieName, '', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0 });
+    response.cookies.set(viewAsCookie, '', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0 });
     return response;
   }
   const input = await body(request);
@@ -147,6 +148,7 @@ async function session(request: Request) {
   });
   const response = json(ctx);
   response.cookies.set(cookieName, value, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: expiresIn / 1000 });
+  response.cookies.set(viewAsCookie, '', { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 0 });
   return response;
 }
 async function classes(request: Request) {

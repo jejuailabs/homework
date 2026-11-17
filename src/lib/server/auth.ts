@@ -1,11 +1,16 @@
 import 'server-only';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { auth, db } from './admin';
-import { ApiError, validSessionAuthentication, validStudentSession, type Role } from './policy';
+import { ApiError, validSessionAuthentication, validStudentSession, viewAsMode, type Role } from './policy';
 import { createContextCache } from './context-cache';
 
-export type Context = { uid: string; email: string | null; displayName: string | null; role: Role; studentId?: string; classId?: string; authVersion?: number };
+export type Context = { uid: string; email: string | null; displayName: string | null; role: Role; studentId?: string; classId?: string; authVersion?: number; viewedBy?: string };
 export const cookieName = '__session';
+/** Set only by the superadmin "view a teacher's screen" action; honoured only for a superadmin session. */
+export const viewAsCookie = '__viewas';
+function cookie(request: Request, name: string) {
+  return request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(`${name}=`))?.slice(name.length + 1);
+}
 // Verified contexts are memoised per instance for a short window so a burst of
 // classroom traffic does not re-fetch the Auth record and account documents on
 // every call. AUTH_CONTEXT_CACHE_MS=0 restores the fresh lookup per request.
@@ -49,7 +54,7 @@ export function runAsTeacher<T>(request: Request, ctx: Context, run: () => Promi
 export async function getContext(request: Request): Promise<Context> {
   const bound = acting.getStore();
   if (bound && bound.request === request) return bound.ctx;
-  const raw =request.headers.get('cookie')?.split(';').map(v => v.trim()).find(v => v.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
+  const raw = cookie(request, cookieName);
   if (!raw) throw new ApiError(401, '로그인이 필요해요.', 'UNAUTHENTICATED');
   try {
     // Verify the signature/issuer/expiry here on every request. Revocation and
@@ -59,7 +64,14 @@ export async function getContext(request: Request): Promise<Context> {
     const decoded = await auth().verifySessionCookie(decodeURIComponent(raw), false);
     if (!validSessionAuthentication(decoded.auth_time)) throw new ApiError(401, '다시 로그인해 주세요.', 'UNAUTHENTICATED');
     const key = `${decoded.uid}|${typeof decoded.authVersion === 'number' ? decoded.authVersion : '-'}|${decoded.auth_time}`;
-    return await contexts.remember(key, decoded.uid, () => contextForUid(decoded.uid, decoded.authVersion, decoded.auth_time));
+    const own = await contexts.remember(key, decoded.uid, () => contextForUid(decoded.uid, decoded.authVersion, decoded.auth_time));
+    // A superadmin looking at a teacher's screen reads as that teacher and can change nothing.
+    const target = cookie(request, viewAsCookie), mode = viewAsMode(own.role, target, new URL(request.url).pathname, request.method);
+    if (mode === 'self') return own;
+    if (mode === 'blocked') throw new ApiError(403, '교사 화면 보기 중에는 내용을 바꿀 수 없어요. 보기를 끝낸 뒤 이용해 주세요.', 'VIEW_ONLY');
+    const teacher = await contexts.remember(`viewas|${target}`, target!, () => contextForUid(target!)).catch(() => null);
+    if (!teacher || teacher.role !== 'teacher') throw new ApiError(403, '이 교사 화면은 지금 볼 수 없어요. 보기를 끝내 주세요.', 'VIEW_AS_UNAVAILABLE');
+    return { ...teacher, viewedBy: own.uid };
   } catch (error) {
     if (error instanceof ApiError) throw error;
     throw new ApiError(401, '로그인이 만료되었어요. 다시 로그인해 주세요.', 'UNAUTHENTICATED');

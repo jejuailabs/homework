@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { acceptsSubmissionFile, assignmentSubmissionType, audioSubmissionMimeTypes, imageSubmissionMimeTypes, videoSubmissionMimeTypes } from '../assignment-submission';
-import { validSessionAuthentication, ApiError, BATCH_REVIEW_LIMIT, batchReviewItems, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
+import { validSessionAuthentication, viewAsMode, ApiError, BATCH_REVIEW_LIMIT, batchReviewItems, canDisableUser, canManageClass, canUseUpload, homeworkThumbnailSize, nextReview, requiredSubmissionType, submissionContentPolicy, uploadPolicy, validStudentSession } from './policy';
 
 test('teacher and platform administrator class access always requires ownership', () => {
   for (const role of ['teacher', 'admin', 'superadmin'] as const) {
@@ -142,4 +142,15 @@ test('a phone-made photo preview is optional, photo-only and capped at 300KB', (
   assert.equal(homeworkThumbnailSize('video/mp4', 1000), undefined);
   assert.equal(homeworkThumbnailSize('image/jpeg', 30_000), 30_000);
   for (const bad of [0, -1, 1.5, 300 * 1024 + 1, '30000']) assert.throws(() => homeworkThumbnailSize('image/jpeg', bad));
+});
+
+test('only a superadmin can view a teacher screen, and only for reads outside the admin and sign-in APIs', () => {
+  assert.equal(viewAsMode('superadmin', 'teacher-1', '/api/classes', 'GET'), 'view');
+  assert.equal(viewAsMode('superadmin', 'teacher-1', '/api/classes', 'HEAD'), 'view');
+  for (const method of ['POST', 'PATCH', 'PUT', 'DELETE']) assert.equal(viewAsMode('superadmin', 'teacher-1', '/api/classes', method), 'blocked');
+  for (const role of ['admin', 'teacher', 'student'] as const) assert.equal(viewAsMode(role, 'teacher-1', '/api/classes', 'POST'), 'self');
+  assert.equal(viewAsMode('superadmin', undefined, '/api/classes', 'POST'), 'self');
+  assert.equal(viewAsMode('superadmin', 'bad/uid', '/api/classes', 'GET'), 'self');
+  assert.equal(viewAsMode('superadmin', 'teacher-1', '/api/admin/console/view-as', 'POST'), 'self');
+  assert.equal(viewAsMode('superadmin', 'teacher-1', '/api/auth/session', 'DELETE'), 'self');
 });
