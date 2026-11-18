@@ -292,5 +292,9 @@
   "deleteHallRoomsConfirm": "Delete the rooms too",
   "deleteHallWarning": "Deleting \"{name}\" cannot be undone. Class information is not deleted.",
   "deleteHallFailed": "The hall could not be deleted. Please try again.",
-  "hallDeleted": "Hall deleted."
+  "hallDeleted": "Hall deleted.",
+  "replacePhoto": "Replace photo",
+  "replaceTitle": "Replace my artwork photo",
+  "replaceHint": "Your artwork '{title}' will be replaced with the new photo. It stays one artwork, and the teacher checks it again before it is shown.",
+  "replaceOwnHint": "Uploaded the wrong picture? You can replace it with a new photo."
 }

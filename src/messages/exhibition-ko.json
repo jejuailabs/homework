@@ -292,5 +292,9 @@
   "deleteHallRoomsConfirm": "전시실도 함께 지울게요",
   "deleteHallWarning": "\"{name}\"을 지우면 되돌릴 수 없어요. 반(학급) 정보는 지워지지 않아요.",
   "deleteHallFailed": "전시관을 삭제하지 못했어요. 다시 시도해 주세요.",
-  "hallDeleted": "전시관을 삭제했어요."
+  "hallDeleted": "전시관을 삭제했어요.",
+  "replacePhoto": "사진 바꾸기",
+  "replaceTitle": "내 작품 사진 바꾸기",
+  "replaceHint": "이미 올린 '{title}' 작품이 새 사진으로 바뀌어요. 작품은 1점 그대로이고, 선생님이 다시 확인한 뒤 전시돼요.",
+  "replaceOwnHint": "그림을 잘못 올렸다면 새 사진으로 바꿀 수 있어요."
 }
