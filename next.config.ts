@@ -11,6 +11,15 @@ const config: NextConfig = {
   // jwks-rsa loads ESM-only jose from CommonJS. Bundle this chain so serverless
   // runtimes with require(ESM) disabled can load Firebase Auth without downgrades.
   transpilePackages: ['firebase-admin', 'jwks-rsa', 'jose'],
+  // The user guide moved into the blog (2026-11-18). Column-style guides went to the tips section.
+  async redirects() {
+    const tips = ['ai-classroom-guide', 'edutech-tools-comparison', 'homework-feedback-tips', 'class-management-ideas', 'student-portfolio', 'padlet-classcard-alternative'];
+    return [
+      {source: '/guide', destination: '/blog/manual', permanent: true},
+      ...tips.map(slug => ({source: `/guide/${slug}`, destination: `/blog/tips/${slug}`, permanent: true})),
+      {source: '/guide/:slug', destination: '/blog/manual/:slug', permanent: true},
+    ];
+  },
   async headers() {
     return [{source:'/:path*',headers:[
       {key:'X-Content-Type-Options',value:'nosniff'},

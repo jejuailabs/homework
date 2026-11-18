@@ -4,7 +4,14 @@ import VisualBlock from './visual';
 import {GUIDES, guideBySlug} from './guides';
 import {SITE_ALT_NAMES, SITE_NAME, SITE_ONE_LINER, SITE_URL, categoryName} from './site';
 import type {Visual} from './types';
+import {postPath, staticPostBySlug} from '@/modules/blog/posts';
 import './public-site.css';
+
+/** Old guide slugs now live in the blog. */
+const guidePath = (slug: string) => {
+  const post = staticPostBySlug(slug);
+  return post ? postPath(post) : '/blog';
+};
 
 // Public introduction shown below the sign-in screen. Server-rendered so
 // search engines and AI crawlers read every word without running scripts.
@@ -143,7 +150,7 @@ export default function LandingSections() {
                 <h3>{f.title}</h3>
                 <p>{f.text}</p>
                 <ul>{f.points.map(p => <li key={p}>{p}</li>)}</ul>
-                <Link className="ps-more" href={`/guide/${f.guide}`}>{f.more} →</Link>
+                <Link className="ps-more" href={guidePath(f.guide)}>{f.more} →</Link>
               </div>
               <VisualBlock visual={f.visual}/>
             </article>
@@ -188,7 +195,7 @@ export default function LandingSections() {
               </tbody>
             </table>
           </div>
-          <p style={{marginTop: 16}}><Link className="ps-more" href="/guide/student-privacy">학생 개인정보 보호 설계 자세히 보기 →</Link></p>
+          <p style={{marginTop: 16}}><Link className="ps-more" href={guidePath('student-privacy')}>학생 개인정보 보호 설계 자세히 보기 →</Link></p>
         </div>
       </section>
 
@@ -200,10 +207,10 @@ export default function LandingSections() {
             <p className="ps-lead">처음 시작하는 법부터 AI 교실 운영 노하우까지 {GUIDES.length}편의 글로 정리했습니다.</p>
             <div className="ps-cardgrid">
               {featured.map(g => (
-                <Link key={g.slug} className="ps-card" href={`/guide/${g.slug}`}><small>{categoryName(g.category)}</small><b>{g.title}</b><p>{g.description}</p></Link>
+                <Link key={g.slug} className="ps-card" href={guidePath(g.slug)}><small>{categoryName(g.category)}</small><b>{g.title}</b><p>{g.description}</p></Link>
               ))}
             </div>
-            <p style={{marginTop: 20}}><Link className="ps-more" href="/guide">사용 가이드 전체 보기 →</Link></p>
+            <p style={{marginTop: 20}}><Link className="ps-more" href="/blog">블로그 전체 보기 →</Link></p>
           </div>
         </section>
       )}
@@ -221,14 +228,14 @@ export default function LandingSections() {
           <h2 id="cta-title" className="ps-title">오늘, 우리 반 교실을 열어 보세요</h2>
           <p className="ps-lead" style={{margin: '0 auto 10px'}}>선생님은 Google 계정으로, 학생은 6자리 코드로 바로 들어옵니다.</p>
           <a className="button primary" href="#main">로그인하러 가기 ↑</a>
-          <Link className="button" href="/guide">사용 가이드 보기</Link>
+          <Link className="button" href="/blog">블로그 보기</Link>
         </div>
       </section>
 
       <footer className="ps-wrap ps-foot">
         <nav aria-label="가이드 바로가기">
-          {FEATURES.map(f => <Link key={f.guide} href={`/guide/${f.guide}`}>{f.tag}</Link>)}
-          <Link href="/guide">전체 가이드</Link>
+          {FEATURES.map(f => <Link key={f.guide} href={guidePath(f.guide)}>{f.tag}</Link>)}
+          <Link href="/blog">블로그</Link>
         </nav>
         <p>{SITE_NAME} (Our Classroom · ourclass.co.kr · 교실.com) — 작은 도전, 함께 자라는 하루.</p>
       </footer>
