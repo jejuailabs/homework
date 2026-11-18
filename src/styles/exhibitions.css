@@ -180,3 +180,5 @@ dialog .ex-delete-zone{margin-top:0}
  .ex-hall-picked{top:auto;bottom:6px;right:6px;font-size:9px;padding:2px 6px}
  .ex-hall-copy strong{white-space:normal;word-break:keep-all}
 }
+/* Students replace their one artwork in place. */
+.ex-replace-own{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}.ex-replace-own small{color:var(--ex-muted,#6b6257)}.ex-replace-hint{font-weight:700}
