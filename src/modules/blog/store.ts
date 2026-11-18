@@ -2,7 +2,10 @@ import 'server-only';
 import {cache} from 'react';
 import {db} from '@/lib/server/admin';
 import {STATIC_POSTS, sortPosts, type BlogPost} from './posts';
-import {categoryOf, isBlogSection} from './taxonomy';
+import {FEATURES, categoryOf, isBlogSection} from './taxonomy';
+import type {MockId} from '@/modules/public-site/types';
+
+const MOCKS = new Set<string>(['dashboard', ...Object.values(FEATURES).map(f => f.mock)]);
 
 // Published posts written from the admin menu live in Firestore `blogPosts`.
 // Pages read them at render time (ISR), so a publish needs no code deploy.
@@ -19,7 +22,7 @@ export function toPost(id: string, d: Record<string, unknown>): BlogPost | null 
   if (!SLUG.test(String(d.slug ?? id)) || !str(d.title, 120) || !str(d.description, 300) || !str(d.summary, 600)) return null;
   const sections = Array.isArray(d.sections) ? d.sections.filter(s => s && str((s as {heading?: unknown}).heading, 120) && strList((s as {body?: unknown}).body)) : [];
   if (!sections.length) return null;
-  const hero = d.hero as {src?: unknown; alt?: unknown} | undefined;
+  const hero = d.hero as {src?: unknown; mock?: unknown; alt?: unknown} | undefined;
   return {
     slug: String(d.slug ?? id),
     section,
@@ -35,7 +38,7 @@ export function toPost(id: string, d: Record<string, unknown>): BlogPost | null 
     updated: str(d.updated, 10) ? String(d.updated) : String(d.published ?? '2026-11-18'),
     hero: hero && str(hero.src, 1000) && String(hero.src).startsWith('https://') && str(hero.alt, 300)
       ? {src: String(hero.src), alt: String(hero.alt)}
-      : {mock: 'dashboard', alt: String(d.title)},
+      : {mock: (typeof hero?.mock === 'string' && MOCKS.has(hero.mock) ? hero.mock : 'dashboard') as MockId, alt: str(hero?.alt, 300) ? String(hero!.alt) : String(d.title)},
     sections: sections as BlogPost['sections'],
     faq: Array.isArray(d.faq) ? (d.faq as {q?: unknown; a?: unknown}[]).filter(f => str(f.q, 300) && str(f.a, 1500)) as BlogPost['faq'] : [],
     related: strList(d.related) ? (d.related as string[]) : [],

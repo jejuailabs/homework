@@ -8,6 +8,7 @@ const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(seahorseT
 await import('../../modules/region-quest/tests/run-tests.mjs');
 await import('./run-developer-mailbox-tests.mjs');
 await import(moduleUrl(compile('../exhibition-halls.test.ts').replace("'./exhibition-halls'", JSON.stringify(moduleUrl(compile('../exhibition-halls.ts'))))));
+await import(moduleUrl(compile('../blog-writer.test.ts').replace("'./blog-writer'", JSON.stringify(moduleUrl(compile('../blog-writer.ts'))))));
 const exhibitionDateUrl = moduleUrl(compile('../exhibition-date.ts'));
 await import(moduleUrl(compile('../exhibition-date.test.ts').replace("'./exhibition-date'", JSON.stringify(exhibitionDateUrl))));
 const videoStorageUrl = moduleUrl(compile('../video-storage.ts'));
