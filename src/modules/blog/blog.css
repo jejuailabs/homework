@@ -1,0 +1,56 @@
+/* Blog: builds on public-site.css (ps-*) and the app tokens, so light/dark and palettes follow the app. */
+
+.bl-bar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
+.bl-bar-inner{max-width:1120px;margin:0 auto;padding:10px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.bl-bar p{margin:0;display:flex;gap:10px;align-items:baseline;min-width:0}
+.bl-bar p b{font-size:14px;white-space:nowrap}
+.bl-bar p span{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bl-bar nav{display:flex;gap:8px;flex-shrink:0}
+
+.bl-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-weight:800;font-size:13.5px;padding:9px 16px;border-radius:30px;background:var(--accent);color:#fff!important;border:1px solid var(--accent);white-space:nowrap}
+.bl-btn.ghost{background:var(--surface);color:var(--ps-ink)!important;border-color:var(--border)}
+.bl-link{font-weight:700;font-size:13.5px;text-decoration:none;color:var(--accent)!important}
+
+.bl-tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);margin:0 0 22px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.bl-tabs a{text-decoration:none;padding:11px 16px 10px;font-weight:700;font-size:14.5px;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+.bl-tabs a.active{color:var(--ps-ink);border-bottom-color:var(--accent)}
+.bl-count{font-size:13px;color:var(--muted);font-weight:600;margin-left:4px}
+.bl-more{margin:14px 0 0}
+
+.bl-card img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:14px;margin-bottom:12px;background:var(--ps-soft)}
+
+.bl-callout{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:center;margin:26px 0;padding:22px;border-radius:22px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+.bl-callout small{font-size:11.5px;font-weight:800;color:var(--accent);letter-spacing:.5px}
+.bl-callout b{display:block;font-size:20px;margin:4px 0 8px;letter-spacing:-.5px}
+.ps-body .bl-callout p{font-size:14.5px;line-height:1.75;color:var(--muted);margin:0 0 14px}
+.bl-callout-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+
+.bl-features{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.bl-feature{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:18px}
+.bl-feature b{display:block;font-size:16px;margin-bottom:6px}
+.ps-body .bl-feature p{font-size:14px;line-height:1.7;color:var(--muted);margin:0 0 10px}
+
+.bl-start{display:grid;grid-template-columns:1fr;gap:22px;align-items:center;margin:48px 0 10px;padding:28px;border-radius:26px;background:var(--ps-soft);border:1px solid var(--border);scroll-margin-top:80px}
+.ps-body .bl-start h2,.bl-start h2{margin:0 0 12px;font-size:24px}
+.bl-start p{line-height:1.85;color:var(--muted);margin:0 0 12px}
+.bl-start ul{margin:0;padding-left:18px;line-height:1.9;font-size:14.5px}
+.bl-start .login-wrap-compact{padding:0;display:block;width:100%;max-width:440px;margin:0 auto}
+.bl-start .login-card{text-align:center}
+.bl>.ps-wrap>.bl-start{margin-bottom:60px}
+@media(min-width:901px){.bl>.ps-wrap>.bl-start{grid-template-columns:1fr minmax(0,420px);gap:36px;padding:36px}}
+
+.bl-toc-cta{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.bl-toc-cta small{font-size:11px;color:var(--muted);font-weight:700}
+.bl-toc-cta p{margin:6px 0 10px;line-height:1.6;font-size:13px}
+
+@media(max-width:900px){
+  .bl-callout{grid-template-columns:1fr}
+  .bl-start{padding:22px}
+}
+@media(max-width:600px){
+  .bl-bar-inner{padding:8px 16px}
+  .bl-bar p span{display:none}
+  .bl-bar .bl-btn{padding:8px 12px;font-size:12.5px}
+  .bl-features{grid-template-columns:1fr}
+  .bl-start{padding:18px 16px}
+}

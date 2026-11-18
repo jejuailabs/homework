@@ -172,3 +172,6 @@
   .ps-body p{font-size:15.5px}
 }
 .ps-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+
+/* "블로그" link in the app header on public pages */
+.header-blog-link{display:inline-flex;align-items:center;text-decoration:none;font-weight:700;font-size:13px;gap:5px;color:inherit}
