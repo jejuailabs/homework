@@ -18,10 +18,14 @@ const cacheWindow = Number(process.env.AUTH_CONTEXT_CACHE_MS ?? 30_000);
 const contexts = createContextCache<Context>({ ttlMs: Number.isFinite(cacheWindow) && cacheWindow > 0 ? cacheWindow : 0 });
 /** Drop memoised contexts after this instance changes an account's state (code reset, suspension, role change). */
 export function forgetContext(uid: string) { contexts.forget(uid); }
-export function assertOrigin(request: Request) {
+/** The same-site check alone, for a body that is not JSON (a recorded WAV): a cross-site form cannot send that type without a preflight. */
+export function assertSameSite(request: Request) {
   const origin = request.headers.get('origin');
   const site = request.headers.get('sec-fetch-site');
   if (site === 'cross-site' || (origin && origin !== new URL(request.url).origin)) throw new ApiError(403, '이 화면에서 다시 시도해 주세요.', 'ORIGIN');
+}
+export function assertOrigin(request: Request) {
+  assertSameSite(request);
   // Browsers send Origin on these JSON mutations. Reject unauthenticated cross-site forms.
   if (!request.headers.get('content-type')?.includes('application/json') && request.method !== 'DELETE') throw new ApiError(415, '요청 형식을 확인해 주세요.');
 }
