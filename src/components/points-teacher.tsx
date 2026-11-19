@@ -7,6 +7,7 @@ import {notifyPointsChanged} from '@/lib/use-point-sync';
 import AccessGate from './access-gate';
 import CharacterAvatar from './character-avatar';
 import PointsTeacherHistory from './points-teacher-history';
+import PointsTeacherGoals from './points-teacher-goals';
 import {pointError, pointLabel, pointsRequest, usePointCopy} from './points-shared';
 import '@/styles/points.css';
 
@@ -90,6 +91,7 @@ function Teacher({initialClassId}: {initialClassId: string}) {
           </form>
         </section>
       </div>
+      <PointsTeacherGoals key={`goals-${classId}`} classId={classId} enabled={state.settings.enabled} label={label} onChanged={() => {void load().catch(() => {}); setRevision(current => current + 1); notifyPointsChanged();}}/>
       <PointsTeacherHistory key={classId} classId={classId} students={state.students} revision={revision} label={label}/>
       {confirm && <dialog ref={dialog} className="points-dialog" onCancel={event => {if (busy) event.preventDefault(); else setConfirm(false);}} aria-labelledby="points-revoke-title"><h2 id="points-revoke-title">{copy('보말을 회수할까요?', 'Recover these points?')}</h2><p>{copy(`${chosen.length}명에게 ${amount.toLocaleString(locale)} ${label}씩 회수합니다.`, `Recover ${amount.toLocaleString(locale)} ${label} from each of ${chosen.length} students.`)}</p><ul className="points-revoke-preview">{chosen.map(student => <li key={student.id}><span>{student.number}. {student.name}</span><strong>{student.points.toLocaleString(locale)} → {(student.points - amount).toLocaleString(locale)}</strong></li>)}</ul><p className="points-muted">{copy('사유', 'Reason')}: {reason.trim()}</p>{error && <p className="points-error" role="alert">{error}</p>}<div className="points-actions"><button className="button" disabled={busy} onClick={() => setConfirm(false)}>{copy('취소', 'Cancel')}</button><button className="button points-revoke-button" disabled={busy || insufficient || !validAmount} onClick={() => void adjust()}>{busy ? copy('회수 중…', 'Recovering…') : copy('회수 확정', 'Confirm recovery')}</button></div></dialog>}
     </>}

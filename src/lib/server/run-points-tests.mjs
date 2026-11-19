@@ -12,3 +12,5 @@ const policy = moduleUrl(compile('./points-policy.ts').replace("'./policy'", JSO
 await import(moduleUrl(compile('./points-policy.test.ts').replace("'./points-policy'", JSON.stringify(policy)).replace("'../points-types'", JSON.stringify(types))));
 const history = moduleUrl(compile('./points-history.ts').replace("'./policy'", JSON.stringify(base)));
 await import(moduleUrl(compile('./points-history.test.ts').replace("'./points-history'", JSON.stringify(history))));
+const goals = moduleUrl(compile('./point-goals-policy.ts').replace("'./policy'", JSON.stringify(base)).replace("'../points-types'", JSON.stringify(types)));
+await import(moduleUrl(compile('./point-goals-policy.test.ts').replace("'./point-goals-policy'", JSON.stringify(goals))));

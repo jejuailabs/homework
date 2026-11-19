@@ -40,7 +40,7 @@ export function wardrobeItem(itemId: unknown) {
   if (!item) throw new ApiError(404, '꾸미기 아이템을 찾을 수 없어요.', 'ITEM_NOT_FOUND');
   return item;
 }
-export function pointLedgerId(source: 'manual' | 'homework' | 'wardrobe' | 'revoke', sourceId: string, studentId: string) {return createHash('sha256').update(JSON.stringify([source, sourceId, studentId])).digest('hex');}
+export function pointLedgerId(source: 'manual' | 'homework' | 'wardrobe' | 'revoke' | 'donation' | 'donation-refund' | 'goal', sourceId: string, studentId: string) {return createHash('sha256').update(JSON.stringify([source, sourceId, studentId])).digest('hex');}
 export function pointAwardDecision(settings: PointSettings, balance: number, amount: number) {
   if (!settings.enabled) throw new ApiError(409, '선생님이 포인트 꾸미기를 켜면 사용할 수 있어요.', 'POINTS_DISABLED');
   pointInteger(amount, 1, Number.MAX_SAFE_INTEGER);

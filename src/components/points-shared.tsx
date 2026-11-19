@@ -22,6 +22,13 @@ export function pointError(error: unknown, ko: boolean) {
     REQUEST_CONFLICT: ['다른 내용의 요청이 겹쳤어요. 화면을 새로 열어 주세요.', 'A different request used this ID. Please reload the page.'],
     ITEM_NOT_OWNED: ['보유한 아이템만 착용할 수 있어요.', 'You can only wear items you own.'],
     STUDENT_UNAVAILABLE: ['학생 계정 상태를 확인해 주세요.', 'Please check the student account status.'],
+    GOAL_LIMIT: ['진행 중인 기부는 3개까지 열 수 있어요.', 'Up to 3 goals can be open.'],
+    GOAL_OVER: ['남은 보말보다 많이 낼 수 없어요. 딱 맞게만 낼 수 있어요.', 'You can give at most what is still missing.'],
+    GOAL_CLOSED: ['이미 끝났거나 마감이 지난 기부예요.', 'This goal has ended.'],
+    GOAL_NOT_REACHED: ['목표를 채운 기부만 보상 완료로 표시할 수 있어요.', 'Only a filled goal can be marked rewarded.'],
+    GOAL_NOT_FOUND: ['기부를 찾을 수 없어요. 새로고침해 주세요.', 'Goal not found. Please refresh.'],
+    GOAL_TARGET: ['목표 보말을 1~1,000,000 사이로 정해 주세요.', 'Set a goal between 1 and 1,000,000.'],
+    GOAL_DUE: ['마감은 지금보다 뒤로 정해 주세요.', 'The deadline must be in the future.'],
     FORBIDDEN: ['이 학급에 접근할 수 없어요.', 'You do not have access to this class.'],
     UNAUTHENTICATED: ['다시 로그인해 주세요.', 'Please sign in again.'],
   };
