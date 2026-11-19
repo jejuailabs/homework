@@ -3,7 +3,7 @@ import {db} from '@/lib/server/admin';
 import {openBody} from '@/modules/teacher-notebook/vault';
 import {NotebookError} from '@/modules/teacher-notebook/policy';
 import {NOTEBOOK_TAG_LABELS, type NotebookTag} from '@/modules/teacher-notebook/types';
-import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, maskNames, safeId, studentLabel, toolAllowed} from './policy';
+import {BerryError, MAX_TOOL_RESULT_ITEMS, alias, boundedInt, isoDate, maskNames, safeId, seoulTime, studentLabel, submissionTimes, toolAllowed} from './policy';
 import {WORKSPACE_TOOLS, callWorkspaceTool} from './workspace-tools';
 import {CLASSROOM_TOOLS, callClassroomTool, menuFlags} from './classroom-tools';
 import {buildCatalog, flatCatalog} from './catalog';
@@ -21,6 +21,7 @@ export const TOOLS: McpTool[] = [
   {name: 'get_roster', scope: 'classes:read', description: '학급 명단을 번호 순으로 돌려줍니다. 기본은 "학생 07" 같은 가명이며, 실명 권한이 있는 연결에서 reveal_names=true일 때만 이름을 돌려줍니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, reveal_names: {type: 'boolean', description: '실명 반환. names 권한이 있어야 동작합니다.'}}, required: ['class_id'], additionalProperties: false}},
   {name: 'list_assignments', scope: 'homework:read', description: '숙제 목록과 제출·검사 집계, 제출 방식(submissionType), 전시실·보드 자동 연동 여부(syncExhibition·syncBoard)를 돌려줍니다. 제출 방식·연동·제목·설명·마감은 manage_homework edit로 고칩니다. 숙제 메뉴 목록과 같은 조건으로 찾습니다: status=open이면 마감 전 또는 마감 없는 숙제만, all이면 전체(숨긴 숙제 제외), type은 종류(image·text·video·legacy), query는 제목 낱말(띄어쓰기로 여러 개), order는 new(최신순, 기본)·old(오래된순)·due(마감 가까운 순)입니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}, status: {type: 'string', enum: ['open', 'all']}, type: {type: 'string', enum: ['image', 'text', 'video', 'legacy']}, query: {type: 'string', maxLength: 80}, order: {type: 'string', enum: ['new', 'old', 'due']}, limit: {type: 'integer', minimum: 1, maximum: 100}}, additionalProperties: false}},
   {name: 'get_missing_submissions', scope: 'homework:read', description: '특정 숙제(assignment_id) 또는 특정 마감일(due_date, YYYY-MM-DD)의 미제출 학생을 돌려줍니다. 학생이 검사 전에 스스로 지운 제출도 미제출로 나옵니다. 제출물 내용은 읽지 않습니다.', inputSchema: {type: 'object', properties: {assignment_id: {type: 'string'}, due_date: {type: 'string', description: 'YYYY-MM-DD (Asia/Seoul)'}, reveal_names: {type: 'boolean'}}, additionalProperties: false}},
+  {name: 'get_submission_times', scope: 'homework:read', description: '숙제 하나(assignment_id)에서 학생별 제출 시각(submittedAt, 처음 낸 때), 고친 시각(editedAt), 검사한 시각(reviewedAt), 몇 번째 제출인지(attemptNumber), 상태(missing 미제출·waiting_review 검사 대기·done 검사 완료·revision 다시 하기), 마감 뒤 제출(late, lateMinutes)을 돌려줍니다. 시각은 모두 한국 시간(YYYY-MM-DD HH:mm)입니다. student_number로 한 학생만, state로 상태별로 거를 수 있습니다. "누가 언제 냈어?", "늦게 낸 학생", "몇 시에 냈어?"에 씁니다. assignment_id는 list_assignments(query로 제목 검색)에서 찾습니다. 제출물 내용은 읽지 않습니다.', inputSchema: {type: 'object', properties: {assignment_id: {type: 'string'}, student_number: {type: 'integer', minimum: 1, maximum: 999}, state: {type: 'string', enum: ['missing', 'waiting_review', 'done', 'revision', 'late']}, reveal_names: {type: 'boolean'}}, required: ['assignment_id'], additionalProperties: false}},
   {name: 'get_review_queue', scope: 'homework:read', description: '검사(확인)를 기다리는 제출이 있는 숙제와 건수를 돌려줍니다. 학생은 검사 전까지 제출을 고치거나 지울 수 있어 건수가 줄어들 수 있습니다.', inputSchema: {type: 'object', properties: {class_id: {type: 'string'}}, additionalProperties: false}},
   {name: 'list_deadlines', scope: 'homework:read', description: '앞으로 days일 안에 마감되는 숙제를 마감 순으로 돌려줍니다.', inputSchema: {type: 'object', properties: {days: {type: 'integer', minimum: 1, maximum: 60}}, additionalProperties: false}},
   {name: 'search_notebook', scope: 'notebook:read', description: '교무수첩 관찰 기록을 기간·학급·학생 번호·검색어로 찾습니다. 상담·건강·가정 등 민감 기록은 항상 제외되며, 본문은 300자까지만 돌려줍니다.', inputSchema: {type: 'object', properties: {from: {type: 'string', description: 'YYYY-MM-DD'}, to: {type: 'string', description: 'YYYY-MM-DD'}, class_id: {type: 'string'}, student_number: {type: 'integer', minimum: 1, maximum: 999}, query: {type: 'string', maxLength: 100}, reveal_names: {type: 'boolean'}, limit: {type: 'integer', minimum: 1, maximum: 100}}, required: ['from', 'to'], additionalProperties: false}},
@@ -103,6 +104,20 @@ export async function callTool(name: string, args: Data, ctx: BearerContext) {
       const rosters = new Map<string, Student[]>();
       for (const task of tasks) if (!rosters.has(task.classId)) rosters.set(task.classId, await roster(task.classId));
       return {date, assignments: await Promise.all(tasks.map(task => missingFor(task, rosters.get(task.classId)!, ctx, args.reveal_names)))};
+    }
+    case 'get_submission_times': {
+      const doc = await db().doc(`assignments/${safeId(args.assignment_id, '숙제')}`).get();
+      if (!doc.exists || doc.data()!.ownerUid !== ctx.uid) throw new BerryError('이 숙제를 찾을 수 없어요.', 404, 'not_found');
+      const task = {id: doc.id, ...doc.data()} as Data;
+      const number = args.student_number === undefined ? null : boundedInt(args.student_number, 0, 1, 999, 'student_number');
+      const states = ['missing', 'waiting_review', 'done', 'revision', 'late'];
+      if (args.state !== undefined && !states.includes(args.state)) throw new BerryError(`state는 ${states.join('·')} 중 하나예요.`);
+      const [students, snap] = await Promise.all([roster(task.classId), db().collection('submissions').where('assignmentId', '==', task.id).select('studentId', 'status', 'submittedAt', 'editedAt', 'reviewedAt', 'attemptNumber').get()]);
+      const all = submissionTimes(students, (task.targetStudentIds ?? []) as string[], snap.docs.map(row => row.data()), task.dueAt);
+      if (number !== null && !all.some(row => row.number === number)) throw new BerryError(`${number}번 학생은 이 숙제 대상이 아니에요.`, 404, 'not_found');
+      const picked = all.filter(row => (number === null || row.number === number) && (args.state === undefined || (args.state === 'late' ? row.late : row.state === args.state)));
+      const byId = new Map(students.map(student => [student.id, student]));
+      return {assignment: {...assignmentView(task), dueAtSeoul: seoulTime(task.dueAt)}, timezone: 'Asia/Seoul', summary: {target: all.length, submitted: all.filter(row => row.state !== 'missing').length, missing: all.filter(row => row.state === 'missing').length, late: all.filter(row => row.late).length}, students: picked.slice(0, MAX_TOOL_RESULT_ITEMS).map(row => ({number: row.number, label: studentLabel(byId.get(row.studentId)!, ctx.scopes, args.reveal_names), state: row.state, submittedAt: seoulTime(row.submittedAt), editedAt: seoulTime(row.editedAt), reviewedAt: seoulTime(row.reviewedAt), attemptNumber: row.attemptNumber, late: row.late, lateMinutes: row.lateMinutes}))};
     }
     case 'get_review_queue': {
       const classId = args.class_id === undefined ? undefined : (await ownedClass(ctx.uid, args.class_id)).id;

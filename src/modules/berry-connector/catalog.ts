@@ -23,10 +23,10 @@ export const DOMAINS: CatalogDomain[] = [
   {key: 'overview', menu: '홈', what: '모든 메뉴의 지금 숫자(대기·마감·용량·진행 중)', guide: ['get_signals 하나로 학급별 미제출·검사 대기·마감 지남·다시 하기, 전시·보드 승인 대기, 저장 공간 단계, 퀴즈 범위 설정, 진행 중 말놀이터 방, Kids Daily 공유 수, 오늘 일정 수를 숫자로 읽는다. 자세한 내용은 해당 메뉴를 연다.'], metrics: ['missing', 'waiting_review', 'overdue_missing', 'pending_artworks', 'pending_posts', 'storage.percent'], tools: ['get_signals'], sensitivity: '숫자만', cost: 'light', words: ['어때', '급한', '챙길', '현황', '요약', '브리핑']},
   {key: 'classes', menu: '숙제 > 학급·명단', what: '학급과 학생 명단', guide: ['학급 이름·학년·학년도·학생 수와 번호순 명단을 읽는다. 학급 만들기·고치기는 manage_class.'], metrics: ['students'], tools: ['manage_class', 'list_classes', 'get_roster'], sensitivity: '학생은 "학생 07" 가명, 실명은 names 권한일 때만', cost: 'light', words: ['학급', '명단']},
   {key: 'homework', menu: '숙제', what: '숙제방 열기·고치기, 제출·미제출, 검사, 마감', guide: [
-    '숙제 목록·제출 방식(글·사진·영상·녹음)·마감·연동, 제출·검사·다시 하기 집계, 미제출 학생, 검사 대기를 읽는다. 학생은 검사 전까지 제출을 고치거나 지울 수 있고, 지운 제출은 미제출로 집계된다.',
+    '숙제 목록·제출 방식(글·사진·영상·녹음)·마감·연동, 제출·검사·다시 하기 집계, 미제출 학생, 검사 대기를 읽는다. 학생별 제출·고친·검사 시각과 마감 뒤 제출은 get_submission_times. 학생은 검사 전까지 제출을 고치거나 지울 수 있고, 지운 제출은 미제출로 집계된다.',
     '숙제 고치기(제목·설명·마감·제출 방식·전시실/보드 연동)는 manage_homework edit로 하고 화면으로 돌려보내지 않는다. 제출이 있어 제출 방식을 못 바꾸면 같은 내용의 새 숙제방을 제안한다.',
     '전시실·보드 연동을 켜면 같은 이름의 방이 열리고 제출물이 자동으로 올라간다. 글·녹음 숙제는 전시실 연동이 안 된다. 첨부 자료 파일은 숙제 화면에서 올린다.',
-  ], metrics: ['submitted', 'missing', 'waiting_review', 'overdue'], tools: ['manage_homework', 'list_assignments', 'get_missing_submissions', 'get_review_queue', 'list_deadlines', 'create_assignment'], sensitivity: '가명. 제출물 글·사진·영상 본문은 읽지 않음', cost: 'medium', words: ['숙제', '과제', '제출', '검사', '안 낸']},
+  ], metrics: ['submitted', 'missing', 'waiting_review', 'overdue'], tools: ['manage_homework', 'list_assignments', 'get_missing_submissions', 'get_submission_times', 'get_review_queue', 'list_deadlines', 'create_assignment'], sensitivity: '가명. 제출물 글·사진·영상 본문은 읽지 않음', cost: 'medium', words: ['숙제', '과제', '제출', '검사', '안 낸', '늦게 낸']},
   {key: 'exhibitions', menu: '작품전시', what: '3D 전시실, 작품 승인, QR 공개, 보관함', guide: [
     '전시실 상태(준비·열림·마감), 작품 수·승인 대기, QR 공개 여부, 주제 해시태그·연 날짜·직접 올림/숙제 연동을 읽는다. 지난 전시는 보관함에서 태그·기간으로 찾는다(search_exhibitions).',
     '도슨트 녹음, 작품과 함께 올리는 소리 파일(mp3·m4a·wav·ogg), 작품 이미지·음성 감상은 화면에서 한다.',

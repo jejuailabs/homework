@@ -1,6 +1,26 @@
 import assert from 'node:assert/strict';
+
+{
+  assert.equal(seoulTime('2026-11-19T05:05:00.000Z'), '2026-11-19 14:05', 'shown in Seoul time');
+  assert.equal(seoulTime(undefined), null);
+  const students = [{id: 'a', number: 1}, {id: 'b', number: 2}, {id: 'c', number: 3}, {id: 'd', number: 4}, {id: 'x', number: 9}];
+  const rows = submissionTimes(students, ['a', 'b', 'c', 'd'], [
+    {studentId: 'a', status: 'submitted', submittedAt: '2026-11-19T05:00:00.000Z', attemptNumber: 1, reviewedAt: null},
+    {studentId: 'b', status: 'done', submittedAt: '2026-11-19T06:00:30.000Z', editedAt: '2026-11-19T07:00:00.000Z', reviewedAt: '2026-11-19T08:00:00.000Z', attemptNumber: 2},
+    {studentId: 'c', status: 'revision', submittedAt: '2026-11-18T00:00:00.000Z', attemptNumber: 1},
+    {studentId: 'x', status: 'submitted', submittedAt: '2026-11-19T00:00:00.000Z'},
+  ], '2026-11-19T06:00:00.000Z');
+  assert.deepEqual(rows.map(row => row.number), [1, 2, 3, 4], 'only target students, untargeted 9 left out');
+  assert.deepEqual(rows.map(row => row.state), ['waiting_review', 'done', 'revision', 'missing']);
+  assert.deepEqual(rows.map(row => row.late), [false, true, false, false]);
+  assert.equal(rows[1].lateMinutes, 1, 'late by a part of a minute counts as a minute');
+  assert.equal(rows[1].editedAt, '2026-11-19T07:00:00.000Z');
+  assert.equal(rows[3].submittedAt, null);
+  assert.equal(rows[3].attemptNumber, 0);
+  assert.equal(submissionTimes(students, ['a'], [{studentId: 'a', status: 'submitted', submittedAt: '2026-11-19T05:00:00.000Z'}], null)[0].late, false, 'no deadline, never late');
+}
 import {createHash} from 'node:crypto';
-import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, canonicalJson, checkedByDefault, clientRegistration, confirmationProblem, connectorAllowed, deriveEvents, givenName, maskNames, mergeEvents, parseScopes, payloadHash, toolAllowed, CONFIRM_SECONDS, protectedResourceMetadata, redirectWith, scopesWithin, studentLabel, validRedirectUri, verifyPkce} from './policy';
+import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, canonicalJson, checkedByDefault, clientRegistration, confirmationProblem, connectorAllowed, deriveEvents, givenName, maskNames, mergeEvents, parseScopes, payloadHash, toolAllowed, CONFIRM_SECONDS, protectedResourceMetadata, redirectWith, scopesWithin, seoulTime, studentLabel, submissionTimes, validRedirectUri, verifyPkce} from './policy';
 
 assert.deepEqual(accessConfig(undefined), {mode: 'off', teacherUids: []});
 assert.deepEqual(accessConfig({mode: 'allowlist', teacherUids: ['t1', 'bad/uid', 7]}), {mode: 'allowlist', teacherUids: ['t1']});

@@ -29,7 +29,7 @@ ourclass 데이터를 **베리 에이전트 서버, Claude, ChatGPT** 같은 외
 
 ## 도구 (읽기)
 
-`list_classes`, `get_roster`, `list_assignments`, `get_missing_submissions`, `get_review_queue`, `list_deadlines`, `search_notebook`, `get_calendar`, `get_timetable`, `get_lesson_log`, `search_workspace`(제목·태그·기한만), `get_work_item`. 각 도구는 소유권을 매번 서버에서 확인하고, 호출마다 `berryAudit`에 기록되며, 연결당 분 60회·교사당 일 2,000회 한도를 둔다.
+`list_classes`, `get_roster`, `list_assignments`, `get_missing_submissions`, `get_submission_times`(학생별 제출·고친·검사 시각, 마감 뒤 제출), `get_review_queue`, `list_deadlines`, `search_notebook`, `get_calendar`, `get_timetable`, `get_lesson_log`, `search_workspace`(제목·태그·기한만), `get_work_item`. 각 도구는 소유권을 매번 서버에서 확인하고, 호출마다 `berryAudit`에 기록되며, 연결당 분 60회·교사당 일 2,000회 한도를 둔다.
 
 ## 도구 (쓰기, 2단계 확인)
 
