@@ -3,7 +3,8 @@
 import {useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent} from 'react';
 import {Volume2, VolumeX} from 'lucide-react';
 import {usePreferences} from './providers';
-import {SPELL_SPEEDS, spellLetterDiff} from '@/lib/cards-logic';
+import {CARD_SPELL_METHODS, SPELL_SPEEDS, spellLetterDiff} from '@/lib/cards-logic';
+import type {CardSpellMethod} from '@/lib/cards-types';
 import ko from '@/messages/cards-spell-ko.json';
 import en from '@/messages/cards-spell-en.json';
 import '@/styles/cards-spell.css';
@@ -14,8 +15,8 @@ import '@/styles/cards-spell.css';
  * A word set types the answer. Every set shares the same rhythm: a miss offers 지금 재시도 (Enter) or 나중에 다시 (Space), a hit offers 한번 더 or 다음 카드,
  * and 힌트 보기 (Ctrl+H) shows the whole answer but sends the card round again.
  */
-export type SpellMethod = 'scramble' | 'dictation' | 'dictation-initial' | 'write' | 'write-letter' | 'write-initial';
-export const SPELL_METHODS: SpellMethod[] = ['scramble', 'dictation', 'dictation-initial', 'write', 'write-letter', 'write-initial'];
+export type SpellMethod = CardSpellMethod;
+export const SPELL_METHODS: SpellMethod[] = CARD_SPELL_METHODS;
 export type SpellFeedback = {correct: boolean; expected: string; answer?: string; hinted?: boolean};
 export type SpellToken = {text: string; id: number};
 export function useSpellCopy() {const {locale} = usePreferences(); return locale === 'ko' ? ko : en;}

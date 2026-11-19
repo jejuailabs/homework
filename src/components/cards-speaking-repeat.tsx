@@ -6,7 +6,6 @@ import {usePreferences} from './providers';
 import {classify, inAppBrowser, micProblemText, toTake, type MicProblem, type Take} from '@/modules/speech-studio/recorder';
 import {pcmWav} from '@/modules/voice-caption/wav';
 import {SPEAKING_MAX_SECONDS, type SpeakingTake, type SpeakingTakes} from '@/lib/cards-speaking';
-import {SPELL_SPEEDS} from '@/lib/cards-logic';
 import type {CardEntry} from '@/lib/cards-types';
 import {ttsPlayer} from '@/lib/tts-client';
 import ko from '@/messages/cards-speaking-repeat-ko.json';
@@ -22,7 +21,6 @@ import '@/styles/cards-speaking-repeat.css';
 export const REPEAT_RECORD_FACTOR = 2;
 const MIN_RECORD_MS = 1500, MAX_RECORD_MS = SPEAKING_MAX_SECONDS * 1000 - 500;
 export const repeatRecordMs = (voiceMs: number) => Math.round(Math.min(MAX_RECORD_MS, Math.max(MIN_RECORD_MS, voiceMs * REPEAT_RECORD_FACTOR)));
-const SPEED_KEY = 'cards-repeat-speed';
 const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
 /** About 0.42 s a word, for when the voice's real length cannot be measured. */
 const estimateMs = (text: string, rate: number) => (text.trim().split(/\s+/).length * 420 + 600) / rate;
@@ -87,17 +85,18 @@ export type RepeatProps = {
   /** Uploads a take and returns it; absent in the teacher's preview, where takes stay on this screen. */
   saveTake?: (cardId: string, take: Take) => Promise<SpeakingTake>;
   exit: ReactNode; footer?: ReactNode; preview?: boolean;
+  /** The teacher's 읽어 주기 속도 for this distribution; students cannot change it. */
+  speechRate?: number | null;
 };
 
-export function SpeakingRepeat({title, cards, takes: initialTakes, canRecord, saveTake, exit, footer, preview}: RepeatProps) {
+export function SpeakingRepeat({title, cards, takes: initialTakes, canRecord, saveTake, exit, footer, preview, speechRate}: RepeatProps) {
   const {locale} = usePreferences(), c = locale === 'ko' ? ko : en;
   const [takes, setTakes] = useState<Record<string, {url?: string}>>(initialTakes);
   const [view, setView] = useState<'menu' | 'check' | 'run' | 'list'>('menu'), [index, setIndex] = useState(0), [single, setSingle] = useState(false);
-  const [phase, setPhase] = useState<Phase>('listen'), [recordMs, setRecordMs] = useState(0), [failure, setFailure] = useState(''), [speed, setSpeed] = useState(1);
+  const [phase, setPhase] = useState<Phase>('listen'), [recordMs, setRecordMs] = useState(0), [failure, setFailure] = useState(''), speed = speechRate || 1;
   const player = useRef<HTMLAudioElement | null>(null), run = useRef(0), alive = useRef(true), pending = useRef<{cardId: string; take: Take} | null>(null), stopTimer = useRef(0), recordRun = useRef(-1);
   const indexRef = useRef(index), singleRef = useRef(single); indexRef.current = index; singleRef.current = single;
   const done = cards.filter(card => takes[card.id]).length, complete = cards.length > 0 && done === cards.length;
-  useEffect(() => {try {const saved = Number(localStorage.getItem(SPEED_KEY)); if (SPELL_SPEEDS.includes(saved)) setSpeed(saved);} catch {}}, []);
   useEffect(() => {alive.current = true; return () => {alive.current = false; run.current++; player.current?.pause(); window.clearTimeout(stopTimer.current); if ('speechSynthesis' in window) window.speechSynthesis.cancel();};}, []);
   // The next two voices are fetched ahead so each card starts at once.
   useEffect(() => {for (const card of cards.slice(index, index + 3)) ttsPlayer().prefetch(card.front, {source: 'cards'});}, [cards, index]);
@@ -293,7 +292,6 @@ export function SpeakingRepeat({title, cards, takes: initialTakes, canRecord, sa
     <p className="rpt-intro">{c.intro}</p>
     {!canRecord && <p className="rpt-alert" role="status">{c.closed}</p>}
     {micAlert}
-    <div className="rpt-speed"><label htmlFor="rpt-speed">{locale === 'ko' ? '재생 속도' : 'Speed'}</label><select id="rpt-speed" value={speed} onChange={event => {const value = Number(event.target.value); setSpeed(value); try {localStorage.setItem(SPEED_KEY, String(value));} catch {}}}>{SPELL_SPEEDS.map(rate => <option key={rate} value={rate}>{rate.toFixed(1)}×</option>)}</select></div>
     <div className="rpt-bar rpt-start">
       {canRecord && !complete && <button type="button" className="button primary" onClick={() => void begin(Math.max(0, firstMissing))}><Mic size={18}/>{done ? c.continue : c.start}</button>}
       {canRecord && done > 0 && <button type="button" className="button" onClick={() => void begin(0)}><RotateCcw size={16}/>{c.restart}</button>}

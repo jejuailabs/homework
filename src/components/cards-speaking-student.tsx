@@ -59,7 +59,7 @@ export function StudentCardsSpeaking({distributionId}: {distributionId: string})
   }
   // Once every sentence has a 녹음 take, the student can keep them as one ZIP, as before.
   const footer = speakingComplete(cards, takes) ? <div className="csp-done"><div><b>{c.doneTitle}</b><p>{c.doneBody}</p></div><button type="button" className="button primary" disabled={!!download} onClick={() => void downloadAll()}>{download ? <LoaderCircle className="spin" size={17}/> : <Download size={17}/>}{download ? `${download.done}/${download.total}` : c.download}</button>{downloadFailed && <p className="csp-status is-error" role="alert">{c.downloadFailed}</p>}</div> : null;
-  return <SpeakingRepeat title={d.title} cards={cards} canRecord={data.canRecord} takes={data.takes} saveTake={saveTake} exit={backLink} footer={footer}/>;
+  return <SpeakingRepeat title={d.title} cards={cards} canRecord={data.canRecord} takes={data.takes} saveTake={saveTake} exit={backLink} footer={footer} speechRate={d.speechRate}/>;
 }
 
 /** The teacher's look at the same tool from the set page: nothing is saved. */

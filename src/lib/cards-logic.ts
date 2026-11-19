@@ -1,6 +1,6 @@
 // Pure card rules shared by the browser and the server, so instant practice feedback can never drift from server grading.
 import { drillAnswerText, drillQuestion, gradeDrill } from './cards-drill';
-import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardMisses, CardMissSummary, CardRequiredModes, CardReviewState, CardReviewStates, CardSetType, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
+import type { CardAfterDue, CardCoverage, CardDirection, CardEntry, CardMisses, CardMissSummary, CardRequiredModes, CardReviewState, CardReviewStates, CardSetType, CardSpellMethod, CardStudyMode, CardTestQuestion, CardTestSettings } from './cards-types';
 
 // One set of card size limits for the server, the editor and bulk import.
 export const CARD_TEXT_LIMIT = 1000;
@@ -24,6 +24,7 @@ export function gradeCardAnswer(card: CardEntry, mode: CardStudyMode, direction:
 
 // 문장 세트 스펠 (클래스카드식 어순배열·딕테이션·영작): students always build the English sentence on the front.
 // Punctuation and spacing are not graded, nor is case. Typing only each word's first letter (the 첫 글자 option) also counts.
+export const CARD_SPELL_METHODS: CardSpellMethod[] = ['scramble', 'dictation', 'dictation-initial', 'write', 'write-letter', 'write-initial'];
 export const SPELL_SPEEDS = [0.4, 0.7, 0.8, 1, 1.2, 1.3, 1.6, 2];
 export function sentenceWords(text: string) {
   return text.normalize('NFKC').replace(/[‘’]/gu, "'").replace(/[^\p{L}\p{N}'\s-]|(?<!\p{L})'|'(?!\p{L})|(?<!\p{L})-|-(?!\p{L})/gu, ' ').split(/\s+/u).filter(Boolean);
