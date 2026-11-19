@@ -42,7 +42,12 @@ export type PointSettings = {enabled: boolean; label: string; rules: {homework: 
 export const defaultPointSettings: PointSettings = {enabled: false, label: '보말', rules: {homework: 10}};
 export type PointBalanceState = {classId: string; studentId: string; points: number; earned: number; settings: PointSettings};
 export type PointGrantResult = {count: number; repeated: boolean; students: {id: string; points: number; pointsEarnedTotal: number}[]};
-export type PointLedgerEntry = {id: string; amount: number; kind: 'earn' | 'spend' | 'revoke'; source: 'manual' | 'homework' | 'wardrobe' | 'myspace' | 'revoke' | 'daily-quiz' | 'playground' | 'lesson-review' | 'cards'; sourceId: string; reason: string; balanceAfter: number; createdAt: string};
+export type PointLedgerEntry = {id: string; amount: number; kind: 'earn' | 'spend' | 'revoke'; source: 'manual' | 'homework' | 'wardrobe' | 'myspace' | 'revoke' | 'daily-quiz' | 'playground' | 'lesson-review' | 'cards' | 'donation' | 'donation-refund'; sourceId: string; reason: string; balanceAfter: number; createdAt: string};
+/** 보말 기부: open → reached (목표 달성) → rewarded (선생님이 교실에서 보상), or open → failed (선생님이 미션 실패를 누르거나 마감까지 못 채움, 전액 환불). */
+export type PointGoalStatus = 'open' | 'reached' | 'rewarded' | 'failed';
+export type PointGoalDonor = {studentId: string; name: string; number: number; amount: number};
+export type PointGoal = {id: string; title: string; description: string; target: number; raised: number; status: PointGoalStatus; dueAt: string | null; donors: PointGoalDonor[]; createdAt: string; reachedAt: string | null; rewardedAt: string | null; failedAt: string | null; failReason: 'teacher' | 'deadline' | null};
+export const POINT_GOAL_OPEN_LIMIT = 3;
 export type TeacherPointLedgerEntry = PointLedgerEntry & {studentId: string; studentName: string; studentNumber: number};
 export type TeacherPointHistory = {ledger: TeacherPointLedgerEntry[]; nextCursor: string | null};
 export type PointStudent = {id: string; name: string; number: number; character: string; points: number; pointsEarnedTotal: number; wardrobeOwned: string[]; wardrobeOutfit: WardrobeOutfit; disabled: boolean};

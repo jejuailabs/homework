@@ -1,36 +1,19 @@
 import 'server-only';
-import {NextResponse} from 'next/server';
 import {FieldPath} from 'firebase-admin/firestore';
 import {db} from './admin';
 import {assertOrigin, requireStudent, requireTeacher, type Context} from './auth';
-import {ApiError, canManageClass, id, text} from './policy';
+import {ApiError, id, text} from './policy';
 import {addPointBalance, equipWardrobe, parsePointSettings, pointAwardDecision, pointBalance, pointInteger, pointLedgerId, pointPurchaseDecision, pointRevokeDecision, pointSettings, wardrobeOutfit, wardrobeOwnership} from './points-policy';
+import {activeStudent, classOwner, input, json, ledgerRef, studentRef} from './points-access';
+import {handlePointGoals} from './point-goals';
 import {comparePointHistory, parsePointHistoryCursor, pointHistoryBoundary, pointHistoryCursor} from './points-history';
 import type {PointLedgerEntry, PointStudent, TeacherPointLedgerEntry} from '../points-types';
 import {companionProfile} from '@/modules/my-space/profile';
 
 type Data = Record<string, any>;
-const json = (data: unknown, status = 200) => NextResponse.json(data, {status, headers: {'Cache-Control': 'private, no-store'}});
-const studentRef = (classId: string, studentId: string) => db().doc(`classes/${id(classId)}/students/${id(studentId)}`);
-const ledgerRef = (classId: string, studentId: string) => studentRef(classId, studentId).collection('pointLedger');
-async function input(request: Request): Promise<Data> {
-  const raw = await request.text();
-  if (Buffer.byteLength(raw) > 20000) throw new ApiError(413, '입력 내용이 너무 커요.');
-  try {const body = JSON.parse(raw); if (body && typeof body === 'object' && !Array.isArray(body)) return body;} catch {}
-  throw new ApiError(400, '입력 내용을 확인해 주세요.');
-}
-function classOwner(ctx: Context, cls: FirebaseFirestore.DocumentSnapshot) {
-  if (!cls.exists || !canManageClass(ctx.role, ctx.uid, cls.data()?.ownerUid)) throw new ApiError(403, '이 학급을 관리할 권한이 없어요.', 'FORBIDDEN');
-}
 function pointStudent(doc: FirebaseFirestore.DocumentSnapshot): PointStudent {
   const v = doc.data()!;
   return {id: doc.id, name: v.name, number: v.number, character: v.character || 'cat', points: pointBalance(v.points), pointsEarnedTotal: pointBalance(v.pointsEarnedTotal), wardrobeOwned: wardrobeOwnership(v.wardrobeOwned), wardrobeOutfit: wardrobeOutfit(v.wardrobeOutfit, v.wardrobeOwned), disabled: !!v.disabled};
-}
-async function activeStudent(ctx: Context & {classId: string; studentId: string}, tx?: FirebaseFirestore.Transaction) {
-  const refs = [db().doc(`classes/${ctx.classId}`), studentRef(ctx.classId, ctx.studentId), db().doc(`users/${ctx.uid}`)];
-  const [cls, pupil, profile] = await Promise.all(refs.map(ref => tx ? tx.get(ref) : ref.get()));
-  if (!cls.exists || !pupil.exists || pupil.data()?.disabled || pupil.data()?.authUid !== ctx.uid || !profile.exists || profile.data()?.disabled || profile.data()?.role !== 'student' || profile.data()?.classId !== ctx.classId || profile.data()?.studentId !== ctx.studentId) throw new ApiError(403, '학생 코드를 선생님께 다시 확인해 주세요.', 'STUDENT_UNAVAILABLE');
-  return {cls, pupil};
 }
 
 /** All reads happen before commit, so a batch of awards can share one transaction. */
@@ -209,6 +192,8 @@ export async function handlePoints(request: Request, segments: string[]) {
       if (segments.length === 3 && segments[2] === 'revoke' && request.method === 'POST') return await revoke(request, classId);
       if (segments.length === 3 && segments[2] === 'history' && request.method === 'GET') return await teacherHistory(request, classId);
     }
+    const goals = await handlePointGoals(request, segments);
+    if (goals) return goals;
     throw new ApiError(404, '요청한 기능을 찾을 수 없어요.', 'NOT_FOUND');
   } catch (error) {
     if (error instanceof ApiError) return json({error: error.message, code: error.code}, error.status);
