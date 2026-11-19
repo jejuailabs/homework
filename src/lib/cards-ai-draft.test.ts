@@ -145,3 +145,12 @@ test('review requests and drafts keep the teacher card and only refresh the exam
   assert.deepEqual(alignReviewCards([{front: 'run', back: '달리다', example: 'I run.'}, {front: 'eat', back: '먹다', example: 'old'}], [{front: 'RUN', back: 'hacked', example: 'She runs to school every morning.'}, {front: 'extra', back: 'x', example: 'y'}]), [{front: 'run', back: '달리다', example: 'She runs to school every morning.'}, {front: 'eat', back: '먹다', example: 'old'}]);
   assert.match(buildCardAiRequest({mode: 'review', level: 'high', cards: [{front: 'a', back: 'b', example: ''}]}, 'm').instructions, /copied exactly as given/);
 });
+test('meaning fill takes English fronts, sentences included, and keeps the teacher order', () => {
+  assert.deepEqual(parseCardAiRequest({mode: 'meanings', level: 'middle', words: [" How's the weather? ", 'monkey']}), {mode: 'meanings', level: 'middle', words: ["How's the weather?", 'monkey']});
+  for (const words of [[], [''], ['a'.repeat(501)], Array.from({length: 31}, () => 'a'), [1]]) assert.ok('error' in parseCardAiRequest({mode: 'meanings', level: 'middle', words}));
+  assert.ok('error' in parseCardAiRequest({mode: 'meanings', level: 'middle', words: ['a'], text: 'x'}));
+  const built = buildCardAiRequest({mode: 'meanings', level: 'middle', words: ['monkey']}, 'm');
+  assert.match(built.instructions, /natural Korean translation/);
+  assert.equal(built.input[0].content[0].text, JSON.stringify({words: ['monkey']}));
+  assert.deepEqual(alignWordCards(['monkey', 'Hi'], [{front: 'hi', back: '안녕', example: ''}]), [{front: 'monkey', back: '', example: ''}, {front: 'Hi', back: '안녕', example: ''}]);
+});

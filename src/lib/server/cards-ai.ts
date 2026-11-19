@@ -9,10 +9,10 @@ import {ApiError} from './policy';
 const BODY_BYTES_MAX = 64 * 1024, PHOTO_BODY_BYTES_MAX = CARD_PHOTO_CHARS + 4096, REPLY_BYTES_MAX = 256 * 1024, PROVIDER_TIMEOUT_MS = 45_000;
 const AI_MODEL = () => process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna';
 /** Word and vocabulary-text drafts keep their original meter name; the P1 sources are counted apart. */
-const TOOL: Record<CardAiRequest['mode'], string> = {words: 'cards-ai-draft', text: 'cards-ai-draft', photo: 'cards-ai-photo', passage: 'cards-ai-passage', topic: 'cards-ai-topic', concept: 'cards-ai-concept', review: 'cards-ai-review'};
+const TOOL: Record<CardAiRequest['mode'], string> = {words: 'cards-ai-draft', text: 'cards-ai-draft', photo: 'cards-ai-photo', passage: 'cards-ai-passage', topic: 'cards-ai-topic', concept: 'cards-ai-concept', review: 'cards-ai-review', meanings: 'cards-ai-meanings'};
 
 function settle(input: CardAiRequest, cards: CardAiDraft[]) {
-  if (input.mode === 'words') return alignWordCards(input.words, cards);
+  if (input.mode === 'words' || input.mode === 'meanings') return alignWordCards(input.words, cards);
   if (input.mode === 'passage') return fitPassageCards(input.text, cards, input.count);
   if (input.mode === 'review') return alignReviewCards(input.cards, cards);
   if (input.mode === 'concept') return fitConceptCards(input, cards);
