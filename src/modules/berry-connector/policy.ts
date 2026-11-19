@@ -136,7 +136,30 @@ export function boundedInt(value: unknown, fallback: number, min: number, max: n
   return n;
 }
 
-export type AssignmentSummary = {id: string; classId: string; title: string; dueAt: string | null; createdAt: string; targetCount: number; submittedCount: number; reviewedCount: number; visibility?: string};
+/** "2026-11-19 14:05" in Seoul time, so the model never has to convert UTC itself. */
+export function seoulTime(iso: unknown): string | null {
+  if (typeof iso !== 'string' || Number.isNaN(Date.parse(iso))) return null;
+  return new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}).format(new Date(iso));
+}
+
+export type SubmissionTimeState = 'missing' | 'waiting_review' | 'done' | 'revision';
+export type SubmissionTimeRow = {studentId: string; number: number; state: SubmissionTimeState; submittedAt: string | null; editedAt: string | null; reviewedAt: string | null; attemptNumber: number; late: boolean; lateMinutes: number | null};
+/**
+ * One row per target student: when they first handed in, when they last edited, when it was checked, and whether it came after
+ * the deadline. A submission the student deleted before review is not in `submissions`, so it reads as missing — as in the 숙제 menu.
+ */
+export function submissionTimes(students: readonly {id: string; number: number}[], targetIds: readonly string[], submissions: readonly Record<string, any>[], dueAt: string | null | undefined): SubmissionTimeRow[] {
+  const targets = new Set(targetIds), byStudent = new Map(submissions.map(row => [String(row.studentId), row]));
+  const due = typeof dueAt === 'string' ? Date.parse(dueAt) : NaN;
+  return students.filter(student => targets.has(student.id)).map(student => {
+    const row = byStudent.get(student.id), submittedAt = typeof row?.submittedAt === 'string' ? row.submittedAt : null;
+    const state: SubmissionTimeState = !row || !submittedAt ? 'missing' : row.status === 'done' ? 'done' : row.status === 'revision' ? 'revision' : 'waiting_review';
+    const overBy = submittedAt && !Number.isNaN(due) ? Date.parse(submittedAt) - due : NaN;
+    return {studentId: student.id, number: student.number, state, submittedAt, editedAt: typeof row?.editedAt === 'string' ? row.editedAt : null, reviewedAt: typeof row?.reviewedAt === 'string' ? row.reviewedAt : null, attemptNumber: Number(row?.attemptNumber) || (submittedAt ? 1 : 0), late: overBy > 0, lateMinutes: overBy > 0 ? Math.ceil(overBy / 60_000) : null};
+  });
+}
+
+export type AssignmentSummary ={id: string; classId: string; title: string; dueAt: string | null; createdAt: string; targetCount: number; submittedCount: number; reviewedCount: number; visibility?: string};
 /** Derive a teacher's event feed from assignment summaries. Deterministic ids let a consumer de-duplicate across polls. */
 export function deriveEvents(assignments: AssignmentSummary[], since: string | null, now: string, soonHours = 48): BerryDerivedEvent[] {
   const events: BerryDerivedEvent[] = [], nowMs = Date.parse(now), sinceMs = since ? Date.parse(since) : Number.NEGATIVE_INFINITY;

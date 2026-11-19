@@ -24,6 +24,7 @@ const GROUPS: GroupSource[] = [
   {key: 'homework', label: '숙제', emoji: '📚', read: ['homework:read'], change: ['homework:read', 'classroom:write'], abilities: [
     {label: '이번 주 마감 숙제', prompt: '이번 주 마감 숙제 알려 줘'},
     {label: '안 낸 학생', prompt: '오늘 마감 숙제 안 낸 학생 알려 줘'},
+    {label: '제출 시간 보기', prompt: '[숙제 이름]에서 [번호]번 학생 언제 냈는지 알려 줘'},
     {label: '숙제 내기', prompt: '[학급]에 [숙제 제목] 숙제 내 줘. 제출은 [사진/글/동영상], 마감은 [날짜]', write: true, needs: ['classes:read', 'classroom:write']},
     {label: '마감 바꾸기', prompt: '[숙제 이름] 마감을 [날짜]로 바꿔 줘', write: true},
     {label: '제출 방식 바꾸기', prompt: '[숙제 이름] 제출 방식을 [사진/글/동영상/녹음]으로 바꿔 줘', write: true},
