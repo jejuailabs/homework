@@ -3,13 +3,13 @@
 import {useCallback, useEffect, useMemo, useRef, useState, type MouseEvent} from 'react';
 import Link from 'next/link';
 import {useRouter} from 'next/navigation';
-import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyboard, LoaderCircle, RefreshCw, RotateCcw, Shuffle, Star, Volume2, X} from 'lucide-react';
+import {ArrowLeft, ArrowRight, BookOpen, Check, CheckCircle2, ChevronRight, Keyboard, LoaderCircle, RefreshCw, RotateCcw, Star, Volume2, X} from 'lucide-react';
 import {usePreferences} from './providers';
 import {CardIllustration, CardIllustrationToggle} from './card-illustration';
 
 import {characterFiles, type Character} from '@/lib/characters';
-import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, cardRevealSpeech, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, sentenceWords, settleStudyBatch, SPELL_SPEEDS, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
-import {SPELL_METHODS, useSpellCopy, SpellBoard, SpellFeedbackBar, SpellHint, SpellMethodPicker, type SpellMethod, type SpellToken} from './cards-spell';
+import {addStudyResponse, cardAnswer, cardDistractors, cardRangePreset, cardRevealSpeech, emptyStudyOutbox, gradeCardAnswer, keepaliveStudyBatches, normalizeCardAnswer, restoreStudyOutbox, sealStudyBuffer, sentenceWords, settleStudyBatch, staleStudyBatch, STUDY_ANSWER_LIMIT, STUDY_IDLE_MS, studyOutboxSize, type StudyBatch, type StudyOutbox} from '@/lib/cards-logic';
+import {useSpellCopy, SpellBoard, SpellFeedbackBar, SpellHint, type SpellMethod, type SpellToken} from './cards-spell';
 import type {CardDirection, CardEntry, CardModeRequirement, CardProgress, CardReviewItem, CardSetType, CardStudyMode} from '@/lib/cards-types';
 import ko from '@/messages/cards-study-ko.json';
 import en from '@/messages/cards-study-en.json';
@@ -70,34 +70,33 @@ function stableMixed<T>(items: T[], seed: number): T[] {const result = [...items
  */
 type PracticeSession = {queue: string[]; index: number; direction: CardDirection; outcomes: {cardId: string; correct: boolean}[]; feedback?: {correct: boolean; expected: string; answer?: string; hinted?: boolean}; finished?: boolean; retry?: boolean; hinted?: boolean; cleared?: string[]; tries?: number; method?: SpellMethod};
 const SPELL_HINT_ANSWER = '(힌트 보기)';
-const spellMethodKey = 'cards-spell-method';
 const newRequestId = () => crypto.randomUUID();
-type PracticeProps = {title: string; cards: CardEntry[]; mode: CardStudyMode; type?: CardSetType; character?: Character; distributionId?: string; studentId?: string; requirement?: CardModeRequirement; progress?: CardProgress; from?: string; to?: string; onProgress?: (progress: CardProgress) => void; onClose?: () => void; speechRate?: number | null};
+type PracticeProps = {title: string; cards: CardEntry[]; mode: CardStudyMode; type?: CardSetType; character?: Character; distributionId?: string; studentId?: string; requirement?: CardModeRequirement; progress?: CardProgress; from?: string; to?: string; onProgress?: (progress: CardProgress) => void; onClose?: () => void; speechRate?: number | null; shuffle?: boolean; spellMethod?: SpellMethod | null};
 
 export function CardsPracticePreview(props: {title: string; cards: CardEntry[]; mode: CardStudyMode | 'test'; type?: CardSetType; onClose?: () => void}) {
   if (props.mode === 'test') return <CardsLocalTestPreview {...props}/>;
   return <CardsPractice key={props.mode} {...props} mode={props.mode}/>;
 }
 
-export function CardsPractice({title, cards, mode, type = 'word', character = 'cat', distributionId, studentId, requirement, progress, from, to, onProgress, onClose, speechRate}: PracticeProps) {
+export function CardsPractice({title, cards, mode, type = 'word', character = 'cat', distributionId, studentId, requirement, progress, from, to, onProgress, onClose, speechRate, shuffle = false, spellMethod: teacherSpellMethod}: PracticeProps) {
+  const spellMethod: SpellMethod = teacherSpellMethod ?? 'scramble';
   const {copy: c} = useCardCopy();
   const isPreview = !distributionId;
   const fixed = !!requirement?.requiredCount;
   const min = requirement ? requirement.rangeStart : 1, max = requirement ? Math.min(requirement.rangeEnd, cards.length) : cards.length;
   const [direction, setDirection] = useState<CardDirection>(requirement?.direction || 'front-back');
-  const [rangeStart, setRangeStart] = useState(() => cardRangePreset(from, to, min, max).start), [rangeEnd, setRangeEnd] = useState(() => cardRangePreset(from, to, min, max).end), [shuffle, setShuffle] = useState(false), [repeat, setRepeat] = useState(1), [starredOnly, setStarredOnly] = useState(false);
+  // The range is the teacher's (or the section the student opened inside it); one pass, in the teacher's order.
+  const {start: rangeStart, end: rangeEnd} = cardRangePreset(from, to, min, max);
   const [stars, setStars] = useState(progress?.starredCardIds || []), [starBusy, setStarBusy] = useState(false);
   const [session, setSession] = useState<PracticeSession | null>(null), [resume, setResume] = useState<PracticeSession | null>(null);
   const [answer, setAnswer] = useState(''), [revealed, setRevealed] = useState(false), [selectedTokens, setSelectedTokens] = useState<number[]>([]);
   const [dueClosed, setDueClosed] = useState(false), [rulesChanged, setRulesChanged] = useState(false);
-  const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), [speed, setSpeed] = useState(speechRate || 1);
+  const [saving, setSaving] = useState(false), [saveFailed, setSaveFailed] = useState(false), [unsaved, setUnsaved] = useState(0), [error, setError] = useState(''), [starError, setStarError] = useState(false), [canSpeak, setCanSpeak] = useState(false), [speechFailed, setSpeechFailed] = useState(false), speed = speechRate || 1;
   const [voiceUsed, setVoiceUsed] = useState(false);
   const sound = useCardSound();
   // 문장 세트 스펠 always builds the English sentence from its meaning, whatever direction the teacher chose for the other modes.
   const sentenceSpell = mode === 'spell' && type === 'sentence', spellCopy = useSpellCopy();
-  const [spellMethod, setSpellMethod] = useState<SpellMethod>('scramble'), [hintOpen, setHintOpen] = useState(false), [wrongToken, setWrongToken] = useState<number | null>(null);
-  useEffect(() => {try {const saved = localStorage.getItem(spellMethodKey) as SpellMethod | null; if (saved && SPELL_METHODS.includes(saved)) setSpellMethod(saved);} catch {}}, []);
-  const chooseSpellMethod = (value: SpellMethod) => {setSpellMethod(value); try {localStorage.setItem(spellMethodKey, value);} catch {}};
+  const [hintOpen, setHintOpen] = useState(false), [wrongToken, setWrongToken] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null), router = useRouter();
   // Answers grade instantly and wait here. Async saves must merge with the latest values, so these live in refs as well as state.
   const sessionRef = useRef<PracticeSession | null>(null), resumeRef = useRef<PracticeSession | null>(null), outboxRef = useRef<StudyOutbox>(emptyStudyOutbox()), flushing = useRef<Promise<void> | null>(null), timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined), failures = useRef(0), progressCallback = useRef(onProgress);
@@ -187,10 +186,10 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   function start(resumeServer = false, wrongOnly = false) {
     setError('');
     if (rangeStart < min || rangeEnd > max || rangeStart > rangeEnd || !Number.isInteger(rangeStart) || !Number.isInteger(rangeEnd)) {setError(c.rangeError); return;}
-    let chosen = cards.slice(rangeStart - 1, rangeEnd).filter(item => !starredOnly || stars.includes(item.id));
+    let chosen = cards.slice(rangeStart - 1, rangeEnd);
     if (wrongOnly) {const wrong = new Set(session?.outcomes.filter(item => !item.correct).map(item => item.cardId)); chosen = cards.filter(item => wrong.has(item.id));}
     if (!chosen.length) {setError(c.noCards); return;}
-    let queue = Array.from({length: Math.max(1, Math.min(10, repeat))}, () => shuffle ? mixed(chosen) : chosen).flat().map(item => item.id);
+    let queue = (shuffle ? mixed(chosen) : chosen).map(item => item.id);
     if (resumeServer && last >= 0) {const index = queue.indexOf(cards[last].id); if (index >= 0 && index < queue.length - 1) queue = queue.slice(index + 1);}
     resumeRef.current = null; setResume(null); setHintOpen(false); setWrongToken(null);
     updateSession({queue, index: 0, direction: sentenceSpell ? 'back-front' : direction, outcomes: [], ...(mode === 'spell' ? {cleared: [], tries: 0, method: sentenceSpell ? spellMethod : undefined} : {})}); setRevealed(false); setAnswer(''); setSelectedTokens([]);
@@ -325,9 +324,9 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
   const saveNotice = dueClosed ? <div className="cs-alert" role="alert"><p>{c.dueLockedSave}</p></div> : rulesChanged ? <div className="cs-alert" role="alert"><p>{c.rulesChangedSave}</p></div> : saveFailed && <div className="cs-alert" role="alert"><p>{c.saveError} {c.saveKeepGoing}</p><button className="button" disabled={saving} onClick={() => void drain()}><RefreshCw size={16}/>{c.retrySave}</button></div>;
   if (!session) return <section className="cs-study"><div className="cs-study-top">{exit}<span className="cs-tag">{c[mode]}</span></div>{isPreview && <p className="cs-preview-note">{c.preview}</p>}<header className="cs-heading"><div><h1>{title}</h1><p>{c.settings}</p></div><CardBuddy character={character}/></header>
     <div className="cs-options"><h2>{c[mode]}</h2>{resume && <div className="cs-resume"><p>{c.savedResume} <strong>{resume.index + 1} / {resume.queue.length}</strong></p><button className="button primary" onClick={() => {resumeRef.current = null; setResume(null); updateSession(resume); setDirection(resume.direction); setAnswer(resume.feedback?.answer || ''); setRevealed(!!resume.feedback);}}><ArrowRight size={16}/>{c.continue}</button></div>}
-      {sentenceSpell && <SpellMethodPicker method={spellMethod} onChange={chooseSpellMethod} speed={speed} onSpeed={setSpeed}/>}
-      <div className="cs-option-grid">{!sentenceSpell && <label>{c.direction}<select value={direction} disabled={fixed} onChange={event => setDirection(event.target.value as CardDirection)}><option value="front-back">{c.frontBack}</option><option value="back-front">{c.backFront}</option></select></label>}<label>{c.repeat}<select value={repeat} onChange={event => setRepeat(Number(event.target.value))}>{[1, 2, 3, 5, 10].map(value => <option key={value} value={value}>{value}</option>)}</select></label><label>{c.rangeStart}<input type="number" min={min} max={max} value={rangeStart} onChange={event => setRangeStart(Number(event.target.value))}/></label><label>{c.rangeEnd}<input type="number" min={min} max={max} value={rangeEnd} onChange={event => setRangeEnd(Number(event.target.value))}/></label></div>
-      {fixed && <p className="cs-muted">{c.fixed} ({min}–{max})</p>}<div className="cs-checks"><label><input type="checkbox" checked={shuffle} onChange={event => setShuffle(event.target.checked)}/><Shuffle size={16}/>{c.shuffle}</label><label><input type="checkbox" checked={starredOnly} onChange={event => setStarredOnly(event.target.checked)}/><Star size={16}/>{c.starredOnly} ({stars.length})</label>{type === 'word' && <CardIllustrationToggle/>}</div>
+      {/* Every option on this screen is the teacher's: direction and range per mode, order, read-aloud speed and the sentence spell method. */}
+      <p className="cs-muted">{c.fixed} ({rangeStart}–{rangeEnd})</p>
+      {type === 'word' && <div className="cs-checks"><CardIllustrationToggle/></div>}
       {error && <p className="cs-alert" role="alert">{error}</p>}{saveNotice}<div className="cs-actions"><button className="button primary" onClick={() => start()}>{resume ? c.restart : c.start}<ArrowRight size={17}/></button>{!resume && last >= 0 && last < cards.length - 1 && <button className="button" onClick={() => start(true)}>{c.continue}</button>}</div>{!resume && last >= 0 && <p className="cs-muted">{c.lastPosition}</p>}
     </div></section>;
   if (session.finished) {const correctCount = session.outcomes.filter(item => item.correct).length, wrongCount = session.outcomes.length - correctCount; const nextMode = mode === 'memorize' ? 'recall' : mode === 'recall' ? 'spell' : 'test', nextHref = `/student/cards/${distributionId}/${nextMode}${from && nextMode !== 'test' ? `?from=${encodeURIComponent(from)}${to ? `&to=${encodeURIComponent(to)}` : ''}` : ''}`; return <section className="cs-study"><div className="cs-study-top">{exit}</div><div className="cs-finish"><CardBuddy character={character} happy/><CheckCircle2 size={34}/><h1>{c.doneTitle}</h1>{isPreview ? <p className="cs-preview-note">{c.preview}</p> : answersLost || saveFailed ? saveNotice : <p className="cs-save-status" role="status">{unsaved ? <><LoaderCircle className="spin" size={16}/>{c.saving}</> : <><Check size={16}/>{c.saved}</>}</p>}<dl className="cs-result-grid"><div><dt>{c.answered}</dt><dd>{session.outcomes.length}</dd></div><div><dt>{c.correctCount}</dt><dd>{correctCount}</dd></div><div><dt>{c.wrongCount}</dt><dd>{wrongCount}</dd></div></dl><div className="cs-actions"><button className="button" onClick={closeSession}><RotateCcw size={16}/>{c.restart}</button>{wrongCount > 0 && <button className="button" onClick={() => start(false, true)}>{c.retryWrong}</button>}{!isPreview && <Link className="button primary" href={nextHref} onClick={event => leave(event, nextHref)}>{c[nextMode]}<ArrowRight size={17}/></Link>}</div></div></section>;}
@@ -346,7 +345,7 @@ export function CardsPractice({title, cards, mode, type = 'word', character = 'c
     {mode === 'spell' ? feedback ? <SpellFeedbackBar feedback={feedback} method={session.method ?? 'write'} sentence={sentenceSpell} saveNote={!answersLost && <span className="cs-muted"><Check size={14}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</span>} onEnter={feedback.correct ? requeue : retryNow} onSpace={feedback.correct ? next : requeue}/>
       : session.method !== 'scramble' || !sentenceSpell ? <div className="cs-study-controls"><button className="button primary" disabled={!answer.trim()} onClick={() => check()}>{spellCopy.check}<Check size={17}/></button></div> : null
     : <div className="cs-study-controls">{feedback ? <><span className="cs-muted">{!answersLost && <><Check size={16}/>{isPreview ? c.preview : unsaved ? c.saveQueued : c.saved}</>}</span><button className="button primary" autoFocus onKeyDown={event => {if (event.repeat) event.preventDefault();}} onClick={next}>{c.next}<ChevronRight size={18}/></button></> : mode === 'memorize' ? revealed ? <><button className="button" onClick={again}><RotateCcw size={17}/>{c.again}</button><button className="button primary" onClick={() => check('')}><Check size={17}/>{c.remember}</button></> : <button className="button primary" onClick={() => setRevealed(true)}>{c.reveal}</button> : sentenceRecall ? <button className="button primary" disabled={selectedTokens.length !== tokens.length} onClick={() => check(selectedTokens.map(id => tokens.find(item => item.id === id)?.text).join(' '))}>{c.check}<Check size={17}/></button> : null}</div>}
-    <div className="cs-study-foot"><p><Keyboard size={16}/>{mode === 'spell' ? 'Enter: 확인 · Ctrl+H: 힌트' : c.keyboard}</p><CardSoundSettings/>{canSpeak ? <label>{c.speed}<select value={speed} onChange={event => setSpeed(Number(event.target.value))}>{[...new Set([...SPELL_SPEEDS, speed])].sort((a, b) => a - b).map(rate => <option key={rate} value={rate}>{rate}×</option>)}</select></label> : <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
+    <div className="cs-study-foot"><p><Keyboard size={16}/>{mode === 'spell' ? 'Enter: 확인 · Ctrl+H: 힌트' : c.keyboard}</p><CardSoundSettings/>{!canSpeak && <p>{c.speechUnavailable}</p>}</div>{speechFailed && <p className="cs-muted" role="status">{c.speechUnavailable}</p>}
   </section>;
 }
 

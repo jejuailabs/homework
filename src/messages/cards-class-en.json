@@ -1,7 +1,7 @@
 {
   "defaults": "Class study defaults", "defaultsHint": "New distributions start from these values. You can still change them each time, and sets you already gave out stay as they are.",
   "required": "Required", "amount": "Amount", "percentHint": "100% is one round of the chosen cards, 200% is two. Off means optional study.",
-  "speechRate": "Default read-aloud speed", "speechDefault": "Default (1×)", "speechHint": "Students can change it on the study screen.", "afterDueHint": "Used only when a distribution has a due date.",
+  "speechRate": "Default read-aloud speed", "speechDefault": "Default (1×)", "speechHint": "Students hear this speed only. They cannot change it.", "studyOptions": "How students study", "studyOptionsHint": "Students see no settings. They study exactly as set here.", "shuffle": "Shuffle cards in memorize, recall and spell", "spellMethod": "Sentence spell method", "spellMethods": {"scramble": "Word order", "dictation": "Dictation (whole sentence)", "dictation-initial": "Dictation (first letters)", "write": "Writing (sentence feedback)", "write-letter": "Writing (letter feedback)", "write-initial": "Writing (first letters)"}, "afterDueHint": "Used only when a distribution has a due date.",
   "allClasses": "Use for all my classes", "allClassesHint": "Other classes keep their own lesson notes and order.",
   "savedDefaults": "Defaults saved.", "savedAll": "Saved for {n} classes.",
   "applyExisting": "Also apply to current sets", "applyExistingHint": "This changes the settings of {n} active {type} in this class. Each one keeps its card range and study records. Tests in progress are graded with the settings they started with.",

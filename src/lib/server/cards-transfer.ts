@@ -106,7 +106,7 @@ export async function runTransfer(ctx: Context, fromClassId: string, input: Tran
       ownerUid: ctx.uid, classId: to.id, className: to.data()!.name, setId: source.setId, setVersion: version ? set!.version : source.setVersion, versionId: version ? set!.versionId : source.versionId,
       title: snapshot.title, type: snapshot.type, cardCount: snapshot.cards.length, cardIds: snapshot.cards.map((card: CardEntry) => card.id),
       targetStudentIds: activeIds, targetStudents: toRoster.filter(row => !row.disabled).map(row => ({ id: row.id, name: row.name, number: row.number })), targetCount: activeIds.length, allStudents: true,
-      requiredModes: settings.requiredModes, test: settings.test, dueAt: settings.dueAt, afterDue: settings.afterDue, speechRate: settings.speechRate, ...(settings.planDate ? { planDate: settings.planDate } : {}),
+      requiredModes: settings.requiredModes, test: settings.test, dueAt: settings.dueAt, afterDue: settings.afterDue, speechRate: settings.speechRate, shuffle: settings.shuffle, spellMethod: settings.spellMethod, ...(settings.planDate ? { planDate: settings.planDate } : {}),
       active: true, snapshot, createdAt: stamp, updatedAt: stamp, carriedFrom: { distributionId: snap.id, classId: from.id, className: String(from.data()!.name ?? '') },
     };
     return { sourceId: snap.id, newId, value };

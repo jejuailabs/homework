@@ -2,7 +2,7 @@
 // What moves to the new class: the sets (as new distributions), the class defaults and lesson memos/order, and for each linked
 // student the card mastery (씨앗~꽃 level, review date), starred cards and recent misses. What stays with the old class: study counts,
 // test attempts and scores, lateness, 보말 receipts, game records and parent links. The old class and its report are never changed.
-import type {CardMisses, CardRequiredModes, CardReviewStates, CardTestSettings} from './cards-types';
+import type {CardMisses, CardRequiredModes, CardReviewStates, CardSpellMethod, CardTestSettings} from './cards-types';
 import type {CardPlanItem} from './cards-class-plan';
 
 export const CARD_TRANSFER_SETS = 50;
@@ -43,10 +43,10 @@ export function fitRequirements(modes: CardRequiredModes, cardCount: number): Ca
  * The settings a placed set starts with. Deadlines belong to the old class's calendar, so they are dropped unless the teacher keeps them;
  * a test that showed answers after the deadline then shows them right after submitting instead of never.
  */
-export function transferredSettings(source: {requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; afterDue?: string; speechRate?: number | null; planDate?: string | null}, cardCount: number, keepDue: boolean) {
+export function transferredSettings(source: {requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; afterDue?: string; speechRate?: number | null; shuffle?: boolean; spellMethod?: CardSpellMethod | null; planDate?: string | null}, cardCount: number, keepDue: boolean) {
   const dueAt = keepDue ? source.dueAt : null;
   const test: CardTestSettings = {...source.test, questionCount: Math.min(Math.max(1, source.test.questionCount), cardCount), ...(source.test.answerRelease === 'after-due' && !dueAt ? {answerRelease: 'immediate' as const} : {})};
-  return {requiredModes: fitRequirements(source.requiredModes, cardCount), test, dueAt, afterDue: dueAt ? (source.afterDue === 'late' || source.afterDue === 'lock' ? source.afterDue : 'open') : 'late', speechRate: source.speechRate ?? null, planDate: keepDue ? source.planDate ?? null : null};
+  return {requiredModes: fitRequirements(source.requiredModes, cardCount), test, dueAt, afterDue: dueAt ? (source.afterDue === 'late' || source.afterDue === 'lock' ? source.afterDue : 'open') : 'late', speechRate: source.speechRate ?? null, shuffle: !!source.shuffle, spellMethod: source.spellMethod ?? null, planDate: keepDue ? source.planDate ?? null : null};
 }
 /** Mastery moves only for cards the placed version still has. Levels and dates are copied as they are; nothing is earned twice. */
 export function carriedCardStates(states: CardReviewStates, cardIds: string[]): CardReviewStates {

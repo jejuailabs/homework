@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, parseSpeechRate, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, assertSetReady, draftSave, parseCards, parseDraftCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
+import { answersReleased, assertDueOpen, canStudyDistribution, cardMutationFingerprint, distributionPatch, lateMark, parseAfterDue, parseShuffle, parseSpeechRate, parseSpellMethod, reportStudentIds, CARD_LIMIT, completedCounts, expectedCardVersion, isCorrectCardAnswer, normalizeCardAnswer, ownsCardResource, assertSetReady, draftSave, parseCards, parseDraftCards, parseDueAt, parseRequirements, parseTestSettings, publicProgress, studyResponses, testAnswers } from './cards-policy';
 import { addStudyResponse, cardAfterDue, cardDistractors, cardDueState, buildCardChoices, buildCardSections, buildTestQuestions, cardAnswer as logicCardAnswer, cardRangePreset, emptyStudyOutbox, formatCountdown, isTestOvertime, testFormat, testTimeLimit, gradeCardAnswer, keepaliveStudyBatches, restoreStudyOutbox, spellHint, sentenceWords, spellLetterDiff, sealStudyBuffer, settleStudyBatch, staleStudyBatch, studyOutboxSize, type StudyBatch } from '../cards-logic';
 import type { CardCoverage, } from './cards-policy';
 import type { CardSnapshot } from '../cards-types';
@@ -385,6 +385,10 @@ test('speech rate default is 0.5-1.5 in tenths, null for the student choice, and
   const current = { cardCount: 4, requiredModes: parseRequirements(undefined, 4), test: parseTestSettings(undefined, 4), dueAt: null };
   assert.deepEqual(distributionPatch({ speechRate: 0.5 }, current), { speechRate: 0.5 });
   assert.deepEqual(distributionPatch({ speechRate: null }, current), { speechRate: null });
+  assert.deepEqual(distributionPatch({ shuffle: true, spellMethod: 'dictation' }, current), { shuffle: true, spellMethod: 'dictation' });
+  assert.deepEqual(distributionPatch({ spellMethod: null }, current), { spellMethod: null });
+  assert.throws(() => distributionPatch({ shuffle: 'yes' }, current)); assert.throws(() => distributionPatch({ spellMethod: 'freestyle' }, current));
+  assert.equal(parseShuffle(undefined), false); assert.equal(parseSpellMethod(undefined), null);
 });
 
 test('끊어읽기: chunk marks are kept only between words of the front and left out when empty', () => {

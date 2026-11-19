@@ -1,7 +1,7 @@
 {
   "defaults": "우리 반 학습 기본값", "defaultsHint": "새 배부에 자동으로 채워져요.",
   "required": "필수", "amount": "학습량", "percentHint": "100%는 한 바퀴, 끄면 선택 학습이에요.",
-  "speechRate": "읽어 주기 기본 속도", "speechDefault": "기본 (1×)", "speechHint": "학생이 학습 화면에서 바꿀 수 있어요.", "afterDueHint": "마감을 정한 배부에만 쓰여요.",
+  "speechRate": "읽어 주기 기본 속도", "speechDefault": "기본 (1×)", "speechHint": "학생은 이 속도로만 들어요. 학생 화면에서는 바꿀 수 없어요.", "studyOptions": "학습 방식", "studyOptionsHint": "학생 화면에는 설정이 없어요. 여기서 정한 대로만 학습해요.", "shuffle": "암기·리콜·스펠 카드 순서 섞기", "spellMethod": "문장 스펠 방법", "spellMethods": {"scramble": "어순배열", "dictation": "딕테이션 · 전체 딕테이션", "dictation-initial": "딕테이션 · 단어의 첫 글자만 입력", "write": "영작 · 문장단위 피드백 (고난도)", "write-letter": "영작 · 글자단위 피드백", "write-initial": "영작 · 단어의 첫 글자만 입력"}, "afterDueHint": "마감을 정한 배부에만 쓰여요.",
   "allClasses": "모든 반에 적용", "allClassesHint": "다른 반의 차시 메모와 순서는 그대로예요.",
   "savedDefaults": "기본값을 저장했어요.", "savedAll": "{n}개 반에 저장했어요.",
   "applyExisting": "기존 배부에도 적용", "applyExistingHint": "학습 중인 {type} {n}개에 적용해요. 학습 기록은 그대로예요.",

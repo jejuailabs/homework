@@ -3,6 +3,8 @@ import type { CardDrill, CardDrillQuestion } from './cards-drill';
 export type CardSetType = 'word' | 'sentence' | 'drill';
 export type CardStudyMode = 'memorize' | 'recall' | 'spell';
 export type CardDirection = 'front-back' | 'back-front';
+/** 문장 세트 스펠의 학습 방법. The teacher picks it per distribution; students cannot change it. */
+export type CardSpellMethod = 'scramble' | 'dictation' | 'dictation-initial' | 'write' | 'write-letter' | 'write-initial';
 /** chunks: 끊어읽기 breaks a teacher marked on a sentence, as word positions (3 = after the third word). Absent when none. */
 export type CardEntry = { id: string; front: string; back: string; example: string; alternatives: string[]; chunks?: number[]; drill?: CardDrill };
 export type CardFolder = { id: string; name: string; createdAt: string; updatedAt: string };
@@ -14,7 +16,7 @@ export type CardTestFormat = 'written' | 'choice';
 export type CardTestSettings = { questionCount: number; goalScore: number; maxAttempts: number; requireStudy: boolean; direction: CardDirection; answerRelease: 'immediate' | 'after-due' | 'never'; format?: CardTestFormat; timeLimitSeconds?: number | null };
 export type CardAfterDue = 'open' | 'late' | 'lock';
 export type CardSnapshot = { title: string; description: string; type: CardSetType; cards: CardEntry[] };
-export type CardDistributionSummary = { id: string; classId: string; className: string; setId: string; setVersion: number; versionId: string; title: string; type: CardSetType; cardCount: number; targetCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; afterDue: CardAfterDue; allStudents: boolean; active: boolean; createdAt: string; updatedAt: string; speechRate?: number | null; speaking?: boolean; speakingRequired?: Partial<Record<string, number>>; carriedFrom?: { className: string } | null; planDate?: string | null };
+export type CardDistributionSummary = { id: string; classId: string; className: string; setId: string; setVersion: number; versionId: string; title: string; type: CardSetType; cardCount: number; targetCount: number; requiredModes: CardRequiredModes; test: CardTestSettings; dueAt: string | null; afterDue: CardAfterDue; allStudents: boolean; active: boolean; createdAt: string; updatedAt: string; speechRate?: number | null; shuffle?: boolean; spellMethod?: CardSpellMethod | null; speaking?: boolean; speakingRequired?: Partial<Record<string, number>>; carriedFrom?: { className: string } | null; planDate?: string | null };
 export type CardDistribution = CardDistributionSummary & { snapshot: CardSnapshot; targetStudentIds: string[] };
 export type CardCoverage = Record<CardStudyMode, Record<string, number>>;
 export type CardProgress = {
