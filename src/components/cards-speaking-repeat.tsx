@@ -194,7 +194,7 @@ export function SpeakingRepeat({title, cards, takes: initialTakes, canRecord, sa
       if (!alive.current || mine !== run.current) return;
       if (singleRef.current) {setSingle(false); finish(); return;}
       void play(at + 1);
-    } catch {if (alive.current) {setPhase('failed'); setFailure('save');}}
+    } catch (reason) {if (alive.current) {setRecordError(reason instanceof Error ? reason.message : ''); setPhase('failed'); setFailure('save');}}
   }
   function finish() {run.current++; take.current?.cancel(); mic.close(); setView('list'); setSingle(false);}
   /** From a tap: sound is unlocked and the microphone asked for here; the first time, the student checks the microphone before cards start. */
@@ -241,7 +241,7 @@ export function SpeakingRepeat({title, cards, takes: initialTakes, canRecord, sa
         {phase === 'record' && <div className="rpt-meter" aria-hidden="true"><span key={`${index}-${recordMs}-${recordRun.current}`} className="is-on" style={{animationDuration: `${recordMs}ms`}}/></div>}
         {phase === 'record' && <div className="rpt-level" aria-hidden="true"><span style={{width: `${Math.round(mic.level * 100)}%`}}/></div>}
       </div>
-      {phase === 'failed' && <div className="rpt-alert" role="alert">{problem ? <><b>{problem.title}</b><ul>{problem.steps.map(step => <li key={step}>{step}</li>)}</ul></> : <p>{failure === 'quiet' ? c.quietStop : failure === 'record' ? recordError || c.recordFailed : c.saveFailed}</p>}<button type="button" className="button" onClick={retry}><RefreshCw size={16}/>{c.retry}</button></div>}
+      {phase === 'failed' && <div className="rpt-alert" role="alert">{problem ? <><b>{problem.title}</b><ul>{problem.steps.map(step => <li key={step}>{step}</li>)}</ul></> : <p>{failure === 'quiet' ? c.quietStop : failure === 'record' ? recordError || c.recordFailed : (failure === 'save' && recordError) || c.saveFailed}</p>}<button type="button" className="button" onClick={retry}><RefreshCw size={16}/>{c.retry}</button></div>}
       <p className="rpt-note">{c.micNote}</p>
       <div className="rpt-bar">
         {phase === 'paused' || phase === 'failed'

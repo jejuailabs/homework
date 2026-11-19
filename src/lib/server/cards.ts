@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { FieldPath } from 'firebase-admin/firestore';
 import { db } from './admin';
 import { cardRewardSettings, prepareCardRewards, studentCardRewards } from './cards-rewards';
-import { assertOrigin, getContext, type Context } from './auth';
+import { assertOrigin, assertSameSite, getContext, type Context } from './auth';
 import { ApiError, id, text } from './policy';
 import { cardsAiDraft } from './cards-ai';
 import { CARD_DUE_GRACE_MS, CARD_REVIEW_SESSION, buildCardChoices, buildTestQuestions, cardAfterDue, cardDueState, cardMissList, cardReviewDate, cardReviewStates, dueCardIds, isTestOvertime, nextCardReview, recordCardMisses, summarizeCardMisses, testTimeLimit } from '../cards-logic';
@@ -594,7 +594,11 @@ async function reviewCards(ctx: Context, request: Request) {
 
 export async function handleCards(request: Request, segments: string[] = []) {
   try {
-    if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
+    // A speaking take is posted as raw audio/wav, not JSON: it gets the same-site check without the JSON-only rule, which
+    // answered every take with 415 so no recording could be saved.
+    const audioTake = request.method === 'POST' && segments[0] === 'distributions' && segments[2] === 'speaking' && segments.length === 4 && request.headers.get('content-type') === 'audio/wav';
+    if (audioTake) assertSameSite(request);
+    else if (!['GET', 'HEAD'].includes(request.method)) assertOrigin(request);
     const ctx = await getContext(request), [resource, resourceId, operation, operationId, action] = segments;
     if (segments.length > 5) throw new ApiError(404, '카드놀이 기능을 찾을 수 없어요.', 'NOT_FOUND');
     if (resourceId) id(resourceId);

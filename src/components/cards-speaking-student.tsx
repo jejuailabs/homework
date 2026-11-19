@@ -32,9 +32,11 @@ export function StudentCardsSpeaking({distributionId}: {distributionId: string})
 
   // 듣고 따라 말하기 saves each card's take as the distribution's 녹음 take; the other five steps are hidden for now.
   const saveTake = useCallback(async (cardId: string, take: Take) => {
-    const response = await fetch(speakingUrl(distributionId, `/${encodeURIComponent(cardId)}`), {method: 'POST', headers: {'Content-Type': 'audio/wav'}, body: new Blob([Uint8Array.from(take.wav)], {type: 'audio/wav'}), credentials: 'same-origin'});
-    const result = await response.json().catch(() => ({})) as {take?: SpeakingTake};
-    if (!response.ok || !result.take) throw new Error('save_failed');
+    // A network failure keeps the screen's own "check the connection" line (empty message); a refusal from the server shows the
+    // server's reason and its code, so a student's screen tells the teacher what actually went wrong.
+    const response = await fetch(speakingUrl(distributionId, `/${encodeURIComponent(cardId)}`), {method: 'POST', headers: {'Content-Type': 'audio/wav'}, body: new Blob([Uint8Array.from(take.wav)], {type: 'audio/wav'}), credentials: 'same-origin'}).catch(() => {throw new Error('');});
+    const result = await response.json().catch(() => ({})) as {take?: SpeakingTake; error?: string; code?: string};
+    if (!response.ok || !result.take) throw new Error(`${result.error || '녹음을 저장하지 못했어요.'} (${result.code || `HTTP ${response.status}`})`);
     URL.revokeObjectURL(take.url);
     setTakes(value => ({...value, [cardId]: result.take!}));
     return result.take;
