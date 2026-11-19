@@ -15,6 +15,7 @@ import {useVerifiedViewer} from './viewer-context';
 import MyPageLink from '@/modules/teacher-notebook/my-page-link';
 import ActivityTracker from './activity-tracker';
 import {cardsMenuVisible} from '@/lib/menu-visibility';
+import {berryAssetUrl} from '@/lib/berry-brand';
 import '@/styles/brand.css';
 // Quiz, Word playground and Kids Daily are hidden from the top menu for now;
 // their pages still work by direct link. Flip a flag to show the menu again.
@@ -49,7 +50,7 @@ export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled
   return <>
     <a href="#main" className="skip-link">{t('skip')}</a>
     <header className="app-header"><div className="header-inner">
-      <Link href={isLogin||isPublicGallery?'/':isAdmin?'/admin':isStudent?'/student':'/teacher'} className="brand"><span className="brand-mark brand-mark-classroom"><img src="/branding/our-classroom-mark.svg" alt="" width="46" height="46"/></span><span>{t('brand')}<small>{t('tagline')}</small></span></Link>
+      <Link href={isLogin||isPublicGallery?'/':isAdmin?'/admin':isStudent?'/student':'/teacher'} className="brand"><img className="brand-berry-duo" src={berryAssetUrl('berry-duo-logo')} alt="BERRY DUO" width="91" height="72"/><span>{t('brand')}<small>{t('tagline')}</small></span></Link>
       {!isLogin&&!isPublicGallery && <nav className={`top-nav ${isStudent?'student-nav':!isAdmin?'teacher-nav':''}`} aria-label={t('home')}>
         {!isStudent&&!isAdmin&&<Link href="/teacher" className={`nav-dashboard ${path==='/teacher'?'active':''}`} aria-current={path==='/teacher'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><LayoutDashboard size={18}/></span>{locale==='en'?'Home':'홈'}</Link>}
         <Link className={`nav-homework ${path===homeworkPath?'active':''}`} aria-current={path===homeworkPath?'page':undefined} href={homeworkPath}><span className="nav-pictogram" aria-hidden="true">{isAdmin?<ShieldCheck size={18}/>:<BookOpen size={18}/>}</span>{isAdmin?t('admin'):t('homework')}</Link>
