@@ -80,10 +80,58 @@ export const guestbook: Record<string, DemoNote[]> = {
   'space-05': [{from: '이슬 선생님', text: '국자자리, 이름을 정말 잘 지었어요.'}],
 };
 
-export type CornerId = 'gallery' | 'bomal' | 'artbook' | 'start';
+/** Homework whose submissions hang in a linked exhibition room and board on their own. */
+export const homework = {title: '내가 좋아하는 것 그리기', due: '금요일까지', room: '숙제 전시 · 내가 좋아하는 것', board: '내가 좋아하는 것 이야기'};
+export const homeworkPeers: {workId: string; text: string}[] = [
+  {workId: 'spring-07', text: '초코랑 산책하는 게 제일 좋아요.'},
+  {workId: 'sea-02', text: '고래는 크고 순해서 좋아요.'},
+  {workId: 'space-01', text: '로켓을 타고 우주에 가고 싶어요.'},
+  {workId: 'spring-03', text: '비 온 뒤에 무지개 찾는 걸 좋아해요.'},
+  {workId: 'sea-06', text: '잠수함을 타면 물고기를 가까이 볼 수 있어요.'},
+];
+export const homeworkPicks = ['spring-09', 'space-08', 'sea-04'];
+export const praises = ['색을 정성껏 칠했네! 참 잘했어요.', '좋아하는 마음이 그림에 다 보여요.', '다음엔 배경도 그려 볼까요?'];
+
+export type BoardNote = {id: string; column: number; from: string; text: string; color: string; hearts: number};
+export const boardColumns = ['알게 된 점', '궁금한 점', '더 해 보고 싶은 것'];
+export const boardColors = ['#fff3b0', '#ffd6e0', '#d3f0dc', '#d6e8ff', '#eadcff'];
+export const boardNotes: BoardNote[] = [
+  {id: 'n1', column: 0, from: '김하늘', text: '고래는 물고기가 아니라 젖을 먹는 동물이래요.', color: '#d6e8ff', hearts: 4},
+  {id: 'n2', column: 0, from: '박서아', text: '문어 다리는 여덟 개! 내 그림은 여섯 개였다.', color: '#ffd6e0', hearts: 6},
+  {id: 'n3', column: 1, from: '최지호', text: '거북은 등딱지를 벗을 수 있나요?', color: '#d3f0dc', hearts: 2},
+  {id: 'n4', column: 1, from: '정유나', text: '해파리는 뼈가 없는데 어떻게 헤엄쳐요?', color: '#eadcff', hearts: 3},
+  {id: 'n5', column: 2, from: '강민준', text: '잠수함 모형을 페트병으로 만들어 보고 싶어요.', color: '#fff3b0', hearts: 5},
+  {id: 'n6', column: 2, from: '윤서연', text: '바닷가에 가서 불가사리를 직접 보고 싶다.', color: '#ffd6e0', hearts: 1},
+  {id: 'n7', column: 0, from: '한지유', text: '상어는 이빨이 빠져도 또 난대요.', color: '#fff3b0', hearts: 3},
+];
+
+export type DemoCard = {word: string; meaning: string; emoji: string};
+export const cardSet = {title: '바다 동물 영어', cards: [
+  {word: 'whale', meaning: '고래', emoji: '🐋'}, {word: 'turtle', meaning: '거북', emoji: '🐢'}, {word: 'octopus', meaning: '문어', emoji: '🐙'},
+  {word: 'shark', meaning: '상어', emoji: '🦈'}, {word: 'crab', meaning: '게', emoji: '🦀'}, {word: 'fish', meaning: '물고기', emoji: '🐟'},
+] as DemoCard[]};
+
+/** Answers recorded for the demo class. The real Berry reads the teacher's own class; nothing here calls an AI. */
+export type BerryCard = {title: string; rows: [string, string][]; done: string};
+export type BerryTurn = {ask: string; answer: string[]; card?: BerryCard; follow?: BerryTurn};
+export const berryTurns: BerryTurn[] = [
+  {ask: '지금 챙길 것 알려 줘', answer: ['오늘 챙기실 것은 네 가지예요.', '· 검사 기다리는 숙제 3건 (내가 좋아하는 것 그리기)', '· 승인 기다리는 작품 2점 (봄 그림전)', '· 오늘 마감 숙제 1개 (독서 감상문)', '· 내일 15:00 학년 협의회']},
+  {ask: '독서 감상문 안 낸 학생 알려 줘', answer: ['아직 3명이 내지 않았어요: 학생 04, 학생 08, 학생 10.', '이름은 가명으로만 다뤄요. 안내 문구를 만들어 드릴까요?'],
+    follow: {ask: '응, 다정하게 써 줘', answer: ['이렇게 써 보면 어떨까요?', '"금요일까지 감상문을 올려 주면 선생님이 꼭 읽어 볼게요. 한 줄이어도 괜찮아요!"']}},
+  {ask: '내일 3시 학년 협의회 일정 넣어 줘', answer: ['이렇게 넣을게요. 저장 전에 확인해 주세요.'],
+    card: {title: '일정 추가', rows: [['제목', '학년 협의회'], ['때', '내일 15:00 ~ 16:00'], ['종류', '회의']], done: '실제로는 선생님 달력에 들어가요. 체험에서는 저장되지 않아요.'}},
+  {ask: '봄 그림전 승인 대기 작품 모두 승인해 줘', answer: ['승인 대기 작품 2점을 찾았어요. 바꾸기 전에 확인해 주세요.'],
+    card: {title: '작품 승인', rows: [['전시실', '봄 그림전'], ['대상', '풍선 타고 훨훨, 낮잠 자는 치즈'], ['바뀌는 것', '승인 대기 → 승인 (전시실에 걸림)']], done: '실제로는 두 작품이 전시실에 걸려요. 체험에서는 반영되지 않아요.'}},
+];
+
+export type CornerId = 'gallery' | 'flow' | 'bomal' | 'board' | 'cards' | 'berry' | 'artbook' | 'start';
 export const corners: {id: CornerId; label: string; lead: string}[] = [
   {id: 'gallery', label: '전시관', lead: '아이들 작품이 걸리는 3D 전시관'},
+  {id: 'flow', label: '숙제 → 전시', lead: '숙제 하나가 전시실과 보드로 이어져요'},
   {id: 'bomal', label: '보말과 캐릭터', lead: '칭찬 보말로 꾸미는 나의 작은 세상'},
+  {id: 'board', label: '참여보드', lead: '모두의 생각이 한 판에 모여요'},
+  {id: 'cards', label: '카드놀이', lead: '단어 카드 짝 맞추기'},
+  {id: 'berry', label: '베리', lead: '말로 시키는 선생님의 AI 비서'},
   {id: 'artbook', label: '작품집', lead: '한 해 작품을 한 권의 PDF로'},
   {id: 'start', label: '시작하기', lead: '우리 반으로 시작하기'},
 ];

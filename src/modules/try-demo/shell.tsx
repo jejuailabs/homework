@@ -14,7 +14,11 @@ import './styles.css';
 const loading = () => <p className="try-loading" role="status"><LoaderCircle className="try-spin" size={20}/>체험을 준비하고 있어요…</p>;
 const views = {
   gallery: dynamic(() => import('./corners/gallery'), {ssr: false, loading}),
+  flow: dynamic(() => import('./corners/flow'), {ssr: false, loading}),
   bomal: dynamic(() => import('./corners/bomal'), {ssr: false, loading}),
+  board: dynamic(() => import('./corners/board'), {ssr: false, loading}),
+  cards: dynamic(() => import('./corners/cards'), {ssr: false, loading}),
+  berry: dynamic(() => import('./corners/berry'), {ssr: false, loading}),
   artbook: dynamic(() => import('./corners/artbook'), {ssr: false, loading}),
   start: dynamic(() => import('./corners/start'), {ssr: false, loading}),
 };
