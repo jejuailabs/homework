@@ -10,6 +10,7 @@ import BoardDashboardSummary from './board-dashboard-summary';
 import TeacherDashboardDetails from './teacher-dashboard-details';
 import StorageGuide from './storage-guide';
 import DeveloperMailbox from './developer-mailbox';
+import TeacherToday from '@/modules/teacher-today/today';
 
 function homeworkHref(classId?: string, assignmentId?: string, status?: string, action?: string) {
   const query = new URLSearchParams();
@@ -96,6 +97,7 @@ export default function TeacherDashboard() {
       <div className="thd-friends" aria-hidden="true"><span className="thd-friend-sun"><Star size={21}/></span><span className="thd-friend-hill"/><span className="thd-friend-window"/><img className="thd-friend-dog" src="/characters/dog-dubu.webp" alt=""/><img className="thd-friend-cat" src="/characters/cat-mochi.webp" alt=""/><img className="thd-friend-hamster" src="/characters/hamster-kong.webp" alt=""/><span className="thd-friend-book"><BookOpen size={33}/></span><Flower2 className="thd-friend-flower" size={26}/><Heart className="thd-friend-heart" size={18}/></div>
     </section>
 
+    <TeacherToday/>
     <nav className="thd-shortcuts" aria-label={t("shortcuts")}>
       <Link className="thd-shortcut thd-mint" href={homeworkHref(classId)}><span className="thd-icon"><BookOpen size={24}/></span><span><strong>{t("homework")}</strong><small>{t("homeworkHint")}</small></span><ArrowRight size={20}/></Link>
       <Link className="thd-shortcut thd-peach" href={exhibitionHref}><span className="thd-icon"><Images size={24}/></span><span><strong>{t("exhibitions")}</strong><small>{t("exhibitionsHint")}</small></span><img src="/characters/otter-moa.webp" alt=""/><ArrowRight size={20}/></Link>
