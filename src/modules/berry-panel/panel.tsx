@@ -2,8 +2,9 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {withBanners} from './links';
 import {usePathname} from 'next/navigation';
-import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, PencilLine, PlugZap, Send, Sparkles, StickyNote, TriangleAlert, X} from 'lucide-react';
+import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, Mic, PencilLine, PlugZap, Send, Sparkles, Square, StickyNote, TriangleAlert, X} from 'lucide-react';
 import {abilityGroups, firstBlank, lackingFor, missingPermissions, type Ability} from './abilities';
+import {useVoiceInput} from './voice';
 import {pickGreeting, remember, seoul, type Greeting, type GreetingHistory} from './greetings';
 import './styles.css';
 
@@ -126,6 +127,7 @@ export default function BerryPanel() {
   const [greeting, setGreeting] = useState<Greeting | null>(null), [brief, setBrief] = useState<TodayBriefing>({state: 'hidden'}), [briefOpen, setBriefOpen] = useState(false);
   const greeted = useRef(false);
   const conversation = useRef<string | null>(null), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
+  const voice = useVoiceInput(text, setText);
   useEffect(() => {
     try {conversation.current = sessionStorage.getItem(CONVERSATION);} catch {}
     const result = new URLSearchParams(window.location.search).get('berry');
@@ -180,6 +182,7 @@ export default function BerryPanel() {
   async function send(override?: string) {
     const message = (override ?? text).trim();
     if (!message || busy) return;
+    if (voice.listening) voice.cancel();
     setText(''); setBusy(true); setError(''); setActivity('생각하는 중…');
     setMessages(old => [...old, {role: 'user', text: message}, {role: 'assistant', text: '', cards: []}]);
     const update = (fn: (last: Message) => Message) => setMessages(old => [...old.slice(0, -1), fn(old[old.length - 1])]);
@@ -269,9 +272,11 @@ export default function BerryPanel() {
         </div>
         <div className="bp-input">
           <button type="button" className="bp-ability-toggle" aria-label="메뉴 열기" title="메뉴 열기" onClick={() => setTab('menu')}><Sparkles size={17}/></button>
-          <textarea ref={input} value={text} rows={2} maxLength={4000} placeholder="베리에게 물어보세요" aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
+          <textarea ref={input} value={text} rows={2} maxLength={4000} placeholder={voice.listening ? '듣고 있어요. 말씀하신 뒤 ■를 눌러 주세요' : '베리에게 물어보세요'} aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
+          {voice.supported && <button type="button" className={`bp-mic${voice.listening ? ' is-listening' : ''}`} aria-label={voice.listening ? '음성 입력 멈추기' : '말로 입력하기'} aria-pressed={voice.listening} title={voice.listening ? '음성 입력 멈추기' : '말로 입력하기'} disabled={busy} onClick={voice.toggle}>{voice.listening ? <Square size={15}/> : <Mic size={17}/>}</button>}
           <button type="button" className="button primary" aria-label="보내기" disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}</button>
         </div>
+        {voice.error && <p className="bp-error" role="alert">{voice.error}</p>}
         {messages.length > 0 && <button type="button" className="bp-new" onClick={newChat}>새 대화</button>}
       </> : tab === 'menu' ? <div className="bp-messages">
         {/* The conversation stays in state here: picking a button or the tab returns to it and continues the same thread. */}
