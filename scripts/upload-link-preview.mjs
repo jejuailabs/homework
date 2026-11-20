@@ -33,30 +33,25 @@ const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="$
   <rect width="${W}" height="${H}" fill="url(#bg)"/>
   <circle cx="900" cy="300" r="330" fill="url(#glow)"/>
   <ellipse cx="900" cy="492" rx="280" ry="62" fill="#cdeedd"/>
-  <rect x="80" y="486" width="318" height="64" rx="32" fill="#2f6f66"/>
 </svg>`);
 
-const [logo, hero, left, right, farLeft, farRight] = await Promise.all([art('berry-duo-logo', 132), art('blue-hallabong', 360), art('rasp-haenyeo', 150), art('blue-horse', 150), art('rasp-hareubang', 120), art('blue-haenyeo', 120)]);
-const [title, line1, line2, address] = await Promise.all([
-  text('모두의 교실', 100, '#23423d'),
-  text('숙제 · 작품 전시 · AI 비서 베리', 34, '#3f5f59'),
-  text('우리 반이 함께 쓰는 온라인 교실', 34, '#3f5f59'),
-  text('ourclass.co.kr', 34, '#ffffff'),
+const [logo, hero, left, right, farLeft, farRight] = await Promise.all([art('berry-duo-logo', 176), art('blue-hallabong', 360), art('rasp-haenyeo', 150), art('blue-horse', 150), art('rasp-hareubang', 120), art('blue-haenyeo', 120)]);
+// Messengers shrink this card to about 250px wide, so only large type survives.
+const [title, tagline] = await Promise.all([
+  text('모두의 교실', 106, '#23423d'),
+  text('숙제 · 전시 · AI 비서 베리', 46, '#2f6f66'),
 ]);
 const heroMeta = await sharp(hero).metadata();
-const addressMeta = await sharp(address).metadata();
 
 const image = await sharp(background).composite([
-  {input: farLeft, left: 668, top: 236},
+  {input: farLeft, left: 648, top: 232},
   {input: farRight, left: 1052, top: 236},
-  {input: left, left: 664, top: 392},
+  {input: left, left: 680, top: 396},
   {input: right, left: 1022, top: 392},
   {input: hero, left: Math.round(900 - heroMeta.width / 2), top: 150},
-  {input: logo, left: 80, top: 62},
-  {input: title, left: 78, top: 226},
-  {input: line1, left: 82, top: 366},
-  {input: line2, left: 82, top: 418},
-  {input: address, left: Math.round(239 - addressMeta.width / 2), top: Math.round(518 - addressMeta.height / 2)},
+  {input: logo, left: 70, top: 56},
+  {input: title, left: 68, top: 274},
+  {input: tagline, left: 72, top: 446},
 ]).png({compressionLevel: 9, palette: false}).toBuffer();
 console.log(`${NAME}.png ${W}x${H}, ${(image.length / 1024).toFixed(0)} KB`);
 if (out) await writeFile(resolve(out), image);
