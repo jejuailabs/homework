@@ -1,12 +1,18 @@
 import 'server-only';
+import {randomBytes, scrypt, timingSafeEqual} from 'node:crypto';
+import {promisify} from 'node:util';
 import {NextResponse} from 'next/server';
 import {auth, db} from '@/lib/server/admin';
 import {assertOrigin, getContext, type Context} from '@/lib/server/auth';
 import {ApiError} from '@/lib/server/policy';
-import {accessConfig, entryInput, monthRange, notebookAllowed, notebookDate, NotebookError, MAX_REPORT_ENTRIES, recentAuthentication, reportRange, studentKey, unlockToken, verifyUnlock, UNLOCK_SECONDS} from './policy';
-import {notebookKeys, openBody, sealBody} from './vault';
+import {accessConfig, afterFailure, blockedFor, entryInput, minutesLabel, monthRange, notebookAllowed, notebookDate, NotebookError, MAX_REPORT_ENTRIES, passwordInput, passwordLock, recentAuthentication, reportRange, studentKey, todoInput, unlockToken, verifyUnlock, UNLOCK_SECONDS} from './policy';
+import {notebookKeys, openBody, openEnvelope, sealBody, sealEnvelope} from './vault';
 import {logWorkspaceEvent} from '@/modules/teacher-workspace/event-log';
-import {NOTEBOOK_TAGS, type NotebookAccessConfig, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStudentRef, type NotebookTag} from './types';
+import {NOTEBOOK_TAGS, type NotebookAccessConfig, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStudentRef, type NotebookTag, type NotebookTodo} from './types';
+
+const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, length: number, options: {N: number; r: number; p: number}) => Promise<Buffer>;
+const SCRYPT = {N: 16384, r: 8, p: 1};
+const hashPassword = async (password: string, salt: Buffer) => (await scryptAsync(password.normalize('NFC'), salt, 32, SCRYPT)).toString('base64url');
 
 type Input = Record<string, unknown>;
 type Stored = {date: string; body: unknown; students: NotebookStudentRef[]; studentKeys: string[]; classIds: string[]; tags: NotebookTag[]; sensitive: boolean; length: number; createdAt: string; updatedAt: string; source?: string; pending?: boolean};
@@ -16,6 +22,9 @@ const now = () => new Date().toISOString();
 const seconds = () => Math.floor(Date.now() / 1000);
 const notebook = (uid: string) => db().doc(`teacherNotebooks/${uid}`);
 const entries = (uid: string) => notebook(uid).collection('entries');
+const todos = (uid: string) => notebook(uid).collection('todos');
+const sealTodo = (text: string, uid: string, id: string) => sealEnvelope(notebookKeys().body, ['teacher-notebook-todo', uid, id], text);
+const openTodo = (envelope: unknown, uid: string, id: string) => openEnvelope(notebookKeys().body, ['teacher-notebook-todo', uid, id], envelope);
 const accessRef = () => db().doc('featureAccess/teacherNotebook');
 
 let cachedAccess: {at: number; value: NotebookAccessConfig} | undefined;
@@ -72,7 +81,7 @@ async function assertOwnStudents(uid: string, refs: NotebookStudentRef[]) {
 }
 function publicEntry(uid: string, doc: FirebaseFirestore.DocumentSnapshot): NotebookEntry {
   const data = doc.data() as Stored, body = openBody(data.body, uid, doc.id);
-  return {id: doc.id, date: data.date, body: body ?? '(이 기록을 열지 못했어요.)', students: data.students ?? [], tags: (data.tags ?? []).filter(tag => NOTEBOOK_TAGS.includes(tag)), sensitive: !!data.sensitive, createdAt: data.createdAt, updatedAt: data.updatedAt, ...(data.pending ? {pending: true} : {})};
+  return {id: doc.id, date: data.date, body: body ?? '(이 기록을 열지 못했어요.)', students: data.students ?? [], tags: (data.tags ?? []).filter(tag => NOTEBOOK_TAGS.includes(tag)), sensitive: !!data.sensitive, createdAt: data.createdAt, updatedAt: data.updatedAt, ...(data.pending ? {pending: true} : {}), ...(data.source === 'chat' ? {source: 'chat' as const} : {})};
 }
 function stored(uid: string, entryId: string, value: ReturnType<typeof entryInput>, createdAt: string): Stored {
   return {date: value.date, body: sealBody(value.body, uid, entryId), students: value.students, studentKeys: value.students.map(studentKey), classIds: [...new Set(value.students.map(ref => ref.classId))], tags: value.tags, sensitive: value.sensitive, length: value.body.length, createdAt, updatedAt: now()};
@@ -80,13 +89,18 @@ function stored(uid: string, entryId: string, value: ReturnType<typeof entryInpu
 
 async function month(uid: string, value: unknown) {
   const range = monthRange(value);
-  const snap = await entries(uid).where('date', '>=', range.from).where('date', '<=', range.to).select('date', 'studentKeys', 'sensitive').limit(5000).get();
+  const [snap, due] = await Promise.all([
+    entries(uid).where('date', '>=', range.from).where('date', '<=', range.to).select('date', 'studentKeys', 'sensitive').limit(5000).get(),
+    todos(uid).where('due', '>=', range.from).where('due', '<=', range.to).select('due', 'done').limit(2000).get(),
+  ]);
   const days: Record<string, NotebookDaySummary & {keys: Set<string>}> = {};
+  const dayOf = (date: string) => days[date] ??= {entries: 0, students: 0, sensitive: 0, todos: 0, keys: new Set()};
   for (const doc of snap.docs) {
-    const data = doc.data(), day = days[data.date] ??= {entries: 0, students: 0, sensitive: 0, keys: new Set()};
+    const data = doc.data(), day = dayOf(data.date);
     day.entries++; if (data.sensitive) day.sensitive++;
     for (const key of data.studentKeys ?? []) day.keys.add(key);
   }
+  for (const doc of due.docs) if (!doc.data().done) dayOf(doc.data().due).todos!++;
   return {month: value, days: Object.fromEntries(Object.entries(days).map(([date, {keys, ...day}]) => [date, {...day, students: keys.size}]))};
 }
 async function day(uid: string, value: unknown) {
@@ -102,12 +116,12 @@ async function create(uid: string, data: Input) {
   await audit(uid, 'entry.create', ref.id, {date: value.date, students: value.students.length, sensitive: value.sensitive});
   return {entry: publicEntry(uid, await ref.get())};
 }
-/** A chat-made entry (Berry) stays marked until the teacher confirms it in the notebook. */
+/** A chat-made entry (Berry). The teacher already approved it on Berry's card, so it is saved as a finished record marked "베리". */
 export async function createChatEntry(uid: string, value: ReturnType<typeof entryInput>) {
   await assertOwnStudents(uid, value.students);
   const ref = entries(uid).doc(), at = now();
   await notebook(uid).set({updatedAt: at}, {merge: true});
-  await ref.create({...stored(uid, ref.id, value, at), source: 'chat', pending: true});
+  await ref.create({...stored(uid, ref.id, value, at), source: 'chat', pending: false});
   await audit(uid, 'entry.create', ref.id, {date: value.date, students: value.students.length, sensitive: value.sensitive, source: 'chat'});
   await logWorkspaceEvent(uid, 'notebook.created', {collection: 'notebook', id: ref.id}, {sensitive: value.sensitive});
   return ref.id;
@@ -124,7 +138,9 @@ async function update(uid: string, entryId: string, data: Input) {
   const value = entryInput(data), ref = entries(uid).doc(entryId), previous = await ref.get();
   if (!previous.exists) throw new NotebookError('기록을 찾을 수 없어요.', 404, 'NOT_FOUND');
   await assertOwnStudents(uid, value.students);
-  await ref.set(stored(uid, ref.id, value, (previous.data() as Stored).createdAt));
+  // Editing a Berry record keeps its "베리" mark; saving it in the notebook also counts as confirming it.
+  const old = previous.data() as Stored;
+  await ref.set({...stored(uid, ref.id, value, old.createdAt), ...(old.source === 'chat' ? {source: 'chat', pending: false} : {})});
   await audit(uid, 'entry.update', ref.id, {date: value.date, students: value.students.length, sensitive: value.sensitive});
   return {entry: publicEntry(uid, await ref.get())};
 }
@@ -158,15 +174,67 @@ async function auditLog(uid: string) {
   const snap = await notebook(uid).collection('audit').orderBy('at', 'desc').limit(50).get();
   return {events: snap.docs.map(doc => ({id: doc.id, ...doc.data()}))};
 }
+function opened(uid: string) {
+  const token = unlockToken(notebookKeys().unlock, uid, seconds());
+  return setUnlockCookie(json({unlocked: true, expiresAt: token.expires * 1000}), token.value, UNLOCK_SECONDS);
+}
+/** Opens the notebook with its own password. Five wrong tries in a row block tries for ten minutes. */
 async function unlock(request: Request, ctx: Context) {
   const data = await input(request);
+  if (typeof data.password !== 'string' || !data.password || data.password.length > 200) throw new NotebookError('비밀번호를 입력해 주세요.');
+  const ref = notebook(ctx.uid), lock = passwordLock((await ref.get()).data()?.lock);
+  if (!lock) throw new NotebookError('먼저 교무수첩 비밀번호를 정해 주세요.', 409, 'PASSWORD_NOT_SET');
+  const wait = blockedFor(lock, seconds());
+  if (wait) throw new NotebookError(`비밀번호를 여러 번 틀렸어요. ${minutesLabel(wait)} 뒤에 다시 시도해 주세요.`, 429, 'PASSWORD_BLOCKED');
+  const expected = Buffer.from(lock.hash, 'base64url'), actual = Buffer.from(await hashPassword(data.password, Buffer.from(lock.salt, 'base64url')), 'base64url');
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    const next = afterFailure(lock, seconds());
+    await ref.set({lock: next}, {merge: true});
+    await audit(ctx.uid, 'notebook.unlock_failed', null, {blocked: next.blockedUntil > 0});
+    throw new NotebookError(next.blockedUntil ? '비밀번호를 5번 틀려서 10분 동안 열 수 없어요.' : `비밀번호가 맞지 않아요. (${next.failures}/5)`, 401, next.blockedUntil ? 'PASSWORD_BLOCKED' : 'PASSWORD_WRONG');
+  }
+  if (lock.failures || lock.blockedUntil) await ref.set({lock: {failures: 0, blockedUntil: 0}}, {merge: true});
+  await audit(ctx.uid, 'notebook.unlock');
+  return opened(ctx.uid);
+}
+/** Sets (first time) or resets (forgotten) the notebook password. Both need a fresh Google sign-in check. */
+async function setPassword(request: Request, ctx: Context) {
+  const data = await input(request), password = passwordInput(data.password);
   if (typeof data.idToken !== 'string' || data.idToken.length > 16_000) throw new NotebookError('로그인 정보를 확인해 주세요.');
   const decoded = await auth().verifyIdToken(data.idToken, true).catch(() => {throw new NotebookError('Google 계정을 다시 확인해 주세요.', 401, 'REAUTH_FAILED');});
   if (decoded.uid !== ctx.uid) throw new NotebookError('지금 로그인한 계정으로 다시 확인해 주세요.', 403, 'REAUTH_MISMATCH');
   if (!recentAuthentication(decoded.auth_time, seconds())) throw new NotebookError('안전을 위해 Google 계정을 다시 확인해 주세요.', 401, 'RECENT_LOGIN_REQUIRED');
-  const token = unlockToken(notebookKeys().unlock, ctx.uid, seconds());
-  await audit(ctx.uid, 'notebook.unlock');
-  return setUnlockCookie(json({unlocked: true, expiresAt: token.expires * 1000}), token.value, UNLOCK_SECONDS);
+  const ref = notebook(ctx.uid), had = !!passwordLock((await ref.get()).data()?.lock), salt = randomBytes(16);
+  await ref.set({lock: {salt: salt.toString('base64url'), hash: await hashPassword(password, salt), failures: 0, blockedUntil: 0, updatedAt: now()}, updatedAt: now()}, {merge: true});
+  await audit(ctx.uid, had ? 'password.reset' : 'password.set');
+  return opened(ctx.uid);
+}
+
+// ---- To-dos: short notes to self, sealed like entries ----
+function publicTodo(uid: string, doc: FirebaseFirestore.DocumentSnapshot): NotebookTodo {
+  const data = doc.data()!;
+  return {id: doc.id, text: openTodo(data.text, uid, doc.id) ?? '(이 할 일을 열지 못했어요.)', due: data.due ?? null, done: !!data.done, createdAt: data.createdAt};
+}
+async function listTodos(uid: string) {
+  const snap = await todos(uid).orderBy('createdAt', 'desc').limit(300).get();
+  return {todos: snap.docs.map(doc => publicTodo(uid, doc))};
+}
+async function saveTodo(uid: string, id: string | null, data: Input) {
+  const value = todoInput(data), ref = id ? todos(uid).doc(id) : todos(uid).doc();
+  const previous = id ? await ref.get() : null;
+  if (id && !previous!.exists) throw new NotebookError('할 일을 찾을 수 없어요.', 404, 'NOT_FOUND');
+  if (!id && (await todos(uid).where('done', '==', false).count().get()).data().count >= 500) throw new NotebookError('끝나지 않은 할 일이 너무 많아요. 끝낸 일을 체크해 주세요.');
+  const at = now();
+  await ref.set({text: sealTodo(value.text, uid, ref.id), due: value.due, done: value.done, createdAt: previous?.data()?.createdAt ?? at, updatedAt: at});
+  await audit(uid, id ? 'todo.update' : 'todo.create', ref.id);
+  return {todo: publicTodo(uid, await ref.get())};
+}
+async function removeTodo(uid: string, id: string) {
+  const ref = todos(uid).doc(id);
+  if (!(await ref.get()).exists) throw new NotebookError('할 일을 찾을 수 없어요.', 404, 'NOT_FOUND');
+  await ref.delete();
+  await audit(uid, 'todo.delete', id);
+  return {ok: true};
 }
 async function adminAccess(request: Request, ctx: Context) {
   if (ctx.role !== 'superadmin') throw new ApiError(403, '최고 운영자만 바꿀 수 있어요.', 'FORBIDDEN');
@@ -189,12 +257,16 @@ export async function handleNotebook(request: Request, segments: string[]) {
     if (path === 'admin/access') return await adminAccess(request, await getContext(request));
     if (path === 'status' && method === 'GET') {
       const ctx = await getContext(request), available = notebookAllowed(await access(), ctx.uid, ctx.role, process.env.TEACHER_NOTEBOOK_DISABLED);
-      let expires: number | null = null;
-      if (available) try {expires = verifyUnlock(notebookKeys().unlock, cookie(request, UNLOCK_COOKIE), ctx.uid, seconds());} catch {}
-      return json({available, unlocked: !!expires, expiresAt: expires ? expires * 1000 : null});
+      let expires: number | null = null, hasPassword = false;
+      if (available) {
+        try {expires = verifyUnlock(notebookKeys().unlock, cookie(request, UNLOCK_COOKIE), ctx.uid, seconds());} catch {}
+        hasPassword = !!passwordLock((await notebook(ctx.uid).get()).data()?.lock);
+      }
+      return json({available, unlocked: !!expires, expiresAt: expires ? expires * 1000 : null, hasPassword});
     }
     const ctx = await teacher(request);
     if (path === 'unlock' && method === 'POST') return await unlock(request, ctx);
+    if (path === 'password' && method === 'POST') return await setPassword(request, ctx);
     if (path === 'lock' && method === 'POST') {await audit(ctx.uid, 'notebook.lock'); return setUnlockCookie(json({unlocked: false}), '', 0);}
     const expires = unlocked(request, ctx), params = new URL(request.url).searchParams;
     if (method === 'GET') {
@@ -203,6 +275,15 @@ export async function handleNotebook(request: Request, segments: string[]) {
       if (path === 'day') return json(await day(ctx.uid, params.get('date')));
       if (path === 'report') return json(await report(ctx.uid, params));
       if (path === 'audit') return json(await auditLog(ctx.uid));
+      if (path === 'todos') return json(await listTodos(ctx.uid));
+    }
+    if (segments[0] === 'todos') {
+      if (method === 'POST' && segments.length === 1) return json(await saveTodo(ctx.uid, null, await input(request)), 201);
+      const todoId = segments[1] ?? '';
+      if (segments.length === 2 && /^[A-Za-z0-9]{1,40}$/.test(todoId)) {
+        if (method === 'POST') return json(await saveTodo(ctx.uid, todoId, await input(request)));
+        if (method === 'DELETE') return json(await removeTodo(ctx.uid, todoId));
+      }
     }
     if (segments[0] === 'entries') {
       if (method === 'POST' && segments.length === 1) return json(await create(ctx.uid, await input(request)), 201);

@@ -84,3 +84,38 @@ export function verifyUnlock(key: Buffer, token: string | undefined, uid: string
 export function recentAuthentication(authTime: unknown, nowSeconds: number) {
   return typeof authTime === 'number' && Number.isFinite(authTime) && nowSeconds - authTime <= REAUTH_SECONDS && authTime <= nowSeconds + 60;
 }
+
+// ---- Notebook password: a second lock of its own, separate from the Google sign-in ----
+export const PASSWORD_MIN = 6, PASSWORD_MAX = 64, MAX_FAILURES = 5, BLOCK_SECONDS = 10 * 60;
+export type PasswordLock = {salt: string; hash: string; failures: number; blockedUntil: number; updatedAt: string};
+const EASY = ['123456', '1234567', '12345678', '123456789', '654321', 'password', 'qwerty', '111111', '000000', 'abcdef', 'abc123'];
+export function passwordInput(value: unknown): string {
+  if (typeof value !== 'string') throw new NotebookError('비밀번호를 입력해 주세요.');
+  if (value.length < PASSWORD_MIN || value.length > PASSWORD_MAX) throw new NotebookError(`비밀번호는 ${PASSWORD_MIN}~${PASSWORD_MAX}자로 정해 주세요.`);
+  if (/^(.)\1+$/.test(value) || EASY.includes(value.toLowerCase())) throw new NotebookError('너무 쉬운 비밀번호예요. 다른 비밀번호로 정해 주세요.');
+  return value;
+}
+export function passwordLock(value: unknown): PasswordLock | null {
+  const data = value as Partial<PasswordLock> | null | undefined;
+  if (!data || typeof data.salt !== 'string' || typeof data.hash !== 'string' || !data.salt || !data.hash) return null;
+  return {salt: data.salt, hash: data.hash, failures: Number(data.failures) || 0, blockedUntil: Number(data.blockedUntil) || 0, updatedAt: String(data.updatedAt ?? '')};
+}
+/** Seconds left before another try is allowed; 0 when the lock is not blocked. */
+export const blockedFor = (lock: PasswordLock, nowSeconds: number) => Math.max(0, lock.blockedUntil - nowSeconds);
+/** After a wrong password: the fifth failure in a row blocks tries for ten minutes. */
+export function afterFailure(lock: PasswordLock, nowSeconds: number): Pick<PasswordLock, 'failures' | 'blockedUntil'> {
+  const failures = lock.failures + 1;
+  return failures >= MAX_FAILURES ? {failures: 0, blockedUntil: nowSeconds + BLOCK_SECONDS} : {failures, blockedUntil: 0};
+}
+export const minutesLabel = (seconds: number) => `${Math.max(1, Math.ceil(seconds / 60))}분`;
+
+// ---- To-dos ----
+export const MAX_TODO = 200;
+export type TodoInput = {text: string; due: string | null; done: boolean};
+export function todoInput(value: Record<string, unknown>): TodoInput {
+  if (typeof value.text !== 'string' || !value.text.trim()) throw new NotebookError('할 일을 입력해 주세요.');
+  const text = value.text.replace(/\s+/g, ' ').trim();
+  if (text.length > MAX_TODO) throw new NotebookError(`할 일은 ${MAX_TODO}자까지 쓸 수 있어요.`);
+  const due = value.due === null || value.due === undefined || value.due === '' ? null : notebookDate(value.due, '기한');
+  return {text, due, done: value.done === true};
+}
