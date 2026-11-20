@@ -1,3 +1,4 @@
+import {LINK_PREVIEW} from '@/lib/berry-brand';
 import type {Metadata} from 'next';
 import LoginScreen from '@/components/login-screen';
 import LandingSections from '@/modules/public-site/landing-sections';
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
   description: SITE_ONE_LINER,
   keywords: ['모두의 교실', '모두의교실', '교실.com', 'ourclass', '온라인 숙제', '학급 작품 전시', 'AI 교실', '교사용 AI 비서', '참여보드', '학급 운영'],
   alternates: {canonical: '/'},
-  openGraph: {title, description: SITE_ONE_LINER, url: SITE_URL, siteName: SITE_NAME, locale: 'ko_KR', type: 'website', images: ['/icons/app-512.png']},
+  openGraph: {title, description: SITE_ONE_LINER, url: SITE_URL, siteName: SITE_NAME, locale: 'ko_KR', type: 'website', images: [LINK_PREVIEW]},
   robots: {index: true, follow: true},
 };
 

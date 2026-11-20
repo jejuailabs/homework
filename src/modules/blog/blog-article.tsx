@@ -1,3 +1,4 @@
+import {LINK_PREVIEW} from '@/lib/berry-brand';
 import Link from 'next/link';
 import LoginScreen from '@/components/login-screen';
 import JsonLd from '@/modules/public-site/json-ld';
@@ -26,7 +27,7 @@ export function postJsonLd(p: BlogPost) {
       author: {'@type': 'Organization', name: `${SITE_NAME} 팀`, url: SITE_URL},
       publisher: {'@type': 'Organization', name: SITE_NAME, url: SITE_URL, logo: `${SITE_URL}/icons/app-512.png`},
       mainEntityOfPage: url,
-      image: 'src' in p.hero ? absolute(p.hero.src) : `${SITE_URL}/icons/app-512.png`,
+      image: 'src' in p.hero ? absolute(p.hero.src) : LINK_PREVIEW.url,
     },
     {
       '@type': 'BreadcrumbList',

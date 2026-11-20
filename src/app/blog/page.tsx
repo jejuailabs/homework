@@ -1,3 +1,4 @@
+import {LINK_PREVIEW} from '@/lib/berry-brand';
 import type {Metadata} from 'next';
 import Link from 'next/link';
 import JsonLd from '@/modules/public-site/json-ld';
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
   title: `${BLOG_NAME} · 사용설명서와 선생님 업무 Tip`,
   description,
   alternates: {canonical: '/blog', types: {'application/rss+xml': '/blog/rss.xml'}},
-  openGraph: {title: BLOG_NAME, description, url: `${SITE_URL}/blog`, siteName: SITE_NAME, locale: 'ko_KR', type: 'website', images: ['/icons/app-512.png']},
+  openGraph: {title: BLOG_NAME, description, url: `${SITE_URL}/blog`, siteName: SITE_NAME, locale: 'ko_KR', type: 'website', images: [LINK_PREVIEW]},
   robots: {index: PUBLIC_SITE_INDEXABLE, follow: PUBLIC_SITE_INDEXABLE},
 };
 

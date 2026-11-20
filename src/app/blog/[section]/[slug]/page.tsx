@@ -1,3 +1,4 @@
+import {LINK_PREVIEW} from '@/lib/berry-brand';
 import type {Metadata} from 'next';
 import {notFound, permanentRedirect} from 'next/navigation';
 import {PUBLIC_SITE_INDEXABLE, SITE_NAME} from '@/modules/public-site/site';
@@ -19,7 +20,7 @@ export async function generateMetadata({params}: {params: Params}): Promise<Meta
   const p = await postBySlug((await params).slug);
   if (!p) return {};
   const title = `${p.seoTitle ?? p.title} · ${SITE_NAME}`;
-  const image = 'src' in p.hero ? p.hero.src : '/icons/app-512.png';
+  const image = 'src' in p.hero ? p.hero.src : LINK_PREVIEW;
   return {
     title,
     description: p.description,

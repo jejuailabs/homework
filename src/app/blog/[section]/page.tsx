@@ -1,3 +1,4 @@
+import {LINK_PREVIEW} from '@/lib/berry-brand';
 import type {Metadata} from 'next';
 import Link from 'next/link';
 import {notFound} from 'next/navigation';
@@ -25,7 +26,7 @@ export async function generateMetadata({params}: {params: Params}): Promise<Meta
     title,
     description: s.blurb,
     alternates: {canonical: `/blog/${s.id}`},
-    openGraph: {title, description: s.blurb, url: `${SITE_URL}/blog/${s.id}`, siteName: SITE_NAME, locale: 'ko_KR', type: 'website', images: ['/icons/app-512.png']},
+    openGraph: {title, description: s.blurb, url: `${SITE_URL}/blog/${s.id}`, siteName: SITE_NAME, locale: 'ko_KR', type: 'website', images: [LINK_PREVIEW]},
     robots: {index: PUBLIC_SITE_INDEXABLE, follow: PUBLIC_SITE_INDEXABLE},
   };
 }
