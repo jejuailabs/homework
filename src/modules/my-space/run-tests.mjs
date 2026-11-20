@@ -57,4 +57,8 @@ await import(module('./marine.test.ts', {
   './catalog': catalog, './new-pets': newPets, './appearance': appearance,
   './policy': policy, './profile': profile, './wardrobe-groups': groups,
 }));
+await import(module('./berry.test.ts', {
+  './catalog': catalog, './new-pets': newPets, './appearance': appearance,
+  './policy': policy, './profile': profile, './wardrobe-groups': groups,
+}));
 await import(module('./diary-policy.test.ts', {'./catalog': catalog, './policy': policy, './diary-calendar': diaryCalendar}));

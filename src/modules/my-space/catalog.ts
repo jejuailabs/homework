@@ -1,4 +1,5 @@
 import {marinePets, marineSetItems, marineSprite} from './marine';
+import {berryPets, berrySetItems, berrySprite} from './berry';
 import {seahorsePets, seahorseSprite, seahorseBodyItems, seahorseSetItems} from './seahorse';
 import { characterFiles } from '@/lib/characters';
 import {WHITEKNEE_ID, whitekneeBodyItems, whitekneeSprite, type WhitekneePose} from './whiteknee';
@@ -34,6 +35,8 @@ export const illustratedRoomThemes: SpaceItem[] = [
 ];
 export const spaceCatalog: SpaceItem[] = [
     ...seahorsePets.map(pet => ({id: pet.id, kind: 'pet' as const, name: pet.name, buddyName: pet.buddyName, en: pet.en, price: 60, base: 'otter', art: seahorseSprite(pet.id)})),
+    ...berryPets.map(pet => ({id: pet.id, kind: 'pet' as const, name: pet.name, buddyName: pet.buddyName, en: pet.en, price: 60, base: 'hamster', art: berrySprite(pet.id)})),
+    ...berrySetItems.map(({looks: _looks, ...set}) => set),
     ...marinePets.map(pet => ({id: pet.id, kind: 'pet' as const, name: pet.name, buddyName: pet.buddyName, en: pet.en, price: 60, base: 'otter', art: marineSprite(pet.id)})),
     ...marineSetItems,
     ...seahorseSetItems,
