@@ -17,7 +17,7 @@ export const demoAssetsReady = storage.ready || !!process.env.NEXT_PUBLIC_TRY_DE
 
 export type DemoStudent = {id: string; number: number; name: string; character: 'cat' | 'dog' | 'hamster' | 'alpaca' | 'rabbit' | 'otter'; bomal: number};
 export const students: DemoStudent[] = [
-  {id: 's1', number: 1, name: '김하늘', character: 'cat', bomal: 120},
+  {id: 's1', number: 1, name: '김하늘', character: 'cat', bomal: 200},
   {id: 's2', number: 2, name: '이도윤', character: 'dog', bomal: 85},
   {id: 's3', number: 3, name: '박서아', character: 'rabbit', bomal: 140},
   {id: 's4', number: 4, name: '최지호', character: 'otter', bomal: 60},
