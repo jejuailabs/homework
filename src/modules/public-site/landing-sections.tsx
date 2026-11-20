@@ -119,7 +119,7 @@ export default function LandingSections() {
   return (
     <div className="ps">
       <JsonLd data={landingJsonLd()}/>
-      <div className="ps-scroll-hint"><a href="#about">모두의 교실 둘러보기 ↓</a></div>
+      <div className="ps-scroll-hint"><a href="/try" style={{background: 'var(--accent)', borderColor: 'var(--accent)', color: '#fff', fontWeight: 700}}>로그인 없이 체험하기 →</a><a href="#about">모두의 교실 둘러보기 ↓</a></div>
 
       <section id="about" className="ps-section" aria-labelledby="about-title">
         <div className="ps-wrap ps-intro">
