@@ -175,7 +175,7 @@ function studentBook(s: BookSnapshot, output: number, indexes: number[]): Studen
   const plan = s.outputs[output];
   return {
     schema: 1, classId: s.classId, studentId: plan.studentId, className: s.className, studentName: plan.displayName, from: s.from, to: s.to, createdAt: s.createdAt,
-    options: {title: plan.volumes > 1 ? `${s.options.title} ${plan.volume}권` : s.options.title, displayName: plan.displayName, dedication: s.options.dedication, format: 'a4', cover: s.options.cover, voiceQr: false},
+    options: {title: plan.volumes > 1 ? `${s.options.title} ${plan.volume}권` : s.options.title, displayName: plan.displayName, dedication: s.options.dedication, format: s.options.format === 'mobile' ? 'mobile' : 'a4', cover: s.options.cover, voiceQr: false},
     pages: indexes.map(i => {
       const item = s.items[i];
       return {key: item.key, roomId: item.roomId, artworkId: item.artworkId, title: item.title, description: item.description, date: item.date, roomTitle: item.roomTitle,

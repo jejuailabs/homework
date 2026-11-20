@@ -5,16 +5,18 @@ import { STUDENT_VOLUME_SIZE, VOLUME_SIZE, type BookItem, type ClassBookOptions 
 
 const item = (n: number, over: Partial<BookItem> = {}): BookItem => ({
   key: `r1:a${n}`, roomId: 'r1', artworkId: 'a' + n, roomTitle: '봄 그림전', title: '작품 ' + n, description: '', feedback: '', date: '2026-04-0' + (1 + n % 9),
-  studentId: 's' + (n % 3), studentName: ['하늘', '도윤', '서아'][n % 3], studentNumber: 1 + n % 3, artistName: '', sourcePath: 'p/' + n, version: 'v', width: 800, height: 600, ...over,
+  studentId: 's' + (n % 3), studentName: ['하늘', '도윤', '서아'][n % 3], studentNumber: 1 + n % 3, artistName: '', sourcePath: 'p/' + n, version: 'v', width: 800, height: 600, origin: 'exhibition', ref: '', ...over,
 });
-const base: ClassBookOptions = {mode: 'class', title: '우리 반 작품집', cover: 'sage', order: 'student', perPage: 2, names: 'name', story: true, feedback: false, unlinked: true, dedication: ''};
+const base: ClassBookOptions = {mode: 'class', title: '우리 반 작품집', cover: 'sage', order: 'student', perPage: 2, names: 'name', story: true, feedback: false, unlinked: true, format: 'a4', dedication: ''};
 
 // Options and selection
 assert.deepEqual(bookOptions({mode: 'class', cover: 'sky'}), {...base, cover: 'sky', unlinked: false});
 assert.equal(bookOptions({mode: 'students', cover: 'peach', title: ' 3학년 2반 ', perPage: 4}).title, '3학년 2반');
 for (const bad of [null, {}, {mode: 'x', cover: 'sage'}, {mode: 'class', cover: 'red'}, {mode: 'class', cover: 'sage', perPage: 3}, {mode: 'class', cover: 'sage', title: 'a'.repeat(81)}, {mode: 'class', cover: 'sage', order: 'x'}])
   assert.throws(() => bookOptions(bad), ClassBookInputError);
-assert.deepEqual(bookSelection({roomIds: ['r1'], from: '2026-03-01', to: '2026-12-31', exclude: ['r1:a1', 'r1:a1']}), {roomIds: ['r1'], studentIds: [], from: '2026-03-01', to: '2026-12-31', exclude: ['r1:a1']});
+assert.deepEqual(bookSelection({roomIds: ['r1'], from: '2026-03-01', to: '2026-12-31', exclude: ['r1:a1', 'r1:a1']}), {roomIds: ['r1'], studentIds: [], from: '2026-03-01', to: '2026-12-31', exclude: ['r1:a1'], homework: false, board: false});
+assert.deepEqual(bookSelection({roomIds: [], homework: true}).homework, true);
+assert.equal(bookOptions({mode: 'students', cover: 'sky', format: 'mobile'}).format, 'mobile');
 for (const bad of [{roomIds: []}, {roomIds: ['r1', 'r1']}, {roomIds: ['../x']}, {roomIds: ['r1'], from: '2026-13-01'}, {roomIds: ['r1'], from: '2026-05-01', to: '2026-04-01'}, {roomIds: ['r1'], exclude: ['nokey']}, {roomIds: ['r1'], studentIds: 'all'}])
   assert.throws(() => bookSelection(bad), ClassBookInputError);
 
