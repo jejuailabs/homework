@@ -11,7 +11,8 @@ test('room edits reject unowned items, NaN positions, duplicate instance IDs and
 test('private diary stores typed references, bounded text and reusable owned stickers', () => { const page = { version: 0, title: '내 이야기', date: '2026-10-18', paper: 'paper-cream', layers: [{ id: 'star1', itemId: 'sticker-star', kind: 'sticker', x: 30, y: 40, size: 20, rotation: 0, flip: false }] }; assert.equal(validateDiary(page, starterSpaceIds).layers.length, 1); assert.throws(() => validateDiary({ ...page, date: '2026-02-30' }, starterSpaceIds)); assert.throws(() => validateDiary({ ...page, layers: [{ ...page.layers[0], itemId: 'sticker-flower' }] }, starterSpaceIds)); assert.throws(() => validateDiary({ ...page, layers: [{ ...page.layers[0], kind: 'photo', assetId: 'https://outside.example/image' }] }, starterSpaceIds)); assert.throws(() => validateDiary({ ...page, layers: [{ ...page.layers[0], kind: 'text', text: 'a'.repeat(301) }] }, starterSpaceIds)); });
 test('catalog keeps stable unique item IDs and every referenced illustration is bundled', () => { assert.equal(new Set(spaceCatalog.map(i => i.id)).size, spaceCatalog.length); for (const item of spaceCatalog) {
     assert(Number.isSafeInteger(item.price) && item.price >= 0);
-    if (item.art)
+    // Berry art is served from Firebase Storage (see berry.test.ts).
+    if (item.art && !item.art.startsWith('https://firebasestorage.googleapis.com/'))
         assert(existsSync(path.join(process.cwd(), 'public', item.art)), item.art);
 } });
 

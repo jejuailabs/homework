@@ -1,5 +1,5 @@
 'use client';
-import {isCompletePet, completeWardrobe, completeSetBadge} from './complete-outfits';
+import {isCompletePet, completeWardrobe, completeSetBadge, completeSetCount} from './complete-outfits';
 import CompleteSetDetails from './complete-set-details';
 import {useEffect, useRef, useState} from 'react';
 import {Check, Shell, X} from 'lucide-react';
@@ -89,7 +89,7 @@ export default function SpaceShop({owned, wardrobeOwned, balance, enabled, onBou
     <div className="ms-categories" role="tablist" aria-label="상점 종류">{shopCategories.filter(([id]) => id !== 'accessory' || !isCompletePet(model.id)).map(([id, name]) => <button key={id} type="button" role="tab" aria-selected={kind === id} onClick={() => {setKind(id); setPetFilter(null);}}>{id === 'clothes' && isCompletePet(model.id) ? '완성 착장 세트' : name}</button>)}</div>
     {wardrobeOpen && <WardrobeBrowser group={group} model={model} currentName={currentName} currentPet={look.pet} owned={owned} onGroup={chooseGroup} onModel={setModelId}/>}
     {wardrobeOpen && isWhiteknee(model.id) && <fieldset className="whiteknee-pose-picker"><legend>미리보기 자세</legend><button type="button" aria-pressed={previewPose === 'rest'} onClick={() => setPreviewPose('rest')}>편안하게</button><button type="button" aria-pressed={previewPose === 'raised'} onClick={() => setPreviewPose('raised')}>살짝 서서 인사</button></fieldset>}
-    {wardrobeOpen && isCompletePet(model.id) && <p className="ms-set-note">옷과 액세서리를 함께 갖춘 20가지 착장이에요. 세트를 고르면 완성된 모습으로 갈아입어요. 한 번 구입하면 {completeWardrobe(model.id)?.friends} 모두 함께 사용할 수 있어요.</p>}
+    {wardrobeOpen && isCompletePet(model.id) && <p className="ms-set-note">옷과 액세서리를 함께 갖춘 {completeSetCount(model.id)}가지 착장이에요. 세트를 고르면 완성된 모습으로 갈아입어요. 한 번 구입하면 {completeWardrobe(model.id)?.friends} 모두 함께 사용할 수 있어요.</p>}
     {kind === 'pet' && petFilter && <div className="ms-pet-filter"><span>{wardrobeGroups.find(g => g.id === petFilter)?.name}를 만나 봐요</span><button type="button" onClick={() => setPetFilter(null)}>전체 친구 보기</button></div>}
     {notice && <p className="ms-notice" role="status">{notice}</p>}
     {storedGroup && <div className="ms-shop-followup"><button type="button" onClick={groupFriends(storedGroup).some(p => owned.includes(p.id)) ? chooseFriend : () => meet(storedGroup)}>{groupFriends(storedGroup).some(p => owned.includes(p.id)) ? '내 친구에서 골라 입히기' : '이 옷을 입을 친구 만나보기'}</button></div>}
