@@ -4,6 +4,7 @@ import {withBanners} from './links';
 import {usePathname} from 'next/navigation';
 import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, PencilLine, PlugZap, Send, Sparkles, StickyNote, TriangleAlert, X} from 'lucide-react';
 import {abilityGroups, firstBlank, lackingFor, missingPermissions, type Ability} from './abilities';
+import {pickGreeting, remember, seoul, type Greeting, type GreetingHistory} from './greetings';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
@@ -17,7 +18,28 @@ const TOOL_LABELS: Record<string, string> = {
   manage_homework: '숙제 관리', manage_exhibition: '전시실 관리', manage_board: '참여보드 관리', manage_quiz: '퀴즈 관리', manage_review: '복습 관리', manage_playground: '말놀이터 관리', manage_points: '보말', manage_cards: '카드 배부', manage_class_tools: '수업 도구', manage_class: '학급 관리', manage_workspace: '업무 공간 관리',
 };
 const PREVIEW_LABELS: Record<string, string> = {title: '제목', date: '날짜', start: '시작', end: '끝', kind: '종류', subject: '과목', period: '교시', unit: '단원', note: '메모', body: '내용', type: '종류', due_at: '기한', tags: '태그', students: '학생', checklist: '체크리스트', url: '링크', class: '학급', submission: '제출 방식', sync_exhibition: '전시실 연동', sync_board: '보드 연동', exhibition: '전시실', board: '보드', count: '개수', target: '대상', action: '할 일', changes: '바꿀 내용', reason: '사유', amount: '점수'};
-const CONVERSATION = 'berry.conversation';
+const CONVERSATION = 'berry.conversation', GREETED = 'berry.greeted', GREETINGS = 'berry.greetings';
+type TodayBriefing = {state: 'loading'} | {state: 'ready'; item: InboxItem | null; readyAt?: string} | {state: 'hidden'};
+
+/** Today's first hello on this device: a written line, shown once per Seoul day; null when already greeted today. */
+function firstGreetingToday(now = Date.now()): Greeting | null {
+  try {
+    const today = seoul(now).date;
+    if (localStorage.getItem(GREETED) === today) return null;
+    const saved = JSON.parse(localStorage.getItem(GREETINGS) ?? '[]') as unknown, history = Array.isArray(saved) ? saved as GreetingHistory : [];
+    const greeting = pickGreeting(now, history);
+    localStorage.setItem(GREETED, today);
+    localStorage.setItem(GREETINGS, JSON.stringify(remember(history, today, greeting.id)));
+    return greeting;
+  } catch {return pickGreeting(now, []);}
+}
+/** "오늘 일정 2 · 마감 1 · 검사 대기 5": the briefing's numbers on one line; null when there is nothing to look at. */
+function summaryLine(payload: Record<string, unknown>) {
+  const count = (value: unknown) => Array.isArray(value) ? value.length : 0;
+  const parts: [string, number][] = [['오늘 일정', count(payload.today)], ['마감', count(payload.deadlines)], ['검사 대기', Number((payload.review as {total_pending?: number} | null)?.total_pending ?? 0)], ['밤사이 알림', count(payload.overnight)]];
+  if (!parts.some(([, n]) => n > 0)) return null;
+  return parts.filter(([, n], index) => index < 3 || n > 0).map(([label, n]) => `${label} ${n}`).join(' · ');
+}
 
 async function api<T>(path: string, body?: object): Promise<T> {
   const response = await fetch(`/api/berry/${path}`, {method: body ? 'POST' : 'GET', cache: 'no-store', ...(body ? {headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)} : {})});
@@ -101,6 +123,8 @@ export default function BerryPanel() {
   const [messages, setMessages] = useState<Message[]>([]), [text, setText] = useState(''), [busy, setBusy] = useState(false), [activity, setActivity] = useState(''), [error, setError] = useState('');
   const [inbox, setInbox] = useState<InboxItem[] | null>(null), [notice, setNotice] = useState('');
   const [asked, setAsked] = useState<Ability | null>(null);
+  const [greeting, setGreeting] = useState<Greeting | null>(null), [brief, setBrief] = useState<TodayBriefing>({state: 'hidden'}), [briefOpen, setBriefOpen] = useState(false);
+  const greeted = useRef(false);
   const conversation = useRef<string | null>(null), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     try {conversation.current = sessionStorage.getItem(CONVERSATION);} catch {}
@@ -114,6 +138,16 @@ export default function BerryPanel() {
   }, []);
   const loadInbox = useCallback(() => {api<{items: InboxItem[]}>('inbox').then(data => setInbox(data.items)).catch(e => setError((e as Error).message));}, []);
   useEffect(() => {if (open && tab === 'inbox' && status?.connected) loadInbox();}, [open, tab, status, loadInbox]);
+  // First open with a connection: say hello (once a day on this device) and fetch today's briefing (the brain makes it on first ask).
+  useEffect(() => {
+    if (!open || !status?.connected || greeted.current) return;
+    greeted.current = true;
+    setGreeting(firstGreetingToday());
+    setBrief({state: 'loading'});
+    api<{item: InboxItem | null; ready_at?: string; off?: boolean}>('briefing')
+      .then(data => setBrief(data.off ? {state: 'hidden'} : {state: 'ready', item: data.item, readyAt: data.ready_at}))
+      .catch(() => setBrief({state: 'hidden'}));
+  }, [open, status]);
   // The list unmounts on the menu and inbox tabs, so coming back lands on the latest message too.
   useEffect(() => {list.current?.scrollTo({top: list.current.scrollHeight});}, [messages, activity, tab]);
   // Buttons on /teacher/berry (or anywhere) open the panel with a request: window.dispatchEvent(new CustomEvent('berry:ask', {detail}))
@@ -150,7 +184,9 @@ export default function BerryPanel() {
     setMessages(old => [...old, {role: 'user', text: message}, {role: 'assistant', text: '', cards: []}]);
     const update = (fn: (last: Message) => Message) => setMessages(old => [...old.slice(0, -1), fn(old[old.length - 1])]);
     try {
-      const response = await fetch('/api/berry/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: message, conversation_id: conversation.current, context: {route: pathname}})});
+      // A new conversation carries the hello Berry just showed, so a reply to it reads naturally.
+      const hello = !conversation.current && greeting ? [greeting.text, todaySummary].filter(Boolean).join(' / ') : undefined;
+      const response = await fetch('/api/berry/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: message, conversation_id: conversation.current, context: {route: pathname, ...(hello ? {greeting: hello} : {})}})});
       if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({}))).error || '베리가 답하지 못했어요.');
       const reader = response.body.getReader(), decoder = new TextDecoder();
       let buffer = '';
@@ -180,6 +216,7 @@ export default function BerryPanel() {
     try {await api(`inbox/${item.id}/done`, {}); setInbox(old => old?.filter(entry => entry.id !== item.id) ?? null);} catch (e) {setError((e as Error).message);}
   }
   const newChat = () => {conversation.current = null; try {sessionStorage.removeItem(CONVERSATION);} catch {} setMessages([]);};
+  const todayItem = brief.state === 'ready' ? brief.item : null, todaySummary = todayItem ? summaryLine(todayItem.payload) : null;
   const missing = status.scopes ? missingPermissions(status.scopes) : null;
   const reconnect = status.connected && missing && missing.scopes.length > 0 && tab !== 'inbox' && <div className="bp-reconnect" role="status">
     <p><strong>베리를 다시 연결해 주세요.</strong> 지금 연결에는 {missing.titles.join(', ')} 권한이 없어서 자물쇠 버튼을 쓸 수 없어요. 연결 화면에서 <strong>쓰기 항목까지 모두 선택</strong>해 주세요.</p>
@@ -208,7 +245,20 @@ export default function BerryPanel() {
         <button type="button" className="button primary" disabled={busy} onClick={() => void connect()}>{busy ? <LoaderCircle className="spin" size={16}/> : <PlugZap size={16}/>}모두의 교실 연결하기</button>
       </div> : tab === 'chat' ? <>
         <div className="bp-messages" ref={list}>
-          {!messages.length && <div className="bp-empty"><img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/><p>무엇을 도와드릴까요? 버튼을 누르거나 편하게 말로 시켜 주세요.</p><Abilities onPick={pick} granted={status.scopes} off={status.off}/></div>}
+          {/* Hello and today's briefing stay on top; the menu buttons live in the 메뉴 tab (✨ beside the input). */}
+          {!messages.length && <img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/>}
+          <div className="bp-msg is-assistant bp-today">
+            <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>
+            <p>{greeting?.text ?? '선생님, 무엇을 도와드릴까요? 편하게 말로 시켜 주세요.'}</p>
+            {brief.state === 'loading' && <p className="bp-thinking"><LoaderCircle className="spin" size={14}/>오늘 브리핑 준비 중…</p>}
+            {brief.state === 'ready' && !todayItem && brief.readyAt && <p className="bp-today-line">오늘 브리핑은 {brief.readyAt}부터 볼 수 있어요.</p>}
+            {brief.state === 'ready' && todayItem && <div className="bp-card bp-today-card">
+              <strong>{todaySummary ?? '오늘은 따로 챙길 일이 없어요.'}</strong>
+              {todaySummary && <button type="button" className="button soft" aria-expanded={briefOpen} onClick={() => setBriefOpen(!briefOpen)}>{briefOpen ? '브리핑 접기' : '오늘 브리핑 보기'}</button>}
+              {briefOpen && <Briefing payload={todayItem.payload}/>}
+            </div>}
+            {!messages.length && <small className="bp-today-hint"><Sparkles size={11} aria-hidden="true"/>버튼으로 부탁하려면 입력창 옆 ✨이나 메뉴 탭을 눌러 주세요.</small>}
+          </div>
           {/* The empty answer placeholder stays hidden until text or a card arrives, so Berry never shows an avatar with nothing beside it. */}
           {messages.map((message, index) => !message.text && !message.cards?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
@@ -218,7 +268,7 @@ export default function BerryPanel() {
           {activity && <div className="bp-msg is-assistant" role="status"><img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/><p className="bp-thinking"><LoaderCircle className="spin" size={14}/>{activity}</p></div>}
         </div>
         <div className="bp-input">
-          {messages.length > 0 && <button type="button" className="bp-ability-toggle" aria-label="메뉴 열기" title="메뉴 열기" onClick={() => setTab('menu')}><Sparkles size={17}/></button>}
+          <button type="button" className="bp-ability-toggle" aria-label="메뉴 열기" title="메뉴 열기" onClick={() => setTab('menu')}><Sparkles size={17}/></button>
           <textarea ref={input} value={text} rows={2} maxLength={4000} placeholder="베리에게 물어보세요" aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
           <button type="button" className="button primary" aria-label="보내기" disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}</button>
         </div>
@@ -243,10 +293,17 @@ export default function BerryPanel() {
 function Briefing({payload}: {payload: Record<string, unknown>}) {
   const today = (payload.today ?? []) as {title: string; start: string; all_day: boolean}[], deadlines = (payload.deadlines ?? []) as {title: string; dueAt: string}[];
   const pending = (payload.review as {total_pending?: number} | null)?.total_pending ?? 0, conflicts = Number(payload.conflicts ?? 0);
+  const overnight = (Array.isArray(payload.overnight) ? payload.overnight : []) as {title?: string}[];
+  const signals = (payload.signals ?? null) as {pending_artworks?: number; pending_posts?: number; storage_level?: string; storage_percent?: number; review_drafts?: number} | null;
+  const approvals = (signals?.pending_artworks ?? 0) + (signals?.pending_posts ?? 0), drafts = signals?.review_drafts ?? 0;
   return <ul className="bp-brief">
     <li>오늘 일정 {today.length}건{today.length ? `: ${today.slice(0, 3).map(event => event.title).join(', ')}` : ''}</li>
     <li>3일 안 마감 {deadlines.length}건{deadlines.length ? `: ${deadlines.slice(0, 3).map(task => task.title).join(', ')}` : ''}</li>
     <li>검사 대기 {pending}건</li>
     {conflicts > 0 && <li>겹치는 일정 {conflicts}건</li>}
+    {overnight.length > 0 && <li>밤사이 알림 {overnight.length}건{overnight.some(item => item.title) ? `: ${overnight.slice(0, 3).map(item => item.title ?? '').filter(Boolean).join(', ')}` : ''}</li>}
+    {approvals > 0 && <li>공개 승인 대기 {approvals}건</li>}
+    {drafts > 0 && <li>배포 안 한 복습 {drafts}건</li>}
+    {signals?.storage_level && signals.storage_level !== 'ok' && <li>저장 공간 {signals.storage_percent ?? ''}% 사용</li>}
   </ul>;
 }

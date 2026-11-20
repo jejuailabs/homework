@@ -74,14 +74,20 @@ export async function handleBerry(request: Request, segments: string[]) {
     if (head === 'chat' && method === 'POST') {
       const data = await input(request), text = typeof data.text === 'string' ? data.text.trim() : '';
       if (!text || text.length > 4000) throw new ApiError(400, '메시지를 확인해 주세요.');
-      const route = typeof (data.context as {route?: unknown} | undefined)?.route === 'string' ? String((data.context as {route: string}).route).slice(0, 200) : undefined;
-      const res = await call(ctx.uid, '/chat', {body: {text, surface, conversation_id: typeof data.conversation_id === 'string' && ID.test(data.conversation_id) ? data.conversation_id : undefined, context: route ? {route} : undefined}, timeout: 58_000})
+      const given = (data.context ?? {}) as {route?: unknown; greeting?: unknown};
+      const route = typeof given.route === 'string' ? given.route.slice(0, 200) : undefined;
+      // The panel's first hello of the day, so Berry can pick up a reply to it; a short written line, never teacher data.
+      const greeting = typeof given.greeting === 'string' ? given.greeting.slice(0, 300) : undefined;
+      const context = route || greeting ? {...(route ? {route} : {}), ...(greeting ? {greeting} : {})} : undefined;
+      const res = await call(ctx.uid, '/chat', {body: {text, surface, conversation_id: typeof data.conversation_id === 'string' && ID.test(data.conversation_id) ? data.conversation_id : undefined, context}, timeout: 58_000})
         .catch(() => null);
       if (!res) return json({error: '베리에 연결하지 못했어요.', code: 'BERRY_UNREACHABLE'}, 502);
       if (!res.ok || !res.body) return relay(Promise.resolve(res));
       // Server-sent events stream straight through; nothing is buffered or stored here.
       return new Response(res.body, {headers: {'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'}});
     }
+    // Today's briefing, made by the brain on the first open of the day (no 07:10 job while there is no phone push).
+    if (head === 'briefing' && method === 'GET') return relay(call(ctx.uid, '/briefing/today', {timeout: 30_000}));
     if (head === 'inbox' && method === 'GET' && !id) {
       const status = new URL(request.url).searchParams.get('status') ?? 'open';
       if (!['open', 'approved', 'rejected', 'done'].includes(status)) throw new ApiError(400, '상태를 확인해 주세요.');
