@@ -14,7 +14,7 @@ const sources = readdirSync(new URL('.', import.meta.url)).filter(name => /\.(ts
 for (const [name, code] of sources) {
   for (const match of code.matchAll(/db\(\)\.(?:doc|collection)\((['`])([^'`$]+)/g)) {
     const path = match[2];
-    const readOnly = /^(classes|exhibitions)\b/.test(path), own = /^classArtbook(s|Owners)\//.test(path);
+    const readOnly = /^(classes|exhibitions|assignments|submissions|participationBoards)\b/.test(path), own = /^classArtbook(s|Owners)\//.test(path);
     if (!readOnly && !own) throw new Error(`${name}: unexpected Firestore path "${path}"`);
   }
   if (name === 'source.ts' && /runTransaction|\.batch\(|\.ref\.(set|update|delete)\(|\.doc\([^)]*\)\.(set|update|delete|create)\(/.test(code)) throw new Error('source.ts must stay read-only');

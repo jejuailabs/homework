@@ -40,7 +40,7 @@ export function bookOptions(v: unknown): ClassBookOptions {
   return {
     mode: o.mode, title, cover: o.cover as ClassBookOptions['cover'], order: order as ClassBookOptions['order'],
     perPage: perPage as ClassBookOptions['perPage'], names: names as BookNames,
-    story: o.story !== false, feedback: o.feedback === true, unlinked: o.unlinked === true, dedication: field(o.dedication, 500),
+    story: o.story !== false, feedback: o.feedback === true, unlinked: o.unlinked === true, format: o.format === 'mobile' ? 'mobile' : 'a4', dedication: field(o.dedication, 500),
   };
 }
 
@@ -48,13 +48,14 @@ export function bookSelection(v: unknown): Selection {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return fail('전시와 학생을 다시 선택해 주세요.');
   const o = v as Record<string, unknown>;
   const roomIds = ids(o.roomIds, '전시실', ROOM_LIMIT), studentIds = ids(o.studentIds, '학생', 200);
-  if (!roomIds.length) return fail('전시실을 하나 이상 선택해 주세요.');
+  const homework = o.homework === true, board = o.board === true;
+  if (!roomIds.length && !homework && !board) return fail('전시실을 하나 이상 선택해 주세요.');
   const from = bookDate(o.from), to = bookDate(o.to);
   if (from && to && from > to) return fail('시작일이 종료일보다 늦어요.');
   const exclude = o.exclude === undefined || o.exclude === null ? [] : o.exclude;
   if (!Array.isArray(exclude) || exclude.length > CLASS_BOOK_LIMIT * 2 || exclude.some(k => typeof k !== 'string' || !/^[\w-]{1,200}:[\w-]{1,200}$/.test(k)))
     return fail('뺄 작품을 다시 선택해 주세요.');
-  return {roomIds, studentIds, from, to, exclude: [...new Set(exclude as string[])]};
+  return {roomIds, studentIds, from, to, exclude: [...new Set(exclude as string[])], homework, board};
 }
 
 export const inPeriod = (date: string, from: string, to: string) => (!from || date >= from) && (!to || date <= to);

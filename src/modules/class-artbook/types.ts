@@ -29,6 +29,8 @@ export type ClassBookOptions = {
   story: boolean; feedback: boolean;
   /** Class book only: approved works that are not linked to a student. */
   unlinked: boolean;
+  /** Student books only: A4 for print, or a phone-sized page. */
+  format: 'a4' | 'mobile';
   dedication: string;
 };
 
@@ -38,6 +40,8 @@ export type BookItem = {
   /** Empty for a work that is not linked to a student. */
   studentId: string; studentName: string; studentNumber: number; artistName: string;
   sourcePath: string; version: string; width: number; height: number;
+  /** Where the picture came from, and the document to re-check before printing or download. */
+  origin: 'exhibition' | 'homework' | 'board'; ref: string;
 };
 
 /** One PDF file: a class volume or one student's book. `indexes` point into BookSnapshot.items, in print order. */
@@ -66,6 +70,7 @@ export type RoomSummary = {
   approved: number; linked: number; unlinked: number; firstDate: string; lastDate: string;
 };
 export type StudentSummary = {id: string; name: string; number: number; works: number};
-export type Overview = {classId: string; className: string; rooms: RoomSummary[]; students: StudentSummary[]; truncated: boolean};
+export type Overview = {classId: string; className: string; rooms: RoomSummary[]; students: StudentSummary[]; truncated: boolean; homeworkCount: number; boardCount: number};
 export type PreviewItem = {key: string; title: string; date: string; roomTitle: string; who: string; thumbnailUrl: string};
-export type Selection = {roomIds: string[]; studentIds: string[]; from: string; to: string; exclude: string[]};
+/** `homework` adds checked homework photos, `board` adds published board photos. A work already hanging in a chosen room is not added twice. */
+export type Selection = {roomIds: string[]; studentIds: string[]; from: string; to: string; exclude: string[]; homework: boolean; board: boolean};

@@ -35,7 +35,8 @@ export default function ClassArtbookWizard() {
   const [data, setData] = useState<Overview | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState('');
   const [rooms, setRooms] = useState<string[]>([]), [everyone, setEveryone] = useState(true), [students, setStudents] = useState<string[]>([]);
   const [from, setFrom] = useState(''), [to, setTo] = useState('');
-  const [options, setOptions] = useState<ClassBookOptions>({mode: 'class', title: '우리 반 작품집', cover: 'sage', order: 'student', perPage: 2, names: 'name', story: true, feedback: false, unlinked: true, dedication: ''});
+  const [options, setOptions] = useState<ClassBookOptions>({mode: 'class', title: '우리 반 작품집', cover: 'sage', order: 'student', perPage: 2, names: 'name', story: true, feedback: false, unlinked: true, format: 'a4', dedication: ''});
+  const [homework, setHomework] = useState(false), [board, setBoard] = useState(false);
   const [works, setWorks] = useState<PreviewItem[] | null>(null), [worksTotal, setWorksTotal] = useState(0), [exclude, setExclude] = useState<string[]>([]);
   const [jobs, setJobs] = useState<BookJob[]>([]), [keep, setKeep] = useState({limit: 6, keepDays: 30}), [busy, setBusy] = useState(false);
   const set = <K extends keyof ClassBookOptions>(key: K, value: ClassBookOptions[K]) => setOptions(o => ({...o, [key]: value}));
@@ -56,7 +57,7 @@ export default function ClassArtbookWizard() {
     setLoading(true); setError(''); setData(null); setWorks(null); setExclude([]); setJobs([]);
     Promise.all([call<Overview>(`${API}/${classId}`), loadJobs(classId)]).then(([overview]) => {
       if (!current || !alive.current) return;
-      setData(overview); setRooms(overview.rooms.filter(r => r.approved).map(r => r.id)); setEveryone(true); setStudents([]);
+      setData(overview); setRooms(overview.rooms.filter(r => r.approved).map(r => r.id)); setEveryone(true); setStudents([]); setHomework(false); setBoard(false);
     }).catch(e => {if (current && alive.current) setError(e.message);}).finally(() => {if (current && alive.current) setLoading(false);});
     return () => {current = false;};
   }, [classId, loadJobs]);
@@ -68,10 +69,11 @@ export default function ClassArtbookWizard() {
   }, [data]);
   const picked = useMemo(() => (data?.rooms ?? []).filter(r => rooms.includes(r.id)), [data, rooms]);
   const totals = useMemo(() => ({approved: picked.reduce((n, r) => n + r.approved, 0), unlinked: picked.reduce((n, r) => n + r.unlinked, 0)}), [picked]);
-  const selection = useMemo(() => ({roomIds: rooms, studentIds: everyone ? [] : students, from, to, exclude}), [rooms, everyone, students, from, to, exclude]);
+  const selection = useMemo(() => ({roomIds: rooms, studentIds: everyone ? [] : students, from, to, exclude, homework, board}), [rooms, everyone, students, from, to, exclude, homework, board]);
+  const sourced = rooms.length > 0 || homework || board;
   // Any change to what is gathered makes the checked list stale.
-  useEffect(() => {setWorks(null); setExclude([]);}, [rooms, everyone, students, from, to, options.mode, options.unlinked]);
-  const canMake = !!classId && rooms.length > 0 && (everyone || students.length > 0) && !!options.title.trim() && !busy;
+  useEffect(() => {setWorks(null); setExclude([]);}, [rooms, everyone, students, from, to, homework, board, options.mode, options.unlinked]);
+  const canMake = !!classId && sourced && (everyone || students.length > 0) && !!options.title.trim() && !busy;
 
   async function act(work: () => Promise<void>) {
     if (running.current) return;
@@ -121,9 +123,9 @@ export default function ClassArtbookWizard() {
     {error && <p className="cab-error" role="alert">{error}</p>}
     {!classes.length && <p className="cab-empty">먼저 학급을 만들어 주세요.</p>}
     {loading && <p className="cab-status" role="status"><LoaderCircle className="spin" size={18}/> 전시실을 살펴보는 중이에요.</p>}
-    {data && !data.rooms.length && <p className="cab-empty">열었거나 종료한 전시실이 아직 없어요. 작품전시에서 전시실을 열고 작품을 승인하면 여기에 모여요.</p>}
+    {data && !data.rooms.length && !data.homeworkCount && !data.boardCount && <p className="cab-empty">열었거나 종료한 전시실이 아직 없어요. 작품전시에서 전시실을 열고 작품을 승인하면 여기에 모여요.</p>}
 
-    {data && !!data.rooms.length && <>
+    {data && (!!data.rooms.length || !!data.homeworkCount || !!data.boardCount) && <>
       <section className="cab-step"><h2><span>1</span>누구의 작품집인가요?</h2>
         <div className="cab-modes">
           <button type="button" className={options.mode === 'class' ? 'on' : ''} aria-pressed={options.mode === 'class'} disabled={busy} onClick={() => set('mode', 'class')}><Users size={22}/><strong>반 전체 한 권</strong><small>우리 반 작품을 한 권에 모아요. 학급 문집이나 교실 보관용으로 좋아요.</small></button>
@@ -139,6 +141,10 @@ export default function ClassArtbookWizard() {
             <span><strong>{room.title}</strong><small>{room.approved ? `승인 작품 ${room.approved}점${room.firstDate ? ` · ${room.firstDate === room.lastDate ? room.firstDate : `${room.firstDate} ~ ${room.lastDate}`}` : ''}` : '승인한 작품이 아직 없어요'}{room.unlinked > 0 && <em> · 학생 미지정 {room.unlinked}점</em>}</small></span></label>)}
         </fieldset>)}
         {data.truncated && <p className="cab-hint">전시실이 아주 많아 최근 것부터 일부만 보여요.</p>}
+        {(!!data.homeworkCount || !!data.boardCount) && <fieldset className="cab-hall" disabled={busy}><legend>다른 곳의 사진도 <small>전시실에 이미 걸린 작품은 한 번만 실려요</small></legend>
+          {!!data.homeworkCount && <label className="cab-room"><input type="checkbox" checked={homework} onChange={e => setHomework(e.target.checked)}/><span><strong>검사 완료한 숙제 사진</strong><small>숙제 {data.homeworkCount}개 · 검사 완료한 제출물의 사진과 글</small></span></label>}
+          {!!data.boardCount && <label className="cab-room"><input type="checkbox" checked={board} onChange={e => setBoard(e.target.checked)}/><span><strong>참여보드에 올린 사진</strong><small>보드 {data.boardCount}개 · 공개된 학생 글의 사진과 글 · 익명 보드는 이름 없이 실려요</small></span></label>}
+        </fieldset>}
         <div className="cab-row"><label className="cab-check"><input type="checkbox" checked={everyone} disabled={busy} onChange={e => setEveryone(e.target.checked)}/>우리 반 모두</label></div>
         {!everyone && <div className="cab-students">{data.students.map(s => <label key={s.id} className="cab-chip"><input type="checkbox" checked={students.includes(s.id)} disabled={busy} onChange={e => setStudents(old => toggle(old, s.id, e.target.checked))}/>{s.number ? `${s.number}. ` : ''}{s.name}<small>{s.works}점</small></label>)}</div>}
         {totals.unlinked > 0 && <p className="cab-hint">학생이 지정되지 않은 작품이 {totals.unlinked}점 있어요. {options.mode === 'students' ? '학생별 책에는 담기지 않아요. 작품전시의 작품 정보에서 학생을 지정하면 담겨요.' : '반 전체 책에는 아래 선택에 따라 함께 담을 수 있어요.'}</p>}
@@ -156,18 +162,19 @@ export default function ClassArtbookWizard() {
             <label className="cab-check"><input type="checkbox" checked={options.feedback} disabled={busy} onChange={e => set('feedback', e.target.checked)}/>선생님 한마디 넣기</label>
             <label className="cab-check"><input type="checkbox" checked={options.unlinked} disabled={busy} onChange={e => set('unlinked', e.target.checked)}/>학생 미지정 작품도 넣기</label>
           </>}
+          {options.mode === 'students' && <label>PDF 크기<select value={options.format} disabled={busy} onChange={e => set('format', e.target.value as ClassBookOptions['format'])}><option value="a4">A4 인쇄용</option><option value="mobile">휴대폰용</option></select></label>}
           <label className="wide">마지막 장에 남길 말<textarea maxLength={500} rows={3} value={options.dedication} disabled={busy} placeholder="그림마다 담긴 생각과 마음을 오래 간직해 주세요." onChange={e => set('dedication', e.target.value)}/></label>
         </div>
         {options.mode === 'class' && options.names !== 'hidden' && <p className="cab-hint">반 전체 책에는 다른 학생의 이름과 작품이 함께 들어 있어요. 가정에 보낼 때는 &quot;학생별 한 권씩&quot;이나 이름 가리기를 써 주세요.</p>}
-        <div className="cab-row"><button type="button" className="button soft" disabled={!rooms.length || busy} onClick={() => void loadWorks()}><Images size={16}/>담길 작품 확인하고 빼기</button>{works && <span className="cab-hint">{worksTotal}점 가운데 {worksTotal - exclude.length}점을 담아요.</span>}</div>
+        <div className="cab-row"><button type="button" className="button soft" disabled={!sourced || busy} onClick={() => void loadWorks()}><Images size={16}/>담길 작품 확인하고 빼기</button>{works && <span className="cab-hint">{worksTotal}점 가운데 {worksTotal - exclude.length}점을 담아요.</span>}</div>
         {works && (works.length ? <div className="cab-works">{works.map(w => <label key={w.key} className={`cab-work${exclude.includes(w.key) ? ' off' : ''}`}><input type="checkbox" checked={!exclude.includes(w.key)} disabled={busy} onChange={e => setExclude(old => toggle(old, w.key, !e.target.checked))}/>
           {w.thumbnailUrl ? <img loading="lazy" src={w.thumbnailUrl} alt=""/> : <i/>}<span><strong>{w.title}</strong><small>{[w.who, w.date, w.roomTitle].filter(Boolean).join(' · ')}</small></span></label>)}</div> : <p className="cab-empty">고른 전시와 기간에 맞는 승인 작품이 없어요.</p>)}
       </section>
 
       <section className="cab-step"><h2><span>4</span>만들기</h2>
-        <p className="cab-summary">전시실 {rooms.length}개 · 작품 약 {Math.max(0, expected)}점 · {options.mode === 'class' ? '반 전체 한 권' : '학생별 한 권씩'}</p>
+        <p className="cab-summary">전시실 {rooms.length}개{homework ? ' + 숙제' : ''}{board ? ' + 보드' : ''} · {works || !(homework || board) ? `작품 약 ${Math.max(0, expected)}점` : '작품 수는 "담길 작품 확인"에서 볼 수 있어요'} · {options.mode === 'class' ? '반 전체 한 권' : '학생별 한 권씩'}</p>
         {expected > CLASS_BOOK_LIMIT && <p className="cab-error">한 번에 {CLASS_BOOK_LIMIT}점까지 만들 수 있어요. 전시나 기간을 나누어 주세요.</p>}
-        <button type="button" className="button primary cab-make" disabled={!canMake || expected <= 0 || expected > CLASS_BOOK_LIMIT} onClick={() => void create()}>{busy ? <LoaderCircle className="spin" size={18}/> : <BookOpen size={18}/>}작품집 만들기</button>
+        <button type="button" className="button primary cab-make" disabled={!canMake || (works || !(homework || board) ? expected <= 0 : false) || expected > CLASS_BOOK_LIMIT} onClick={() => void create()}>{busy ? <LoaderCircle className="spin" size={18}/> : <BookOpen size={18}/>}작품집 만들기</button>
         <p className="cab-hint">작품이 많으면 몇 분 걸려요. 이 화면을 닫으면 그 단계에서 멈추고, 다시 열어 &quot;이어서 만들기&quot;를 누르면 이어져요.</p>
       </section>
 
