@@ -2,10 +2,10 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {GoogleAuthProvider, reauthenticateWithPopup} from 'firebase/auth';
-import {ChevronLeft, ChevronRight, Download, FileText, History, LoaderCircle, Lock, Pencil, Printer, ShieldCheck, Trash2, UserPlus, X} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Download, FileText, History, KeyRound, ListTodo, LoaderCircle, Lock, Pencil, Plus, Printer, ShieldCheck, Trash2, UserPlus, X} from 'lucide-react';
 import {auth} from '@/lib/firebase-client';
 import {findMentions, mentionQuery, studentKey} from './mentions';
-import {NOTEBOOK_TAG_LABELS, NOTEBOOK_TAGS, SENSITIVE_TAGS, type NotebookAuditEvent, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStatus, type NotebookStudentRef, type NotebookTag} from './types';
+import {NOTEBOOK_TAG_LABELS, NOTEBOOK_TAGS, SENSITIVE_TAGS, type NotebookAuditEvent, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStatus, type NotebookStudentRef, type NotebookTag, type NotebookTodo} from './types';
 import './styles.css';
 
 const IDLE_MS = 15 * 60_000, WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -32,27 +32,104 @@ const longDate = (date: string) => {const d = new Date(`${date}T00:00:00Z`); ret
 type Draft = {id: string | null; body: string; students: NotebookStudentRef[]; tags: NotebookTag[]; sensitive: boolean};
 const emptyDraft = (): Draft => ({id: null, body: '', students: [], tags: [], sensitive: false});
 
-function Unlock({onUnlocked}: {onUnlocked: (expiresAt: number) => void}) {
+/**
+ * The notebook's own lock. Opening takes the notebook password; setting it the first time,
+ * or resetting a forgotten one, takes a fresh Google sign-in check first.
+ */
+function Unlock({hasPassword, startReset, onUnlocked}: {hasPassword: boolean; startReset: boolean; onUnlocked: (expiresAt: number) => void}) {
+  const [mode, setMode] = useState<'open' | 'set'>(hasPassword && !startReset ? 'open' : 'set');
+  const [password, setPassword] = useState(''), [again, setAgain] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
-  async function open() {
-    setBusy(true); setError('');
+  async function open(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true); setError('');
+    try {onUnlocked((await call<{expiresAt: number}>('unlock', {body: {password}})).expiresAt);}
+    catch (e) {setError((e as Error).message); setPassword('');}
+    finally {setBusy(false);}
+  }
+  async function set(event: React.FormEvent) {
+    event.preventDefault(); setError('');
+    if (password.length < 6) {setError('비밀번호는 6자 이상으로 정해 주세요.'); return;}
+    if (password !== again) {setError('두 비밀번호가 서로 달라요.'); return;}
+    setBusy(true);
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('로그인 정보가 없어요. 로그아웃한 뒤 다시 로그인해 주세요.');
       const result = await reauthenticateWithPopup(user, new GoogleAuthProvider());
-      const data = await call<{expiresAt: number}>('unlock', {body: {idToken: await result.user.getIdToken(true)}});
-      onUnlocked(data.expiresAt);
+      onUnlocked((await call<{expiresAt: number}>('password', {body: {idToken: await result.user.getIdToken(true), password}})).expiresAt);
     } catch (e) {
       const code = (e as {code?: string}).code;
       setError(code === 'auth/user-mismatch' ? '지금 로그인한 Google 계정으로 확인해 주세요.' : code?.startsWith('auth/') ? 'Google 계정 확인을 마치지 못했어요. 다시 시도해 주세요.' : (e as Error).message);
     } finally {setBusy(false);}
   }
-  return <section className="nb-lock">
+  if (mode === 'open') return <section className="nb-lock">
     <div className="nb-lock-icon"><Lock size={30}/></div>
     <h2>교무수첩은 잠겨 있어요</h2>
-    <p>학생 생활·상담 기록이 담긴 공간이라, 열 때마다 Google 계정을 한 번 더 확인해요.<br/>열린 뒤 30분이 지나거나 15분 동안 사용하지 않으면 다시 잠겨요.</p>
-    <button className="button primary" onClick={open} disabled={busy}>{busy ? <LoaderCircle className="spin" size={18}/> : <ShieldCheck size={18}/>}Google 계정으로 열기</button>
+    <p>교무수첩 비밀번호를 입력하면 열려요.<br/>열린 뒤 30분이 지나거나 15분 동안 사용하지 않으면 다시 잠겨요.</p>
+    <form className="nb-lock-form" onSubmit={open}>
+      <input type="password" autoComplete="current-password" aria-label="교무수첩 비밀번호" placeholder="교무수첩 비밀번호" value={password} maxLength={64} autoFocus onChange={e => setPassword(e.target.value)}/>
+      <button className="button primary" disabled={busy || !password}>{busy ? <LoaderCircle className="spin" size={18}/> : <KeyRound size={18}/>}열기</button>
+    </form>
     {error && <p className="nb-error" role="alert">{error}</p>}
+    <button type="button" className="nb-link" onClick={() => {setMode('set'); setError(''); setPassword('');}}>비밀번호를 잊었어요</button>
+  </section>;
+  return <section className="nb-lock">
+    <div className="nb-lock-icon"><KeyRound size={30}/></div>
+    <h2>{hasPassword ? '교무수첩 비밀번호 새로 정하기' : '교무수첩 비밀번호 정하기'}</h2>
+    <p>교무수첩만 여는 전용 비밀번호예요. 모두의 교실 로그인과 따로 한 번 더 잠가요.<br/>정할 때는 본인 확인을 위해 Google 계정을 한 번 확인해요.</p>
+    <form className="nb-lock-form is-column" onSubmit={set}>
+      <input type="password" autoComplete="new-password" aria-label="새 비밀번호" placeholder="새 비밀번호 (6자 이상)" value={password} maxLength={64} autoFocus onChange={e => setPassword(e.target.value)}/>
+      <input type="password" autoComplete="new-password" aria-label="새 비밀번호 확인" placeholder="한 번 더 입력" value={again} maxLength={64} onChange={e => setAgain(e.target.value)}/>
+      <button className="button primary" disabled={busy || !password || !again}>{busy ? <LoaderCircle className="spin" size={18}/> : <ShieldCheck size={18}/>}Google 확인 후 비밀번호 정하기</button>
+    </form>
+    {error && <p className="nb-error" role="alert">{error}</p>}
+    {hasPassword && <button type="button" className="nb-link" onClick={() => {setMode('open'); setError(''); setPassword(''); setAgain('');}}>비밀번호로 열기</button>}
+  </section>;
+}
+
+/** To-dos: unfinished first (earliest due date first), finished ones folded at the bottom. */
+function Todos({date, onChanged, onLocked}: {date: string; onChanged: () => void; onLocked: () => void}) {
+  const [list, setList] = useState<NotebookTodo[] | null>(null), [text, setText] = useState(''), [due, setDue] = useState(''), [error, setError] = useState('');
+  const [editing, setEditing] = useState<{id: string; text: string; due: string} | null>(null), [busy, setBusy] = useState(false);
+  const fail = useCallback((e: unknown) => {if (e instanceof LockedError) onLocked(); else setError((e as Error).message);}, [onLocked]);
+  const load = useCallback(() => call<{todos: NotebookTodo[]}>('todos').then(d => setList(d.todos)).catch(fail), [fail]);
+  useEffect(() => {load();}, [load]);
+  async function save(id: string | null, body: {text: string; due: string | null; done: boolean}) {
+    setBusy(true); setError('');
+    try {await call(id ? `todos/${id}` : 'todos', {body}); await load(); onChanged(); return true;} catch (e) {fail(e); return false;} finally {setBusy(false);}
+  }
+  async function add(event: React.FormEvent) {
+    event.preventDefault();
+    if (text.trim() && await save(null, {text, due: due || null, done: false})) {setText(''); setDue('');}
+  }
+  async function remove(todo: NotebookTodo) {
+    if (!confirm('이 할 일을 지울까요?')) return;
+    try {await call(`todos/${todo.id}`, {method: 'DELETE'}); await load(); onChanged();} catch (e) {fail(e);}
+  }
+  const today = seoulDate();
+  const open = (list ?? []).filter(t => !t.done).sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || b.createdAt.localeCompare(a.createdAt));
+  const done = (list ?? []).filter(t => t.done);
+  const row = (todo: NotebookTodo) => editing?.id === todo.id ? <li key={todo.id} className="nb-todo is-editing">
+    <input aria-label="할 일 고치기" value={editing.text} maxLength={200} onChange={e => setEditing({...editing, text: e.target.value})}/>
+    <input type="date" aria-label="기한" value={editing.due} onChange={e => setEditing({...editing, due: e.target.value})}/>
+    <button className="button soft" onClick={() => setEditing(null)}>취소</button>
+    <button className="button primary" disabled={busy || !editing.text.trim()} onClick={async () => {if (await save(todo.id, {text: editing.text, due: editing.due || null, done: todo.done})) setEditing(null);}}>저장</button>
+  </li> : <li key={todo.id} className={`nb-todo${todo.done ? ' is-done' : ''}`}>
+    <label><input type="checkbox" checked={todo.done} disabled={busy} onChange={() => save(todo.id, {text: todo.text, due: todo.due, done: !todo.done})}/><span>{todo.text}</span></label>
+    {todo.due && <time className={!todo.done && todo.due < today ? 'is-late' : todo.due === today ? 'is-today' : ''}>{todo.due === today ? '오늘' : longDate(todo.due)}</time>}
+    <button className="icon-button" aria-label="고치기" onClick={() => setEditing({id: todo.id, text: todo.text, due: todo.due ?? ''})}><Pencil size={14}/></button>
+    <button className="icon-button" aria-label="삭제" onClick={() => remove(todo)}><Trash2 size={14}/></button>
+  </li>;
+  return <section className="nb-card nb-todos" aria-label="할 일">
+    <h3><ListTodo size={18}/>할 일</h3>
+    <form className="nb-todo-add" onSubmit={add}>
+      <input aria-label="새 할 일" placeholder="할 일을 적어 주세요" value={text} maxLength={200} onChange={e => setText(e.target.value)}/>
+      <input type="date" aria-label="기한(선택)" value={due} onChange={e => setDue(e.target.value)}/>
+      <button className="button primary" disabled={busy || !text.trim()}><Plus size={16}/>추가</button>
+    </form>
+    <button type="button" className="nb-link" onClick={() => setDue(date)}>기한을 {longDate(date)}로</button>
+    {error && <p className="nb-error" role="alert">{error}</p>}
+    {!list ? <p className="nb-muted"><LoaderCircle className="spin" size={16}/> 불러오는 중…</p> : open.length === 0 ? <p className="nb-muted">남은 할 일이 없어요.</p> : <ul className="nb-todo-list">{open.map(row)}</ul>}
+    {done.length > 0 && <details className="nb-todo-done"><summary>끝낸 일 {done.length}개</summary><ul className="nb-todo-list">{done.slice(0, 50).map(row)}</ul></details>}
   </section>;
 }
 
@@ -166,7 +243,7 @@ function ReportDialog({roster, onClose, onLocked}: {roster: NotebookRosterClass[
 function AuditPanel({onLocked}: {onLocked: () => void}) {
   const [events, setEvents] = useState<NotebookAuditEvent[] | null>(null), [error, setError] = useState('');
   useEffect(() => {call<{events: NotebookAuditEvent[]}>('audit').then(data => setEvents(data.events)).catch(e => {if (e instanceof LockedError) onLocked(); else setError((e as Error).message);});}, [onLocked]);
-  const label: Record<string, string> = {'notebook.unlock': '수첩 열기', 'notebook.lock': '수첩 잠금', 'entry.create': '기록 저장', 'entry.update': '기록 고침', 'entry.delete': '기록 삭제', 'report.build': '리포트 생성'};
+  const label: Record<string, string> = {'notebook.unlock': '수첩 열기', 'notebook.unlock_failed': '비밀번호 틀림', 'notebook.lock': '수첩 잠금', 'password.set': '비밀번호 정함', 'password.reset': '비밀번호 새로 정함', 'entry.create': '기록 저장', 'entry.update': '기록 고침', 'entry.delete': '기록 삭제', 'entry.confirm': '베리 기록 확정', 'todo.create': '할 일 추가', 'todo.update': '할 일 고침', 'todo.delete': '할 일 삭제', 'report.build': '리포트 생성'};
   return <section className="nb-card"><h3><History size={18}/>최근 접근 기록</h3>{error && <p className="nb-error">{error}</p>}{!events && !error && <p className="nb-muted">불러오는 중…</p>}
     <ul className="nb-audit">{events?.map(event => <li key={event.id}><span>{label[event.action] ?? event.action}</span><time>{new Date(event.at).toLocaleString('ko-KR')}</time></li>)}</ul></section>;
 }
@@ -175,7 +252,7 @@ export default function TeacherNotebook() {
   const [status, setStatus] = useState<NotebookStatus | null>(null), [error, setError] = useState('');
   const [roster, setRoster] = useState<NotebookRosterClass[]>([]), [month, setMonth] = useState(monthOf(seoulDate())), [days, setDays] = useState<Record<string, NotebookDaySummary>>({});
   const [date, setDate] = useState(seoulDate()), [entries, setEntries] = useState<NotebookEntry[] | null>(null), [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [reportOpen, setReportOpen] = useState(false), [auditOpen, setAuditOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false), [auditOpen, setAuditOpen] = useState(false), [resetting, setResetting] = useState(false);
   const lastActive = useRef(Date.now());
   const unlocked = !!status?.unlocked;
   const names = useMemo(() => new Map<string, string>(roster.flatMap(cls => cls.students.map(s => [`${cls.id}_${s.id}`, s.name] as const))), [roster]);
@@ -209,24 +286,26 @@ export default function TeacherNotebook() {
   return <section className="nb-shell">
     <div className="nb-heading">
       <div><p className="nb-eyebrow"><Link href="/teacher/me">마이페이지</Link> · 교무수첩</p><h2>교무수첩</h2><p>하루 기록과 학생별 관찰을 날짜별로 모아 둬요. 기록은 암호화되어 저장되고, 선생님 본인만 열 수 있어요.</p></div>
-      {unlocked && <div className="nb-heading-actions"><button className="button soft" onClick={() => setReportOpen(true)}><FileText size={16}/>종합 리포트</button><button className="button soft" onClick={() => setAuditOpen(!auditOpen)} aria-pressed={auditOpen}><History size={16}/>접근 기록</button><button className="button soft" onClick={lock}><Lock size={16}/>잠그기</button></div>}
+      {unlocked && <div className="nb-heading-actions"><button className="button soft" onClick={() => setReportOpen(true)}><FileText size={16}/>종합 리포트</button><button className="button soft" onClick={() => setAuditOpen(!auditOpen)} aria-pressed={auditOpen}><History size={16}/>접근 기록</button><button className="button soft" onClick={() => {setResetting(true); lock();}}><KeyRound size={16}/>비밀번호 바꾸기</button><button className="button soft" onClick={() => {setResetting(false); lock();}}><Lock size={16}/>잠그기</button></div>}
     </div>
     {error && <p className="nb-error" role="alert">{error}<button className="icon-button" aria-label="닫기" onClick={() => setError('')}><X size={16}/></button></p>}
-    {!unlocked ? <Unlock onUnlocked={expiresAt => {lastActive.current = Date.now(); setError(''); setStatus({available: true, unlocked: true, expiresAt});}}/> : <>
+    {!unlocked ? <Unlock key={`${status.hasPassword}-${resetting}`} hasPassword={!!status.hasPassword} startReset={resetting} onUnlocked={expiresAt => {lastActive.current = Date.now(); setError(''); setResetting(false); setStatus({available: true, unlocked: true, expiresAt, hasPassword: true});}}/> : <>
       {auditOpen && <AuditPanel onLocked={locked}/>}
       <div className="nb-columns">
-        <section className="nb-card nb-calendar" aria-label="달력">
+        <div className="nb-side"><section className="nb-card nb-calendar" aria-label="달력">
           <div className="nb-month"><button className="icon-button" aria-label="이전 달" onClick={() => setMonth(shiftMonth(month, -1))}><ChevronLeft size={18}/></button><strong>{month.replace('-', '년 ')}월</strong><button className="icon-button" aria-label="다음 달" onClick={() => setMonth(shiftMonth(month, 1))}><ChevronRight size={18}/></button></div>
-          <div className="nb-grid">{WEEKDAYS.map(d => <span key={d} className="nb-weekday">{d}</span>)}{monthCells(month).map((cell, i) => cell ? <button key={cell} className={`nb-day${cell === date ? ' is-selected' : ''}${cell === seoulDate() ? ' is-today' : ''}`} aria-pressed={cell === date} aria-label={`${longDate(cell)}${days[cell] ? `, 기록 ${days[cell].entries}건` : ''}`} onClick={() => {setDate(cell); setDraft(emptyDraft());}}><span>{Number(cell.slice(8))}</span>{days[cell] && <small>{days[cell].entries}</small>}</button> : <span key={`blank${i}`}/>)}</div>
+          <div className="nb-grid">{WEEKDAYS.map(d => <span key={d} className="nb-weekday">{d}</span>)}{monthCells(month).map((cell, i) => cell ? <button key={cell} className={`nb-day${cell === date ? ' is-selected' : ''}${cell === seoulDate() ? ' is-today' : ''}`} aria-pressed={cell === date} aria-label={`${longDate(cell)}${days[cell] ? `, 기록 ${days[cell].entries}건` : ''}`} onClick={() => {setDate(cell); setDraft(emptyDraft());}}><span>{Number(cell.slice(8))}</span>{!!days[cell]?.entries && <small>{days[cell].entries}</small>}{!!days[cell]?.todos && <i className="nb-todo-dot" title={`할 일 ${days[cell].todos}개`}/>}</button> : <span key={`blank${i}`}/>)}</div>
           <button className="nb-today" onClick={() => {const t = seoulDate(); setMonth(monthOf(t)); setDate(t); setDraft(emptyDraft());}}>오늘로</button>
         </section>
+        <Todos date={date} onChanged={loadMonth} onLocked={locked}/></div>
         <section className="nb-card">
           <Composer date={date} roster={roster} names={names} draft={draft} setDraft={setDraft} onSaved={() => {loadDay(); loadMonth();}} onLocked={locked}/>
           <h3 className="nb-day-title">{longDate(date)}의 기록</h3>
           {!entries ? <p className="nb-muted"><LoaderCircle className="spin" size={16}/> 불러오는 중…</p> : entries.length === 0 ? <p className="nb-muted">아직 이 날의 기록이 없어요.</p> :
             <ul className="nb-entries">{entries.map(entry => <li key={entry.id} className={entry.sensitive ? 'is-sensitive' : ''}>
               <div className="nb-entry-meta"><span>{entry.students.length ? entry.students.map(ref => names.get(studentKey(ref)) ?? '명단에 없음').join(', ') : '학급 전체'}</span><span className="nb-entry-tags">{entry.tags.map(tag => NOTEBOOK_TAG_LABELS[tag]).join(' · ')}{entry.sensitive && <b> 민감</b>}</span></div>
-              {entry.pending && <span className="nb-berry"><img src="/berry/raspberry-64.webp" alt="" width="16" height="16"/>베리 제안 <button onClick={() => accept(entry)}>확정</button></span>}
+              {entry.pending ? <span className="nb-berry"><img src="/berry/raspberry-64.webp" alt="" width="16" height="16"/>베리 제안 <button onClick={() => accept(entry)}>확정</button></span>
+                : entry.source === 'chat' && <span className="nb-berry"><img src="/berry/raspberry-64.webp" alt="" width="16" height="16"/>베리가 기록</span>}
               <p>{entry.body}</p>
               <div className="nb-entry-actions"><button className="icon-button" aria-label="고치기" onClick={() => setDraft({id: entry.id, body: entry.body, students: entry.students, tags: entry.tags, sensitive: entry.sensitive})}><Pencil size={15}/></button><button className="icon-button" aria-label="삭제" onClick={() => remove(entry)}><Trash2 size={15}/></button></div>
             </li>)}</ul>}

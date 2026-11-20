@@ -33,7 +33,7 @@ ourclass 데이터를 **베리 에이전트 서버, Claude, ChatGPT** 같은 외
 
 ## 도구 (쓰기, 2단계 확인)
 
-`add_calendar_event`(calendar:write), `add_lesson_log`·`add_work_item`(workspace:write), `add_notebook_entry`(notebook:write)는 저장하지 않고 미리보기와 `confirm_token`(10분, 1회)을 돌려준다. `confirm_write {confirm_token}`이 같은 교사·같은 연결·같은 내용(payload 해시)일 때만 저장한다. 토큰은 해시만 `berryConfirmations/{hash}`에 두고, 미리보기 내용은 교무수첩과 같은 봉투 암호화로 보관한다. 저장된 문서는 `source: 'chat'`, `pending: true`이며 선생님이 화면에서 확정해야 `pending: false`가 된다. 민감 분류가 붙은 교무수첩 기록은 응답에 본문을 돌려주지 않는다.
+`add_calendar_event`(calendar:write), `add_lesson_log`·`add_work_item`(workspace:write), `add_notebook_entry`(notebook:write)는 저장하지 않고 미리보기와 `confirm_token`(10분, 1회)을 돌려준다. `confirm_write {confirm_token}`이 같은 교사·같은 연결·같은 내용(payload 해시)일 때만 저장한다. 토큰은 해시만 `berryConfirmations/{hash}`에 두고, 미리보기 내용은 교무수첩과 같은 봉투 암호화로 보관한다. 저장된 문서는 `source: 'chat'`, `pending: true`이며 선생님이 화면에서 확정해야 `pending: false`가 된다. 단, 교무수첩 기록(`add_notebook_entry`)은 카드의 [기록]이 곧 선생님 승인이므로 `pending: false`로 바로 저장하고 "베리가 기록" 표시만 남긴다(교무수첩에서 고치기·지우기 가능). 민감 분류가 붙은 교무수첩 기록은 응답에 본문을 돌려주지 않는다.
 
 두뇌는 `confirm_write`를 사용자 승인 버튼에만 연결해야 한다(LLM이 미리보기와 확인을 연속 호출하면 2단계가 무의미해진다).
 

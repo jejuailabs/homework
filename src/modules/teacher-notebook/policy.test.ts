@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {accessConfig, entryInput, findMentions, mentionQuery, monthRange, notebookAllowed, notebookDate, recentAuthentication, reportCsv, reportRange, unlockToken, verifyUnlock, UNLOCK_SECONDS} from './policy';
+import {accessConfig, afterFailure, blockedFor, entryInput, passwordInput, passwordLock, todoInput, findMentions, mentionQuery, monthRange, notebookAllowed, notebookDate, recentAuthentication, reportCsv, reportRange, unlockToken, verifyUnlock, UNLOCK_SECONDS} from './policy';
 
 const roster = [
   {id: 'c1', name: '3-1', students: [{id: 's1', name: '김민준', number: 1}, {id: 's2', name: '김민준호', number: 2}, {id: 's3', name: '이서연', number: 3}]},
@@ -61,4 +61,26 @@ const csv = reportCsv([{id: 'e1', date: '2026-10-27', body: '=SUM(A1) "따옴표
 assert.ok(csv.startsWith('﻿'));
 assert.ok(csv.includes(`"'=SUM(A1) ""따옴표"""`), 'formulas are neutralized and quotes escaped');
 assert.ok(csv.includes('"김민준"'));
+// Notebook password
+assert.equal(passwordInput('berry-2026'), 'berry-2026');
+assert.throws(() => passwordInput('12345'), /6~64/);
+assert.throws(() => passwordInput('123456'), /쉬운/);
+assert.throws(() => passwordInput('aaaaaaaa'), /쉬운/);
+assert.throws(() => passwordInput(123456), /입력/);
+assert.equal(passwordLock(undefined), null);
+assert.equal(passwordLock({salt: '', hash: 'x'}), null);
+const lock = passwordLock({salt: 's', hash: 'h'})!;
+assert.deepEqual({failures: lock.failures, blockedUntil: lock.blockedUntil}, {failures: 0, blockedUntil: 0});
+let tries = lock;
+for (let i = 1; i < 5; i++) {tries = {...tries, ...afterFailure(tries, 1000)}; assert.equal(tries.failures, i); assert.equal(tries.blockedUntil, 0);}
+tries = {...tries, ...afterFailure(tries, 1000)};
+assert.deepEqual({failures: tries.failures, blockedUntil: tries.blockedUntil}, {failures: 0, blockedUntil: 1600}, 'fifth wrong try blocks ten minutes');
+assert.equal(blockedFor(tries, 1000), 600);
+assert.equal(blockedFor(tries, 1700), 0);
+// To-dos
+assert.deepEqual(todoInput({text: '  가정통신문   걷기 ', due: '2026-11-21'}), {text: '가정통신문 걷기', due: '2026-11-21', done: false});
+assert.deepEqual(todoInput({text: '회의', due: '', done: true}), {text: '회의', due: null, done: true});
+assert.throws(() => todoInput({text: '  '}), /할 일/);
+assert.throws(() => todoInput({text: 'x', due: '2026-13-01'}), /기한/);
+assert.throws(() => todoInput({text: 'x'.repeat(201)}), /200/);
 console.log('teacher notebook policy tests passed');
