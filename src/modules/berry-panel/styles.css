@@ -67,3 +67,8 @@
 .bp-today{max-width:92%}.bp-today .bp-thinking{background:none;padding:2px 12px}.bp-today-line{font-size:12px;color:var(--muted);background:none!important;padding:0 12px!important}
 .bp-today-card{display:flex;flex-direction:column;gap:8px}.bp-today-card>strong{font-size:13px}.bp-today-card>.button{align-self:flex-start}
 .bp-today-hint{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.bp-mic{display:grid;place-items:center;flex:none;width:44px;height:44px;border:1px solid var(--border);border-radius:12px;background:#fbf7ff;color:#6f4d8c;cursor:pointer}.bp-mic:disabled{opacity:.5;cursor:default}
+.bp-mic.is-listening{background:#d6336c;border-color:#d6336c;color:#fff;animation:bp-mic-pulse 1.4s ease-in-out infinite}
+@keyframes bp-mic-pulse{0%,100%{box-shadow:0 0 0 0 #d6336c55}50%{box-shadow:0 0 0 7px #d6336c00}}
+@media(prefers-reduced-motion:reduce){.bp-mic.is-listening{animation:none}}
+[data-mode=dark] .bp-mic:not(.is-listening){background:#2d2338;color:#dcc8ef}
