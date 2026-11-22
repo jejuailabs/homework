@@ -72,3 +72,4 @@
 @keyframes bp-mic-pulse{0%,100%{box-shadow:0 0 0 0 #d6336c55}50%{box-shadow:0 0 0 7px #d6336c00}}
 @media(prefers-reduced-motion:reduce){.bp-mic.is-listening{animation:none}}
 [data-mode=dark] .bp-mic:not(.is-listening){background:#2d2338;color:#dcc8ef}
+.bp-to{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:6px 16px 6px 10px;border:1.5px solid #f3b9cc;border-radius:999px;background:linear-gradient(135deg,#fff5f8,#ffe3ec);color:#a82c55;font:inherit;font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap}.bp-to:hover{border-color:#e58aa8}.bp-to:focus-visible{outline:3px solid #e58aa8;outline-offset:2px}[data-mode=dark] .bp-to{background:#4a2836;border-color:#7d4059;color:#ffd3e2}

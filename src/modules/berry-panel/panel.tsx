@@ -124,6 +124,7 @@ export default function BerryPanel() {
   const [messages, setMessages] = useState<Message[]>([]), [text, setText] = useState(''), [busy, setBusy] = useState(false), [activity, setActivity] = useState(''), [error, setError] = useState('');
   const [inbox, setInbox] = useState<InboxItem[] | null>(null), [notice, setNotice] = useState('');
   const [asked, setAsked] = useState<Ability | null>(null);
+  const [topic, setTopic] = useState('');
   const [greeting, setGreeting] = useState<Greeting | null>(null), [brief, setBrief] = useState<TodayBriefing>({state: 'hidden'}), [briefOpen, setBriefOpen] = useState(false);
   const greeted = useRef(false);
   const conversation = useRef<string | null>(null), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
@@ -155,8 +156,10 @@ export default function BerryPanel() {
   // Buttons on /teacher/berry (or anywhere) open the panel with a request: window.dispatchEvent(new CustomEvent('berry:ask', {detail}))
   useEffect(() => {
     const onAsk = (event: Event) => {const detail = (event as CustomEvent<Ability>).detail; if (detail?.prompt) {setOpen(true); setTab('chat'); setAsked(detail);}};
-    window.addEventListener('berry:ask', onAsk);
-    return () => window.removeEventListener('berry:ask', onAsk);
+    // "To 베리" buttons open the chat with a first line for that screen and send nothing.
+    const onOpen = (event: Event) => {setOpen(true); setTab('chat'); setTopic((event as CustomEvent<{topic?: string}>).detail?.topic ?? '');};
+    window.addEventListener('berry:ask', onAsk); window.addEventListener('berry:open', onOpen);
+    return () => {window.removeEventListener('berry:ask', onAsk); window.removeEventListener('berry:open', onOpen);};
   }, []);
   useEffect(() => {if (asked && status?.connected && !busy) {setAsked(null); pick(asked);}}, [asked, status, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!status?.available) return null;
@@ -252,7 +255,7 @@ export default function BerryPanel() {
           {!messages.length && <img className="bp-hero" src="/berry/raspberry-160.webp" alt="" width="84" height="84"/>}
           <div className="bp-msg is-assistant bp-today">
             <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>
-            <p>{greeting?.text ?? '선생님, 무엇을 도와드릴까요? 편하게 말로 시켜 주세요.'}</p>
+            <p>{topic || (greeting?.text ?? '선생님, 무엇을 도와드릴까요? 편하게 말로 시켜 주세요.')}</p>
             {brief.state === 'loading' && <p className="bp-thinking"><LoaderCircle className="spin" size={14}/>오늘 브리핑 준비 중…</p>}
             {brief.state === 'ready' && !todayItem && brief.readyAt && <p className="bp-today-line">오늘 브리핑은 {brief.readyAt}부터 볼 수 있어요.</p>}
             {brief.state === 'ready' && todayItem && <div className="bp-card bp-today-card">
