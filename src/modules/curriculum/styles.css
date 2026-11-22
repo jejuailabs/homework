@@ -215,3 +215,26 @@
   .cur-sheet-scroll{overflow:visible}#cur-print{min-width:0;position:fixed;inset:0;aspect-ratio:auto;border:0;box-shadow:none;border-radius:0;padding:10mm}
   @page{size:A4 landscape;margin:0}
 }
+
+/* 우리 반 시작·저장 */
+.cur-start-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:-2px 0 14px;padding:14px 18px;border-radius:18px;background:#fff8e6;border:1px solid #f3dfae;color:#6b4e12}
+[data-mode=dark] .cur-start-banner{background:#3d331c;border-color:#5c4a24;color:#f3dcaa}
+.cur-start-banner>div{flex:1;min-width:220px}.cur-start-banner strong{font-size:15px}.cur-start-banner p{font-size:13px;margin-top:2px;opacity:.85}
+.cur-save{display:inline-flex;align-items:center;gap:5px;align-self:center;font-size:12px;font-weight:700;color:var(--muted);padding:6px 10px;border-radius:999px;background:var(--surface-alt);border:1px solid var(--border)}
+.cur-save.is-saved{color:var(--success)}.cur-save.is-saving svg{animation:cur-spin 1s linear infinite}.cur-save.is-error{color:var(--danger);max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cur-save button{border:0;background:none;padding:0;font-weight:800;text-decoration:underline;color:inherit}
+@keyframes cur-spin{to{transform:rotate(360deg)}}
+.cur-empty{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;border-radius:16px;background:var(--surface-alt);border:1px dashed var(--border)}.cur-empty p{flex:1;min-width:200px;font-size:13px;color:var(--muted);line-height:1.6}
+.cur-form{display:flex;flex-direction:column;gap:12px;padding:20px}.cur-form>header{display:flex;justify-content:space-between;align-items:center}.cur-form h3{display:flex;align-items:center;gap:6px;font-size:18px}
+.cur-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--muted)}
+.cur-form input,.cur-form select{font:inherit;font-size:14px;color:var(--text);padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);min-width:0}
+.cur-form .cur-check{flex-direction:row;align-items:center;gap:8px;font-size:13px;color:var(--text)}.cur-form .cur-check input{width:18px;height:18px;padding:0}
+.cur-form-pair{display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px}
+.cur-form>footer{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
+.cur-form.is-inline{padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}.cur-form.is-inline>footer{grid-column:1/-1}
+.cur-error{padding:10px 12px;border-radius:12px;background:#fae8e3;color:#8e4737;font-size:13px}[data-mode=dark] .cur-error{background:#4c302a;color:#f4c4b8}
+.cur-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+.cur-hours td.is-edit{padding:4px}.cur-hours td.is-edit input{width:56px;padding:6px;border-radius:8px;border:1px solid var(--accent);text-align:center;font:inherit;font-size:13px;background:var(--surface);color:var(--text)}
+.cur-hours td.is-missing{color:var(--cur-short);font-weight:800}
+.cur-month-grid button{font:inherit;font-size:11px;padding:3px 0;border:0;border-radius:6px;background:var(--day);color:inherit;cursor:pointer}
+.cur-month-grid button:hover{outline:2px solid var(--accent);outline-offset:-1px}.cur-month-grid button.day-weekend{color:var(--muted);opacity:.6}

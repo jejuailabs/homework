@@ -4,7 +4,9 @@ import {expand, hourStats, progressToDate, schoolWeekOf, setSlot, week, weekStar
 import {SAMPLE_PLAN} from './sample';
 import {buildXlsx, sheetName} from './xlsx';
 import {FILE_KINDS, buildFile} from './files';
-import {curriculumAccess, curriculumAllowed} from './policy';
+import {PlanError, curriculumAccess, curriculumAllowed, planInput} from './policy';
+import {HOLIDAYS_2026, starterPlan, subjectsFor} from './starter';
+import {changeSummary} from './changes';
 
 // 스쿨마스터 기능 229개가 빠짐없이, 한 번씩, 메뉴 자리를 갖는다.
 assert.equal(FEATURES.length, 229, '설계도 제1부의 기능 수');
@@ -81,5 +83,44 @@ assert.equal(curriculumAllowed(pilot, 'teacher1', 'teacher'), true);
 assert.equal(curriculumAllowed(pilot, 'teacher2', 'teacher'), false);
 assert.equal(curriculumAllowed(curriculumAccess({mode: 'all'}), 'student1', 'student'), false, '학생에게는 열리지 않는다');
 assert.equal(curriculumAccess({mode: 'everyone'}).mode, 'off', '모르는 값은 꺼짐');
+
+// 우리 반 시작: 확실한 것만 채우고, 비운 곳은 시수표가 알린다.
+assert.deepEqual(subjectsFor(1).map(entry => entry.name), ['국어', '수학', '바른 생활', '슬기로운 생활', '즐거운 생활', '창의적 체험활동'], '1·2학년은 통합교과');
+assert.ok(subjectsFor(5).some(entry => entry.name === '실과') && !subjectsFor(4).some(entry => entry.name === '실과'), '실과는 5·6학년만');
+const mine = starterPlan({schoolName: '제주시험초', className: '3학년 2반', grade: 3, useSampleTimetable: false});
+assert.equal(mine.sample, false);
+assert.equal(mine.templates[1].length, 0, '시간표는 비운 채 시작');
+assert.ok(mine.subjects.every(entry => entry.standard[1] === 0 && entry.standard[2] === 0), '기준시수는 학교마다 달라 비운다');
+assert.ok(HOLIDAYS_2026.some(day => day.date === '2026-05-01') && HOLIDAYS_2026.some(day => day.date === '2026-07-17'), '2026년부터 노동절·제헌절 공휴일');
+const fresh = hourStats(mine);
+assert.ok(fresh.rows.every(row => !row.hasStandard) && !fresh.total.hasStandard, '기준 없는 교과는 증감을 비교하지 않는다');
+assert.ok(fresh.warnings.some(text => text.includes('기준시수가 비어')) && fresh.warnings.some(text => text.includes('기초시간표가 비어')), '무엇을 넣어야 하는지 알려 준다');
+assert.equal(starterPlan({schoolName: 'a', className: 'b', grade: 3, useSampleTimetable: true}).templates[1].length, SAMPLE_PLAN.templates[1].length, '3·4학년은 예시 시간표로 시작할 수 있다');
+assert.equal(starterPlan({schoolName: 'a', className: 'b', grade: 5, useSampleTimetable: true}).templates[1].length, 0, '다른 학년에는 예시 시간표를 넣지 않는다');
+const filled = {...mine, days: [...mine.days, {date: '2026-07-22', kind: 'vacation' as const, name: '여름방학'}]};
+assert.ok(hourStats(filled).schoolDays.year < hourStats(mine).schoolDays.year, '방학을 넣으면 수업일수가 준다');
+assert.ok(hourStats(mine).warnings.some(text => text.includes('방학·재량휴업일')), '방학이 없으면 수업일수가 많다고 알린다');
+
+// 저장 검사: 화면이 보낸 계획을 서버가 다시 확인한다.
+assert.deepEqual(planInput(JSON.parse(JSON.stringify(mine))), mine, '시작 계획은 그대로 통과');
+assert.equal(planInput({...SAMPLE_PLAN}).sample, false, '저장되는 계획은 예시 표시를 달 수 없다');
+const bad = (patch: Record<string, unknown>, why: string) => assert.throws(() => planInput({...mine, ...patch}), PlanError, why);
+bad({templates: {1: [{weekday: 1, period: 1, subject: 'kor'}, {weekday: 1, period: 1, subject: 'mat'}], 2: []}}, '같은 칸에 두 과목');
+bad({templates: {1: [{weekday: 1, period: 1, subject: 'zzz'}], 2: []}}, '없는 교과');
+bad({templates: {1: [{weekday: 6, period: 1, subject: 'kor'}], 2: []}}, '토요일 칸');
+bad({templates: {1: [{weekday: 1, period: 9, subject: 'kor'}], 2: []}}, '하루 교시 수를 넘는 칸');
+bad({semester2On: '2026-03-01'}, '학기 순서');
+bad({days: [{date: '2025-12-01', kind: 'holiday', name: '밖'}]}, '학년도 밖 날짜');
+bad({days: [{date: '2026-04-01', kind: 'holiday', name: 'a'}, {date: '2026-04-01', kind: 'off', name: 'b'}]}, '하루에 일정 둘');
+bad({days: [{date: '2026-02-30', kind: 'holiday', name: '없는 날'}]}, '없는 날짜');
+bad({className: ''}, '빈 학급 이름');
+bad({subjects: mine.subjects.map(entry => entry.key === 'kor' ? {...entry, standard: {1: -1, 2: 0}} : entry)}, '음수 기준시수');
+bad({subjects: [...mine.subjects, mine.subjects[0]]}, '같은 교과 두 번');
+
+// 변경 요약: 무엇이 바뀌었는지 한 줄(재구성 내역의 연료).
+const edited = {...setSlot(mine, 1, 1, 1, 'kor'), subjects: mine.subjects.map(entry => entry.key === 'kor' ? {...entry, standard: {1: 102, 2: 102}} : entry), days: filled.days};
+assert.equal(changeSummary(mine, edited), '1학기 기초시간표 1칸 · 기준시수 1개 교과 · 학사일정 1건');
+assert.equal(changeSummary(mine, mine), '', '바뀐 것이 없으면 기록하지 않는다');
+assert.equal(changeSummary(mine, {...mine, className: '3학년 3반'}), '반 정보');
 
 console.log('curriculum tests passed');

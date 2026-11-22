@@ -15,7 +15,7 @@ const DATE = {type: 'string', description: 'YYYY-MM-DD (Asia/Seoul). 비우면 �
 const SAMPLE_NOTE = '지금은 시험용 예시 학급(예시초등학교 3학년 4반) 자료예요. 선생님 반의 실제 자료가 아니라고 함께 말해 주세요.';
 export const CURRICULUM_TOOLS: McpTool[] = [
   {name: 'find_schoolmaster_feature', scope: 'workspace:read', description: '스쿨마스터에서 쓰던 기능(예: 연간시수 자동맞추기, 주간학습 높이자동조정, 나이스 올리기)을 모두의 교실 교육과정 메뉴의 어디에서 하는지 찾습니다. 지금 되는지, 모두의 교실 다른 메뉴에 있는지, 몇 단계에 만들 예정인지와 메뉴 주소를 돌려줍니다.', inputSchema: {type: 'object', properties: {query: {type: 'string', minLength: 1, maxLength: 60, description: '기능 이름이나 하고 싶은 일'}}, required: ['query'], additionalProperties: false}},
-  {name: 'get_curriculum_hours', scope: 'workspace:read', description: '연간 시수 통계표: 교과별 1·2학기 편성시수, 학교 기준시수, 증감과 수업일수, 기준과 어긋난 교과를 돌려줍니다. 계산은 서버가 하며 직접 더하거나 고치지 말고 그대로 전합니다.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
+  {name: 'get_curriculum_hours', scope: 'workspace:read', description: '연간 시수 통계표: 교과별 1·2학기 편성시수, 학교 기준시수, 증감과 수업일수, 기준과 어긋난 교과를 돌려줍니다. 기준시수를 아직 넣지 않은 교과는 standard·diff가 null이며 비교하지 말고 "기준시수를 넣어 주세요"라고 안내합니다. 계산은 서버가 하며 직접 더하거나 고치지 말고 그대로 전합니다.', inputSchema: {type: 'object', properties: {}, additionalProperties: false}},
   {name: 'get_curriculum_week', scope: 'workspace:read', description: '한 주(월~금)의 시간표와 교시별 교과·단원·차시, 행사·휴업일, 교과별 진도율을 돌려줍니다. 주간학습 안내와 "오늘 몇 교시 뭐야"에 씁니다.', inputSchema: {type: 'object', properties: {date: DATE}, additionalProperties: false}},
   {name: 'make_curriculum_file', scope: 'workspace:read', description: `엑셀 파일을 만들어 내려받기 링크를 돌려줍니다. kind: hours(${FILE_LABELS.hours}), progress(${FILE_LABELS.progress}, 1·2학기), weekly(${FILE_LABELS.weekly}, date가 있는 주). 자료를 바꾸지 않으므로 확인 카드 없이 바로 링크를 전합니다.`, inputSchema: {type: 'object', properties: {kind: {type: 'string', enum: [...FILE_KINDS]}, date: DATE}, required: ['kind'], additionalProperties: false}},
 ];
@@ -43,7 +43,7 @@ export async function callCurriculumTool(name: string, args: Record<string, unkn
       return {query: args.query, found: found.map(featureView), total_features: FEATURES.length, hint: found.length ? null : '비슷한 말로 다시 찾거나 교육과정 메뉴 검색창(Ctrl+K)을 안내합니다.'};
     }
     case 'get_curriculum_hours': {
-      const stats = hourStats(plan), compact = (row: typeof stats.total) => ({subject: row.name, planned: row.planned, standard: row.standard, diff: row.diff, out_of_range: row.outOfRange});
+      const stats = hourStats(plan), compact = (row: typeof stats.total) => ({subject: row.name, planned: row.planned, standard: row.hasStandard ? row.standard : null, diff: row.hasStandard ? row.diff : null, out_of_range: row.outOfRange});
       return {...base, rows: stats.rows.map(compact), total: compact(stats.total), school_days: stats.schoolDays, days_required: stats.daysRequired, warnings: stats.warnings, link: '/teacher/curriculum?tab=curriculum&section=1.2.4', file: '/teacher/curriculum?download=hours'};
     }
     case 'get_curriculum_week': {

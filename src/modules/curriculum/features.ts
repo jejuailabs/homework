@@ -53,7 +53,7 @@ const SECTION_NAMES: Record<string, string> = {
 };
 
 /** 화면이 이미 있는 절: 메뉴에서 누르면 그 화면이 열린다. */
-export const SECTION_PAGES: Record<string, string> = {'1.1.5': 'calendar', '1.2.3': 'template', '1.2.4': 'hours', '1.2.5': 'progress', '1.2.9': 'weekly'};
+export const SECTION_PAGES: Record<string, string> = {'1.1.3': 'info', '1.1.4': 'hours', '1.1.5': 'calendar', '1.2.3': 'template', '1.2.4': 'hours', '1.2.5': 'progress', '1.2.9': 'weekly'};
 
 export const SECTIONS: Section[] = STEPS.flatMap(step => step.sections.map(key => ({key, name: SECTION_NAMES[key], tab: step.tab, step: step.key, page: SECTION_PAGES[key]})));
 
@@ -67,7 +67,7 @@ export const CORE_IDS = new Set([
 
 /** 지금 이 화면에서 동작하는 기능과, 그 일을 베리가 맡는 도구. */
 export const LIVE: Record<string, string | null> = {
-  '1.1.5-03': 'get_curriculum_hours', '1.2.3-01': 'get_curriculum_week', '1.2.3-02': null, '1.2.3-03': null, '1.2.4-01': 'get_curriculum_hours',
+  '1.1.4-03': 'get_curriculum_hours', '1.1.5-02': null, '1.1.5-03': 'get_curriculum_hours', '1.1.5-04': null, '1.2.3-01': 'get_curriculum_week', '1.2.3-02': null, '1.2.3-03': null, '1.2.4-01': 'get_curriculum_hours',
   '1.2.4-09': 'get_curriculum_hours', '1.2.5-01': 'make_curriculum_file', '1.2.9-01': 'get_curriculum_week',
   'X-01': null, 'X-11': 'find_schoolmaster_feature', 'X-14': 'find_schoolmaster_feature', 'X-15': null,
 };
