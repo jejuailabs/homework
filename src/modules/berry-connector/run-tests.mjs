@@ -9,6 +9,7 @@ const abilities = moduleUrl(compile('../berry-panel/abilities.ts').replace("'@/m
 await import(moduleUrl(compile('../berry-panel/abilities.test.ts').replace("'../berry-connector/types'", JSON.stringify(types)).replace("'./abilities'", JSON.stringify(abilities))));
 await import(moduleUrl(compile('../berry-panel/links.test.ts').replace("'./links'", JSON.stringify(moduleUrl(compile('../berry-panel/links.ts'))))));
 await import(moduleUrl(compile('../berry-panel/greetings.test.ts').replace("'./greetings'", JSON.stringify(moduleUrl(compile('../berry-panel/greetings.ts'))))));
+await import(moduleUrl(compile('../berry-panel/usage-meter.test.ts').replace("'./usage-meter'", JSON.stringify(moduleUrl(compile('../berry-panel/usage-meter.ts'))))));
 await import(moduleUrl(compile('../berry-panel/dictation.test.ts').replace("'./dictation'", JSON.stringify(moduleUrl(compile('../berry-panel/dictation.ts'))))));
 await import(moduleUrl(compile('./card-progress.test.ts').replace("'./card-progress'", JSON.stringify(moduleUrl(compile('./card-progress.ts'))))));
 await import(moduleUrl(compile('./card-settings.test.ts').replace("'./card-settings'", JSON.stringify(moduleUrl(compile('./card-settings.ts').replace("'./policy'", JSON.stringify(policy)))))));

@@ -4,7 +4,7 @@ import {FieldValue, Timestamp} from 'firebase-admin/firestore';
 import {db} from './admin';
 import {assertOrigin, requireTeacher} from './auth';
 import {ApiError,id} from './policy';
-import {aiProviderUsage,aiUsageHour,type AiProviderUsage,type AiUsageObserver} from '../ai-usage';
+import {BERRY_TOOL,aiProviderUsage,aiUsageHour,type AiProviderUsage,type AiUsageObserver} from '../ai-usage';
 import {citedAiOutput, type AiCitation} from '../ai-citations';
 import {artworkAuthorNames, artworkAuthorRequest} from './artwork-author-policy';
 import {AI_PROMPT_VERSION, AiError, aiWindows, assertAiQuota, buildAiRequest, completedAiText, configuredLimit, providerFailure, readBoundedJson, validateAiInput, type AiInput, type AiLimits} from './ai-policy';
@@ -137,6 +137,11 @@ export async function getAiOperations() {
 export async function recordExternalCall(uid:string,tool:string,model:string,ok:boolean,durationMs:number){
   const now=new Date().toISOString();
   await db().collection('aiJobs').add({actorUid:uid,classId:'',meteringVersion:2,tool,model,status:ok?'done':'failed',createdAt:now,completedAt:now,durationMs,usage:aiProviderUsage({},model)});
+}
+/** One Berry chat turn, timed by the ourclass proxy from sending the question to the end of the answer stream. */
+export async function recordBerryTurn(uid:string,turn:{ok:boolean;model:string;providerUsage:unknown;toolCalls:number;surface:string},startedAt:number){
+  const completedAt=Date.now();
+  await db().collection('aiJobs').add({actorUid:uid,classId:'',meteringVersion:2,tool:BERRY_TOOL,model:turn.model,status:turn.ok?'done':'failed',createdAt:new Date(startedAt).toISOString(),startedAt,completedAt:new Date(completedAt).toISOString(),durationMs:completedAt-startedAt,usage:aiProviderUsage(turn.providerUsage,turn.model),berryToolCalls:turn.toolCalls,surface:turn.surface});
 }
 /** One counter per person, hour and feature for answers served from a shared store. */
 export async function recordAiReuse(uid:string,classId:string,tool:string,model:string,characters:number){

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {aiProviderUsage,aiUsageHour,aiUsageHourRows,aiUsagePeriod,aiUsageTeacher,summarizeAiUsage,summarizeAiUsageHours,summarizeTeacherTokens} from './ai-usage';
+import {aiProviderUsage,aiUsageHour,aiUsageHourRows,aiUsagePeriod,aiUsageTeacher,summarizeAiUsage,summarizeAiUsageHours,summarizeTeacherTokens,splitBerryUsage} from './ai-usage';
 test('AI usage retains only metering metadata and prices cached input plus actual search calls',()=>{
   const usage=aiProviderUsage({usage:{input_tokens:10000,output_tokens:1000,total_tokens:11000,input_tokens_details:{cached_tokens:2000}},service_tier:'default',output:[{type:'web_search_call'},{type:'web_search_call'},{type:'message',content:'PRIVATE TEXT'}],image:'PRIVATE PHOTO'},'gpt-6-luna');
   assert.equal(usage.inputTokens,10000);assert.equal(usage.cachedInputTokens,2000);assert.equal(usage.webSearchCalls,2);assert(Math.abs(usage.estimatedUsd!-.02132)<1e-10);assert(!JSON.stringify(usage).includes('PRIVATE'));
@@ -54,4 +54,10 @@ test('voice characters and free reuse are totalled per teacher, class, feature a
   assert.deepEqual(hours.map(row=>row.hour),['2026-11-09T11','2026-11-09T10']);assert.equal(hours[1].requests,1);assert.equal(hours[1].characters,1000);assert.equal(hours[1].reusedRequests,3);assert.ok(Math.abs(hours[1].estimatedUsd-.016)<1e-9);
   const rows=aiUsageHourRows(jobs,hits);
   assert.equal(rows.length,2);assert.equal(rows[1].uid,'teacherA');assert.equal(rows[1].tool,'tts-cards');assert.equal(rows[1].model,'google-tts-neural2');assert.equal(rows[1].reusedCharacters,300);
+});
+test('processing time sums recorded durations and Berry turns are split from other features',()=>{
+  const jobs=[{actorUid:'a',tool:'berry',status:'done',createdAt:'2026-11-22T01:00:00Z',durationMs:8000},{actorUid:'a',tool:'berry',status:'failed',createdAt:'2026-11-22T01:05:00Z',durationMs:2000},{actorUid:'a',tool:'resource',status:'done',createdAt:'2026-11-22T01:10:00Z',durationMs:3000},{actorUid:'b',tool:'resource',status:'done',createdAt:'2026-11-22T02:00:00Z'}];
+  const total=summarizeAiUsage(jobs).total;assert.equal(total.durationMs,13000);assert.equal(total.timedCalls,3);assert.equal(total.berryRequests,2);assert.equal(total.berryDurationMs,10000);
+  const split=splitBerryUsage(jobs);assert.equal(split.berry.requests,2);assert.equal(split.berry.failed,1);assert.equal(split.others.requests,2);assert.equal(split.others.timedCalls,1);
+  assert.equal(summarizeAiUsage(jobs).teachers.find(row=>row.uid==='a')!.berryRequests,2);
 });

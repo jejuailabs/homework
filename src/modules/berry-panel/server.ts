@@ -1,5 +1,5 @@
 import 'server-only';
-import {NextResponse} from 'next/server';
+import {NextResponse, after} from 'next/server';
 import {assertOrigin, getContext} from '@/lib/server/auth';
 import {ApiError} from '@/lib/server/policy';
 import {access} from '@/modules/berry-connector/oauth';
@@ -7,6 +7,8 @@ import {connectorAllowed} from '@/modules/berry-connector/policy';
 import {appContext, endAppSession, issueAppCode, redeemAppCode} from './app-session';
 import {menuFlags} from '@/modules/berry-connector/classroom-tools';
 import {notebookAvailableFor} from '@/modules/teacher-notebook/server';
+import {recordBerryTurn} from '@/lib/server/ai';
+import {BERRY_DEFAULT_MODEL, meterBerryStream, type BerryTurnResult} from './usage-meter';
 
 /**
  * Same-origin proxy from the teacher's browser to the Berry brain. The session cookie stays on ourclass; the brain sees
@@ -79,12 +81,18 @@ export async function handleBerry(request: Request, segments: string[]) {
       // The panel's first hello of the day, so Berry can pick up a reply to it; a short written line, never teacher data.
       const greeting = typeof given.greeting === 'string' ? given.greeting.slice(0, 300) : undefined;
       const context = route || greeting ? {...(route ? {route} : {}), ...(greeting ? {greeting} : {})} : undefined;
+      const startedAt = Date.now();
       const res = await call(ctx.uid, '/chat', {body: {text, surface, conversation_id: typeof data.conversation_id === 'string' && ID.test(data.conversation_id) ? data.conversation_id : undefined, context}, timeout: 58_000})
         .catch(() => null);
       if (!res) return json({error: '베리에 연결하지 못했어요.', code: 'BERRY_UNREACHABLE'}, 502);
       if (!res.ok || !res.body) return relay(Promise.resolve(res));
-      // Server-sent events stream straight through; nothing is buffered or stored here.
-      return new Response(res.body, {headers: {'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'}});
+      // Server-sent events stream straight through; only the closing usage counts are read, for the admin API usage report.
+      let ended!: (result: BerryTurnResult) => void;
+      const turn = new Promise<BerryTurnResult>(resolve => {ended = resolve;});
+      // A stream that never closes still gets a (failed) record once the route's time is up.
+      const limit = setTimeout(() => ended({ok: false, model: BERRY_DEFAULT_MODEL, providerUsage: {}, toolCalls: 0}), 59_000);
+      after(() => turn.then(result => {clearTimeout(limit); return recordBerryTurn(ctx.uid, {...result, surface}, startedAt);}).catch(() => console.error('Berry usage record failed')));
+      return new Response(meterBerryStream(res.body, ended), {headers: {'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no'}});
     }
     // Today's briefing, made by the brain on the first open of the day (no 07:10 job while there is no phone push).
     if (head === 'briefing' && method === 'GET') return relay(call(ctx.uid, '/briefing/today', {timeout: 30_000}));
