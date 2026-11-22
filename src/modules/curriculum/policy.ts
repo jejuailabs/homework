@@ -23,7 +23,7 @@ export class PlanError extends Error {constructor(message: string) {super(messag
 const KINDS = ['holiday', 'vacation', 'event', 'off'] as const;
 const TONES = ['coral', 'apricot', 'rose', 'sky', 'mint', 'lime', 'lavender', 'pink', 'teal', 'sand'];
 const DATE = /^\d{4}-\d{2}-\d{2}$/, KEY = /^[a-z][a-z0-9_]{0,15}$/;
-export const PLAN_LIMITS = {subjects: 20, units: 40, days: 400, nameLength: 40, periods: 10};
+export const PLAN_LIMITS = {subjects: 20, units: 40, days: 400, nameLength: 40, periods: 10, overrides: 600};
 type Raw = Record<string, unknown>;
 const obj = (value: unknown, label: string): Raw => {if (!value || typeof value !== 'object' || Array.isArray(value)) throw new PlanError(`${label}을(를) 확인해 주세요.`); return value as Raw;};
 const str = (value: unknown, label: string, max = PLAN_LIMITS.nameLength, optional = false) => {
@@ -79,7 +79,18 @@ export function planInput(value: unknown): import('./engine').Plan {
     const note = {date: on, kind: day.kind as typeof KINDS[number], name: str(day.name, '일정 이름', 30)};
     return day.periods === undefined || day.periods === null ? note : {...note, periods: int(day.periods, '행사일 교시', 1, periodsPerDay)};
   }).sort((a, b) => a.date.localeCompare(b.date));
+  const seenChanges = new Set<string>();
+  const overrides = (raw.overrides === undefined ? [] : list(raw.overrides, '하루 시간표 바꾸기', PLAN_LIMITS.overrides)).map(item => {
+    const change = obj(item, '하루 시간표 바꾸기'), on = date(change.date, '바꾸는 날'), period = int(change.period, '바꾸는 교시', 1, periodsPerDay);
+    if (on < startsOn || on > endsOn) throw new PlanError(`${on}은(는) 학년도 밖이에요.`);
+    if (seenChanges.has(`${on}:${period}`)) throw new PlanError(`${on} ${period}교시를 두 번 바꿨어요.`);
+    seenChanges.add(`${on}:${period}`);
+    if (change.subject !== null && (typeof change.subject !== 'string' || !keys.has(change.subject))) throw new PlanError('바꾸는 과목을 확인해 주세요.');
+    const value = {date: on, period, subject: change.subject as string | null};
+    return change.note === undefined || change.note === '' ? value : {...value, note: str(change.note, '바꾼 이유', 30)};
+  }).sort((a, b) => a.date.localeCompare(b.date) || a.period - b.period);
   return {
+    overrides,
     sample: false, schoolName: str(raw.schoolName, '학교 이름'), className: str(raw.className, '학급 이름', 20), grade: int(raw.grade, '학년', 1, 6), year: int(raw.year, '학년도', 2020, 2100),
     startsOn, semester2On, endsOn, periodsPerDay, subjects, templates: {1: slotList(1), 2: slotList(2)}, days, daysRequired: int(raw.daysRequired, '법정 수업일수', 0, 250),
   };

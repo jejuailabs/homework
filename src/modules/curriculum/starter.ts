@@ -41,6 +41,6 @@ export function starterPlan(input: StarterInput): Plan {
   return {
     sample: false, schoolName: input.schoolName, className: input.className, grade: input.grade, year: 2026,
     startsOn: '2026-03-02', semester2On: '2026-08-17', endsOn: '2027-02-28', periodsPerDay: 6,
-    subjects, templates: {1: template, 2: template.map(slot => ({...slot}))}, days: HOLIDAYS_2026.map(day => ({...day})), daysRequired: 190,
+    subjects, templates: {1: template, 2: template.map(slot => ({...slot}))}, days: HOLIDAYS_2026.map(day => ({...day})), daysRequired: 190, overrides: [],
   };
 }

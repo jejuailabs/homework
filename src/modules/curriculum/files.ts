@@ -1,10 +1,11 @@
-import {WEEKDAYS, expand, hourStats, progressBook, shortDate, week, weekStartOf, type HourRow, type Plan} from './engine';
+import {WEEKDAYS, causes, expand, hourStats, progressBook, shortDate, week, weekStartOf, type HourRow, type Plan} from './engine';
+import {RULE_SOURCE, UNVERIFIED, nationalChecks} from './rules';
 import {buildXlsx, type Cell, type Sheet} from './xlsx';
 
 /** 베리와 화면 버튼이 같은 파일을 만든다. 새 종류는 여기에만 더한다. */
-export const FILE_KINDS = ['hours', 'progress', 'weekly'] as const;
+export const FILE_KINDS = ['hours', 'check', 'progress', 'weekly'] as const;
 export type FileKind = typeof FILE_KINDS[number];
-export const FILE_LABELS: Record<FileKind, string> = {hours: '연간 시수 통계표', progress: '교과 진도표', weekly: '주간학습 안내'};
+export const FILE_LABELS: Record<FileKind, string> = {hours: '연간 시수 통계표', check: '수업시수 점검표', progress: '교과 진도표', weekly: '주간학습 안내'};
 
 const diffCell = (value: number): Cell => ({value, style: value < 0 ? 'short' : value > 0 ? 'over' : 'even'});
 const head = (...labels: string[]): Cell[] => labels.map(value => ({value, style: 'head'}));
@@ -24,6 +25,23 @@ function hoursSheet(plan: Plan): Sheet {
     ...(stats.warnings.length ? stats.warnings.map(text => ['확인할 것', text] as Cell[]) : [['확인할 것', '기준과 어긋난 교과가 없어요.'] as Cell[]]),
     [{value: '증감: 빨강은 기준보다 모자람, 파랑은 기준보다 많음.', style: 'note'}],
   ]};
+}
+
+/** 수업시수 점검표: 국가 규칙 판정 + 교과별로 시수가 바뀐 날(원인) + 아직 확인하지 못한 규칙. 교육청 점검·학년 협의용. */
+function checkSheets(plan: Plan): Sheet[] {
+  const stats = hourStats(plan), checks = nationalChecks(plan, stats), why = causes(plan);
+  const verdict = {ok: '맞음', short: '모자람', over: '넘음', info: '참고'} as const;
+  const judged: Sheet = {name: '규칙 점검', widths: [30, 10, 70], rows: [
+    ...title(plan, '수업시수 점검표'), head('항목', '판정', '내용'),
+    ...checks.map(check => [check.title, {value: verdict[check.verdict], style: check.verdict === 'short' ? 'short' : check.verdict === 'over' ? 'over' : 'even'}, check.detail] as Cell[]),
+    [], [{value: `근거: ${RULE_SOURCE.title} (${RULE_SOURCE.via}, ${RULE_SOURCE.checkedOn} 확인)`, style: 'note'}],
+    [{value: `아직 확인하지 못한 규칙(판정에 쓰지 않음): ${UNVERIFIED.join(', ')}`, style: 'note'}],
+  ]};
+  const traced: Sheet = {name: '시수 변동 원인', widths: [14, 12, 10, 30, 8], rows: [
+    ...title(plan, '교과별 시수 변동 원인'), head('날짜', '교과', '종류', '이유', '증감'),
+    ...plan.subjects.flatMap(subject => (why.get(subject.key) ?? []).map(cause => [shortDate(cause.date), subject.name, {holiday: '공휴일', off: '재량휴업', event: '행사 단축', override: '시간표 바꾸기'}[cause.kind], cause.name, diffCell(cause.delta)] as Cell[])),
+  ]};
+  return [judged, traced];
 }
 
 function progressSheets(plan: Plan): Sheet[] {
@@ -59,6 +77,6 @@ export function fileName(plan: Plan, kind: FileKind, date?: string) {
 
 /** kind에 맞는 엑셀 바이트. weekly는 date가 있는 주(없으면 학년도 첫 주). */
 export function buildFile(plan: Plan, kind: FileKind, date?: string) {
-  const sheets = kind === 'hours' ? [hoursSheet(plan)] : kind === 'progress' ? progressSheets(plan) : [weeklySheet(plan, date ?? plan.startsOn)];
+  const sheets = kind === 'hours' ? [hoursSheet(plan)] : kind === 'check' ? checkSheets(plan) : kind === 'progress' ? progressSheets(plan) : [weeklySheet(plan, date ?? plan.startsOn)];
   return {name: fileName(plan, kind, date), bytes: buildXlsx(sheets), rows: sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0)};
 }

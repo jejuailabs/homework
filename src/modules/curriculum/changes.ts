@@ -15,6 +15,10 @@ export function changeSummary(before: Plan, after: Plan) {
   const oldDays = new Set(before.days.map(dayKey)), newDays = new Set(after.days.map(dayKey));
   const dayChanges = [...newDays].filter(entry => !oldDays.has(entry)).length + [...oldDays].filter(entry => !newDays.has(entry)).length;
   if (dayChanges) parts.push(`학사일정 ${dayChanges}건`);
+  const changeKey = (change: NonNullable<Plan['overrides']>[number]) => `${change.date}:${change.period}:${change.subject ?? '-'}`;
+  const oldChanges = new Set((before.overrides ?? []).map(changeKey)), newChanges = new Set((after.overrides ?? []).map(changeKey));
+  const swapped = [...newChanges].filter(entry => !oldChanges.has(entry)).length + [...oldChanges].filter(entry => !newChanges.has(entry)).length;
+  if (swapped) parts.push(`하루 시간표 바꾸기 ${swapped}건`);
   if (before.className !== after.className || before.schoolName !== after.schoolName || before.grade !== after.grade || before.startsOn !== after.startsOn || before.semester2On !== after.semester2On || before.endsOn !== after.endsOn || before.periodsPerDay !== after.periodsPerDay || before.daysRequired !== after.daysRequired) parts.push('반 정보');
   return parts.join(' · ');
 }

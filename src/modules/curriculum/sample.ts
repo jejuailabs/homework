@@ -70,5 +70,5 @@ const DAYS: DayNote[] = [
 export const SAMPLE_PLAN: Plan = {
   sample: true, schoolName: '예시초등학교', className: '3학년 4반', grade: 3, year: 2026,
   startsOn: '2026-03-02', semester2On: '2026-08-18', endsOn: '2027-02-28', periodsPerDay: 6,
-  subjects: SUBJECTS, templates: {1: template, 2: template}, days: DAYS, daysRequired: 190,
+  subjects: SUBJECTS, templates: {1: template, 2: template}, days: DAYS, daysRequired: 190, overrides: [],
 };

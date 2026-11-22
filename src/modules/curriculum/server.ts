@@ -1,11 +1,13 @@
 import 'server-only';
 import {NextResponse} from 'next/server';
-import {db} from '@/lib/server/admin';
+import {bucket, db} from '@/lib/server/admin';
 import {assertOrigin, getContext, type Context} from '@/lib/server/auth';
 import {ApiError} from '@/lib/server/policy';
 import {PlanError, curriculumAccess, curriculumAllowed, planInput, type CurriculumAccess} from './policy';
 import {starterPlan} from './starter';
 import {changeSummary} from './changes';
+import {TableError, gridsOf} from './tables';
+import {interpret} from './readers';
 import {SAMPLE_PLAN} from './sample';
 import type {Plan} from './engine';
 
@@ -18,6 +20,7 @@ const json = (value: unknown, status = 200) => NextResponse.json(value, {status,
 const accessRef = () => db().doc('featureAccess/curriculum');
 const planRef = (uid: string) => db().doc(`curriculumPlans/${uid}`);
 const MAX_BODY = 200_000;
+const safeSourceId = (value: string) => {if (!/^[A-Za-z0-9]{10,40}$/.test(value)) throw new ApiError(400, '자료 번호를 확인해 주세요.'); return value;};
 
 let cached: {at: number; value: CurriculumAccess} | undefined;
 async function access(): Promise<CurriculumAccess> {
@@ -79,6 +82,66 @@ async function savePlan(ctx: Context, input: Record<string, unknown>) {
   });
 }
 
+/** 올린 자료: 파일은 Storage에 브라우저가 바로 올리고(Vercel을 거치지 않음), 서버는 다시 내려받아 표를 읽는다. */
+export const SOURCE_ROLES = ['standards', 'calendar', 'timetable', 'events', 'assignments', 'guideline', 'progress', 'themes', 'previous'] as const;
+export type SourceRole = typeof SOURCE_ROLES[number];
+const SOURCE_BYTES = 20 * 1024 * 1024, SOURCE_LIMIT = 40, UPLOAD_WINDOW = 15 * 60_000;
+const sourcesOf = (uid: string) => planRef(uid).collection('sources');
+const sourcePath = (uid: string, id: string) => `curriculum-sources/${uid}/${id}`;
+type SourceDoc = {name: string; role: SourceRole; size: number; path: string; status: 'uploading' | 'uploaded' | 'read' | 'failed'; createdAt: string; readAt?: string; error?: string; findings?: unknown};
+const sourceView = (id: string, value: SourceDoc) => ({id, name: value.name, role: value.role, size: value.size, status: value.status, createdAt: value.createdAt, readAt: value.readAt ?? null, error: value.error ?? null, findings: value.findings ?? null});
+
+async function createSource(ctx: Context, input: Record<string, unknown>) {
+  const name = typeof input.name === 'string' ? input.name.trim().slice(0, 120) : '', size = typeof input.size === 'number' ? input.size : 0;
+  const role = (SOURCE_ROLES as readonly unknown[]).includes(input.role) ? input.role as SourceRole : 'standards';
+  if (!name) throw new ApiError(400, '파일 이름을 확인해 주세요.');
+  if (!Number.isInteger(size) || size < 1 || size > SOURCE_BYTES) throw new ApiError(400, '파일은 20MB까지 올릴 수 있어요.');
+  if (!/\.(xlsx|hwpx|hwp|pdf|png|jpe?g)$/i.test(name)) throw new ApiError(400, '엑셀(XLSX)·한글(HWPX/HWP)·PDF·사진 파일만 올릴 수 있어요.');
+  if (!(await planRef(ctx.uid).get()).exists) throw new ApiError(404, '우리 반을 먼저 시작해 주세요.');
+  if ((await sourcesOf(ctx.uid).count().get()).data().count >= SOURCE_LIMIT) throw new ApiError(400, `자료는 ${SOURCE_LIMIT}개까지 올릴 수 있어요.`);
+  const ref = sourcesOf(ctx.uid).doc(), path = sourcePath(ctx.uid, ref.id);
+  await ref.set({name, role, size, path, status: 'uploading', createdAt: new Date().toISOString()} satisfies SourceDoc);
+  const [uploadUrl] = await bucket().file(path).getSignedUrl({version: 'v4', action: 'write', expires: Date.now() + UPLOAD_WINDOW, contentType: 'application/octet-stream', extensionHeaders: {'content-length': String(size)}});
+  return {id: ref.id, uploadUrl, headers: {'Content-Type': 'application/octet-stream'}};
+}
+
+/** 올린 파일을 읽어 기준시수·시간표·학사일정 후보를 남긴다. 저장(계획 반영)은 화면의 확인 카드에서 한다. */
+async function readSource(ctx: Context, id: string) {
+  const ref = sourcesOf(ctx.uid).doc(id), snap = await ref.get();
+  if (!snap.exists) throw new ApiError(404, '자료를 찾을 수 없어요.');
+  const value = snap.data() as SourceDoc, plan = (await stored(ctx.uid))?.plan;
+  if (!plan) throw new ApiError(404, '우리 반을 먼저 시작해 주세요.');
+  let bytes: Uint8Array;
+  try {const [data] = await bucket().file(value.path).download(); bytes = new Uint8Array(data);}
+  catch {throw new ApiError(409, '파일이 아직 다 올라가지 않았어요. 잠시 뒤 다시 눌러 주세요.');}
+  if (bytes.length > SOURCE_BYTES) throw new ApiError(400, '파일은 20MB까지 읽을 수 있어요.');
+  const readAt = new Date().toISOString();
+  try {
+    // Firestore는 undefined 값을 받지 않는다: JSON으로 한 번 걸러 빈 칸을 없앤다.
+    const findings = JSON.parse(JSON.stringify(interpret(gridsOf(value.name, bytes), plan)));
+    await ref.update({status: 'read', readAt, findings, error: null});
+    return sourceView(id, {...value, status: 'read', readAt, findings});
+  } catch (error) {
+    const message = error instanceof TableError ? error.message : '파일을 읽지 못했어요. 다른 형식(엑셀·HWPX)으로 저장해 다시 올려 주세요.';
+    if (!(error instanceof TableError)) console.error('Curriculum source read failed', (error as Error).name);
+    await ref.update({status: 'failed', readAt, error: message});
+    return sourceView(id, {...value, status: 'failed', readAt, error: message});
+  }
+}
+
+async function deleteSource(ctx: Context, id: string) {
+  const ref = sourcesOf(ctx.uid).doc(id), snap = await ref.get();
+  if (!snap.exists) return {deleted: false};
+  await bucket().file((snap.data() as SourceDoc).path).delete().catch(() => {});
+  await ref.delete();
+  return {deleted: true};
+}
+
+export async function listSources(uid: string) {
+  const snap = await sourcesOf(uid).orderBy('createdAt', 'desc').limit(SOURCE_LIMIT).get();
+  return snap.docs.map(doc => sourceView(doc.id, doc.data() as SourceDoc));
+}
+
 export async function handleCurriculum(request: Request, segments: string[]) {
   try {
     const path = segments.join('/'), method = request.method;
@@ -92,6 +155,10 @@ export async function handleCurriculum(request: Request, segments: string[]) {
     }
     if (path === 'plan' && method === 'POST') return json(await startPlan(ctx, await body(request)), 201);
     if (path === 'plan' && method === 'PUT') return json(await savePlan(ctx, await body(request)));
+    if (path === 'sources' && method === 'GET') return json({sources: await listSources(ctx.uid)});
+    if (path === 'sources' && method === 'POST') return json(await createSource(ctx, await body(request)), 201);
+    if (segments[0] === 'sources' && segments.length === 3 && method === 'POST' && segments[2] === 'read') return json(await readSource(ctx, safeSourceId(segments[1])));
+    if (segments[0] === 'sources' && segments.length === 3 && method === 'POST' && segments[2] === 'delete') return json(await deleteSource(ctx, safeSourceId(segments[1])));
     if (path === 'changes' && method === 'GET') {
       const snap = await planRef(ctx.uid).collection('changes').orderBy('at', 'desc').limit(30).get();
       return json({changes: snap.docs.map(doc => doc.data())});

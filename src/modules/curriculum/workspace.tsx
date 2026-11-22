@@ -8,6 +8,7 @@ import {buildFile, type FileKind} from './files';
 import {SAMPLE_PLAN} from './sample';
 import {SECTION_VIEWS, WeeklyView, toneOf, type SectionViewKey, type ViewProps} from './views';
 import {StartDialog, type StartInput} from './editors';
+import HoursCenter from './hours-center';
 import {starterPlan} from './starter';
 import './styles.css';
 
@@ -16,7 +17,7 @@ import './styles.css';
  * 기능 229개는 모두 메뉴에 자리가 있고, 각 탭 맨 위에 핵심 기능 카드가 먼저 보인다.
  * preview: 로그인 없는 로컬 시안 페이지(/curriculum-preview). 서버를 부르지 않는다.
  */
-type View = {tab: 'home' | TabKey; section: string | null; date: string | null};
+type View = {tab: 'home' | 'hours' | TabKey; section: string | null; date: string | null};
 type SaveState = {state: 'idle' | 'saving' | 'saved' | 'error' | 'stale'; message?: string; at?: string};
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const seoulToday = () => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
@@ -25,7 +26,7 @@ const STATUS_TONE: Record<Feature['status'], string> = {live: 'is-live', elsewhe
 
 function readView(): View {
   const params = new URLSearchParams(window.location.search), tab = params.get('tab');
-  return {tab: TABS.some(entry => entry.key === tab) ? tab as TabKey : 'home', section: params.get('section'), date: params.get('date')};
+  return {tab: tab === 'hours' ? 'hours' : TABS.some(entry => entry.key === tab) ? tab as TabKey : 'home', section: params.get('section'), date: params.get('date')};
 }
 
 export default function CurriculumWorkspace({preview = false}: {preview?: boolean}) {
@@ -112,7 +113,7 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
     if (!available || !loaded || handled.current) return;
     handled.current = true;
     const params = new URLSearchParams(window.location.search), kind = params.get('download');
-    if (kind === 'hours' || kind === 'progress' || kind === 'weekly') {
+    if (kind === 'hours' || kind === 'check' || kind === 'progress' || kind === 'weekly') {
       download(kind, params.get('date') ?? undefined);
       params.delete('download');
       history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}`);
@@ -171,10 +172,12 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
 
     <nav className="cur-tabs" aria-label="교육과정 메뉴">
       <button className={view.tab === 'home' ? 'is-on' : ''} onClick={() => go({tab: 'home', section: null})}><Layers size={16}/>홈</button>
+      <button className={`cur-tab-hours${view.tab === 'hours' ? ' is-on' : ''}`} onClick={() => go({tab: 'hours', section: null})}><Clock3 size={16}/>수업시수 센터</button>
       {TABS.map(tab => <button key={tab.key} className={view.tab === tab.key ? 'is-on' : ''} onClick={() => go({tab: tab.key, section: null})}><span className="cur-tab-no">{tab.no}</span>{tab.name}</button>)}
     </nav>
 
-    {view.tab === 'home'
+    {view.tab === 'hours' ? <HoursCenter plan={plan} sessions={sessions} today={today} preview={preview} onPlan={setPlan} onDownload={download} askBerry={askBerry}/>
+      : view.tab === 'home'
       ? <Home plan={plan} sessions={sessions} today={today} go={go} askBerry={askBerry} download={download}/>
       : <TabView tab={view.tab} section={view.section} date={view.date} go={go} askBerry={askBerry} props={props}/>}
 
@@ -221,7 +224,7 @@ function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sess
       </article>
 
       <article className="cur-card">
-        <header><span className="cur-card-icon tone-coral"><CalendarDays size={18}/></span><div><h3>시수 현황</h3><p>학교 기준과 비교</p></div><button className="cur-link" onClick={() => go({tab: 'curriculum', section: '1.2.4'})}>통계표<ChevronRight size={15}/></button></header>
+        <header><span className="cur-card-icon tone-coral"><CalendarDays size={18}/></span><div><h3>시수 현황</h3><p>학교 기준과 비교</p></div><button className="cur-link" onClick={() => go({tab: 'hours', section: null})}>수업시수 센터<ChevronRight size={15}/></button></header>
         <div className="cur-gauge"><strong>{stats.schoolDays.year}</strong><span>/ {stats.daysRequired}일 수업</span><i><em style={{width: `${Math.min(100, Math.round(stats.schoolDays.year / stats.daysRequired * 100))}%`}}/></i></div>
         <div className="cur-diff-list">{short.map(row => <span key={row.subject} className="is-short">{row.name} {row.diff.year}</span>)}{over.map(row => <span key={row.subject} className="is-over">{row.name} +{row.diff.year}</span>)}{!short.length && !over.length && <span className="is-even">모두 기준과 같아요</span>}</div>
         <footer><button className="cur-btn is-ghost" onClick={() => download('hours')}><Download size={15}/>시수 엑셀</button></footer>
