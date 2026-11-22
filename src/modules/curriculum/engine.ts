@@ -16,7 +16,10 @@ export type Plan = {
   subjects: Subject[]; templates: {1: Slot[]; 2: Slot[]}; days: DayNote[];
   /** 학교가 정한 법정 수업일수 기준. */
   daysRequired: number;
+  /** 하루짜리 시간표 바꾸기(스쿨마스터 연간시간표의 칸 수정). subject가 null이면 그 시간 수업을 비운다. 없으면 []. */
+  overrides?: Override[];
 };
+export type Override = {date: string; period: number; subject: SubjectKey | null; note?: string};
 export type Session = {date: string; weekday: number; period: number; subject: SubjectKey; semester: 1 | 2; unit: string | null; lesson: number; lessons: number};
 /** hasStandard=false면 학교 기준시수를 아직 넣지 않은 교과: 증감을 보이지 않는다(0과 비교하면 거짓 경고가 된다). */
 export type HourRow = {subject: SubjectKey; name: string; planned: {1: number; 2: number; year: number}; standard: {1: number; 2: number; year: number}; diff: {1: number; 2: number; year: number}; outOfRange: boolean; hasStandard: boolean};
@@ -46,6 +49,17 @@ export function isSchoolDay(plan: Plan, date: string) {
   return !note || note.kind === 'event';
 }
 
+/** 그날 실제로 열리는 교시: 기초시간표에서 시작해 하루짜리 바꾸기를 덮어쓴다. */
+function daySlots(plan: Plan, date: string, semester: 1 | 2, weekday: number, limit: number) {
+  const byPeriod = new Map<number, SubjectKey>();
+  for (const slot of plan.templates[semester]) if (slot.weekday === weekday && slot.period <= limit) byPeriod.set(slot.period, slot.subject);
+  for (const change of plan.overrides ?? []) {
+    if (change.date !== date || change.period > limit) continue;
+    if (change.subject) byPeriod.set(change.period, change.subject); else byPeriod.delete(change.period);
+  }
+  return [...byPeriod.entries()].sort((a, b) => a[0] - b[0]).map(([period, subject]) => ({period, subject}));
+}
+
 /** 학년도 전체 차시. 단원은 교과별로 차시 순서대로 채운다(단원 차시가 모자라면 단원 없이 남는다). */
 export function expand(plan: Plan): Session[] {
   const sessions: Session[] = [];
@@ -53,7 +67,7 @@ export function expand(plan: Plan): Session[] {
   for (let date = plan.startsOn; date <= plan.endsOn; date = addDays(date, 1)) {
     if (!isSchoolDay(plan, date)) continue;
     const semester = semesterOf(plan, date), weekday = weekdayOf(date), limit = dayNote(plan, date)?.periods ?? plan.periodsPerDay;
-    for (const slot of plan.templates[semester].filter(entry => entry.weekday === weekday && entry.period <= limit).sort((a, b) => a.period - b.period)) {
+    for (const slot of daySlots(plan, date, semester, weekday, limit)) {
       const subject = plan.subjects.find(entry => entry.key === slot.subject);
       if (!subject) continue;
       const key = `${slot.subject}:${semester}`, at = cursor.get(key) ?? {unit: 0, lesson: 0}, units = subject.units[semester];
@@ -142,4 +156,76 @@ export function weeklyCounts(plan: Plan, semester: 1 | 2) {
   const counts = new Map<SubjectKey, number>();
   for (const slot of plan.templates[semester]) counts.set(slot.subject, (counts.get(slot.subject) ?? 0) + 1);
   return counts;
+}
+
+/**
+ * 왜 시수가 이렇게 됐나: 기초시간표대로라면 있었을 수업이 빠진 날(공휴일·재량휴업·행사 단축)과 하루짜리 바꾸기를 교과별로.
+ * 방학은 원래 수업이 없는 기간이라 원인으로 세지 않는다. 양수 = 더해짐, 음수 = 빠짐.
+ */
+export type Cause = {date: string; kind: 'holiday' | 'off' | 'event' | 'override'; name: string; delta: number; period?: number};
+export function causes(plan: Plan): Map<SubjectKey, Cause[]> {
+  const out = new Map<SubjectKey, Cause[]>(), add = (key: SubjectKey, cause: Cause) => out.set(key, [...(out.get(key) ?? []), cause]);
+  for (let date = plan.startsOn; date <= plan.endsOn; date = addDays(date, 1)) {
+    const weekday = weekdayOf(date);
+    if (weekday > 5) continue;
+    const semester = semesterOf(plan, date), note = dayNote(plan, date), base = plan.templates[semester].filter(slot => slot.weekday === weekday);
+    if (note && (note.kind === 'holiday' || note.kind === 'off')) {
+      const lost = new Map<SubjectKey, number>();
+      for (const slot of base) lost.set(slot.subject, (lost.get(slot.subject) ?? 0) + 1);
+      lost.forEach((count, key) => add(key, {date, kind: note.kind as 'holiday' | 'off', name: note.name, delta: -count}));
+      continue;
+    }
+    if (note?.kind === 'vacation') continue;
+    if (note?.kind === 'event' && note.periods) {
+      const lost = new Map<SubjectKey, number>();
+      for (const slot of base) if (slot.period > note.periods) lost.set(slot.subject, (lost.get(slot.subject) ?? 0) + 1);
+      lost.forEach((count, key) => add(key, {date, kind: 'event', name: note.name, delta: -count}));
+    }
+    const limit = note?.periods ?? plan.periodsPerDay;
+    for (const change of (plan.overrides ?? []).filter(entry => entry.date === date && entry.period <= limit)) {
+      const before = base.find(slot => slot.period === change.period)?.subject ?? null;
+      if (before === change.subject) continue;
+      const name = change.note || '하루 시간표 바꾸기';
+      if (before) add(before, {date, kind: 'override', name, delta: -1, period: change.period});
+      if (change.subject) add(change.subject, {date, kind: 'override', name, delta: 1, period: change.period});
+    }
+  }
+  return out;
+}
+
+/**
+ * 조절 제안: 교과 A를 n시간 늘리려면, 오늘 이후 그 학기에 기준보다 남는 교과의 수업을 A로 바꾼다(남는 만큼만).
+ * 줄이려면, A의 수업을 기준보다 모자란 교과에 준다(모자란 만큼만). 기준이 없는 교과는 주고받지 않는다.
+ * 그래서 체육·예술처럼 기준 밑으로 줄이면 안 되는 교과는 남는 시간이 없으면 건드리지 않는다.
+ * 계산만 하고 저장하지 않는다(적용은 화면·베리의 확인 뒤). 다 못 채우면 채운 만큼만 돌려준다.
+ */
+export function suggestAdjust(plan: Plan, target: SubjectKey, amount: number, from: string, semester: 1 | 2): Override[] {
+  const sessions = expand(plan), stats = hourStats(plan, sessions);
+  const room = new Map(stats.rows.filter(row => row.hasStandard && row.subject !== target).map(row => [row.subject, amount > 0 ? row.diff[semester] : -row.diff[semester]]));
+  const future = sessions.filter(session => session.semester === semester && session.date >= from);
+  const out: Override[] = [];
+  if (amount > 0) {
+    const pool = future.filter(session => (room.get(session.subject) ?? 0) > 0).sort((a, b) => (room.get(b.subject)! - room.get(a.subject)!) || a.date.localeCompare(b.date) || b.period - a.period);
+    for (const session of pool) {
+      if (out.length >= amount) break;
+      if ((room.get(session.subject) ?? 0) <= 0) continue;
+      room.set(session.subject, room.get(session.subject)! - 1);
+      out.push({date: session.date, period: session.period, subject: target, note: '시수 맞추기'});
+    }
+  } else {
+    for (const session of future.filter(entry => entry.subject === target).sort((a, b) => a.date.localeCompare(b.date) || b.period - a.period)) {
+      if (out.length >= -amount) break;
+      const receiver = [...room.entries()].filter(([, need]) => need > 0).sort((a, b) => b[1] - a[1])[0];
+      if (!receiver) break;
+      room.set(receiver[0], receiver[1] - 1);
+      out.push({date: session.date, period: session.period, subject: receiver[0], note: '시수 맞추기'});
+    }
+  }
+  return out;
+}
+
+/** 같은 날·교시 바꾸기는 하나만: 새 것이 옛 것을 덮는다. */
+export function applyOverrides(plan: Plan, changes: Override[]): Plan {
+  const keys = new Set(changes.map(change => `${change.date}:${change.period}`));
+  return {...plan, overrides: [...(plan.overrides ?? []).filter(change => !keys.has(`${change.date}:${change.period}`)), ...changes].sort((a, b) => a.date.localeCompare(b.date) || a.period - b.period)};
 }

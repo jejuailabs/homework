@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {CORE_IDS, ELSEWHERE, FEATURES, LIVE, SECTIONS, STEPS, TABS, searchFeatures} from './features';
-import {expand, hourStats, progressToDate, schoolWeekOf, setSlot, week, weekStartOf, weekdayOf} from './engine';
+import {applyOverrides, causes, expand, hourStats, progressToDate, schoolWeekOf, setSlot, suggestAdjust, week, weekStartOf, weekdayOf} from './engine';
+import {AUTONOMY_MIN, nationalChecks} from './rules';
 import {SAMPLE_PLAN} from './sample';
 import {buildXlsx, sheetName} from './xlsx';
 import {FILE_KINDS, buildFile} from './files';
@@ -122,5 +123,38 @@ const edited = {...setSlot(mine, 1, 1, 1, 'kor'), subjects: mine.subjects.map(en
 assert.equal(changeSummary(mine, edited), '1학기 기초시간표 1칸 · 기준시수 1개 교과 · 학사일정 1건');
 assert.equal(changeSummary(mine, mine), '', '바뀐 것이 없으면 기록하지 않는다');
 assert.equal(changeSummary(mine, {...mine, className: '3학년 3반'}), '반 정보');
+
+// 수업시수 센터: 하루짜리 바꾸기, 원인, 조절 제안, 국가 규칙.
+const swapped = applyOverrides(SAMPLE_PLAN, [{date: '2026-05-06', period: 5, subject: 'kor', note: '시험'}]);
+const swapStats = hourStats(swapped);
+assert.equal(swapStats.rows.find(row => row.subject === 'kor')!.planned[1], stats.rows.find(row => row.subject === 'kor')!.planned[1] + 1, '하루 바꾸기로 국어 +1');
+assert.equal(swapStats.total.planned[1], stats.total.planned[1], '전체 시수는 그대로');
+assert.equal(applyOverrides(swapped, [{date: '2026-05-06', period: 5, subject: null}]).overrides!.length, 1, '같은 칸은 새 것이 덮는다');
+assert.equal(hourStats(applyOverrides(SAMPLE_PLAN, [{date: '2026-05-06', period: 5, subject: null}])).total.planned[1], stats.total.planned[1] - 1, '비우면 한 시간 줄어든다');
+const why = causes(SAMPLE_PLAN);
+assert.ok(why.get('kor')!.some(cause => cause.date === '2026-05-05' && cause.kind === 'holiday' && cause.delta === -1), '어린이날 국어 -1이 원인으로 잡힌다');
+assert.ok(why.get('pe')!.some(cause => cause.date === '2026-05-08' && cause.kind === 'event'), '운동회 단축으로 빠진 체육');
+assert.ok(![...why.values()].flat().some(cause => cause.date >= '2026-07-22' && cause.date <= '2026-08-16'), '방학은 원인이 아니다');
+assert.ok(causes(swapped).get('kor')!.some(cause => cause.kind === 'override' && cause.delta === 1), '바꾸기도 원인으로 보인다');
+const short = stats.rows.find(row => row.diff[2] < 0)!;
+const plan2 = suggestAdjust(SAMPLE_PLAN, short.subject, -short.diff[2], '2026-09-01', 2);
+assert.equal(plan2.length, -short.diff[2], `${short.name} 2학기 부족분만큼 제안`);
+assert.ok(plan2.every(change => change.subject === short.subject && change.date >= '2026-09-01'), '오늘 이후 날짜만');
+const fixed = hourStats(applyOverrides(SAMPLE_PLAN, plan2));
+assert.equal(fixed.rows.find(row => row.subject === short.subject)!.diff[2], 0, '적용하면 부족이 0');
+assert.ok(fixed.rows.every(row => !row.hasStandard || row.diff[2] >= Math.min(0, stats.rows.find(other => other.subject === row.subject)!.diff[2])), '다른 교과를 새로 모자라게 만들지 않는다');
+assert.equal(suggestAdjust(mine, 'kor', 3, '2026-09-01', 2).length, 0, '기준시수가 없으면 주고받지 않는다');
+const checks = nationalChecks(SAMPLE_PLAN, stats);
+assert.equal(checks.find(check => check.id === 'days')!.verdict, 'ok');
+assert.ok(checks.some(check => check.id === 'band-pe') && checks.some(check => check.id === 'band-arts'), '3~4학년군 교과(군) 규칙');
+assert.equal(checks.find(check => check.id === 'autonomy')!.verdict, 'info', '자율시간이 없으면 안내만');
+const thin = nationalChecks({...SAMPLE_PLAN, templates: {1: SAMPLE_PLAN.templates[1].filter(slot => slot.subject !== 'pe'), 2: SAMPLE_PLAN.templates[2].filter(slot => slot.subject !== 'pe')}}, hourStats({...SAMPLE_PLAN, templates: {1: SAMPLE_PLAN.templates[1].filter(slot => slot.subject !== 'pe'), 2: SAMPLE_PLAN.templates[2].filter(slot => slot.subject !== 'pe')}}));
+assert.equal(thin.find(check => check.id === 'band-pe')!.verdict, 'short', '체육을 빼면 감축 불가 경고');
+assert.equal(nationalChecks({...mine, grade: 1, subjects: subjectsFor(1)}, hourStats({...mine, grade: 1, subjects: subjectsFor(1)})).find(check => check.id === 'band')!.verdict, 'info', '1~2학년은 확인 필요로만');
+const withAuto = {...SAMPLE_PLAN, subjects: [...SAMPLE_PLAN.subjects, {key: 'auto1', name: '학교자율시간(우리 고장)', short: '자', tone: 'teal', standard: {1: 29, 2: 0}, units: {1: [], 2: []}}], templates: {1: [...SAMPLE_PLAN.templates[1].filter(slot => !(slot.weekday === 3 && slot.period === 5)), {weekday: 3, period: 5, subject: 'auto1'}], 2: SAMPLE_PLAN.templates[2]}};
+assert.equal(nationalChecks(withAuto, hourStats(withAuto)).find(check => check.id === 'autonomy')!.verdict, hourStats(withAuto).rows.find(row => row.subject === 'auto1')!.planned[1] >= AUTONOMY_MIN['3-4'] ? 'ok' : 'short', '자율시간은 한 학기 최소 시수로 본다');
+assert.throws(() => planInput({...mine, overrides: [{date: '2026-05-06', period: 1, subject: 'kor'}, {date: '2026-05-06', period: 1, subject: 'mat'}]}), PlanError, '같은 칸 두 번 바꾸기');
+assert.throws(() => planInput({...mine, overrides: [{date: '2026-05-06', period: 1, subject: 'zzz'}]}), PlanError, '없는 과목으로 바꾸기');
+assert.equal(changeSummary(mine, applyOverrides(mine, [{date: '2026-05-06', period: 1, subject: 'kor'}])), '하루 시간표 바꾸기 1건');
 
 console.log('curriculum tests passed');
