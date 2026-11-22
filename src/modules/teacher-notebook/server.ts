@@ -268,6 +268,17 @@ export async function handleNotebook(request: Request, segments: string[]) {
     if (path === 'unlock' && method === 'POST') return await unlock(request, ctx);
     if (path === 'password' && method === 'POST') return await setPassword(request, ctx);
     if (path === 'lock' && method === 'POST') {await audit(ctx.uid, 'notebook.lock'); return setUnlockCookie(json({unlocked: false}), '', 0);}
+    // To-dos sit on the workspace home beside the calendar, so the teacher's sign-in opens them. Records stay behind the notebook lock.
+    if (segments[0] === 'todos') {
+      if (method === 'GET' && segments.length === 1) return json(await listTodos(ctx.uid));
+      if (method === 'POST' && segments.length === 1) return json(await saveTodo(ctx.uid, null, await input(request)), 201);
+      const todoId = segments[1] ?? '';
+      if (segments.length === 2 && /^[A-Za-z0-9]{1,40}$/.test(todoId)) {
+        if (method === 'POST') return json(await saveTodo(ctx.uid, todoId, await input(request)));
+        if (method === 'DELETE') return json(await removeTodo(ctx.uid, todoId));
+      }
+      return json({error: '찾을 수 없어요.', code: 'NOT_FOUND'}, 404);
+    }
     const expires = unlocked(request, ctx), params = new URL(request.url).searchParams;
     if (method === 'GET') {
       if (path === 'roster') return json({classes: await roster(ctx.uid), expiresAt: expires * 1000});
@@ -275,15 +286,6 @@ export async function handleNotebook(request: Request, segments: string[]) {
       if (path === 'day') return json(await day(ctx.uid, params.get('date')));
       if (path === 'report') return json(await report(ctx.uid, params));
       if (path === 'audit') return json(await auditLog(ctx.uid));
-      if (path === 'todos') return json(await listTodos(ctx.uid));
-    }
-    if (segments[0] === 'todos') {
-      if (method === 'POST' && segments.length === 1) return json(await saveTodo(ctx.uid, null, await input(request)), 201);
-      const todoId = segments[1] ?? '';
-      if (segments.length === 2 && /^[A-Za-z0-9]{1,40}$/.test(todoId)) {
-        if (method === 'POST') return json(await saveTodo(ctx.uid, todoId, await input(request)));
-        if (method === 'DELETE') return json(await removeTodo(ctx.uid, todoId));
-      }
     }
     if (segments[0] === 'entries') {
       if (method === 'POST' && segments.length === 1) return json(await create(ctx.uid, await input(request)), 201);

@@ -1,17 +1,18 @@
 'use client';
 import {useCallback, useEffect, useState} from 'react';
-import Link from 'next/link';
-import {BriefcaseBusiness, CalendarDays, ChevronLeft, ChevronRight, ClipboardPaste, Download, FolderTree, LoaderCircle, NotebookPen, Pencil, Table, Trash2, X} from 'lucide-react';
+import {BriefcaseBusiness, ChevronLeft, ChevronRight, ClipboardPaste, Download, LoaderCircle, Pencil, Trash2, X} from 'lucide-react';
+import ToBerry from '@/modules/berry-panel/to-berry';
 import {zipParts} from '@/lib/zip-store';
 import {BerryPending, call, message, seoulToday, shortDate} from './api';
 import {CalendarTab} from './calendar';
 import {FoldersTab} from './folders';
+import {HomeTab} from './home';
+import WorkspaceNav, {WORKSPACE_TABS, type WorkspaceTab} from './nav';
 import {addDays, weekDates, weekKeyOf} from './shared';
 import type {LessonDay, Timetable, TimetableSlot} from './types';
 import './styles.css';
 
-const TABS = [{id: 'calendar', label: '일정', icon: CalendarDays}, {id: 'timetable', label: '시간표', icon: Table}, {id: 'lessons', label: '수업 일지', icon: NotebookPen}, {id: 'folders', label: '업무 폴더', icon: FolderTree}] as const;
-type Tab = typeof TABS[number]['id'];
+type Tab = WorkspaceTab;
 const DAYS = ['월', '화', '수', '목', '금'], PERIODS = [1, 2, 3, 4, 5, 6, 7];
 
 function TimetableTab() {
@@ -116,20 +117,20 @@ function ExportMenu({onClose}: {onClose: () => void}) {
 }
 
 export default function TeacherWorkspace() {
-  const [tab, setTab] = useState<Tab>('calendar'), [available, setAvailable] = useState<boolean | null>(null), [exporting, setExporting] = useState(false);
+  const [tab, setTab] = useState<Tab>('home'), [available, setAvailable] = useState<boolean | null>(null), [exporting, setExporting] = useState(false);
   useEffect(() => {call<{available: boolean}>('status').then(data => setAvailable(data.available)).catch(() => setAvailable(false));}, []);
   useEffect(() => {
-    const read = () => {const hash = window.location.hash.slice(1); if (TABS.some(t => t.id === hash)) setTab(hash as Tab);};
+    const read = () => {const hash = window.location.hash.slice(1); setTab(WORKSPACE_TABS.some(t => t.id === hash) ? hash as Tab : 'home');};
     read(); window.addEventListener('hashchange', read);
     return () => window.removeEventListener('hashchange', read);
   }, []);
-  const choose = (id: Tab) => {setTab(id); history.replaceState(null, '', `#${id}`);};
+  const choose = (id: Tab) => {setTab(id); history.replaceState(null, '', id === 'home' ? window.location.pathname : `#${id}`); window.scrollTo({top: 0});};
   return <section className="mp-shell wsp-shell">
-    <p className="wsp-eyebrow"><Link href="/teacher/me">마이페이지</Link> › 업무 공간</p>
-    <div className="wsp-heading"><div><h2><BriefcaseBusiness size={24}/> 업무 공간</h2><p>일정·시간표·수업 일지·업무 폴더를 한곳에 모아요. 베리가 넣은 항목은 선생님이 확정해야 반영돼요.</p></div>
-      {available && <button type="button" className="button soft" onClick={() => setExporting(true)}><Download size={15}/>내보내기</button>}</div>
+    <div className="wsp-heading"><div><h2><BriefcaseBusiness size={24}/> 업무 공간</h2><p>일정·할 일·시간표·수업 일지·업무 폴더와 교무수첩을 한곳에서 봐요. 베리가 넣은 항목은 선생님이 확정해야 반영돼요.</p></div>
+      <div className="wsp-actions"><ToBerry topic="업무에 어떤 걸 도와드릴까요? 일정·할 일·수업 일지·학생 기록을 말로 시켜 주세요."/>{available && <button type="button" className="button soft" onClick={() => setExporting(true)}><Download size={15}/>내보내기</button>}</div></div>
     {available === null ? <p className="wsp-muted"><LoaderCircle className="spin" size={16}/> 확인 중…</p> : !available ? <div className="wsp-card"><h3>지금은 쓸 수 없어요</h3><p className="wsp-muted">업무 공간이 잠시 멈춰 있어요. 저장한 기록은 그대로 있어요.</p></div> : <>
-      <div className="wsp-tabs" role="tablist">{TABS.map(({id, label, icon: Icon}) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'is-active' : ''} onClick={() => choose(id)}><Icon size={16}/>{label}</button>)}</div>
+      <WorkspaceNav current={tab} onPick={choose}/>
+      {tab === 'home' && <HomeTab onPick={choose}/>}
       {tab === 'calendar' && <CalendarTab/>}
       {tab === 'timetable' && <TimetableTab/>}
       {tab === 'lessons' && <LessonsTab/>}

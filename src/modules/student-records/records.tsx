@@ -1,7 +1,8 @@
 'use client';
 import {useEffect, useMemo, useState} from 'react';
 import Link from 'next/link';
-import {ArrowLeft, Check, Download, LoaderCircle, NotebookPen} from 'lucide-react';
+import {Check, Download, LoaderCircle, NotebookPen} from 'lucide-react';
+import WorkspaceNav from '@/modules/teacher-workspace/nav';
 import {recordsCsv} from './policy';
 import {RECORD_KIND_LABELS, type RecordKind, type StudentRecords} from './types';
 import './styles.css';
@@ -53,7 +54,8 @@ export default function StudentRecordsView() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
   return <main className="srec">
-    <header><Link href="/teacher/me" className="srec-back"><ArrowLeft size={15}/>교무수첩</Link>
+    <WorkspaceNav current="records"/>
+    <header>
       <p className="page-kicker">STUDENT RECORDS</p><h1 className="page-title">학생별 모아 보기</h1>
       <p className="page-description">숙제 검사 때 남긴 말씀, 작품 한마디, 보말을 주며 적은 까닭을 학생별로 모았어요. 학기말에 생활기록부를 쓸 때 꺼내 보세요.</p></header>
     <section className="srec-bar">
@@ -77,7 +79,7 @@ export default function StudentRecordsView() {
           {shown && <ol>{s.shown.map((r, i) => <li key={i}><time>{r.date}</time><span className={`srec-kind ${r.kind}`}>{RECORD_KIND_LABELS[r.kind]}</span><div><small>{r.title}</small><p>{r.text}</p></div></li>)}</ol>}
         </li>;
       })}</ul>
-      <p className="srec-note"><NotebookPen size={14}/>직접 적은 관찰 기록은 <Link href="/teacher/me/notebook">교무수첩</Link>의 보고서에서 따로 받을 수 있어요. 민감한 기록은 여기에 섞지 않아요.</p>
+      <p className="srec-note"><NotebookPen size={14}/>직접 적은 관찰 기록은 <Link href="/teacher/me/notebook">교무수첩</Link>의 종합 리포트에서 따로 받을 수 있어요. 민감한 기록은 여기에 섞지 않아요.</p>
     </>}
   </main>;
 }

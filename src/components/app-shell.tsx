@@ -13,7 +13,7 @@ import StudentCompanion from '@/modules/my-space/companion';
 import TestZone from './test-zone';
 import {useVerifiedViewer} from './viewer-context';
 import MyPageLink from '@/modules/teacher-notebook/my-page-link';
-import NotebookNavLink from '@/modules/teacher-today/nav-link';
+import WorkspaceNavLink from '@/modules/teacher-today/nav-link';
 import ActivityTracker from './activity-tracker';
 import {cardsMenuVisible} from '@/lib/menu-visibility';
 import {berryAssetUrl} from '@/lib/berry-brand';
@@ -67,7 +67,7 @@ export default function AppShell({children,mySpaceEnabled=true,playgroundEnabled
         {!isStudent&&!isAdmin&&kidsDailyMenuVisible&&<Link href="/teacher/diary" className={path==='/teacher/diary'?'active':''} aria-current={path==='/teacher/diary'?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><BookOpen size={18}/></span>Kids Daily</Link>}
         {!isStudent&&!isAdmin&&<Link href="/teacher/tools" className={`nav-tools ${path.includes('tools')?'active':''}`} aria-current={path.includes('tools')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Sparkles size={18}/></span>{t('tools')}</Link>}
         {!isStudent&&!isAdmin&&<Link href="/teacher/points" className={`nav-points ${path.includes('/points')?'active':''}`} aria-current={path.includes('/points')?'page':undefined}><span className="nav-pictogram" aria-hidden="true"><Shell size={18}/></span>{locale==='en'?'Points':'보말'}</Link>}
-        {!isStudent&&!isAdmin&&<NotebookNavLink active={path.startsWith('/teacher/me')}/>}
+        {!isStudent&&!isAdmin&&<WorkspaceNavLink active={path.startsWith('/teacher/me')} label={locale==='en'?'Workspace':'업무 공간'}/>}
       </nav>}
       <div className="header-actions">
         {(isLogin||path=='/blog'||path.startsWith('/blog/'))&&<Link className="icon-button header-blog-link" href="/blog" aria-current={path.startsWith('/blog')?'page':undefined}><BookOpen size={17}/><span>{locale==='en'?'Blog':'블로그'}</span></Link>}

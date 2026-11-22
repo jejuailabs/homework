@@ -2,10 +2,11 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {GoogleAuthProvider, reauthenticateWithPopup} from 'firebase/auth';
-import {ChevronLeft, ChevronRight, Download, FileText, History, KeyRound, ListTodo, LoaderCircle, Lock, Pencil, Plus, Printer, ShieldCheck, Trash2, UserPlus, X} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Download, FileText, History, KeyRound, LoaderCircle, Lock, Pencil, Printer, ShieldCheck, Trash2, UserPlus, X} from 'lucide-react';
 import {auth} from '@/lib/firebase-client';
+import WorkspaceNav from '@/modules/teacher-workspace/nav';
 import {findMentions, mentionQuery, studentKey} from './mentions';
-import {NOTEBOOK_TAG_LABELS, NOTEBOOK_TAGS, SENSITIVE_TAGS, type NotebookAuditEvent, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStatus, type NotebookStudentRef, type NotebookTag, type NotebookTodo} from './types';
+import {NOTEBOOK_TAG_LABELS, NOTEBOOK_TAGS, SENSITIVE_TAGS, type NotebookAuditEvent, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStatus, type NotebookStudentRef, type NotebookTag} from './types';
 import './styles.css';
 
 const IDLE_MS = 15 * 60_000, WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -83,53 +84,6 @@ function Unlock({hasPassword, startReset, onUnlocked}: {hasPassword: boolean; st
     </form>
     {error && <p className="nb-error" role="alert">{error}</p>}
     {hasPassword && <button type="button" className="nb-link" onClick={() => {setMode('open'); setError(''); setPassword(''); setAgain('');}}>비밀번호로 열기</button>}
-  </section>;
-}
-
-/** To-dos: unfinished first (earliest due date first), finished ones folded at the bottom. */
-function Todos({date, onChanged, onLocked}: {date: string; onChanged: () => void; onLocked: () => void}) {
-  const [list, setList] = useState<NotebookTodo[] | null>(null), [text, setText] = useState(''), [due, setDue] = useState(''), [error, setError] = useState('');
-  const [editing, setEditing] = useState<{id: string; text: string; due: string} | null>(null), [busy, setBusy] = useState(false);
-  const fail = useCallback((e: unknown) => {if (e instanceof LockedError) onLocked(); else setError((e as Error).message);}, [onLocked]);
-  const load = useCallback(() => call<{todos: NotebookTodo[]}>('todos').then(d => setList(d.todos)).catch(fail), [fail]);
-  useEffect(() => {load();}, [load]);
-  async function save(id: string | null, body: {text: string; due: string | null; done: boolean}) {
-    setBusy(true); setError('');
-    try {await call(id ? `todos/${id}` : 'todos', {body}); await load(); onChanged(); return true;} catch (e) {fail(e); return false;} finally {setBusy(false);}
-  }
-  async function add(event: React.FormEvent) {
-    event.preventDefault();
-    if (text.trim() && await save(null, {text, due: due || null, done: false})) {setText(''); setDue('');}
-  }
-  async function remove(todo: NotebookTodo) {
-    if (!confirm('이 할 일을 지울까요?')) return;
-    try {await call(`todos/${todo.id}`, {method: 'DELETE'}); await load(); onChanged();} catch (e) {fail(e);}
-  }
-  const today = seoulDate();
-  const open = (list ?? []).filter(t => !t.done).sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || b.createdAt.localeCompare(a.createdAt));
-  const done = (list ?? []).filter(t => t.done);
-  const row = (todo: NotebookTodo) => editing?.id === todo.id ? <li key={todo.id} className="nb-todo is-editing">
-    <input aria-label="할 일 고치기" value={editing.text} maxLength={200} onChange={e => setEditing({...editing, text: e.target.value})}/>
-    <input type="date" aria-label="기한" value={editing.due} onChange={e => setEditing({...editing, due: e.target.value})}/>
-    <button className="button soft" onClick={() => setEditing(null)}>취소</button>
-    <button className="button primary" disabled={busy || !editing.text.trim()} onClick={async () => {if (await save(todo.id, {text: editing.text, due: editing.due || null, done: todo.done})) setEditing(null);}}>저장</button>
-  </li> : <li key={todo.id} className={`nb-todo${todo.done ? ' is-done' : ''}`}>
-    <label><input type="checkbox" checked={todo.done} disabled={busy} onChange={() => save(todo.id, {text: todo.text, due: todo.due, done: !todo.done})}/><span>{todo.text}</span></label>
-    {todo.due && <time className={!todo.done && todo.due < today ? 'is-late' : todo.due === today ? 'is-today' : ''}>{todo.due === today ? '오늘' : longDate(todo.due)}</time>}
-    <button className="icon-button" aria-label="고치기" onClick={() => setEditing({id: todo.id, text: todo.text, due: todo.due ?? ''})}><Pencil size={14}/></button>
-    <button className="icon-button" aria-label="삭제" onClick={() => remove(todo)}><Trash2 size={14}/></button>
-  </li>;
-  return <section className="nb-card nb-todos" aria-label="할 일">
-    <h3><ListTodo size={18}/>할 일</h3>
-    <form className="nb-todo-add" onSubmit={add}>
-      <input aria-label="새 할 일" placeholder="할 일을 적어 주세요" value={text} maxLength={200} onChange={e => setText(e.target.value)}/>
-      <input type="date" aria-label="기한(선택)" value={due} onChange={e => setDue(e.target.value)}/>
-      <button className="button primary" disabled={busy || !text.trim()}><Plus size={16}/>추가</button>
-    </form>
-    <button type="button" className="nb-link" onClick={() => setDue(date)}>기한을 {longDate(date)}로</button>
-    {error && <p className="nb-error" role="alert">{error}</p>}
-    {!list ? <p className="nb-muted"><LoaderCircle className="spin" size={16}/> 불러오는 중…</p> : open.length === 0 ? <p className="nb-muted">남은 할 일이 없어요.</p> : <ul className="nb-todo-list">{open.map(row)}</ul>}
-    {done.length > 0 && <details className="nb-todo-done"><summary>끝낸 일 {done.length}개</summary><ul className="nb-todo-list">{done.slice(0, 50).map(row)}</ul></details>}
   </section>;
 }
 
@@ -282,10 +236,11 @@ export default function TeacherNotebook() {
     try {await call(`entries/${entry.id}/confirm`, {body: {}}); loadDay();} catch (e) {fail(e);}
   }
   if (!status) return <div className="center-state">{error ? <p>{error}</p> : <LoaderCircle className="spin" size={28}/>}</div>;
-  if (!status.available) return <section className="nb-shell"><div className="nb-lock"><Lock size={30}/><h2>교무수첩은 아직 준비 중이에요</h2><p>시범 운영 중인 기능이에요. 열리면 마이페이지에서 바로 쓸 수 있어요.</p><Link className="button soft" href="/teacher/me">마이페이지로</Link></div></section>;
+  if (!status.available) return <section className="nb-shell"><div className="nb-lock"><Lock size={30}/><h2>교무수첩은 아직 준비 중이에요</h2><p>시범 운영 중인 기능이에요. 열리면 업무 공간에서 바로 쓸 수 있어요.</p><Link className="button soft" href="/teacher/me/workspace">업무 공간으로</Link></div></section>;
   return <section className="nb-shell">
+    <WorkspaceNav current="notebook"/>
     <div className="nb-heading">
-      <div><p className="nb-eyebrow"><Link href="/teacher/me">마이페이지</Link> · 교무수첩</p><h2>교무수첩</h2><p>하루 기록과 학생별 관찰을 날짜별로 모아 둬요. 기록은 암호화되어 저장되고, 선생님 본인만 열 수 있어요.</p></div>
+      <div><h2>교무수첩</h2><p>하루 기록과 학생별 관찰을 날짜별로 모아 둬요. 기록은 암호화되어 저장되고, 선생님 본인만 열 수 있어요.</p></div>
       {unlocked && <div className="nb-heading-actions"><button className="button soft" onClick={() => setReportOpen(true)}><FileText size={16}/>종합 리포트</button><button className="button soft" onClick={() => setAuditOpen(!auditOpen)} aria-pressed={auditOpen}><History size={16}/>접근 기록</button><button className="button soft" onClick={() => {setResetting(true); lock();}}><KeyRound size={16}/>비밀번호 바꾸기</button><button className="button soft" onClick={() => {setResetting(false); lock();}}><Lock size={16}/>잠그기</button></div>}
     </div>
     {error && <p className="nb-error" role="alert">{error}<button className="icon-button" aria-label="닫기" onClick={() => setError('')}><X size={16}/></button></p>}
@@ -297,7 +252,7 @@ export default function TeacherNotebook() {
           <div className="nb-grid">{WEEKDAYS.map(d => <span key={d} className="nb-weekday">{d}</span>)}{monthCells(month).map((cell, i) => cell ? <button key={cell} className={`nb-day${cell === date ? ' is-selected' : ''}${cell === seoulDate() ? ' is-today' : ''}`} aria-pressed={cell === date} aria-label={`${longDate(cell)}${days[cell] ? `, 기록 ${days[cell].entries}건` : ''}`} onClick={() => {setDate(cell); setDraft(emptyDraft());}}><span>{Number(cell.slice(8))}</span>{!!days[cell]?.entries && <small>{days[cell].entries}</small>}{!!days[cell]?.todos && <i className="nb-todo-dot" title={`할 일 ${days[cell].todos}개`}/>}</button> : <span key={`blank${i}`}/>)}</div>
           <button className="nb-today" onClick={() => {const t = seoulDate(); setMonth(monthOf(t)); setDate(t); setDraft(emptyDraft());}}>오늘로</button>
         </section>
-        <Todos date={date} onChanged={loadMonth} onLocked={locked}/></div>
+        </div>
         <section className="nb-card">
           <Composer date={date} roster={roster} names={names} draft={draft} setDraft={setDraft} onSaved={() => {loadDay(); loadMonth();}} onLocked={locked}/>
           <h3 className="nb-day-title">{longDate(date)}의 기록</h3>

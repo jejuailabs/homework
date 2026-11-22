@@ -7,13 +7,13 @@ import {CALENDAR_KINDS, CALENDAR_KIND_LABELS, type CalendarEvent, type CalendarK
 
 type Draft = {id: string | null; title: string; kind: CalendarKind; allDay: boolean; startDate: string; startTime: string; endDate: string; endTime: string};
 const draftFor = (date: string): Draft => ({id: null, title: '', kind: 'school', allDay: true, startDate: date, startTime: '09:00', endDate: date, endTime: '10:00'});
-function monthCells(month: string) {
+export function monthCells(month: string) {
   const first = `${month}-01`, offset = new Date(`${first}T00:00:00Z`).getUTCDay();
   const days = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
   return Array.from({length: Math.ceil((offset + days) / 7) * 7}, (_, i) => addDays(first, i - offset));
 }
-const shiftMonth = (month: string, delta: number) => {const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + delta, 1)); return d.toISOString().slice(0, 7);};
-const covers = (event: CalendarEvent, date: string) => event.startDate <= date && date <= event.endDate;
+export const shiftMonth = (month: string, delta: number) => {const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + delta, 1)); return d.toISOString().slice(0, 7);};
+export const covers = (event: CalendarEvent, date: string) => event.startDate <= date && date <= event.endDate;
 
 function ImportDialog({onClose, onDone}: {onClose: () => void; onDone: () => void}) {
   const [text, setText] = useState(''), [format, setFormat] = useState<'ics' | 'csv'>('ics'), [busy, setBusy] = useState(false), [error, setError] = useState('');
