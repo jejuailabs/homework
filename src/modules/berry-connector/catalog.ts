@@ -57,6 +57,13 @@ export const DOMAINS: CatalogDomain[] = [
   {key: 'storage', menu: '홈 > 저장 공간', what: '선생님 저장 공간 용량', guide: ['전체·사용·남은 용량, 항목별(숙제 영상·사진·전시·자료·보드·업무), 경고 단계, 이용 기간 종료일을 읽는다.'], metrics: ['percent', 'level', 'days_left'], tools: ['get_storage'], sensitivity: '없음', cost: 'light', words: ['저장 공간', '용량']},
   {key: 'workspace', menu: '마이페이지 > 업무 공간', what: '일정·시간표·수업 일지·업무 폴더', guide: ['일정(숙제 마감 포함), 주간 시간표, 날짜별 수업 일지, 폴더 항목(메모·체크리스트·링크)을 읽는다. 새로 넣기는 add_*, 고치기·지우기는 manage_workspace.'], metrics: ['today_events'], tools: ['manage_workspace', 'get_calendar', 'get_timetable', 'get_lesson_log', 'search_workspace', 'get_work_item', 'add_calendar_event', 'add_lesson_log', 'add_work_item'], sensitivity: '민감 항목 제외, 이름 가명화', cost: 'medium', words: ['일정', '시간표', '수업 일지', '업무'], flag: 'workspace'},
   {key: 'notebook', menu: '마이페이지 > 교무수첩', what: '학생 관찰 기록(교무수첩)', guide: ['날짜·학생·분류별 관찰 기록을 찾고(search_notebook) 남긴다(add_notebook_entry). 민감 기록은 본문이 돌아오지 않는다.'], metrics: ['entries'], tools: ['search_notebook', 'add_notebook_entry'], sensitivity: '상담·건강·가정 기록은 절대 나가지 않음', cost: 'medium', words: ['교무수첩', '관찰'], flag: 'notebook'},
+  {key: 'curriculum', menu: '교육과정(스쿨마스터)', what: '스쿨마스터 대체: 시수·시간표·진도표·주간학습, 엑셀 파일', guide: [
+    '시수·수업일수·기준과 어긋난 교과는 get_curriculum_hours, 한 주의 교시별 교과·단원·차시와 진도율은 get_curriculum_week로 읽는다. 숫자는 서버가 계산한 값을 그대로 전하고 베리가 더하거나 고치지 않는다.',
+    '"엑셀로 만들어줘·뽑아줘"는 make_curriculum_file(hours 시수표, progress 진도표, weekly 주간학습)로 만들고 돌아온 link를 [파일 이름](link)로 준다. 자료를 바꾸지 않으므로 확인 카드가 없다.',
+    '"스쿨마스터에서 ~하던 거"는 find_schoolmaster_feature로 메뉴 위치, 지금 되는지, 몇 단계 예정인지 찾아 그대로 안내한다. 준비 중인 기능을 되는 것처럼 말하지 않는다.',
+    '응답에 note가 있으면(시험용 예시 학급) 선생님 반의 실제 자료가 아니라고 함께 말한다. 시간표 바꾸기·진도 옮기기 저장은 아직 없다.',
+    '업무 공간의 주간 시간표(get_timetable)와 다른 메뉴다. 시수·진도·주간학습 안내 질문은 이 메뉴로 답한다.',
+  ], metrics: ['school_days', 'hour_diff'], tools: ['get_curriculum_hours', 'get_curriculum_week', 'make_curriculum_file', 'find_schoolmaster_feature'], sensitivity: '학생 정보 없음', cost: 'light', words: ['스쿨마스터', '시수', '기준시수', '연간시수', '진도표', '교과진도', '기초시간표', '연간시간표', '주간학습', '수업일수', '창체'], flag: 'curriculum'},
   {key: 'confirm', menu: '(저장 확인)', what: '미리보기 카드를 선생님이 확인한 뒤 저장', guide: [], metrics: [], tools: ['confirm_write'], sensitivity: '-', cost: 'light', words: []},
 ];
 
@@ -73,7 +80,7 @@ export const CATALOG_RULES = [
 ];
 
 /** Where each menu opens; it travels on the menu's root line. Tools add item links (one homework, one room) on top of these. */
-export const MENU_LINKS: Partial<Record<string, string>> = {overview: '/teacher', classes: '/teacher/homework', homework: '/teacher/homework', exhibitions: '/teacher/exhibitions', boards: '/teacher/boards', quiz: '/teacher/daily-quiz', lesson_review: '/teacher/lesson-review', playground: '/teacher/playground', points: '/teacher/points', cards: '/teacher/cards', tools: '/teacher/tools', dictionary: '/teacher/tools/dictionary', neighborhood: '/teacher/tools/neighborhood', kids_daily: '/teacher/diary', storage: '/teacher', workspace: '/teacher/me/workspace', notebook: '/teacher/me/notebook'};
+export const MENU_LINKS: Partial<Record<string, string>> = {overview: '/teacher', curriculum: '/teacher/curriculum', classes: '/teacher/homework', homework: '/teacher/homework', exhibitions: '/teacher/exhibitions', boards: '/teacher/boards', quiz: '/teacher/daily-quiz', lesson_review: '/teacher/lesson-review', playground: '/teacher/playground', points: '/teacher/points', cards: '/teacher/cards', tools: '/teacher/tools', dictionary: '/teacher/tools/dictionary', neighborhood: '/teacher/tools/neighborhood', kids_daily: '/teacher/diary', storage: '/teacher', workspace: '/teacher/me/workspace', notebook: '/teacher/me/notebook'};
 
 /** Builds the tree from the domain list and the live tool registry; unknown tools land in "기타" so nothing is ever missing. */
 export function buildCatalog(tools: CatalogTool[], enabled: Record<string, unknown>) {

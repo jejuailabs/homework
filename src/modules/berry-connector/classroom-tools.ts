@@ -156,6 +156,7 @@ export function menuFlags() {
     playground: process.env.PLAYGROUND_DISABLED !== 'true', playground_live: process.env.PLAYGROUND_DISABLED !== 'true' && process.env.PLAYGROUND_LIVE_DISABLED !== 'true',
     kids_daily: process.env.MY_SPACE_DISABLED !== 'true', tools: true, tools_disabled: tools, dictionary: !tools.includes('dictionary'), points: true,
     cards: cardsMenuVisible, notebook: process.env.TEACHER_NOTEBOOK_DISABLED !== 'true', workspace: process.env.TEACHER_WORKSPACE_DISABLED !== 'true',
+    curriculum: process.env.CURRICULUM_DISABLED !== 'true',
   };
 }
 

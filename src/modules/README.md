@@ -54,3 +54,15 @@ STT implementation reference: [OpenAI file transcription guide](https://develope
 ## 스케치북
 
 `sketchbook/`은 선생님 도구의 래스터 그림판이다. 이미지 불러오기(사진 깔기·도안 선화 추출), 선 레이어 기준 채우기, "선 안에만 칠하기"를 제공한다. 저장은 기기 IndexedDB만 쓰고 서버 API·Firebase는 쓰지 않는다. `TOOLS_DISABLED=sketchbook`으로 끈다. 사용법·한도·검증은 `docs/sketchbook.md`를 따른다.
+
+## 교육과정 작업실 (스쿨마스터 대체)
+
+`curriculum/`은 스쿨마스터의 교육과정·주간학습·평가·수업도우미·자료관리 기능 229개(설계도 v1.1 제1부)를 같은 메뉴 순서로 옮기는 모듈이다. 숨김 시험 중이며 메뉴·첫 화면 어디에도 링크가 없다.
+
+- 화면: `/teacher/curriculum`. 로그인 없이 보는 시안은 개발 서버에서만 열리는 `/curriculum-preview`.
+- 공개 범위: Firestore `featureAccess/curriculum`의 `{mode: off | allowlist | all, teacherUids}`. 기본은 off이고, 플랫폼 관리자는 off에서도 확인용으로 열린다. `CURRICULUM_DISABLED=true`는 관리자까지 모두 끈다.
+- 구조: 차시 한 칸이 원자다. `engine.ts`가 학사일정 × 기초시간표 → 차시 → 시수표·진도표·주간학습을 계산하고 아무것도 따로 저장하지 않는다. 화면과 베리가 같은 계산기를 쓴다.
+- 기능 표: `feature-rows.ts`(설계도 표 그대로)와 `features.ts`(탭·흐름 단계·핵심·지금 됨/다른 메뉴/준비 중·단계). 개수와 자리는 `curriculum.test.ts`가 지킨다.
+- 엑셀: `xlsx.ts`(외부 라이브러리 없음) + `files.ts`(시수표·진도표·주간학습). 베리의 파일 링크 `/teacher/curriculum?download=hours`는 화면을 열어 그 자리에서 내려받게 한다. 서버에 파일을 쌓지 않는다.
+- 베리: `berry-tools.ts`의 읽기 도구 4개(`find_schoolmaster_feature`, `get_curriculum_hours`, `get_curriculum_week`, `make_curriculum_file`). 공개 범위 밖의 선생님에게는 도구 목록과 분류표에서 아예 빠진다.
+- 지금 자료는 시험용 예시 학급(`sample.ts`) 하나다. 실제 학급 자료를 붙일 때는 `server.ts`의 `planFor`와 화면의 계획 불러오기만 바꾼다. 원본은 Firebase, 관계 검색용 사본은 나중에 Supabase(베리)로 간다.
