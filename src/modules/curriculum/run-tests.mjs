@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import ts from 'typescript';
+const compile = filename => ts.transpileModule(fs.readFileSync(new URL(filename, import.meta.url), 'utf8'), {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext}}).outputText;
+const moduleUrl = code => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+const engine = moduleUrl(compile('./engine.ts'));
+const sample = moduleUrl(compile('./sample.ts'));
+const rows = moduleUrl(compile('./feature-rows.ts'));
+const features = moduleUrl(compile('./features.ts').replace("'./feature-rows'", JSON.stringify(rows)));
+const zip = moduleUrl(compile('../../lib/zip-store.ts'));
+const xlsx = moduleUrl(compile('./xlsx.ts').replace("'./engine'", JSON.stringify(engine)).replace("'@/lib/zip-store'", JSON.stringify(zip)));
+const files = moduleUrl(compile('./files.ts').replace("'./engine'", JSON.stringify(engine)).replace("'./xlsx'", JSON.stringify(xlsx)));
+const policy = moduleUrl(compile('./policy.ts'));
+const swap = code => code.replace("'./policy'", JSON.stringify(policy)).replace("'./engine'", JSON.stringify(engine)).replace("'./sample'", JSON.stringify(sample)).replace("'./features'", JSON.stringify(features)).replace("'./xlsx'", JSON.stringify(xlsx)).replace("'./files'", JSON.stringify(files));
+await import(moduleUrl(swap(compile('./curriculum.test.ts'))));

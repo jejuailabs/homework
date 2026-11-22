@@ -105,6 +105,7 @@ await import('../../modules/teacher-workspace/run-tests.mjs');
 await import('../../modules/sketchbook/run-tests.mjs');
 await import('../../modules/speech-studio/run-tests.mjs');
 await import('../../modules/berry-connector/run-tests.mjs');
+await import('../../modules/curriculum/run-tests.mjs');
 
 const adminConsolePolicyUrl=moduleUrl(compile('../admin-console-policy.ts'));
 await import(moduleUrl(compile('../admin-console-policy.test.ts').replace("'./admin-console-policy'",JSON.stringify(adminConsolePolicyUrl))));

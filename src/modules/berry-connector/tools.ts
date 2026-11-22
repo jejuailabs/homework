@@ -8,6 +8,8 @@ import {WORKSPACE_TOOLS, callWorkspaceTool} from './workspace-tools';
 import {CLASSROOM_TOOLS, callClassroomTool, menuFlags} from './classroom-tools';
 import {buildCatalog, flatCatalog} from './catalog';
 import {MANAGE_TOOLS} from './manage-tools';
+import {CURRICULUM_TOOLS, CURRICULUM_TOOL_NAMES, callCurriculumTool} from '@/modules/curriculum/berry-tools';
+import {curriculumAvailableFor} from '@/modules/curriculum/server';
 import {ASSIGNMENT_KINDS, ASSIGNMENT_ORDERS, findAssignments} from '@/lib/assignment-finder';
 import type {BearerContext, McpTool} from './types';
 
@@ -28,7 +30,14 @@ export const TOOLS: McpTool[] = [
   ...CLASSROOM_TOOLS,
   ...WORKSPACE_TOOLS,
   ...MANAGE_TOOLS,
+  ...CURRICULUM_TOOLS,
 ];
+
+/** Tools this connection may see: its scopes, plus the curriculum menu only for teachers it is opened to (hidden pilot). */
+export async function visibleTools(ctx: BearerContext) {
+  const curriculum = await curriculumAvailableFor(ctx.uid, ctx.role).catch(() => false);
+  return TOOLS.filter(tool => toolAllowed(tool, ctx.scopes) && (curriculum || !CURRICULUM_TOOL_NAMES.has(tool.name)));
+}
 
 const seoulDate = (iso: string) => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(iso));
 async function ownedClasses(uid: string) {
@@ -73,11 +82,12 @@ export async function callTool(name: string, args: Data, ctx: BearerContext) {
   if (!toolAllowed(tool, ctx.scopes)) throw new BerryError(`이 도구에는 ${[tool.scope].flat().join(' 또는 ')} 권한이 필요해요.`, 403, 'insufficient_scope');
   if (name === 'get_catalog') {
     // Built from the tools this connection may use, so the table never lists something the client cannot call.
-    const usable = TOOLS.filter(entry => toolAllowed(entry, ctx.scopes)), tree = buildCatalog(usable, menuFlags());
+    const usable = await visibleTools(ctx), tree = buildCatalog(usable, menuFlags());
     // A client that walks the tree asks for it; one that does not gets the same content flattened, as it always read it.
     const catalog = args.tree === true ? tree : flatCatalog(tree, usable);
     return typeof args.known_version === 'string' && args.known_version === catalog.version ? {version: catalog.version, unchanged: true} : catalog;
   }
+  if (CURRICULUM_TOOL_NAMES.has(name)) return callCurriculumTool(name, args, ctx);
   if (CLASSROOM_TOOLS.includes(tool)) return callClassroomTool(name, args, ctx);
   if (WORKSPACE_TOOLS.includes(tool) || MANAGE_TOOLS.includes(tool)) return callWorkspaceTool(name, args, ctx);
   switch (name) {
