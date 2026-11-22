@@ -13,7 +13,8 @@ const title = (plan: Plan, label: string): Cell[][] => [[{value: `${plan.year}�
 function hoursSheet(plan: Plan): Sheet {
   const stats = hourStats(plan), line = (entry: HourRow, total = false): Cell[] => {
     const plain = (value: number): Cell => total ? {value, style: 'total'} : value;
-    return [total ? {value: entry.name, style: 'total'} : entry.name, plain(entry.planned[1]), plain(entry.standard[1]), diffCell(entry.diff[1]), plain(entry.planned[2]), plain(entry.standard[2]), diffCell(entry.diff[2]), plain(entry.planned.year), plain(entry.standard.year), diffCell(entry.diff.year)];
+    const diff = (value: number): Cell => entry.hasStandard ? diffCell(value) : {value: '—', style: 'even'};
+    return [total ? {value: entry.name, style: 'total'} : entry.name, plain(entry.planned[1]), plain(entry.standard[1]), diff(entry.diff[1]), plain(entry.planned[2]), plain(entry.standard[2]), diff(entry.diff[2]), plain(entry.planned.year), plain(entry.standard.year), diff(entry.diff.year)];
   };
   return {name: '연간시수', widths: [18, 10, 10, 8, 10, 10, 8, 10, 10, 8], rows: [
     ...title(plan, '연간 시수 통계표'),

@@ -18,11 +18,14 @@ export type Plan = {
   daysRequired: number;
 };
 export type Session = {date: string; weekday: number; period: number; subject: SubjectKey; semester: 1 | 2; unit: string | null; lesson: number; lessons: number};
-export type HourRow = {subject: SubjectKey; name: string; planned: {1: number; 2: number; year: number}; standard: {1: number; 2: number; year: number}; diff: {1: number; 2: number; year: number}; outOfRange: boolean};
+/** hasStandard=false면 학교 기준시수를 아직 넣지 않은 교과: 증감을 보이지 않는다(0과 비교하면 거짓 경고가 된다). */
+export type HourRow = {subject: SubjectKey; name: string; planned: {1: number; 2: number; year: number}; standard: {1: number; 2: number; year: number}; diff: {1: number; 2: number; year: number}; outOfRange: boolean; hasStandard: boolean};
 export type HourStats = {rows: HourRow[]; total: HourRow; schoolDays: {1: number; 2: number; year: number}; daysRequired: number; warnings: string[]};
 
 /** 학교 기준시수 대비 증감 허용 폭(스쿨마스터 시수편제의 기본값 ±20%). */
 export const ALLOWED_RATIO = 0.2;
+/** 수업일수가 기준보다 이만큼 넘게 많으면 방학이 빠졌을 가능성을 알린다. */
+export const DAYS_SLACK = 15;
 export const WEEKDAYS = ['', '월', '화', '수', '목', '금', '토', '일'];
 
 const toTime = (date: string) => Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10));
@@ -75,7 +78,8 @@ export function schoolDayCount(plan: Plan) {
 
 const row = (subject: SubjectKey, name: string, planned: HourRow['planned'], standard: HourRow['standard']): HourRow => {
   const diff = {1: planned[1] - standard[1], 2: planned[2] - standard[2], year: planned.year - standard.year};
-  return {subject, name, planned, standard, diff, outOfRange: standard.year > 0 && Math.abs(diff.year) > standard.year * ALLOWED_RATIO};
+  const hasStandard = standard.year > 0;
+  return {subject, name, planned, standard, diff, outOfRange: hasStandard && Math.abs(diff.year) > standard.year * ALLOWED_RATIO, hasStandard};
 };
 
 /** 스쿨마스터 "연간시수 통계표"와 같은 표: 교과별 1·2학기 편성시수, 기준시수, 증감. */
@@ -86,10 +90,14 @@ export function hourStats(plan: Plan, sessions = expand(plan)): HourStats {
     return row(subject.key, subject.name, planned, {1: subject.standard[1], 2: subject.standard[2], year: subject.standard[1] + subject.standard[2]});
   });
   const sum = (pick: (entry: HourRow) => {1: number; 2: number; year: number}) => ({1: rows.reduce((n, entry) => n + pick(entry)[1], 0), 2: rows.reduce((n, entry) => n + pick(entry)[2], 0), year: rows.reduce((n, entry) => n + pick(entry).year, 0)});
-  const total = row('total', '합계', sum(entry => entry.planned), sum(entry => entry.standard));
+  const total = {...row('total', '합계', sum(entry => entry.planned), sum(entry => entry.standard)), hasStandard: rows.length > 0 && rows.every(entry => entry.hasStandard)};
   const schoolDays = schoolDayCount(plan), warnings: string[] = [];
   if (schoolDays.year < plan.daysRequired) warnings.push(`수업일수가 ${schoolDays.year}일로 기준 ${plan.daysRequired}일보다 ${plan.daysRequired - schoolDays.year}일 모자라요.`);
-  for (const entry of rows) {
+  if (schoolDays.year > plan.daysRequired + DAYS_SLACK) warnings.push(`수업일수가 ${schoolDays.year}일로 많아요. 방학·재량휴업일이 학사일정에 들어갔는지 확인해 주세요.`);
+  const missing = rows.filter(entry => !entry.hasStandard);
+  if (missing.length) warnings.push(`기준시수가 비어 있는 교과가 ${missing.length}개 있어요: ${missing.map(entry => entry.name).join(', ')}.`);
+  if (!plan.templates[1].length) warnings.push('1학기 기초시간표가 비어 있어요.');
+  for (const entry of rows.filter(item => item.hasStandard)) {
     if (entry.diff.year < 0) warnings.push(`${entry.name} 시수가 기준보다 ${-entry.diff.year}시간 모자라요.`);
     if (entry.outOfRange) warnings.push(`${entry.name} 증감이 기준의 ±${ALLOWED_RATIO * 100}%를 넘어요.`);
   }

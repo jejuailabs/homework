@@ -1,12 +1,14 @@
 'use client';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
-import {ArrowRight, BookOpenCheck, CalendarDays, ChevronRight, ClipboardList, Clock3, Download, FileSpreadsheet, Layers, Lock, MessageCircleHeart, NotebookPen, Search, Sparkles, Star, Wand2, X} from 'lucide-react';
+import {ArrowRight, BookOpenCheck, CalendarDays, Check, ChevronRight, ClipboardList, Clock3, CloudOff, Download, FileSpreadsheet, Layers, LoaderCircle, Lock, MessageCircleHeart, NotebookPen, School, Search, Sparkles, Star, Wand2, X} from 'lucide-react';
 import {FEATURES, SECTIONS, SECTION_PAGES, STATUS_LABELS, STEPS, TABS, searchFeatures, sectionName, type Feature, type TabKey} from './features';
 import {addDays, expand, hourStats, isSchoolDay, progressToDate, schoolWeekOf, shortDate, week, type Plan} from './engine';
 import {buildFile, type FileKind} from './files';
 import {SAMPLE_PLAN} from './sample';
 import {SECTION_VIEWS, WeeklyView, toneOf, type SectionViewKey, type ViewProps} from './views';
+import {StartDialog, type StartInput} from './editors';
+import {starterPlan} from './starter';
 import './styles.css';
 
 /**
@@ -15,6 +17,7 @@ import './styles.css';
  * preview: 로그인 없는 로컬 시안 페이지(/curriculum-preview). 서버를 부르지 않는다.
  */
 type View = {tab: 'home' | TabKey; section: string | null; date: string | null};
+type SaveState = {state: 'idle' | 'saving' | 'saved' | 'error' | 'stale'; message?: string; at?: string};
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const seoulToday = () => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
 const BERRY_EXAMPLES = ['시수 정리된 엑셀 만들어줘', '이번 주 주간학습 보여줘', '모자란 시수가 있는 교과 알려줘', '스쿨마스터 연간시수 자동맞추기는 어디 있어?'];
@@ -27,7 +30,11 @@ function readView(): View {
 
 export default function CurriculumWorkspace({preview = false}: {preview?: boolean}) {
   const [available, setAvailable] = useState<boolean | null>(preview ? true : null);
-  const [plan, setPlan] = useState<Plan>(SAMPLE_PLAN);
+  const [plan, setPlan] = useState<Plan>(SAMPLE_PLAN), [original, setOriginal] = useState<Plan>(SAMPLE_PLAN);
+  // loaded: 선생님 반 계획을 서버에서 받았는지(없으면 예시 학급을 보여 준다). version은 두 창 덮어쓰기 방지용.
+  const [loaded, setLoaded] = useState(preview), version = useRef<number | null>(null), saved = useRef<Plan>(SAMPLE_PLAN);
+  const [save, setSave] = useState<SaveState>({state: 'idle'});
+  const [starting, setStarting] = useState<{open: boolean; busy: boolean; error: string}>({open: false, busy: false, error: ''});
   const [view, setView] = useState<View>({tab: 'home', section: null, date: null});
   const [searching, setSearching] = useState(false), [notice, setNotice] = useState('');
   const today = useMemo(seoulToday, []);
@@ -50,10 +57,59 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
     return () => {alive = false;};
   }, [preview]);
 
+  useEffect(() => {
+    if (preview || !available) return;
+    let alive = true;
+    fetch('/api/curriculum/plan', {cache: 'no-store'}).then(response => response.ok ? response.json() : Promise.reject(new Error())).then((data: {plan: Plan | null; version?: number}) => {
+      if (!alive) return;
+      if (data.plan) {setPlan(data.plan); setOriginal(data.plan); saved.current = data.plan; version.current = data.version ?? null;}
+      setLoaded(true);
+    }).catch(() => {if (alive) {setLoaded(true); setNotice('우리 반 계획을 불러오지 못했어요. 예시 학급을 보여 드려요.');}});
+    return () => {alive = false;};
+  }, [preview, available]);
+
+  // 우리 반 계획은 바뀌면 잠시 뒤 자동 저장한다(예시 학급·시안 화면은 저장하지 않는다).
+  useEffect(() => {
+    if (preview || plan.sample || version.current === null || plan === saved.current) return;
+    const timer = setTimeout(async () => {
+      setSave({state: 'saving'});
+      try {
+        const response = await fetch('/api/curriculum/plan', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({plan, version: version.current})});
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 409 && data.code === 'STALE_VERSION') {setSave({state: 'stale', message: data.error}); return;}
+        if (!response.ok) {setSave({state: 'error', message: data.error ?? '저장하지 못했어요.'}); return;}
+        version.current = data.version; saved.current = plan;
+        setSave({state: 'saved', at: new Intl.DateTimeFormat('ko-KR', {timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit'}).format(new Date())});
+      } catch {setSave({state: 'error', message: '인터넷 연결을 확인해 주세요. 다시 고치면 다시 저장해요.'});}
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [plan, preview]);
+
+  const start = useCallback(async (input: StartInput) => {
+    setStarting(old => ({...old, busy: true, error: ''}));
+    if (preview) {
+      // 시안 화면: 서버 없이 같은 시작 계획을 만들어 흐름만 보여 준다(저장하지 않는다).
+      const value = starterPlan({...input, schoolName: input.schoolName.trim(), className: input.className.trim()});
+      setPlan(value); setOriginal(value); setStarting({open: false, busy: false, error: ''});
+      setNotice('시안 화면이라 저장은 하지 않아요. 기초시간표부터 채워 보세요.');
+      setView(old => ({...old, tab: 'curriculum', section: '1.2.3'}));
+      return;
+    }
+    try {
+      const response = await fetch('/api/curriculum/plan', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(input)});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error ?? '만들지 못했어요.');
+      setPlan(data.plan); setOriginal(data.plan); saved.current = data.plan; version.current = data.version;
+      setStarting({open: false, busy: false, error: ''});
+      setNotice('우리 반을 만들었어요. 기초시간표부터 채워 보세요.');
+      setView(old => ({...old, tab: 'curriculum', section: '1.2.3'}));
+    } catch (error) {setStarting(old => ({...old, busy: false, error: (error as Error).message}));}
+  }, [preview]);
+
   // 베리가 준 파일 링크(?download=hours)로 들어오면 그 자리에서 내려받고 주소를 정리한다.
   const handled = useRef(false);
   useEffect(() => {
-    if (!available || handled.current) return;
+    if (!available || !loaded || handled.current) return;
     handled.current = true;
     const params = new URLSearchParams(window.location.search), kind = params.get('download');
     if (kind === 'hours' || kind === 'progress' || kind === 'weekly') {
@@ -61,7 +117,7 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
       params.delete('download');
       history.replaceState(null, '', `${location.pathname}${params.size ? `?${params}` : ''}`);
     }
-  }, [available, download]);
+  }, [available, loaded, download]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {event.preventDefault(); setSearching(true);} if (event.key === 'Escape') setSearching(false);};
@@ -90,10 +146,10 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
     window.dispatchEvent(new CustomEvent('berry:ask', {detail: {label: '교육과정', prompt, needs: []}}));
   }, [preview]);
 
-  if (available === null) return <div className="cur-shell"><p className="cur-muted">교육과정 작업실을 여는 중…</p></div>;
+  if (available === null || (available && !loaded)) return <div className="cur-shell"><p className="cur-muted">교육과정 작업실을 여는 중…</p></div>;
   if (!available) return <div className="cur-shell"><div className="cur-locked"><Lock size={22}/><h2>교육과정 작업실은 아직 준비 중이에요</h2><p>지금은 일부 선생님과 먼저 시험하고 있어요.</p><Link className="cur-btn" href="/teacher">선생님 홈으로</Link></div></div>;
 
-  const props: ViewProps = {plan, sessions, today, onPlan: setPlan, onDownload: download, original: SAMPLE_PLAN};
+  const props: ViewProps = {plan, sessions, today, onPlan: setPlan, onDownload: download, original};
   return <div className="cur-shell">
     <header className="cur-hero">
       <div>
@@ -102,10 +158,16 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
         <p className="cur-sub">{plan.schoolName} {plan.year}학년도 {plan.className} · 스쿨마스터에서 하던 일을 같은 순서로</p>
       </div>
       <div className="cur-hero-actions">
+        {!plan.sample && (preview ? <span className="cur-save">시안: 저장 안 함</span> : <SaveBadge save={save}/>)}
         <button className="cur-search-btn" onClick={() => setSearching(true)}><Search size={16}/>기능 찾기<kbd>Ctrl K</kbd></button>
         <button className="cur-btn is-berry" onClick={() => askBerry('교육과정 메뉴에서 지금 할 수 있는 일을 알려줘')}><Sparkles size={16}/>베리에게 시키기</button>
       </div>
     </header>
+
+    {plan.sample && <div className="cur-start-banner">
+      <School size={20}/><div><strong>지금 보는 것은 예시 학급이에요.</strong><p>우리 반을 시작하면 시간표·기준시수·학사일정을 넣고 자동으로 저장돼요. 베리도 우리 반 자료로 답해요.</p></div>
+      <button className="cur-btn" onClick={() => setStarting({open: true, busy: false, error: ''})}>우리 반 시작하기</button>
+    </div>}
 
     <nav className="cur-tabs" aria-label="교육과정 메뉴">
       <button className={view.tab === 'home' ? 'is-on' : ''} onClick={() => go({tab: 'home', section: null})}><Layers size={16}/>홈</button>
@@ -117,8 +179,17 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
       : <TabView tab={view.tab} section={view.section} date={view.date} go={go} askBerry={askBerry} props={props}/>}
 
     {searching && <SearchDialog onClose={() => setSearching(false)} onPick={feature => {setSearching(false); if (feature.link) window.location.assign(feature.link); else go({tab: feature.tab, section: feature.section});}}/>}
+    {starting.open && <StartDialog busy={starting.busy} error={starting.error} onStart={start} onClose={() => setStarting({open: false, busy: false, error: ''})}/>}
     {notice && <div className="cur-toast" role="status">{notice}</div>}
   </div>;
+}
+
+function SaveBadge({save}: {save: SaveState}) {
+  if (save.state === 'saving') return <span className="cur-save is-saving"><LoaderCircle size={14}/>저장 중</span>;
+  if (save.state === 'saved') return <span className="cur-save is-saved"><Check size={14}/>{save.at} 저장됨</span>;
+  if (save.state === 'stale') return <span className="cur-save is-error" title={save.message}><CloudOff size={14}/>다른 창에서 먼저 저장 · <button onClick={() => location.reload()}>새로고침</button></span>;
+  if (save.state === 'error') return <span className="cur-save is-error" title={save.message}><CloudOff size={14}/>{save.message}</span>;
+  return <span className="cur-save"><Check size={14}/>자동 저장</span>;
 }
 
 function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sessions: ReturnType<typeof expand>; today: string; go: (view: Partial<View>) => void; askBerry: (prompt: string) => void; download: (kind: FileKind, date?: string) => void}) {
@@ -139,6 +210,7 @@ function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sess
     <div className="cur-cards">
       <article className="cur-card is-wide">
         <header><span className="cur-card-icon tone-sky"><Clock3 size={18}/></span><div><h3>{day === today ? '오늘 시간표' : '다음 수업일 시간표'}</h3><p>{shortDate(day)}{plan.days.find(entry => entry.date === day)?.name ? ` · ${plan.days.find(entry => entry.date === day)!.name}` : ''}</p></div><button className="cur-link" onClick={() => go({tab: 'curriculum', section: '1.2.3'})}>기초시간표<ChevronRight size={15}/></button></header>
+        {!todayCells.length && <div className="cur-empty"><p>{plan.templates[1].length ? '이날은 수업이 없어요.' : '기초시간표가 비어 있어요. 요일·교시별 과목을 넣으면 오늘 시간표·시수·주간학습이 한꺼번에 채워져요.'}</p>{!plan.templates[1].length && <button className="cur-btn" onClick={() => go({tab: 'curriculum', section: '1.2.3'})}>기초시간표 채우기</button>}</div>}
         <ol className="cur-today">{todayCells.map(cell => <li key={cell.period} className={`tone-${toneOf(plan, cell.subject)}`}><b>{cell.period}</b><strong>{cell.name}</strong><small>{cell.unit ? `${cell.unit}${cell.lessons ? ` · ${cell.lesson}/${cell.lessons}차시` : ''}` : ''}</small></li>)}</ol>
       </article>
 

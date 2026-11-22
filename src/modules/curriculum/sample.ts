@@ -45,11 +45,13 @@ const DAYS: DayNote[] = [
   {date: '2026-03-02', kind: 'holiday', name: '삼일절 대체공휴일'},
   {date: '2026-03-03', kind: 'event', name: '시업식·입학식', periods: 4},
   {date: '2026-04-17', kind: 'event', name: '현장체험학습'},
+  {date: '2026-05-01', kind: 'holiday', name: '노동절'},
   {date: '2026-05-04', kind: 'off', name: '재량휴업일'},
   {date: '2026-05-05', kind: 'holiday', name: '어린이날'},
   {date: '2026-05-08', kind: 'event', name: '운동회', periods: 4},
   {date: '2026-05-25', kind: 'holiday', name: '부처님오신날 대체공휴일'},
   {date: '2026-06-03', kind: 'holiday', name: '전국동시지방선거'},
+  {date: '2026-07-17', kind: 'holiday', name: '제헌절'},
   {date: '2026-07-21', kind: 'event', name: '여름방학식', periods: 4},
   ...range('2026-07-22', '2026-08-16', 'vacation', '여름방학'),
   {date: '2026-08-17', kind: 'holiday', name: '광복절 대체공휴일'},
@@ -67,6 +69,6 @@ const DAYS: DayNote[] = [
 
 export const SAMPLE_PLAN: Plan = {
   sample: true, schoolName: '예시초등학교', className: '3학년 4반', grade: 3, year: 2026,
-  startsOn: '2026-03-03', semester2On: '2026-08-18', endsOn: '2027-02-28', periodsPerDay: 6,
+  startsOn: '2026-03-02', semester2On: '2026-08-18', endsOn: '2027-02-28', periodsPerDay: 6,
   subjects: SUBJECTS, templates: {1: template, 2: template}, days: DAYS, daysRequired: 190,
 };

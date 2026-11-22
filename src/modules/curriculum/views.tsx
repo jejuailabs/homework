@@ -1,6 +1,7 @@
 'use client';
 import {useMemo, useState} from 'react';
-import {ChevronLeft, ChevronRight, Download, Printer, RotateCcw} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Download, PencilLine, Printer, RotateCcw} from 'lucide-react';
+import {DayDialog, InfoView} from './editors';
 import {WEEKDAYS, addDays, dayNote, hourStats, isSchoolDay, progressBook, schoolWeekOf, setSlot, shortDate, week, weekStartOf, weekdayOf, weeklyCounts, type Plan, type Session, type SubjectKey} from './engine';
 import type {FileKind} from './files';
 
@@ -12,22 +13,34 @@ const signed = (value: number) => value > 0 ? `+${value}` : String(value);
 const diffClass = (value: number) => value < 0 ? 'is-short' : value > 0 ? 'is-over' : 'is-even';
 
 /** 1.2.4 연간시간표 — 스쿨마스터 "연간시수 통계표"와 같은 모양(교과가 열, 학기가 행). */
-export function HoursView({plan, sessions, onDownload}: ViewProps) {
+export function HoursView({plan, sessions, onDownload, onPlan}: ViewProps) {
   const stats = useMemo(() => hourStats(plan, sessions), [plan, sessions]);
+  const [editing, setEditing] = useState(false);
   const columns = [...stats.rows, stats.total];
-  const line = (label: string, pick: (row: typeof stats.total) => number, kind: 'plain' | 'std' | 'diff') => (
-    <tr className={`is-${kind}`}><th scope="row">{label}</th>{columns.map(row => {const value = pick(row); return <td key={row.subject} className={kind === 'diff' ? diffClass(value) : row.subject === 'total' ? 'is-total' : ''}>{kind === 'diff' ? signed(value) : value}</td>;})}</tr>
+  const setStandard = (key: string, semester: 1 | 2, value: number) => onPlan({...plan, subjects: plan.subjects.map(subject => subject.key === key ? {...subject, standard: {...subject.standard, [semester]: Math.max(0, Math.min(400, Math.round(value) || 0))}} : subject)});
+  const line = (label: string, pick: (row: typeof stats.total) => number, kind: 'plain' | 'std' | 'diff', semester?: 1 | 2) => (
+    <tr className={`is-${kind}`}><th scope="row">{label}</th>{columns.map(row => {
+      const value = pick(row);
+      if (kind === 'std' && editing && semester && row.subject !== 'total') return <td key={row.subject} className="is-edit"><input type="number" min={0} max={400} aria-label={`${row.name} ${semester}학기 기준시수`} value={value} onChange={event => setStandard(row.subject, semester, Number(event.target.value))}/></td>;
+      if (kind === 'diff' && !row.hasStandard) return <td key={row.subject} className="is-even">—</td>;
+      if (kind === 'std' && !row.hasStandard && row.subject !== 'total') return <td key={row.subject} className="is-missing">{value || '?'}</td>;
+      return <td key={row.subject} className={kind === 'diff' ? diffClass(value) : row.subject === 'total' ? 'is-total' : ''}>{kind === 'diff' ? signed(value) : value}</td>;
+    })}</tr>
   );
   return <section className="cur-view">
     <div className="cur-view-head">
       <div><h3>연간 시수 통계표</h3><p>교과별 편성 시수를 학교 기준과 비교해요. <span className="cur-legend is-short">빨강 = 모자람</span> <span className="cur-legend is-over">파랑 = 많음</span></p></div>
-      <button className="cur-btn" onClick={() => onDownload('hours')}><Download size={16}/>엑셀로 받기</button>
+      <div className="cur-actions">
+        {!plan.sample && <button className={`cur-btn ${editing ? '' : 'is-ghost'}`} onClick={() => setEditing(!editing)}><PencilLine size={16}/>{editing ? '기준시수 다 넣었어요' : '기준시수 고치기'}</button>}
+        <button className="cur-btn" onClick={() => onDownload('hours')}><Download size={16}/>엑셀로 받기</button>
+      </div>
     </div>
+    {editing && <p className="cur-muted">학교 교육과정 편제표의 학기별 기준시수를 넣으세요. 넣는 대로 증감이 다시 계산되고 자동으로 저장돼요.</p>}
     <div className="cur-table-wrap"><table className="cur-hours">
       <thead><tr><th/>{columns.map(row => <th key={row.subject} scope="col">{row.subject === 'total' ? '합계' : plan.subjects.find(subject => subject.key === row.subject)?.short === '창' ? '창체' : row.name}</th>)}</tr></thead>
       <tbody>
-        {line('1학기 편성', row => row.planned[1], 'plain')}{line('기준', row => row.standard[1], 'std')}{line('증감', row => row.diff[1], 'diff')}
-        {line('2학기 편성', row => row.planned[2], 'plain')}{line('기준', row => row.standard[2], 'std')}{line('증감', row => row.diff[2], 'diff')}
+        {line('1학기 편성', row => row.planned[1], 'plain')}{line('기준', row => row.standard[1], 'std', 1)}{line('증감', row => row.diff[1], 'diff')}
+        {line('2학기 편성', row => row.planned[2], 'plain')}{line('기준', row => row.standard[2], 'std', 2)}{line('증감', row => row.diff[2], 'diff')}
         {line('연간 편성', row => row.planned.year, 'plain')}{line('기준', row => row.standard.year, 'std')}{line('증감', row => row.diff.year, 'diff')}
       </tbody>
     </table></div>
@@ -69,13 +82,14 @@ export function TemplateView({plan, original, onPlan}: ViewProps) {
     </div>
     <div className="cur-counts">{plan.subjects.map(subject => <span key={subject.key} className={`cur-chip tone-${subject.tone}`}>{subject.short === '창' ? '창체' : subject.name} 주 {counts.get(subject.key) ?? 0}</span>)}</div>
     <div className="cur-change">
-      {changes.length ? <><strong>바꾼 결과 (연간 시수)</strong>{changes.map(entry => <span key={entry.name} className={diffClass(entry.delta)}>{entry.name} {signed(entry.delta)}</span>)}<button className="cur-btn is-ghost" onClick={() => onPlan(original)}><RotateCcw size={15}/>처음으로</button></> : <span className="cur-muted">아직 바꾼 칸이 없어요. 시험 화면이라 바꾼 내용은 저장되지 않아요.</span>}
+      {changes.length ? <><strong>바꾼 결과 (연간 시수)</strong>{changes.map(entry => <span key={entry.name} className={diffClass(entry.delta)}>{entry.name} {signed(entry.delta)}</span>)}<button className="cur-btn is-ghost" onClick={() => onPlan(original)}><RotateCcw size={15}/>처음으로</button></> : <span className="cur-muted">{plan.sample ? '아직 바꾼 칸이 없어요. 예시 학급이라 바꾼 내용은 저장되지 않아요.' : '칸을 바꾸면 자동으로 저장돼요.'}</span>}
     </div>
   </section>;
 }
 
 /** 1.1.5 학사일정-휴업일 — 한 해를 달력 열두 장으로, 수업일수는 계산해서. */
-export function CalendarView({plan}: ViewProps) {
+export function CalendarView({plan, onPlan}: ViewProps) {
+  const [editing, setEditing] = useState<string | null>(null);
   const months = useMemo(() => {
     const out: string[] = [];
     for (let month = plan.startsOn.slice(0, 7); month <= plan.endsOn.slice(0, 7); month = addDays(`${month}-28`, 7).slice(0, 7)) out.push(month);
@@ -84,7 +98,7 @@ export function CalendarView({plan}: ViewProps) {
   const stats = useMemo(() => hourStats(plan), [plan]);
   return <section className="cur-view">
     <div className="cur-view-head">
-      <div><h3>학사일정·휴업일</h3><p>공휴일·방학·행사를 빼고 수업일수를 셉니다.</p></div>
+      <div><h3>학사일정·휴업일</h3><p>공휴일·방학·행사를 빼고 수업일수를 셉니다. 날짜를 누르면 방학·재량휴업·행사를 넣어요.</p></div>
       <div className="cur-days is-inline"><strong>{stats.schoolDays.year}일</strong><span>/ 기준 {plan.daysRequired}일</span></div>
     </div>
     <div className="cur-legend-row"><span className="day-class">수업</span><span className="day-event">행사</span><span className="day-holiday">공휴일</span><span className="day-vacation">방학</span><span className="day-off">재량휴업</span></div>
@@ -98,12 +112,13 @@ export function CalendarView({plan}: ViewProps) {
           {days.map(date => {
             const note = dayNote(plan, date), inYear = date >= plan.startsOn && date <= plan.endsOn, weekend = weekdayOf(date) > 5;
             const kind = !inYear ? 'out' : note ? note.kind : weekend ? 'weekend' : 'class';
-            return <span key={date} className={`day-${kind}`} title={note ? `${shortDate(date)} ${note.name}` : undefined}>{+date.slice(8, 10)}</span>;
+            return inYear ? <button key={date} className={`day-${kind}`} title={note ? `${shortDate(date)} ${note.name}` : shortDate(date)} onClick={() => setEditing(date)}>{+date.slice(8, 10)}</button> : <span key={date} className={`day-${kind}`}>{+date.slice(8, 10)}</span>;
           })}
         </div>
         <ul>{plan.days.filter(day => day.date.startsWith(month) && day.kind !== 'vacation').map(day => <li key={day.date}><b>{+day.date.slice(8, 10)}일</b> {day.name}{day.periods ? ` (${day.periods}교시)` : ''}</li>)}</ul>
       </div>;
     })}</div>
+    {editing && <DayDialog plan={plan} date={editing} onPlan={onPlan} onClose={() => setEditing(null)}/>}
   </section>;
 }
 
@@ -162,5 +177,6 @@ export function WeeklyView({plan, sessions, today, onDownload, focusDate}: ViewP
   </section>;
 }
 
-export const SECTION_VIEWS = {hours: HoursView, template: TemplateView, calendar: CalendarView, progress: ProgressView, weekly: WeeklyView} as const;
+const InfoSection = ({plan, onPlan}: ViewProps) => <InfoView key={`${plan.className}|${plan.semester2On}|${plan.endsOn}`} plan={plan} onPlan={onPlan}/>;
+export const SECTION_VIEWS = {hours: HoursView, template: TemplateView, calendar: CalendarView, progress: ProgressView, weekly: WeeklyView, info: InfoSection} as const;
 export type SectionViewKey = keyof typeof SECTION_VIEWS;
