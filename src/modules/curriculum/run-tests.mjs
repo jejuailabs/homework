@@ -15,7 +15,8 @@ const sampleUrl = moduleUrl(compile('./sample.ts'));
 const starter = moduleUrl(compile('./starter.ts').replace("'./sample'", JSON.stringify(sampleUrl)));
 const changes = moduleUrl(compile('./changes.ts'));
 const rules = moduleUrl(compile('./rules.ts'));
-const swap = code => code.replace("'./policy'", JSON.stringify(policy)).replace("'./starter'", JSON.stringify(starter)).replace("'./changes'", JSON.stringify(changes)).replace("'./rules'", JSON.stringify(rules)).replace("'./engine'", JSON.stringify(engine)).replace("'./sample'", JSON.stringify(sample)).replace("'./features'", JSON.stringify(features)).replace("'./xlsx'", JSON.stringify(xlsx)).replace("'./files'", JSON.stringify(files));
+const berryTasks = moduleUrl(compile('./berry-tasks.ts'));
+const swap = code => code.replace("'./policy'", JSON.stringify(policy)).replace("'./starter'", JSON.stringify(starter)).replace("'./changes'", JSON.stringify(changes)).replace("'./rules'", JSON.stringify(rules)).replace("'./berry-tasks'", JSON.stringify(berryTasks)).replace("'./engine'", JSON.stringify(engine)).replace("'./sample'", JSON.stringify(sample)).replace("'./features'", JSON.stringify(features)).replace("'./xlsx'", JSON.stringify(xlsx)).replace("'./files'", JSON.stringify(files));
 await import(moduleUrl(swap(compile('./curriculum.test.ts'))));
 
 // 판독: 엑셀·한글 표 읽기와 해석.

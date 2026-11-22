@@ -2,18 +2,22 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {ArrowRight, BookOpenCheck, CalendarDays, Check, ChevronRight, ClipboardList, Clock3, CloudOff, Download, FileSpreadsheet, Layers, LoaderCircle, Lock, MessageCircleHeart, NotebookPen, School, Search, Sparkles, Star, Wand2, X} from 'lucide-react';
-import {FEATURES, SECTIONS, SECTION_PAGES, STATUS_LABELS, STEPS, TABS, searchFeatures, sectionName, type Feature, type TabKey} from './features';
+import {FEATURES, SECTIONS, SECTION_PAGES, STATUS_LABELS, STEPS, TABS, sectionName, type Feature, type TabKey} from './features';
 import {addDays, expand, hourStats, isSchoolDay, progressToDate, schoolWeekOf, shortDate, week, type Plan} from './engine';
 import {buildFile, type FileKind} from './files';
 import {SAMPLE_PLAN} from './sample';
 import {SECTION_VIEWS, WeeklyView, toneOf, type SectionViewKey, type ViewProps} from './views';
 import {StartDialog, type StartInput} from './editors';
 import HoursCenter from './hours-center';
+import BerryPlan from './berry-plan';
+import FeatureMap from './feature-map';
+import {featureTask, taskOf, type BerryTask} from './berry-tasks';
 import {starterPlan} from './starter';
 import './styles.css';
 
 /**
- * 교육과정 작업실(스쿨마스터 대체). 위 탭은 스쿨마스터의 큰 메뉴 순서, 탭 안은 스쿨마스터 "작성 흐름도"를 그대로 따른다.
+ * 교육과정 작업실. 위 탭은 선생님들이 익숙한 교육과정 업무 순서, 탭 안은 "작성 흐름도"(담당자 → 담임·전담 → 출력)를 따른다.
+ * 화면·베리 응답에는 다른 회사 프로그램 이름을 쓰지 않는다(내부 설계 문서에만 남긴다).
  * 기능 229개는 모두 메뉴에 자리가 있고, 각 탭 맨 위에 핵심 기능 카드가 먼저 보인다.
  * preview: 로그인 없는 로컬 시안 페이지(/curriculum-preview). 서버를 부르지 않는다.
  */
@@ -21,7 +25,7 @@ type View = {tab: 'home' | 'hours' | TabKey; section: string | null; date: strin
 type SaveState = {state: 'idle' | 'saving' | 'saved' | 'error' | 'stale'; message?: string; at?: string};
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const seoulToday = () => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
-const BERRY_EXAMPLES = ['시수 정리된 엑셀 만들어줘', '이번 주 주간학습 보여줘', '모자란 시수가 있는 교과 알려줘', '스쿨마스터 연간시수 자동맞추기는 어디 있어?'];
+const BERRY_CHIPS = ['check-hours', 'hours-file', 'week', 'find'];
 const STATUS_TONE: Record<Feature['status'], string> = {live: 'is-live', elsewhere: 'is-elsewhere', planned: 'is-planned'};
 
 function readView(): View {
@@ -38,6 +42,8 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
   const [starting, setStarting] = useState<{open: boolean; busy: boolean; error: string}>({open: false, busy: false, error: ''});
   const [view, setView] = useState<View>({tab: 'home', section: null, date: null});
   const [searching, setSearching] = useState(false), [notice, setNotice] = useState('');
+  // 베리 계획 확인 창: undefined = 닫힘, null = 맡길 일 고르기, task = 그 계획.
+  const [berryPlan, setBerryPlan] = useState<BerryTask | null | undefined>(undefined);
   const today = useMemo(seoulToday, []);
   const sessions = useMemo(() => expand(plan), [plan]);
 
@@ -142,9 +148,12 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
     if (!next.section) window.scrollTo({top: 0, behavior: 'smooth'});
   }, []);
 
-  const askBerry = useCallback((prompt: string) => {
-    if (preview) {setNotice(`시안 화면에는 베리 창이 없어요. 선생님 화면에서는 "${prompt}"가 베리에게 바로 전달돼요.`); return;}
-    window.dispatchEvent(new CustomEvent('berry:ask', {detail: {label: '교육과정', prompt, needs: []}}));
+  // 베리 버튼은 바로 보내지 않고 계획부터 보여 준다. 확인하면 그때 베리 창으로 보낸다.
+  const askBerry = useCallback((task: BerryTask | null) => setBerryPlan(task), []);
+  const sendBerry = useCallback((task: BerryTask) => {
+    setBerryPlan(undefined);
+    if (preview) {setNotice(`시안 화면에는 베리 창이 없어요. 선생님 화면에서는 "${task.title}"를 베리가 이 계획대로 시작해요.`); return;}
+    window.dispatchEvent(new CustomEvent('berry:ask', {detail: {label: task.title, prompt: task.prompt, needs: []}}));
   }, [preview]);
 
   if (available === null || (available && !loaded)) return <div className="cur-shell"><p className="cur-muted">교육과정 작업실을 여는 중…</p></div>;
@@ -156,12 +165,12 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
       <div>
         <p className="cur-eyebrow">모두의 교실 · 교육과정 {plan.sample && <span className="cur-sample">시험용 예시 학급</span>}</p>
         <h2>교육과정 작업실</h2>
-        <p className="cur-sub">{plan.schoolName} {plan.year}학년도 {plan.className} · 스쿨마스터에서 하던 일을 같은 순서로</p>
+        <p className="cur-sub">{plan.schoolName} {plan.year}학년도 {plan.className} · 익숙한 교육과정 업무 순서 그대로</p>
       </div>
       <div className="cur-hero-actions">
         {!plan.sample && (preview ? <span className="cur-save">시안: 저장 안 함</span> : <SaveBadge save={save}/>)}
-        <button className="cur-search-btn" onClick={() => setSearching(true)}><Search size={16}/>기능 찾기<kbd>Ctrl K</kbd></button>
-        <button className="cur-btn is-berry" onClick={() => askBerry('교육과정 메뉴에서 지금 할 수 있는 일을 알려줘')}><Sparkles size={16}/>베리에게 시키기</button>
+        <button className="cur-search-btn" onClick={() => setSearching(true)}><Search size={16}/>기능 지도<kbd>Ctrl K</kbd></button>
+        <button className="cur-btn is-berry" onClick={() => askBerry(null)}><Sparkles size={16}/>베리에게 시키기</button>
       </div>
     </header>
 
@@ -181,7 +190,8 @@ export default function CurriculumWorkspace({preview = false}: {preview?: boolea
       ? <Home plan={plan} sessions={sessions} today={today} go={go} askBerry={askBerry} download={download}/>
       : <TabView tab={view.tab} section={view.section} date={view.date} go={go} askBerry={askBerry} props={props}/>}
 
-    {searching && <SearchDialog onClose={() => setSearching(false)} onPick={feature => {setSearching(false); if (feature.link) window.location.assign(feature.link); else go({tab: feature.tab, section: feature.section});}}/>}
+    {berryPlan !== undefined && <BerryPlan key={berryPlan?.key ?? 'pick'} task={berryPlan} onConfirm={sendBerry} onClose={() => setBerryPlan(undefined)}/>}
+    {searching && <FeatureMap onClose={() => setSearching(false)} onPick={feature => {setSearching(false); if (feature.link) window.location.assign(feature.link); else go({tab: feature.tab, section: feature.section});}}/>}
     {starting.open && <StartDialog busy={starting.busy} error={starting.error} onStart={start} onClose={() => setStarting({open: false, busy: false, error: ''})}/>}
     {notice && <div className="cur-toast" role="status">{notice}</div>}
   </div>;
@@ -195,7 +205,7 @@ function SaveBadge({save}: {save: SaveState}) {
   return <span className="cur-save"><Check size={14}/>자동 저장</span>;
 }
 
-function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sessions: ReturnType<typeof expand>; today: string; go: (view: Partial<View>) => void; askBerry: (prompt: string) => void; download: (kind: FileKind, date?: string) => void}) {
+function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sessions: ReturnType<typeof expand>; today: string; go: (view: Partial<View>) => void; askBerry: (task: BerryTask | null) => void; download: (kind: FileKind, date?: string) => void}) {
   const stats = useMemo(() => hourStats(plan, sessions), [plan, sessions]);
   let day = today;
   for (let step = 0; step < 14 && !isSchoolDay(plan, day); step++) day = addDays(day, 1);
@@ -206,8 +216,8 @@ function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sess
   return <div className="cur-home">
     <section className="cur-berry-strip">
       <div className="cur-berry-face"><MessageCircleHeart size={22}/></div>
-      <div><strong>몰라도 괜찮아요. 베리에게 말로 시키세요.</strong><p>시수 계산, 파일 만들기, 스쿨마스터 기능 위치까지 베리가 대신 찾아요.</p></div>
-      <div className="cur-berry-chips">{BERRY_EXAMPLES.map(text => <button key={text} onClick={() => askBerry(text)}>{text}</button>)}</div>
+      <div><strong>몰라도 괜찮아요. 베리에게 말로 시키세요.</strong><p>누르면 베리가 어떻게 진행할지 먼저 보여 드려요. 확인하면 그때 시작해요.</p></div>
+      <div className="cur-berry-chips">{BERRY_CHIPS.map(key => <button key={key} onClick={() => askBerry(taskOf(key))}>{taskOf(key).title}</button>)}<button onClick={() => askBerry(null)}>다른 일…</button></div>
     </section>
 
     <div className="cur-cards">
@@ -251,7 +261,7 @@ function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sess
     </div>
 
     <section className="cur-coverage">
-      <div><h3>스쿨마스터 기능 {FEATURES.length}개</h3><p>모든 기능이 메뉴에 자리를 갖고 있어요. 단계별로 채워 갑니다.</p></div>
+      <div><h3>교육과정 기능 {FEATURES.length}개</h3><p>모든 기능이 메뉴에 자리를 갖고 있어요. 단계별로 채워 갑니다.</p></div>
       <div className="cur-coverage-bar" aria-label="기능 진행 상황"><em className="is-live" style={{flex: counts.live}}/><em className="is-elsewhere" style={{flex: counts.elsewhere}}/><em className="is-planned" style={{flex: counts.planned}}/></div>
       <div className="cur-coverage-legend"><span className="is-live">지금 사용 {counts.live}</span><span className="is-elsewhere">모두의 교실에 있음 {counts.elsewhere}</span><span className="is-planned">준비 중 {counts.planned}</span></div>
       <div className="cur-tab-tiles">{TABS.map(tab => {const mine = FEATURES.filter(feature => feature.tab === tab.key); return <button key={tab.key} onClick={() => go({tab: tab.key, section: null})}><span className="cur-tab-no">{tab.no}</span><strong>{tab.name}</strong><small>{tab.summary}</small><em>{mine.length}개 기능 · 핵심 {mine.filter(feature => feature.core).length}<ArrowRight size={14}/></em></button>;})}</div>
@@ -259,7 +269,7 @@ function Home({plan, sessions, today, go, askBerry, download}: {plan: Plan; sess
   </div>;
 }
 
-function TabView({tab, section, date, go, askBerry, props}: {tab: TabKey; section: string | null; date: string | null; go: (view: Partial<View>) => void; askBerry: (prompt: string) => void; props: ViewProps}) {
+function TabView({tab, section, date, go, askBerry, props}: {tab: TabKey; section: string | null; date: string | null; go: (view: Partial<View>) => void; askBerry: (task: BerryTask | null) => void; props: ViewProps}) {
   const steps = STEPS.filter(step => step.tab === tab), core = FEATURES.filter(feature => feature.tab === tab && feature.core);
   const current = section ? SECTIONS.find(entry => entry.key === section && entry.tab === tab) ?? null : null;
   const page = current?.page as SectionViewKey | undefined, Page = page ? SECTION_VIEWS[page] : null;
@@ -288,13 +298,13 @@ function TabView({tab, section, date, go, askBerry, props}: {tab: TabKey; sectio
     {current && <>
       <div className="cur-crumb" ref={crumb}><button onClick={() => go({section: null})}>{info.name}</button><ChevronRight size={14}/><strong>{current.name}</strong></div>
       {Page && (page === 'weekly' ? <WeeklyView {...props} focusDate={date ?? undefined}/> : <Page {...props}/>)}
-      {!Page && <div className="cur-planned-banner"><Sparkles size={18}/><div><strong>{current.name} 화면은 단계별로 만드는 중이에요.</strong><p>아래 기능 목록에서 스쿨마스터의 어떤 일을 어떻게 바꾸는지 미리 볼 수 있어요.</p></div></div>}
+      {!Page && <div className="cur-planned-banner"><Sparkles size={18}/><div><strong>{current.name} 화면은 단계별로 만드는 중이에요.</strong><p>아래 기능 목록에서 지금 하던 일이 어떻게 바뀌는지 미리 볼 수 있어요.</p></div></div>}
       <FeatureList features={FEATURES.filter(feature => feature.section === current.key)} askBerry={askBerry}/>
     </>}
   </div>;
 }
 
-function FeatureCard({feature, go, askBerry}: {feature: Feature; go: (view: Partial<View>) => void; askBerry: (prompt: string) => void}) {
+function FeatureCard({feature, go, askBerry}: {feature: Feature; go: (view: Partial<View>) => void; askBerry: (task: BerryTask | null) => void}) {
   return <article className={`cur-feature-card ${STATUS_TONE[feature.status]}`}>
     <span className="cur-status">{STATUS_LABELS[feature.status]}{feature.status === 'planned' && ` · ${feature.phase}단계`}</span>
     <small>{sectionName(feature.section)}</small>
@@ -302,47 +312,27 @@ function FeatureCard({feature, go, askBerry}: {feature: Feature; go: (view: Part
     <p>{feature.ours}</p>
     <footer>
       {feature.link ? <Link className="cur-link" href={feature.link}>열기<ChevronRight size={15}/></Link> : <button className="cur-link" onClick={() => go({section: feature.section})}>메뉴 열기<ChevronRight size={15}/></button>}
-      {feature.berry && <button className="cur-link is-berry" onClick={() => askBerry(`${feature.want} — 베리가 해 줘`)}><Sparkles size={14}/>베리</button>}
+      {feature.berry && <button className="cur-link is-berry" onClick={() => askBerry(featureTask(feature))}><Sparkles size={14}/>베리</button>}
     </footer>
   </article>;
 }
 
-function FeatureList({features, askBerry}: {features: Feature[]; askBerry: (prompt: string) => void}) {
+function FeatureList({features, askBerry}: {features: Feature[]; askBerry: (task: BerryTask | null) => void}) {
   return <section className="cur-features">
     <h3 className="cur-section-title">세부 기능 {features.length}개</h3>
     <ul>{features.map(feature => <li key={feature.id} className={STATUS_TONE[feature.status]}>
       <div className="cur-feature-main">
-        <span className="cur-feature-id">SM-{feature.id}</span>
+        <span className="cur-feature-id">{feature.id}</span>
         <strong>{feature.name}{feature.core && <Star size={13} className="cur-star" aria-label="핵심"/>}</strong>
         <p><b>원하는 것</b>{feature.want}</p>
-        <p className="is-limit"><b>스쿨마스터</b>{feature.limit}</p>
+        <p className="is-limit"><b>기존 방식</b>{feature.limit}</p>
         <p className="is-ours"><b>모두의 교실</b>{feature.ours}</p>
       </div>
       <div className="cur-feature-side">
         <span className="cur-status">{STATUS_LABELS[feature.status]}{feature.status === 'planned' && ` · ${feature.phase}단계`}</span>
         {feature.link && <Link className="cur-link" href={feature.link}>열기<ChevronRight size={14}/></Link>}
-        {feature.berry && <button className="cur-link is-berry" onClick={() => askBerry(`${feature.want} — 베리가 해 줘`)}><Sparkles size={13}/>베리</button>}
+        {feature.berry && <button className="cur-link is-berry" onClick={() => askBerry(featureTask(feature))}><Sparkles size={13}/>베리</button>}
       </div>
     </li>)}</ul>
   </section>;
 }
-
-function SearchDialog({onClose, onPick}: {onClose: () => void; onPick: (feature: Feature) => void}) {
-  const [query, setQuery] = useState(''), input = useRef<HTMLInputElement>(null);
-  const found = useMemo(() => searchFeatures(query, 12), [query]);
-  useEffect(() => {input.current?.focus();}, []);
-  return <div className="cur-dialog" role="dialog" aria-modal="true" aria-label="스쿨마스터 기능 찾기" onClick={onClose}>
-    <div className="cur-dialog-card" onClick={event => event.stopPropagation()}>
-      <div className="cur-dialog-input"><Search size={18}/><input ref={input} value={query} onChange={event => setQuery(event.target.value)} placeholder="스쿨마스터에서 하던 일 (예: 연간시수 자동맞추기, 나이스 올리기)" onKeyDown={event => {if (event.key === 'Enter' && found[0]) onPick(found[0]);}}/><button className="cur-icon" aria-label="닫기" onClick={onClose}><X size={18}/></button></div>
-      <ul>{found.map(feature => <li key={feature.id}><button onClick={() => onPick(feature)}>
-        <span className={`cur-dot ${STATUS_TONE[feature.status]}`}/>
-        <span><strong>{sectionName(feature.section)} · {feature.name}</strong><small>{TABS.find(tab => tab.key === feature.tab)!.name} · {STATUS_LABELS[feature.status]}{feature.status === 'planned' ? ` · ${feature.phase}단계` : ''}</small></span>
-        <ChevronRight size={16}/>
-      </button></li>)}
-        {query.trim() && !found.length && <li className="cur-muted">찾는 기능이 없어요. 다른 말로 찾아보거나 베리에게 물어보세요.</li>}
-        {!query.trim() && <li className="cur-muted">{FEATURES.length}개 기능 전부에서 찾아요. 단어 두 개를 띄어 쓰면 둘 다 들어간 것만 보여요.</li>}
-      </ul>
-    </div>
-  </div>;
-}
-

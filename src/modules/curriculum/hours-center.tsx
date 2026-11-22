@@ -5,6 +5,7 @@ import {applyOverrides, causes, hourStats, isSchoolDay, progressToDate, semester
 import {RULE_SOURCE, UNVERIFIED, nationalChecks, type Verdict} from './rules';
 import {applyFindings, type DayFinding, type Findings, type StandardFinding, type TemplateFinding} from './readers';
 import type {FileKind} from './files';
+import {taskOf, type BerryTask} from './berry-tasks';
 
 /**
  * 수업시수 센터: 기존 교육과정 메뉴는 그대로 두고, 시수만 한 화면에서 푼다.
@@ -12,7 +13,7 @@ import type {FileKind} from './files';
  * 모든 숫자는 engine·rules가 계산하고, 적용은 계획(plan)을 바꿔 기존 자동 저장을 탄다.
  */
 type Source = {id: string; name: string; role: string; size: number; status: 'uploading' | 'uploaded' | 'read' | 'failed'; createdAt: string; error: string | null; findings: Findings | null};
-type Props = {plan: Plan; sessions: Session[]; today: string; preview: boolean; onPlan: (plan: Plan) => void; onDownload: (kind: FileKind) => void; askBerry: (prompt: string) => void};
+type Props = {plan: Plan; sessions: Session[]; today: string; preview: boolean; onPlan: (plan: Plan) => void; onDownload: (kind: FileKind) => void; askBerry: (task: BerryTask) => void};
 
 const ROLES: {key: string; label: string; level: '필수' | '권장' | '선택'; hint: string}[] = [
   {key: 'standards', label: '교육과정 편제표(시간 배당표)', level: '필수', hint: '학년·학기별 교과 기준시수'},
@@ -23,7 +24,7 @@ const ROLES: {key: string; label: string; level: '필수' | '권장' | '선택';
   {key: 'guideline', label: '교육청 편성·운영 지침', level: '선택', hint: '지역 의무 시수(다음 단계에서 읽음)'},
   {key: 'progress', label: '교과 진도표·지도서 차시', level: '선택', hint: '단원별 차시(다음 단계)'},
   {key: 'themes', label: '안전·범교과 운영 계획', level: '선택', hint: '주제별 목표 시수(다음 단계)'},
-  {key: 'previous', label: '작년 시수표·스쿨마스터 출력물', level: '선택', hint: '작년과 비교(다음 단계)'},
+  {key: 'previous', label: '작년 시수표·기존 프로그램 출력물', level: '선택', hint: '작년과 비교(다음 단계)'},
 ];
 const VERDICT_TEXT: Record<Verdict, string> = {ok: '맞음', short: '모자람', over: '넘음', info: '참고'};
 const signed = (value: number) => value > 0 ? `+${value}` : String(value);
@@ -72,7 +73,7 @@ export default function HoursCenter({plan, sessions, today, preview, onPlan, onD
     <header className="hc-head">
       <div><h3>수업시수 센터</h3><p>자료를 올리거나 직접 넣으면 시수가 맞는지, 왜 어긋났는지, 어떻게 맞출지 한 화면에서 보여요.</p></div>
       <div className="cur-actions">
-        <button className="cur-btn is-ghost" onClick={() => askBerry('우리 반 수업시수 괜찮은지 점검해 주고, 모자란 교과는 어떻게 맞추면 될지 알려줘')}>베리에게 점검 맡기기</button>
+        <button className="cur-btn is-ghost" onClick={() => askBerry(taskOf('check-hours'))}>베리에게 점검 맡기기</button>
         <button className="cur-btn is-ghost" onClick={() => onDownload('hours')}><Download size={16}/>시수표</button>
         <button className="cur-btn" onClick={() => onDownload('check')}><Download size={16}/>점검표</button>
       </div>

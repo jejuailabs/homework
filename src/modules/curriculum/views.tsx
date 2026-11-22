@@ -12,7 +12,7 @@ export const toneOf = (plan: Plan, key: SubjectKey) => plan.subjects.find(subjec
 const signed = (value: number) => value > 0 ? `+${value}` : String(value);
 const diffClass = (value: number) => value < 0 ? 'is-short' : value > 0 ? 'is-over' : 'is-even';
 
-/** 1.2.4 연간시간표 — 스쿨마스터 "연간시수 통계표"와 같은 모양(교과가 열, 학기가 행). */
+/** 1.2.4 연간시간표 — 선생님들이 익숙한 "연간시수 통계표" 모양(교과가 열, 학기가 행). */
 export function HoursView({plan, sessions, onDownload, onPlan}: ViewProps) {
   const stats = useMemo(() => hourStats(plan, sessions), [plan, sessions]);
   const [editing, setEditing] = useState(false);

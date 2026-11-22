@@ -49,7 +49,7 @@ const SECTION_NAMES: Record<string, string> = {
   '2.1': '학급명부', '2.2': '수행평가', '2.3': '지필평가 기록', '2.4': '단원평가 기록', '2.5': '교과-종합의견',
   '3.1': '발표자 뽑기', '3.2': '자리정하기', '3.3': '타이머',
   '4.1': '파일 불러오기', '4.2': '파일로 저장', '4.3': '백업·복원', '4.4': '자료공유', '4.5': '데이터 초기화', '4.6': '타임머신',
-  '5.1': '사용신청·학교등록', X: '스쿨마스터 전체에 걸친 특성',
+  '5.1': '사용신청·학교등록', X: '어디서나 공통 기능',
 };
 
 /** 화면이 이미 있는 절: 메뉴에서 누르면 그 화면이 열린다. */
@@ -69,7 +69,7 @@ export const CORE_IDS = new Set([
 export const LIVE: Record<string, string | null> = {
   '1.1.4-03': 'get_curriculum_hours', '1.1.5-02': null, '1.1.5-03': 'get_curriculum_hours', '1.1.5-04': null, '1.2.3-01': 'get_curriculum_week', '1.2.3-02': null, '1.2.3-03': null, '1.2.4-01': 'get_curriculum_hours',
   '1.2.4-09': 'get_curriculum_hours', '1.2.5-01': 'make_curriculum_file', '1.2.9-01': 'get_curriculum_week',
-  'X-01': null, 'X-11': 'find_schoolmaster_feature', 'X-14': 'find_schoolmaster_feature', 'X-15': null,
+  'X-01': null, 'X-11': 'find_curriculum_feature', 'X-14': 'find_curriculum_feature', 'X-15': null,
 };
 /** 모두의 교실에 이미 있는 기능: 그 메뉴로 보낸다. */
 export const ELSEWHERE: Record<string, string> = {

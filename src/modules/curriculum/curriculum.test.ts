@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import {CORE_IDS, ELSEWHERE, FEATURES, LIVE, SECTIONS, STEPS, TABS, searchFeatures} from './features';
+import {CORE_IDS, ELSEWHERE, FEATURES, LIVE, SECTIONS, STEPS, TABS, searchFeatures, sectionName} from './features';
 import {applyOverrides, causes, expand, hourStats, progressToDate, schoolWeekOf, setSlot, suggestAdjust, week, weekStartOf, weekdayOf} from './engine';
 import {AUTONOMY_MIN, nationalChecks} from './rules';
+import {BERRY_TASKS, featureTask} from './berry-tasks';
 import {SAMPLE_PLAN} from './sample';
 import {buildXlsx, sheetName} from './xlsx';
 import {FILE_KINDS, buildFile} from './files';
@@ -156,5 +157,12 @@ assert.equal(nationalChecks(withAuto, hourStats(withAuto)).find(check => check.i
 assert.throws(() => planInput({...mine, overrides: [{date: '2026-05-06', period: 1, subject: 'kor'}, {date: '2026-05-06', period: 1, subject: 'mat'}]}), PlanError, '같은 칸 두 번 바꾸기');
 assert.throws(() => planInput({...mine, overrides: [{date: '2026-05-06', period: 1, subject: 'zzz'}]}), PlanError, '없는 과목으로 바꾸기');
 assert.equal(changeSummary(mine, applyOverrides(mine, [{date: '2026-05-06', period: 1, subject: 'kor'}])), '하루 시간표 바꾸기 1건');
+
+// 화면·베리 계획 글에는 다른 회사 프로그램 이름을 쓰지 않는다.
+const shownText = [...FEATURES.flatMap(feature => [feature.name, feature.want, feature.limit, feature.ours, sectionName(feature.section)]), ...TABS.flatMap(tab => [tab.name, tab.summary]), ...STEPS.map(step => step.name), ...BERRY_TASKS.flatMap(task => [task.title, task.prompt, task.result, task.changes, ...task.steps])].join(' ');
+assert.ok(!/스쿨마스터|schoolmaster/i.test(shownText), '화면 글에 스쿨마스터가 없다');
+// 베리 계획: 단계가 있고, 기능 카드의 [베리]는 실제 도구에 맞는 단계를 보여 준다.
+assert.ok(BERRY_TASKS.every(task => task.steps.length >= 2 && task.prompt && task.result && task.changes), '계획마다 단계·받는 것·자료 변화');
+for (const feature of FEATURES.filter(entry => entry.berry)) assert.ok(!featureTask(feature).steps.includes('필요한 자료를 읽어요'), `${feature.id}: ${feature.berry} 도구 단계 설명이 있다`);
 
 console.log('curriculum tests passed');
