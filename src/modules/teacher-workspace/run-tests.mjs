@@ -6,3 +6,5 @@ const types = moduleUrl(compile('./types.ts'));
 const shared = moduleUrl(compile('./shared.ts'));
 const policy = moduleUrl(compile('./policy.ts').replace("'./types'", JSON.stringify(types)).replaceAll("'./shared'", JSON.stringify(shared)));
 await import(moduleUrl(compile('./policy.test.ts').replace("'./policy'", JSON.stringify(policy))));
+const view = moduleUrl(compile('./timetable-view.ts').replaceAll("'./shared'", JSON.stringify(shared)));
+await import(moduleUrl(compile('./timetable-view.test.ts').replace("'./timetable-view'", JSON.stringify(view))));

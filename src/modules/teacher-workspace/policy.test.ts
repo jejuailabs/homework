@@ -148,3 +148,10 @@ assert.equal(workspaceAllowed('teacher'), true);
 assert.equal(workspaceAllowed('student'), false);
 assert.equal(workspaceAllowed('admin', 'true'), false, 'kill switch wins');
 console.log('teacher workspace policy tests passed');
+
+// The list form Berry writes ("월1 국어, 월2 수학") used to be mistaken for a weekday header row and saved an empty week.
+assert.deepEqual(parseTimetableText('월1 국어, 월2 수학(과학실), 화1 영어'), [{day: 1, period: 1, subject: '국어'}, {day: 1, period: 2, subject: '수학', room: '과학실'}, {day: 2, period: 1, subject: '영어'}]);
+assert.deepEqual(parseTimetableText('월요일 3교시: 체육(체육관)\n금 6 창체'), [{day: 1, period: 3, subject: '체육', room: '체육관'}, {day: 5, period: 6, subject: '창체'}]);
+assert.throws(() => parseTimetableText('월8 국어'), /1~7교시/);
+// A pasted grid with a weekday header still reads as a grid.
+assert.deepEqual(parseTimetableText('월\t화\n국어\t수학'), [{day: 1, period: 1, subject: '국어'}, {day: 2, period: 1, subject: '수학'}]);

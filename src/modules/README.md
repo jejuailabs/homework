@@ -66,3 +66,11 @@ STT implementation reference: [OpenAI file transcription guide](https://develope
 - 엑셀: `xlsx.ts`(외부 라이브러리 없음) + `files.ts`(시수표·진도표·주간학습). 베리의 파일 링크 `/teacher/curriculum?download=hours`는 화면을 열어 그 자리에서 내려받게 한다. 서버에 파일을 쌓지 않는다.
 - 베리: `berry-tools.ts`의 읽기 도구 4개(`find_schoolmaster_feature`, `get_curriculum_hours`, `get_curriculum_week`, `make_curriculum_file`). 공개 범위 밖의 선생님에게는 도구 목록과 분류표에서 아예 빠진다.
 - 지금 자료는 시험용 예시 학급(`sample.ts`) 하나다. 실제 학급 자료를 붙일 때는 `server.ts`의 `planFor`와 화면의 계획 불러오기만 바꾼다. 원본은 Firebase, 관계 검색용 사본은 나중에 Supabase(베리)로 간다.
+
+`attachments/`는 선생님이 베리 창·시간표·수업 일지에 붙이는 파일을 다루는 모듈이다.
+
+- 올리기: 브라우저가 서명 URL로 Storage(`teacher-attachments/{uid}/{id}`)에 바로 올린다. 파일 본문은 Vercel을 거치지 않는다. 파일당 10MB, 녹음만 30MB, 한 번에 3개.
+- 읽기: `POST /api/attachments/{id}/read`가 파일을 한 번 글로 바꿔 Firestore `teacherAttachments/{uid}/files/{id}`에 남기고 **원본은 바로 지운다**. 엑셀·HWPX·옛 HWP(`hwp.ts`)·글 파일은 서버가 직접 읽고, 사진·PDF는 모델이, 녹음은 받아쓰기가 읽는다. 선생님당 최근 40개만 남긴다.
+- 정리: `POST /api/attachments/draft`가 읽은 글이나 직접 쓴 글을 시간표 칸 또는 수업 일지 줄로 만든다. 저장하지 않고 화면의 확인 단계로만 돌려준다.
+- 베리: 대화 요청의 `attachments`(id 목록)를 `berry-panel/server.ts`가 읽은 글로 바꿔 `context.attachments`에 실어 보낸다(두뇌는 파일을 받지 않으며 두뇌 코드는 바뀌지 않았다). 이어 읽기는 `read_attachment`, 목록은 `list_attachments`(업무 공간 메뉴).
+- 끄기: `ATTACHMENTS_DISABLED=true`. `OPENAI_API_KEY`가 없어도 꺼진다. 모델은 `ATTACH_AI_MODEL`(없으면 `OPENAI_MODEL`), 받아쓰기는 `ATTACH_TRANSCRIBE_MODEL`(기본 `gpt-transcribe`).

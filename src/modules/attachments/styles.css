@@ -1,0 +1,11 @@
+.att-chips{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+.att-chip{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:4px 6px 4px 9px;border:1px solid var(--border);border-radius:999px;background:var(--surface);font-size:12px;line-height:1.2}
+.att-chip>span{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+.att-chip>small{color:var(--muted);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att-chip>button{display:grid;place-items:center;width:20px;height:20px;min-height:0;padding:0;border:0;border-radius:50%;background:none;color:var(--muted);cursor:pointer}
+.att-chip>button:hover{background:var(--border)}
+.att-chip.is-read{border-color:var(--accent)}
+.att-chip.is-failed{border-color:#d9534f;color:#b3261e}.att-chip.is-failed>small{color:#b3261e}
+.att-button{display:grid;place-items:center;flex:none;width:36px;height:36px;min-height:0;padding:0;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--muted);cursor:pointer}
+.att-button:hover:not(:disabled){color:var(--accent);border-color:var(--accent)}.att-button:disabled{opacity:.5;cursor:default}
+.att-drop{outline:2px dashed var(--accent);outline-offset:-4px}

@@ -1,4 +1,5 @@
 import 'server-only';
+import {bellsInput, bellsOrDefault} from './timetable-view';
 import {randomBytes} from 'node:crypto';
 import {NextResponse} from 'next/server';
 import {Timestamp} from 'firebase-admin/firestore';
@@ -173,6 +174,15 @@ async function saveTimetable(uid: string, value: unknown, data: Input) {
   logWorkspaceEvent(uid, 'timetable.saved', {collection: 'timetable', id: key}, {writer: batch});
   await batch.commit();
   return getTimetable(uid, key);
+}
+
+/** Period times for the timetable screen (지금·다음 교시). One set per teacher; the defaults apply until saved. */
+async function getBells(uid: string) {const saved = (await space(uid).get()).data()?.bells; return {bells: bellsOrDefault(saved), custom: Array.isArray(saved)};}
+async function saveBells(uid: string, data: Input) {
+  const bells = bellsInput(data.bells);
+  await touch(uid);
+  await space(uid).set({bells}, {merge: true});
+  return {bells, custom: true};
 }
 
 // ---- Lesson log ----
@@ -483,6 +493,10 @@ export async function handleWorkspace(request: Request, segments: string[]) {
       if (segments.length === 2 && method === 'POST') return json(await updateCalendarEvent(uid, eventId, await input(request)));
       if (segments.length === 2 && method === 'DELETE') return json(await removeDoc(uid, calendar(uid).doc(eventId), '일정', 'calendar.deleted', 'calendar'));
       if (segments.length === 3 && action === 'confirm' && method === 'POST') return json(await confirm(uid, calendar(uid).doc(eventId), '일정', 'calendar.confirmed', 'calendar'));
+    }
+    if (head === 'bells' && segments.length === 1) {
+      if (method === 'GET') return json(await getBells(uid));
+      if (method === 'POST') return json(await saveBells(uid, await input(request)));
     }
     if (head === 'timetable' && segments.length === 2) {
       if (method === 'GET') return json(await getTimetable(uid, id));
