@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {assertGoalSlot, goalDonationDecision, goalOverdue, goalRefunds, parsePointGoal, publicPointGoal} from './point-goals-policy';
+import {assertGoalSlot, parsePointGoalEdit, goalDonationDecision, goalOverdue, goalRefunds, parsePointGoal, publicPointGoal} from './point-goals-policy';
 
 const now = new Date('2026-11-20T00:00:00.000Z');
 const open = {status: 'open', target: 100, raised: 70, dueAt: null, donors: {a: {name: '가', number: 1, amount: 50}, b: {name: '나', number: 2, amount: 20}}};
@@ -38,4 +38,13 @@ test('학생끼리 보는 기부자 명단은 많이 낸 순', () => {
   const goal = publicPointGoal('g1', {...open, title: '영화', createdAt: '2026-11-19T00:00:00.000Z'});
   assert.deepEqual(goal.donors.map(row => row.name), ['가', '나']);
   assert.equal(goal.status, 'open'); assert.equal(goal.failReason, null);
+});
+
+test('기부 고치기: 모으는 중이면 전부, 끝났으면 이름·설명만', () => {
+  const now = new Date('2026-11-24T00:00:00Z');
+  const open = {status: 'open', raised: 30, target: 100};
+  assert.deepEqual(parsePointGoalEdit({title: '영화', description: '', target: 50, dueAt: null}, open, now), {title: '영화', description: '', target: 50, dueAt: null});
+  assert.throws(() => parsePointGoalEdit({title: '영화', target: 30}, open, now), /31개 이상/);
+  assert.throws(() => parsePointGoalEdit({title: '영화', target: 80, dueAt: '2026-11-01T00:00:00Z'}, open, now), /마감/);
+  assert.deepEqual(parsePointGoalEdit({title: ' 간식 ', description: '금요일', target: 1}, {status: 'rewarded', raised: 100, target: 100}, now), {title: '간식', description: '금요일'});
 });
