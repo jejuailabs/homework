@@ -14,7 +14,7 @@ import { ApiError, canManageClass, id, text } from './policy';
 import {
   EXHIBITION_ARTWORK_LIMIT, EXHIBITION_LIST_LIMIT, EXHIBITION_PIXEL_LIMIT, EXHIBITION_DERIVATIVE_RESERVATION,
   approvalCountDelta, artworkReview, artworkStudentId, artReaction, canConsumeExhibitionUpload,
-  canParticipateExhibition, canSubmitExhibition, canViewArtwork, canViewArtworkFeedback, canViewExhibition, exhibitionStatus, exhibitionTheme,
+  canEditOwnArtworkText, canParticipateExhibition, canSubmitExhibition, canViewArtwork, canViewArtworkFeedback, canViewExhibition, exhibitionStatus, exhibitionTheme,
   exhibitionUploadPolicy, exhibitionAudioPolicy, audioHeaderMatches, nextPassport, nextReactionCounts, ownsExhibition,
   exhibitionStorageLimit, reserveExhibitionBytes, settleExhibitionBytes, releaseExhibitionBytes, exhibitionCursor, encodeExhibitionCursor, completeExhibitionWrites,
 } from './exhibition-policy';
@@ -656,7 +656,34 @@ async function bulkArtworkDate(ctx: Context, exhibition: Exhibition, request: Re
   return json({updated: works.length, artworkDate: day});
 }
 
+// Students may change only the title and words of their own artwork. Like a replaced photo,
+// the edited artwork goes back to the teacher before classmates and visitors see it again.
+async function editOwnArtworkText(ctx: Context, exhibition: Exhibition, artworkId: string, request: Request) {
+  const input = await body(request);
+  if (Object.keys(input).some(key => key !== 'title' && key !== 'description')) throw new ApiError(403, '작품 이름과 한마디만 고칠 수 있어요.', 'FORBIDDEN');
+  const changes: Data = {};
+  if ('title' in input) changes.title = text(input.title, '작품 제목', 120);
+  if ('description' in input) changes.description = text(input.description, '작품 설명', 2000, true);
+  if (!Object.keys(changes).length) throw new ApiError(400, '수정할 내용을 입력해 주세요.');
+  const ref = artRef(exhibition.id, artworkId);
+  const result = await uploadTransaction(async tx => {
+    const freshExhibition = await tx.get(exhibitionRef(exhibition.id));
+    const snapshot = await tx.get(ref);
+    if (!freshExhibition.exists || !snapshot.exists) throw new ApiError(404, '작품을 찾을 수 없어요.');
+    const value = snapshot.data()!;
+    if (!canEditOwnArtworkText(ctx, asExhibition(freshExhibition), { studentId: value.studentId })) throw new ApiError(403, '지금은 이 작품을 고칠 수 없어요.', 'FORBIDDEN');
+    const same = Object.keys(changes).every(key => changes[key] === (value[key] ?? ''));
+    if (same) return mapped(snapshot);
+    const edited = { ...changes, status: 'pending' as ArtworkStatus, reviewedAt: null };
+    tx.update(ref, edited);
+    tx.update(exhibitionRef(exhibition.id), { approvedCount: FieldValue.increment(approvalCountDelta(value.status, 'pending')), updatedAt: now() });
+    return { ...value, ...edited, id: snapshot.id };
+  });
+  return json({ artwork: await signedArtwork(ctx, exhibition, result) });
+}
+
 async function reviewArtwork(ctx: Context, exhibition: Exhibition, artworkId: string, request: Request) {
+  if (ctx.role === 'student') return await editOwnArtworkText(ctx, exhibition, artworkId, request);
   owner(ctx, exhibition);
   const input = await body(request);
   const changes: Data = {};

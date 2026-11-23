@@ -296,5 +296,8 @@
   "replacePhoto": "Replace photo",
   "replaceTitle": "Replace my artwork photo",
   "replaceHint": "Your artwork '{title}' will be replaced with the new photo. It stays one artwork, and the teacher checks it again before it is shown.",
-  "replaceOwnHint": "Uploaded the wrong picture? You can replace it with a new photo."
+  "replaceOwnHint": "Uploaded the wrong picture? You can replace it with a new photo.",
+  "editOwnText": "Edit title and artist words",
+  "editOwnHint": "After you edit, the teacher checks it again before it is shown.",
+  "editOwnSaved": "Saved. It will be shown after the teacher checks it again."
 }

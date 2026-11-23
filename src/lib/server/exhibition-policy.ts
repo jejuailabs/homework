@@ -70,6 +70,10 @@ export function canParticipateExhibition(actor: ExhibitionActor, exhibition: Exh
 export function canViewArtwork(actor: ExhibitionActor, exhibition: ExhibitionAccess, artwork: { studentId: string; status: ArtworkStatus }) {
   return canViewExhibition(actor, exhibition) && (ownsExhibition(actor, exhibition) || artwork.status === 'approved' || (!!artwork.studentId && artwork.studentId === actor.studentId));
 }
+// A child may fix the words on their own artwork only while they could still submit one.
+export function canEditOwnArtworkText(actor: ExhibitionActor, exhibition: ExhibitionAccess, artwork: { studentId: string }) {
+  return actor.role === 'student' && canSubmitExhibition(actor, exhibition) && !!artwork.studentId && artwork.studentId === actor.studentId;
+}
 export function exhibitionUploadPolicy(contentType: unknown, size: unknown) {
   if (typeof contentType !== 'string' || !['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) throw new ApiError(400, 'JPG, PNG, WebP 사진을 선택해 주세요.', 'FILE_TYPE');
   if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 1 || size > EXHIBITION_IMAGE_LIMIT) throw new ApiError(400, '사진 한 장은 100MB까지 올릴 수 있어요.', 'FILE_SIZE');

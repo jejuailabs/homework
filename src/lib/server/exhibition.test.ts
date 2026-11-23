@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   approvalCountDelta, artworkReview, artworkStudentId, artReaction, canConsumeExhibitionUpload,
-  canParticipateExhibition, canSubmitExhibition, canViewArtwork, canViewArtworkFeedback, canViewExhibition, exhibitionStatus, exhibitionTheme,
+  canEditOwnArtworkText, canParticipateExhibition, canSubmitExhibition, canViewArtwork, canViewArtworkFeedback, canViewExhibition, exhibitionStatus, exhibitionTheme,
   exhibitionUploadPolicy, exhibitionAudioPolicy, audioHeaderMatches, EXHIBITION_AUDIO_TYPES, nextPassport, nextReactionCounts, ownsExhibition,
   exhibitionStorageLimit, reserveExhibitionBytes, settleExhibitionBytes, releaseExhibitionBytes, exhibitionCursor, encodeExhibitionCursor, EXHIBITION_DERIVATIVE_RESERVATION, completeExhibitionWrites,
 } from './exhibition-policy';
@@ -187,4 +187,15 @@ test('artwork sound files: only real audio types up to 50MB, and the header must
   assert.equal(audioHeaderMatches('audio/wav', bytes('RIFF    WAVEfmt ')), true);
   assert.equal(audioHeaderMatches('audio/wav', bytes('<html><body>')), false);
   assert.equal(audioHeaderMatches('audio/mpeg', bytes('%PDF-1.7')), false);
+});
+
+test('students edit the words of only their own artwork while uploads are open', () => {
+  const open = { ...exhibition, allowStudentUploads: true };
+  assert.equal(canEditOwnArtworkText(student, open, { studentId: 'a' }), true);
+  assert.equal(canEditOwnArtworkText(student, open, { studentId: 'b' }), false);
+  assert.equal(canEditOwnArtworkText(student, open, { studentId: '' }), false);
+  assert.equal(canEditOwnArtworkText(student, { ...open, allowStudentUploads: false }, { studentId: 'a' }), false);
+  assert.equal(canEditOwnArtworkText(student, { ...open, status: 'closed' }, { studentId: 'a' }), false);
+  assert.equal(canEditOwnArtworkText({ ...student, classId: 'class-b' }, open, { studentId: 'a' }), false);
+  assert.equal(canEditOwnArtworkText(teacher, open, { studentId: 'a' }), false);
 });
