@@ -98,6 +98,7 @@ export function sortEvents(events: CalendarEvent[]) {
 
 // ---- Timetable ----
 const WEEKDAY_HEADER = /^(월|화|수|목|금|토|일|mon|tue|wed|thu|fri|sat|sun)/i;
+const LIST_CELL = /^(월|화|수|목|금)(?:요일)?\s*(\d{1,2})\s*(?:교시)?\s*[:：]?\s+(\S.*)$/;
 function cellSlot(text: string): {subject: string; room?: string} | null {
   const cell = text.replace(/^"|"$/g, '').trim();
   if (!cell || cell === '-') return null;
@@ -115,6 +116,15 @@ export function parseTimetableText(text: string): TimetableSlot[] {
   if (typeof text !== 'string' || text.length > 5000) throw new WorkspaceError('시간표 내용을 확인해 주세요.');
   const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(line => line.trim());
   if (!lines.length) throw new WorkspaceError('시간표 내용을 붙여 넣어 주세요.');
+  // List form, the way Berry writes a week: "월1 국어, 월2 수학(과학실)". Every piece must fit, or it is read as a grid.
+  const pieces = lines.flatMap(line => line.split(/[,;]/)).map(piece => piece.trim()).filter(Boolean).map(piece => LIST_CELL.exec(piece));
+  if (pieces.length && pieces.every(Boolean)) {
+    return timetableSlots(pieces.map(piece => {
+      const period = Number(piece![2]), slot = cellSlot(piece![3]);
+      if (period < 1 || period > 7) throw new WorkspaceError('시간표는 1~7교시까지 넣을 수 있어요.');
+      return slot ? {day: '월화수목금'.indexOf(piece![1]) + 1, period, ...slot} : null;
+    }).filter(Boolean));
+  }
   const separator = lines.some(line => line.includes('\t')) ? '\t' : ',';
   let rows = lines.map(line => line.split(separator));
   const header = rows[0].map(cell => cell.trim());
