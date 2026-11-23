@@ -19,6 +19,20 @@ export function parsePointGoal(value: Data, now: Date) {
   }
   return {title, description, target, dueAt};
 }
+/**
+ * 선생님이 연 기부 고치기. 모으는 중이면 보상·설명·목표·마감을 모두 바꿀 수 있고, 목표는 이미 모인 보말보다 커야 해요(바꾸자마자 달성되지 않게).
+ * 이미 끝난 기부(달성·보상 완료·실패)는 이름과 설명만 고쳐요.
+ */
+export function parsePointGoalEdit(value: Data, current: Data, now: Date) {
+  if (current.status !== 'open') {
+    const title = text(value.title, '보상 이름', 60);
+    const description = value.description === undefined || value.description === null || value.description === '' ? '' : text(value.description, '설명', 300);
+    return {title, description};
+  }
+  const parsed = parsePointGoal(value, now), raised = Number.isSafeInteger(current.raised) ? current.raised : 0;
+  if (parsed.target <= raised) throw new ApiError(400, `이미 ${raised}개가 모였어요. 목표는 ${raised + 1}개 이상으로 정해 주세요.`, 'GOAL_TARGET_BELOW');
+  return parsed;
+}
 export function assertGoalSlot(openCount: number) {
   if (openCount >= POINT_GOAL_OPEN_LIMIT) throw new ApiError(409, `진행 중인 기부는 ${POINT_GOAL_OPEN_LIMIT}개까지 열 수 있어요.`, 'GOAL_LIMIT');
 }

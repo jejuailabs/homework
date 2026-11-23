@@ -28,6 +28,7 @@ export function pointError(error: unknown, ko: boolean) {
     GOAL_NOT_REACHED: ['목표를 채운 기부만 보상 완료로 표시할 수 있어요.', 'Only a filled goal can be marked rewarded.'],
     GOAL_NOT_FOUND: ['기부를 찾을 수 없어요. 새로고침해 주세요.', 'Goal not found. Please refresh.'],
     GOAL_TARGET: ['목표 보말을 1~1,000,000 사이로 정해 주세요.', 'Set a goal between 1 and 1,000,000.'],
+    GOAL_TARGET_BELOW: ['이미 모인 보말보다 목표를 크게 정해 주세요.', 'The goal must be more than what is already given.'],
     GOAL_DUE: ['마감은 지금보다 뒤로 정해 주세요.', 'The deadline must be in the future.'],
     FORBIDDEN: ['이 학급에 접근할 수 없어요.', 'You do not have access to this class.'],
     UNAUTHENTICATED: ['다시 로그인해 주세요.', 'Please sign in again.'],

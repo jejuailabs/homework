@@ -1,6 +1,6 @@
 'use client';
 import {useCallback, useEffect, useRef, useState, type FormEvent} from 'react';
-import {Check, HandHeart, Maximize2, X} from 'lucide-react';
+import {Check, HandHeart, Maximize2, Pencil, Trash2, X} from 'lucide-react';
 import {POINT_GOAL_OPEN_LIMIT, type PointGoal} from '@/lib/points-types';
 import {pointError, pointsRequest, usePointCopy} from './points-shared';
 import {celebrationSeen, GoalCelebration, GoalDonors, goalDueText, GoalProgress, goalStatusText, markCelebrationSeen} from './points-goals-shared';
@@ -10,6 +10,7 @@ export default function PointsTeacherGoals({classId, enabled, label, onChanged}:
   const {ko, locale, copy} = usePointCopy();
   const [goals, setGoals] = useState<PointGoal[] | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [title, setTitle] = useState(''), [description, setDescription] = useState(''), [target, setTarget] = useState(100), [dueAt, setDueAt] = useState('');
+  const [editing, setEditing] = useState<{id: string; title: string; description: string; target: number; dueAt: string} | null>(null);
   const [big, setBig] = useState<string | null>(null), [party, setParty] = useState<PointGoal | null>(null);
   const requestId = useRef(crypto.randomUUID()), busyRef = useRef(false);
   const load = useCallback(async () => {
@@ -40,6 +41,32 @@ export default function PointsTeacherGoals({classId, enabled, label, onChanged}:
     if (!window.confirm(copy(`'${goal.title}' 미션을 실패로 끝낼까요? 학생들이 낸 ${label} ${goal.raised}개를 모두 돌려줘요.`, `End '${goal.title}' as failed? All ${goal.raised} ${label} go back to the students.`))) return;
     void action(async () => {await pointsRequest(`/api/points/classes/${classId}/goals/${goal.id}/fail`, {method: 'POST', body: '{}'}); await load(); onChanged(); setNotice(copy('미션 실패로 정리하고 보말을 모두 돌려줬어요.', 'Marked as failed and returned all points.'));});
   }
+  function startEdit(goal: PointGoal) {
+    setEditing({id: goal.id, title: goal.title, description: goal.description, target: goal.target, dueAt: goal.dueAt ? localInput(goal.dueAt) : ''});
+    setError(''); setNotice('');
+  }
+  function saveEdit(event: FormEvent, goal: PointGoal) {
+    event.preventDefault();
+    if (!editing) return;
+    const body = goal.status === 'open'
+      ? {title: editing.title.trim(), description: editing.description.trim(), target: editing.target, dueAt: editing.dueAt ? new Date(editing.dueAt).toISOString() : null}
+      : {title: editing.title.trim(), description: editing.description.trim()};
+    void action(async () => {await pointsRequest(`/api/points/classes/${classId}/goals/${goal.id}/edit`, {method: 'POST', body: JSON.stringify(body)}); setEditing(null); await load(); setNotice(copy('기부 내용을 고쳤어요.', 'Goal updated.'));});
+  }
+  function remove(goal: PointGoal) {
+    const refund = (goal.status === 'open' || goal.status === 'reached') && goal.raised > 0;
+    const message = refund
+      ? copy(`'${goal.title}' 기부를 지울까요? 학생들이 낸 ${label} ${goal.raised}개를 모두 돌려주고 지워요. 되돌릴 수 없어요.`, `Delete '${goal.title}'? All ${goal.raised} ${label} go back to the students. This cannot be undone.`)
+      : copy(`'${goal.title}' 기부를 지울까요? 학생 화면에서도 사라지고 되돌릴 수 없어요.`, `Delete '${goal.title}'? It disappears for students too. This cannot be undone.`);
+    if (!window.confirm(message)) return;
+    void action(async () => {
+      await pointsRequest(`/api/points/classes/${classId}/goals/${goal.id}/delete`, {method: 'POST', body: '{}'});
+      if (editing?.id === goal.id) setEditing(null);
+      if (big === goal.id) setBig(null);
+      await load(); if (refund) onChanged();
+      setNotice(refund ? copy(`기부를 지우고 ${label}를 모두 돌려줬어요.`, 'Deleted and returned all points.') : copy('기부를 지웠어요.', 'Goal deleted.'));
+    });
+  }
   function rewarded(goal: PointGoal) {
     void action(async () => {await pointsRequest(`/api/points/classes/${classId}/goals/${goal.id}/rewarded`, {method: 'POST', body: '{}'}); await load(); setNotice(copy('보상 완료로 표시했어요.', 'Marked as rewarded.'));});
   }
@@ -57,7 +84,17 @@ export default function PointsTeacherGoals({classId, enabled, label, onChanged}:
       {full && <p className="points-muted pg-wide">{copy(`진행 중인 기부가 ${POINT_GOAL_OPEN_LIMIT}개예요. 하나가 끝나면 새로 열 수 있어요.`, `${POINT_GOAL_OPEN_LIMIT} goals are open. Finish one to open another.`)}</p>}
     </form>}
     {goals === null ? <p role="status">{copy('기부를 불러오고 있어요.', 'Loading goals…')}</p> : !goals.length ? <p className="points-muted">{copy('아직 연 기부가 없어요.', 'No goals yet.')}</p> : <ul className="pg-list">{goals.map(goal => <li key={goal.id} className={`pg-card is-${goal.status}`}>
-      <div className="pg-card-head"><div><h3>{goal.title}</h3>{goal.description && <p className="points-muted">{goal.description}</p>}</div><span className="pg-status">{goalStatusText(goal, copy)}</span></div>
+      {editing?.id === goal.id ? <form className="pg-form" onSubmit={event => saveEdit(event, goal)}>
+        <label>{copy('보상 이름', 'Reward')}<input value={editing.title} maxLength={60} required disabled={busy} onChange={event => setEditing({...editing, title: event.target.value})}/></label>
+        {goal.status === 'open' && <label>{copy(`목표 ${label}`, `Goal (${label})`)}<input type="number" min={goal.raised + 1} max={1000000} step={1} required disabled={busy} value={editing.target} onChange={event => setEditing({...editing, target: Number(event.target.value)})}/></label>}
+        {goal.status === 'open' && <label>{copy('마감 (선택)', 'Deadline (optional)')}<input type="datetime-local" disabled={busy} value={editing.dueAt} onChange={event => setEditing({...editing, dueAt: event.target.value})}/></label>}
+        <label className="pg-wide">{copy('설명 (선택)', 'Description (optional)')}<input value={editing.description} maxLength={300} disabled={busy} onChange={event => setEditing({...editing, description: event.target.value})}/></label>
+        {goal.status === 'open' ? goal.raised > 0 && <p className="points-muted pg-wide">{copy(`이미 ${label} ${goal.raised}개가 모였어요. 목표는 ${goal.raised + 1}개 이상으로 정해 주세요.`, `${goal.raised} ${label} already given. The goal must be at least ${goal.raised + 1}.`)}</p> : <p className="points-muted pg-wide">{copy('끝난 기부는 이름과 설명만 고칠 수 있어요.', 'Only the name and description of a finished goal can change.')}</p>}
+        <div className="pg-actions pg-wide">
+          <button className="button primary" disabled={busy || !editing.title.trim() || (goal.status === 'open' && (!Number.isSafeInteger(editing.target) || editing.target <= goal.raised))}><Check size={16}/>{copy('저장', 'Save')}</button>
+          <button type="button" className="button" disabled={busy} onClick={() => setEditing(null)}>{copy('취소', 'Cancel')}</button>
+        </div>
+      </form> : <div className="pg-card-head"><div><h3>{goal.title}</h3>{goal.description && <p className="points-muted">{goal.description}</p>}</div><span className="pg-status">{goalStatusText(goal, copy)}</span></div>}
       <GoalProgress goal={goal} label={label} locale={locale}/>
       {goal.dueAt && <p className="points-muted">{goalDueText(goal, locale, copy)}</p>}
       <GoalDonors goal={goal} label={label} locale={locale} copy={copy}/>
@@ -65,6 +102,8 @@ export default function PointsTeacherGoals({classId, enabled, label, onChanged}:
         {(goal.status === 'open' || goal.status === 'reached') && <button type="button" className="button" onClick={() => setBig(goal.id)}><Maximize2 size={16}/>{copy('크게 보기', 'Show big')}</button>}
         {goal.status === 'reached' && <button type="button" className="button primary" disabled={busy} onClick={() => rewarded(goal)}><Check size={16}/>{copy('교실에서 보상 완료', 'Reward given')}</button>}
         {goal.status === 'open' && <button type="button" className="button pg-danger" disabled={busy} onClick={() => fail(goal)}><X size={16}/>{copy('미션 실패 (보말 돌려주기)', 'Mission failed (return points)')}</button>}
+        {editing?.id !== goal.id && <button type="button" className="button" disabled={busy} onClick={() => startEdit(goal)}><Pencil size={16}/>{copy('수정', 'Edit')}</button>}
+        <button type="button" className="button pg-danger" disabled={busy} onClick={() => remove(goal)}><Trash2 size={16}/>{copy('삭제', 'Delete')}</button>
       </div>
     </li>)}</ul>}
     {shown && <div className="pg-big" role="dialog" aria-modal="true" aria-label={shown.title}><button type="button" className="icon-button pg-big-close" aria-label={copy('닫기', 'Close')} onClick={() => setBig(null)}><X size={24}/></button><div className="pg-big-inner">
@@ -76,4 +115,10 @@ export default function PointsTeacherGoals({classId, enabled, label, onChanged}:
     </div></div>}
     {party && <GoalCelebration goal={party} label={label} locale={locale} copy={copy} onClose={() => setParty(null)}/>}
   </section>;
+}
+
+/** ISO time → the value a datetime-local input expects, in the teacher's own time zone. */
+function localInput(iso: string) {
+  const date = new Date(iso), pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

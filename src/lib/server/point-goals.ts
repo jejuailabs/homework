@@ -3,7 +3,7 @@ import {db} from './admin';
 import {requireStudent, requireTeacher, type Context} from './auth';
 import {ApiError, id} from './policy';
 import {addPointBalance, pointBalance, pointLedgerId, pointSettings} from './points-policy';
-import {assertGoalSlot, goalDonationDecision, goalOverdue, goalRefunds, parsePointGoal, publicPointGoal} from './point-goals-policy';
+import {assertGoalSlot, goalDonationDecision, goalOverdue, goalRefunds, parsePointGoal, parsePointGoalEdit, publicPointGoal} from './point-goals-policy';
 import {activeStudent, classOwner, input, json, ledgerRef, studentRef, type Data} from './points-access';
 import type {PointGoal} from '../points-types';
 
@@ -15,6 +15,21 @@ import type {PointGoal} from '../points-types';
 const goalsRef = (classId: string) => db().collection(`classes/${id(classId)}/pointGoals`);
 const LIST_LIMIT = 20;
 
+/** Gives every donor back what they gave, inside a transaction (reads first, then writes). The ledger id is fixed per goal and student, so a second refund never pays twice. */
+async function refundDonors(tx: FirebaseFirestore.Transaction, classId: string, goalId: string, value: Data, reason: string, actor: Context | null, at: Date) {
+  const refunds = goalRefunds(value);
+  if (!refunds.length) return;
+  const pupils = await tx.getAll(...refunds.map(donor => studentRef(classId, donor.studentId)));
+  const ledgers = refunds.map(donor => ledgerRef(classId, donor.studentId).doc(pointLedgerId('donation-refund', goalId, donor.studentId)));
+  const prior = await tx.getAll(...ledgers);
+  refunds.forEach((donor, index) => {
+    const pupil = pupils[index];
+    if (!pupil.exists || prior[index].exists) return;
+    const balance = addPointBalance(pointBalance(pupil.data()?.points), donor.amount);
+    tx.update(pupil.ref, {points: balance});
+    tx.create(ledgers[index], {classId, studentId: donor.studentId, amount: donor.amount, kind: 'earn', source: 'donation-refund', sourceId: goalId, reason, actorUid: actor?.uid ?? 'system', balanceAfter: balance, createdAt: at.toISOString()});
+  });
+}
 /** Gives every donor back what they gave and closes the goal. Safe to call twice: a closed goal is left alone. */
 async function failGoal(classId: string, goalId: string, reason: 'teacher' | 'deadline', actor: Context | null) {
   const ref = goalsRef(classId).doc(id(goalId)), at = new Date();
@@ -27,17 +42,7 @@ async function failGoal(classId: string, goalId: string, reason: 'teacher' | 'de
       if (actor && value.status !== 'failed') throw new ApiError(409, '진행 중인 기부만 미션 실패로 정리할 수 있어요.', 'GOAL_CLOSED');
       return publicPointGoal(goal.id, value);
     }
-    const refunds = goalRefunds(value);
-    const pupils = refunds.length ? await tx.getAll(...refunds.map(donor => studentRef(classId, donor.studentId))) : [];
-    const ledgers = refunds.map(donor => ledgerRef(classId, donor.studentId).doc(pointLedgerId('donation-refund', goal.id, donor.studentId)));
-    const prior = ledgers.length ? await tx.getAll(...ledgers) : [];
-    refunds.forEach((donor, index) => {
-      const pupil = pupils[index];
-      if (!pupil.exists || prior[index].exists) return;
-      const balance = addPointBalance(pointBalance(pupil.data()?.points), donor.amount);
-      tx.update(pupil.ref, {points: balance});
-      tx.create(ledgers[index], {classId, studentId: donor.studentId, amount: donor.amount, kind: 'earn', source: 'donation-refund', sourceId: goal.id, reason: `기부 환불 · ${value.title}`, actorUid: actor?.uid ?? 'system', balanceAfter: balance, createdAt: at.toISOString()});
-    });
+    await refundDonors(tx, classId, goal.id, value, `기부 환불 · ${value.title}`, actor, at);
     const next = {status: 'failed', failedAt: at.toISOString(), failReason: reason};
     tx.update(ref, next);
     return publicPointGoal(goal.id, {...value, ...next});
@@ -90,6 +95,34 @@ async function rewardGoal(request: Request, classId: string, goalId: string) {
   return json({goal});
 }
 
+/** 고치기: 모으는 중이면 보상·설명·목표·마감, 끝난 기부는 이름·설명만. */
+async function editGoal(request: Request, classId: string, goalId: string) {
+  const ctx = await requireTeacher(request), data = await input(request), at = new Date(), ref = goalsRef(classId).doc(id(goalId));
+  const goal = await db().runTransaction(async tx => {
+    const [cls, snap] = await Promise.all([tx.get(db().doc(`classes/${id(classId)}`)), tx.get(ref)]);
+    classOwner(ctx, cls);
+    if (!snap.exists) throw new ApiError(404, '기부를 찾을 수 없어요.', 'GOAL_NOT_FOUND');
+    const value = snap.data()!, next = {...parsePointGoalEdit(data, value, at), updatedAt: at.toISOString()};
+    tx.update(ref, next);
+    return publicPointGoal(snap.id, {...value, ...next});
+  });
+  return json({goal});
+}
+/** 지우기: 아직 보상 전(모으는 중·달성)이면 학생들이 낸 보말을 모두 돌려준 뒤 지워요. 보상 완료·실패한 기부는 기록만 지워요. */
+async function deleteGoal(request: Request, classId: string, goalId: string) {
+  const ctx = await requireTeacher(request), at = new Date(), ref = goalsRef(classId).doc(id(goalId));
+  const refunded = await db().runTransaction(async tx => {
+    const [cls, snap] = await Promise.all([tx.get(db().doc(`classes/${id(classId)}`)), tx.get(ref)]);
+    classOwner(ctx, cls);
+    if (!snap.exists) return 0;
+    const value = snap.data()!, refund = value.status === 'open' || value.status === 'reached';
+    if (refund) await refundDonors(tx, classId, snap.id, value, `기부 취소 환불 · ${value.title}`, ctx, at);
+    tx.delete(ref);
+    return refund ? goalRefunds(value).length : 0;
+  });
+  return json({deleted: true, refunded});
+}
+
 async function studentGoals(request: Request) {
   const ctx = await requireStudent(request), {cls, pupil} = await activeStudent(ctx);
   return json({goals: await listGoals(ctx.classId), settings: pointSettings(cls.data()?.pointSettings), studentId: ctx.studentId, points: pointBalance(pupil.data()?.points)});
@@ -130,6 +163,8 @@ export async function handlePointGoals(request: Request, segments: string[]) {
       const ctx = await requireTeacher(request);
       return json({goal: await failGoal(classId, segments[3], 'teacher', ctx)});
     }
+    if (segments.length === 5 && segments[4] === 'edit' && request.method === 'POST') return editGoal(request, classId, segments[3]);
+    if (segments.length === 5 && segments[4] === 'delete' && request.method === 'POST') return deleteGoal(request, classId, segments[3]);
     if (segments.length === 5 && segments[4] === 'rewarded' && request.method === 'POST') return rewardGoal(request, classId, segments[3]);
   }
   return null;
