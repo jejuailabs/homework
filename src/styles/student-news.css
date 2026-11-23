@@ -1,0 +1,24 @@
+/* "New from the teacher" marks on student screens: a banner, count badges and NEW tags that vanish once opened. */
+.sn-count-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#ff5a4e;color:#fff;font-size:12px;font-weight:900;line-height:1;box-shadow:0 0 0 2px #fff;font-variant-numeric:tabular-nums}
+.sn-new-tag{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:#ff5a4e;color:#fff;font-size:11px;font-weight:900;letter-spacing:.04em;line-height:1.1;box-shadow:0 2px 0 #c9372d;animation:sn-pop 1.8s ease-in-out infinite}
+
+.ws-student .sn-news-banner{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:22px 0;padding:14px 18px;border:2px solid #ffd3cc;border-radius:22px;background:linear-gradient(110deg,#fff4e8,#ffe9ef);box-shadow:0 4px 0 #ffd3cc}
+.ws-student .sn-news-banner strong{font-size:16px;font-weight:900;color:var(--text)}
+.ws-student .sn-news-bell{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#ff5a4e;color:#fff;flex:none;animation:sn-ring 2.4s ease-in-out infinite;transform-origin:50% 10%}
+.ws-student .sn-news-chips{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.ws-student .sn-news-chip{display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:8px 10px 8px 14px;border:2px solid #fff;border-radius:999px;background:#fff;color:var(--text);font:inherit;font-size:14px;font-weight:800;text-decoration:none;cursor:pointer;box-shadow:0 3px 0 #ffd3cc;transition:transform .15s}
+.ws-student .sn-news-chip:hover{transform:translateY(-2px)}
+.ws-student .sn-news-chip:focus-visible{outline:3px solid var(--accent-strong,#e0664f);outline-offset:2px}
+
+.ws-student .sd-gallery-entry .sn-entry-badge{position:absolute;top:-9px;right:-6px;z-index:2;min-width:28px;height:28px;font-size:14px;animation:sn-pop 1.8s ease-in-out infinite}
+
+.ws-student .ws-task-card.sn-task-new{position:relative;border-color:#ff9d92;box-shadow:0 0 0 3px #ffe1dc,0 6px 0 #ffc8c0}
+.ws-student .sn-task-tag{margin:0 auto 0 10px;font-size:12px;padding:4px 10px}
+
+.pb-board-cover{position:relative}
+.pb-board-cover .sn-board-tag{position:absolute;top:10px;left:10px;z-index:3}
+
+@keyframes sn-pop{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+@keyframes sn-ring{0%,70%,100%{transform:rotate(0)}75%{transform:rotate(14deg)}80%{transform:rotate(-12deg)}85%{transform:rotate(8deg)}90%{transform:rotate(-5deg)}}
+@media (max-width:640px){.ws-student .sn-news-chips{margin-left:0;width:100%}}
+@media (prefers-reduced-motion:reduce){.sn-new-tag,.ws-student .sn-news-bell,.ws-student .sd-gallery-entry .sn-entry-badge{animation:none}}

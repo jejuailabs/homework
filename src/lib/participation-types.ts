@@ -34,7 +34,7 @@ export type BoardPost = {
   commentCount: number; createdAt: string; updatedAt: string; version: number; canEdit: boolean;
 };
 export type BoardComment = { id: string; text: string; author: BoardAuthor; status: BoardPostStatus; createdAt: string; updatedAt: string; canEdit: boolean };
-export type BoardListResponse = { boards: ParticipationBoard[]; classes: { id: string; name: string; studentCount: number }[]; viewerRole: 'teacher' | 'student'; viewerId: string; nextCursor: string | null };
+export type BoardListResponse = { boards: ParticipationBoard[]; newBoardIds?: string[]; classes: { id: string; name: string; studentCount: number }[]; viewerRole: 'teacher' | 'student'; viewerId: string; nextCursor: string | null };
 export type BoardDetailResponse = { board: ParticipationBoard; posts: BoardPost[]; nextCursor: string | null; viewerRole: 'teacher' | 'student'; viewerId: string; unchanged?: boolean };
 export type BoardCreateInput = { requestId: string; classId: string; title: string; description?: string; layout?: BoardLayout; theme?: BoardTheme; character?: Character };
 export type BoardSettingsInput = Partial<Pick<ParticipationBoard, 'title' | 'description' | 'layout' | 'theme' | 'character' | 'status' | 'commentsEnabled' | 'reactionsEnabled' | 'moderation' | 'anonymous' | 'revealMode' | 'revealed' | 'publicViewEnabled' | 'visitorComments' | 'sections' | 'sort'>>;

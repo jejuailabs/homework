@@ -27,6 +27,7 @@ const homeworkArchiveUrl = moduleUrl(compile('../homework-archive.ts').replace("
 await import(moduleUrl(compile('../homework-archive.test.ts').replace("'./homework-archive'", JSON.stringify(homeworkArchiveUrl)).replace("'./zip-store'", JSON.stringify(zipStoreUrl))));
 const studentAssignmentViewUrl = moduleUrl(compile('../student-assignment-view.ts'));
 await import(moduleUrl(compile('../student-assignment-view.test.ts').replace("'./student-assignment-view'", JSON.stringify(studentAssignmentViewUrl))));
+await import(moduleUrl(compile('../student-news.test.ts').replace("'./student-news'", JSON.stringify(moduleUrl(compile('../student-news.ts'))))));
 await import(moduleUrl(compile('../submission-edit.test.ts').replace("'./submission-edit'", JSON.stringify(moduleUrl(compile('../submission-edit.ts'))))));
 const canvasTextUrl=moduleUrl(compile('../canvas-text.ts'));
 const cameraUrl=moduleUrl(compile('../canvas-camera.ts'));
