@@ -15,6 +15,7 @@ import { visitor } from '@/modules/artwork-extensions/exhibition-adapter';
 import { consumeModuleRate } from '@/modules/artwork-extensions/server-utils';
 import { guestName, guestText } from '@/modules/warm-guestbook/policy';
 import {reconcileHomeworkSync} from './homework-sync';
+import {markStudentSeen, unseenBoardIds} from './student-news';
 
 type Data = Record<string, any>;
 type StoredBoard = Data & { id: string; ownerUid: string; classId: string; status: string };
@@ -120,8 +121,10 @@ async function list(ctx: Context, request: Request) {
     ctx.role === 'student' ? db().doc(`classes/${id(ctx.classId)}`).get().then(doc => [doc]) : db().collection('classes').where('ownerUid', '==', ctx.uid).limit(100).get().then(s => s.docs),
   ]);
   const items = page.docs.slice(0, 50);
-  const last = items.at(-1);
-  return json({ boards: items.map(asBoard).filter(b => canViewBoard(ctx, b)).map(b => publicBoard(ctx, b)), classes: classes.map(d => ({ id: d.id, name: d.data()?.name ?? '', studentCount: d.data()?.studentCount ?? 0 })), viewerRole: ctx.role === 'student' ? 'student' : 'teacher', viewerId: ctx.uid, nextCursor: page.size > 50 && last ? Buffer.from(JSON.stringify({ scope: cursorScope, createdAt: last.data().createdAt, id: last.id })).toString('base64url') : null });
+  const last = items.at(-1), boards = items.map(asBoard).filter(b => canViewBoard(ctx, b));
+  // Students see NEW on recent boards they have not opened; a failed read only hides the tags.
+  const newBoardIds = ctx.role === 'student' ? await unseenBoardIds(ctx, boards).catch(() => []) : [];
+  return json({ boards: boards.map(b => publicBoard(ctx, b)), newBoardIds, classes: classes.map(d => ({ id: d.id, name: d.data()?.name ?? '', studentCount: d.data()?.studentCount ?? 0 })), viewerRole: ctx.role === 'student' ? 'student' : 'teacher', viewerId: ctx.uid, nextCursor: page.size > 50 && last ? Buffer.from(JSON.stringify({ scope: cursorScope, createdAt: last.data().createdAt, id: last.id })).toString('base64url') : null });
 }
 async function create(ctx: Context, request: Request, source?: StoredBoard) {
   const input = await body(request);
@@ -172,6 +175,8 @@ async function detail(ctx: Context, board: StoredBoard, request: Request) {
   if (linked) after(() => reconcileHomeworkSync(linked));
   const params = new URL(request.url).searchParams;
   const cursor = params.get('cursor');
+  // Opening a board (not a refresh or a next page) clears its NEW tag for this student.
+  if (ctx.role === 'student' && !cursor && !params.get('since')) after(() => markStudentSeen(ctx.uid, 'boards', board.id).catch(() => undefined));
   if (!cursor && params.get('since') === board.updatedAt) return json({ board: publicBoard(ctx, board), posts: [], nextCursor: null, viewerRole: ctx.role === 'student' ? 'student' : 'teacher', viewerId: ctx.uid, unchanged: true });
   let query = boardRef(board.id).collection('posts').where('deleted', '==', false).orderBy(FieldPath.documentId());
   if (cursor) query = query.startAfter(id(cursor));

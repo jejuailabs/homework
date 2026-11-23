@@ -18,6 +18,7 @@ const student = {uid: 'student-1', role: 'student', classId: 'class-a', studentI
 const submissionEdit = load('../submission-edit.ts');
 const videoStorage = load('../video-storage.ts');
 const homeworkSyncPolicy = load('./homework-sync-policy.ts', {'./policy': policy});
+const studentNewsPolicy = load('../student-news.ts');
 
 function fixture(initial) {
   const data = new Map(Object.entries(initial).map(([key, value]) => [key, structuredClone(value)]));
@@ -66,6 +67,8 @@ function fixture(initial) {
     'firebase-admin/firestore': fieldValue,
     '../assignment-submission': submission, '../submission-edit': submissionEdit, './homework-uploads': homeworkUploads, './submission-edits': submissionEdits,
     './homework-sync-policy': homeworkSyncPolicy,
+    './student-news': {studentNews: async () => ({seenAssignments: new Set(), newBoardIds: [], newExhibitionIds: []}), studentSeen: async () => ({ok: true})},
+    '../student-news': studentNewsPolicy,
     './points-policy': {pointBalance: value => value ?? 0, pointSettings: () => ({}), wardrobeOutfit: () => ({})},
     '@/modules/my-space/profile': {companionProfile: () => null},
     './assignment-materials': {signedAssignmentMaterials: async value => {assert.notEqual(value?.[0]?.id, 'secret'); return value ?? [];}, bindAssignmentMaterials: async () => []},
@@ -186,6 +189,8 @@ test('student home excludes hidden content and resolves submission records beyon
   const f = fixture(setup), response = await f.api.handle(request('GET'), 'student-home');
   assert.equal(response.status, 200);
   const result = await response.json(); assert.equal(result.assignments.length, 206);
+  assert.deepEqual(result.news, {assignments: 0, boards: 0, exhibitions: 0}, 'reviewed homework is never counted as new');
+  assert.ok(result.assignments.every(task => task.isNew === false));
   assert.equal(result.assignments.find(task => task.id === 'current-204').status, 'done');
   assert.ok(result.assignments.every(task => task.visibility === 'visible'));
   assert.ok(f.reads.every(batch => batch.length <= 100));

@@ -29,6 +29,8 @@ import {ownedItems, roomCompanionAppearance} from '@/modules/my-space/policy';
 import {personalExhibition} from '@/modules/personal-exhibition/identity';
 import {assignmentVisibility, assertAssignmentVisible} from './assignment-visibility-policy';
 import {createLinkedRooms, resyncHomeworkRooms, setSyncedWithdrawn, syncSubmission} from './homework-sync';
+import {studentNews, studentSeen} from './student-news';
+import {newAssignmentIds} from '../student-news';
 import {editedHomeworkSync, homeworkSyncTargets, submissionTypeChange} from './homework-sync-policy';
 
 type Data = Record<string, any>;
@@ -343,6 +345,8 @@ async function assignmentDetail(request: Request, assignmentId: string) {
 }
 async function home(request: Request) {
   const ctx = await requireStudent(request);
+  // News is a nicety: a failed read only hides the NEW marks, never the homework.
+  const news = studentNews(ctx).catch(() => null);
   const [profile, metadata] = await Promise.all([studentProfile(ctx), db().collection('assignments').where('classId', '==', ctx.classId).select('visibility', 'targetStudentIds').get()]);
   const visibleRefs = metadata.docs.filter(task => assignmentVisibility(task.data()).visibility === 'visible' && task.data().targetStudentIds?.includes(ctx.studentId)).map(task => task.ref);
   const tasks: FirebaseFirestore.DocumentSnapshot[] = [];
@@ -361,7 +365,8 @@ async function home(request: Request) {
     const { targetStudentIds: _targets, ownerUid: _owner, ...visibleTask } = task;
     return { ...visibleTask, materials: await signedAssignmentMaterials(task.materials), status: submission?.status ?? 'pending', submission: submission ? await withFileUrls(submission, task.title) : null,videoJob:jobs.get(task.id)||null,deletedSubmission:deleted.get(task.id)||null };
   }));
-  return json({ profile, assignments,videoProcessingEnabled:!!await videoConfig() });
+  const seen = await news, fresh = new Set(seen ? newAssignmentIds(visible.map(task => ({id: String(task.id), createdAt: task.createdAt, status: String(byAssignment.get(task.id)?.status ?? 'pending')})), seen.seenAssignments, Date.now()) : []);
+  return json({ profile, assignments: assignments.map((task, index) => ({...task, isNew: fresh.has(String(visible[index].id))})), news: {assignments: fresh.size, boards: seen?.newBoardIds.length ?? 0, exhibitions: seen?.newExhibitionIds.length ?? 0}, videoProcessingEnabled:!!await videoConfig() });
 }
 async function character(request: Request) {
   const ctx = await requireStudent(request);
@@ -578,6 +583,7 @@ export async function handle(request: Request, operation: string, parameter?: st
       case 'assignments': return await assignments(request);
       case 'assignment': return await assignmentDetail(request, id(parameter));
       case 'student-home': return await home(request);
+      case 'student-seen': return json(await studentSeen(request));
       case 'student-character': return await character(request);
       case 'upload-init': return await initUpload(request);
       case 'submission-finalize': return await finalize(request);
