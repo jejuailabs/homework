@@ -20,6 +20,26 @@ const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'C
 const millis=(v:any)=>v?.toMillis?.()??(typeof v==='string'?Date.parse(v):0);
 const iso=(v:any)=>v?.toDate?.().toISOString()??(typeof v==='string'?v:'');
 const countCache=new Map<string,{value:number;expires:number;at:string}>();
+type TeacherStats={classes:number;students:number;assignments:number;exhibitions:number};
+const statsCache=new Map<string,{value:TeacherStats;expires:number}>();
+// 교사 목록 한 페이지(최대 20명)에만 쓰는 요약 수치. 과제·전시실은 개수 집계, 학급은 학생 수 칸만 읽어 합산(추가 색인 불필요). 1분간 재사용한다.
+async function teacherStats(uids:string[]) {
+  const result=new Map<string,TeacherStats>(),now=Date.now();
+  await Promise.all(uids.map(async uid=>{
+    const hit=statsCache.get(uid);if(hit&&hit.expires>now){result.set(uid,hit.value);return;}
+    try{
+      const[classes,assignments,exhibitions]=await Promise.all([
+        db().collection('classes').where('ownerUid','==',uid).select('studentCount').limit(200).get(),
+        db().collection('assignments').where('ownerUid','==',uid).count().get(),
+        db().collection('exhibitions').where('ownerUid','==',uid).count().get(),
+      ]);
+      const value={classes:classes.size,students:classes.docs.reduce((sum,doc)=>sum+(Number(doc.data().studentCount)||0),0),assignments:assignments.data().count,exhibitions:exhibitions.data().count};
+      if(statsCache.size>=500)statsCache.delete(statsCache.keys().next().value!);
+      statsCache.set(uid,{value,expires:now+60_000});result.set(uid,value);
+    }catch{console.error('Teacher stats unavailable');}
+  }));
+  return result;
+}
 async function body(request:Request){const raw=await request.text();if(raw.length>20000)throw new ApiError(413,'요청이 너무 커요.');try{const v=JSON.parse(raw);if(!v||typeof v!=='object'||Array.isArray(v))throw Error();return v as Data;}catch{throw new ApiError(400,'입력 내용을 확인해 주세요.');}}
 async function context(request:Request){const ctx=await getContext(request);if(!isAdmin(ctx.role))throw new ApiError(403,'운영자만 사용할 수 있어요.','FORBIDDEN');return ctx;}
 async function audit(ctx:Context,action:string,target:string,details:Data={},outcome='success') {
@@ -96,6 +116,10 @@ async function rows(section:string,p:URLSearchParams,ctx:Context,size=50,withTot
     if(section==='jobs')return{...base,name:v.name||v.tool||v.kind,actorUid:v.actorUid,actorName:owners.get(v.actorUid)||'계정 확인 필요',status:v.status,createdAt:iso(v.createdAt),updatedAt:iso(v.updatedAt||v.completedAt),processed:v.processed||0,total:v.total??null,error:v.error||v.code||'',tool:v.tool||'',model:v.model||'',durationMs:v.durationMs??null,result:v.result||null,retryAllowed:def.collection==='adminJobs'&&['failed','paused','running'].includes(v.status)};
     return{...base,name:v.name,type:v.type,ownerUid:v.ownerUid||'',ownerName:owners.get(v.ownerUid)||'소속 미확인',classId:v.classId||'',className:classes.get(v.classId)||'',size:v.size||0,status:v.status||'unknown',checkedAt:v.checkedAt||'',sourceStatus:v.sourceStatus||'',canQuarantine:v.canQuarantine===true,canRestore:!!v.quarantinePath&&!!v.quarantineJob};
   });
+  if(section==='accounts'&&p.get('kind')==='teachers'&&withTotal&&!readTime){
+    const stats=await teacherStats((items as Data[]).filter(v=>v.role!=='student').map(v=>v.id as string));
+    for(const item of items)(item as Data).stats=stats.get(item.id as string)??null;
+  }
   const last=docs.at(-1);
   return{items,total:cached?.value??null,countedAt:cached?.at??null,pageSize:size,nextCursor:snap.size>size&&last?token(scope,[def.sort==='__name__'?last.id:last.data()[def.sort],last.id]):null,checkedAt:stamp(),scope:section==='storage'?'마지막 버킷 조사에서 확인된 실제 파일; 현재 사용량과 차이가 있을 수 있습니다.':undefined};
 }
