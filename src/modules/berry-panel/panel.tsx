@@ -2,18 +2,20 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {withBanners} from './links';
 import {usePathname} from 'next/navigation';
-import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, Mic, PencilLine, PlugZap, Send, Sparkles, Square, StickyNote, TriangleAlert, X} from 'lucide-react';
+import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, Mic, Paperclip, PencilLine, PlugZap, Send, Sparkles, Square, StickyNote, TriangleAlert, X} from 'lucide-react';
 import {abilityGroups, firstBlank, lackingFor, missingPermissions, type Ability} from './abilities';
 import {useVoiceInput} from './voice';
 import {pickGreeting, remember, seoul, type Greeting, type GreetingHistory} from './greetings';
+import {AttachButton, AttachChips, useAttachments} from '@/modules/attachments/client';
+import {ACCEPT_HINT, MAX_PER_MESSAGE} from '@/modules/attachments/policy';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
-type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]};
+type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]; files?: string[]};
 type InboxItem = {id: string; kind: string; rule: string | null; title_generic: string; payload: Record<string, unknown>; status: string; created_at: string};
 const TOOL_LABELS: Record<string, string> = {
   add_calendar_event: '일정 추가', add_lesson_log: '수업 일지 추가', add_work_item: '업무 항목 추가', add_notebook_entry: '교무수첩에 기록할까요?', create_assignment: '숙제방 열기', create_exhibition: '전시실 열기', create_board: '참여보드 열기', approve_artworks: '작품 승인', approve_posts: '게시물 공개', publish_review: '복습 배포', get_signals: '현황 확인', get_catalog: '메뉴 살펴보기', get_storage: '저장 공간 확인', list_exhibitions: '전시실 확인', search_exhibitions: '전시 보관함 찾기', list_boards: '보드 확인', get_moderation_queue: '승인 대기 확인', get_quiz_status: '퀴즈 확인', get_review_status: '복습 확인', get_playground_status: '말놀이터 확인', get_points: '보말 확인', list_card_sets: '카드 확인', find_base_vocab: '기본 어휘 찾기', list_class_tools: '수업 도구 확인', list_neighborhood_packs: '동네 탐험 자료 찾기', get_neighborhood_pack: '동네 탐험 자료 열기',
-  get_calendar: '일정 확인', get_timetable: '시간표 확인', get_lesson_log: '수업 일지 확인', search_workspace: '업무 폴더 찾기', get_work_item: '업무 항목 열기',
+  get_calendar: '일정 확인', get_timetable: '시간표 확인', read_attachment: '붙인 파일 읽기', list_attachments: '붙인 파일 확인', get_lesson_log: '수업 일지 확인', search_workspace: '업무 폴더 찾기', get_work_item: '업무 항목 열기',
   list_classes: '학급 확인', get_roster: '명단 확인', list_assignments: '숙제 확인', get_missing_submissions: '미제출 확인', get_submission_times: '제출 시간 확인', get_review_queue: '검사 대기 확인',
   list_deadlines: '마감 확인', search_notebook: '교무수첩 찾기', set_reminder: '알림 예약', list_schedule: '알림 확인', remember: '기억하기', forget: '기억 지우기',
   manage_homework: '숙제 관리', manage_exhibition: '전시실 관리', manage_board: '참여보드 관리', manage_quiz: '퀴즈 관리', manage_review: '복습 관리', manage_playground: '말놀이터 관리', manage_points: '보말', manage_cards: '카드 배부', manage_class_tools: '수업 도구', manage_class: '학급 관리', manage_workspace: '업무 공간 관리',
@@ -120,7 +122,7 @@ function Abilities({onPick, granted, off}: {onPick: (ability: Ability) => void; 
 /** Floating Berry chat for teachers. Talks only to /api/berry (same origin); the brain never sees the session cookie. */
 export default function BerryPanel() {
   const pathname = usePathname();
-  const [status, setStatus] = useState<{available: boolean; connected: boolean; scopes?: string[]; off?: string[]} | null>(null), [open, setOpen] = useState(false), [tab, setTab] = useState<'chat' | 'menu' | 'inbox'>('chat');
+  const [status, setStatus] = useState<{available: boolean; connected: boolean; scopes?: string[]; off?: string[]; attach?: boolean} | null>(null), [open, setOpen] = useState(false), [tab, setTab] = useState<'chat' | 'menu' | 'inbox'>('chat');
   const [messages, setMessages] = useState<Message[]>([]), [text, setText] = useState(''), [busy, setBusy] = useState(false), [activity, setActivity] = useState(''), [error, setError] = useState('');
   const [inbox, setInbox] = useState<InboxItem[] | null>(null), [notice, setNotice] = useState('');
   const [asked, setAsked] = useState<Ability | null>(null);
@@ -129,6 +131,8 @@ export default function BerryPanel() {
   const greeted = useRef(false);
   const conversation = useRef<string | null>(null), list = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
   const voice = useVoiceInput(text, setText);
+  // Files are read into text as soon as they are attached, so sending is as quick as a plain message.
+  const files = useAttachments(MAX_PER_MESSAGE), [dropping, setDropping] = useState(false);
   useEffect(() => {
     try {conversation.current = sessionStorage.getItem(CONVERSATION);} catch {}
     const result = new URLSearchParams(window.location.search).get('berry');
@@ -137,7 +141,7 @@ export default function BerryPanel() {
       setNotice(result === 'connected' ? '모두의 교실과 연결됐어요. 이제 물어보세요.' : result === 'denied' ? '연결을 취소했어요.' : '연결하지 못했어요. 다시 시도해 주세요.');
       const url = new URL(window.location.href); url.searchParams.delete('berry'); history.replaceState(null, '', url);
     }
-    api<{available: boolean; connected: boolean; scopes?: string[]; off?: string[]}>('status').then(setStatus).catch(() => setStatus({available: false, connected: false}));
+    api<{available: boolean; connected: boolean; scopes?: string[]; off?: string[]; attach?: boolean}>('status').then(setStatus).catch(() => setStatus({available: false, connected: false}));
   }, []);
   const loadInbox = useCallback(() => {api<{items: InboxItem[]}>('inbox').then(data => setInbox(data.items)).catch(e => setError((e as Error).message));}, []);
   useEffect(() => {if (open && tab === 'inbox' && status?.connected) loadInbox();}, [open, tab, status, loadInbox]);
@@ -183,16 +187,18 @@ export default function BerryPanel() {
     requestAnimationFrame(() => {input.current?.focus(); input.current?.setSelectionRange(blank[0], blank[1]);});
   }
   async function send(override?: string) {
-    const message = (override ?? text).trim();
-    if (!message || busy) return;
+    const message = (override ?? text).trim(), attached = override === undefined ? files.ready : [];
+    if ((!message && !attached.length) || busy || (override === undefined && files.busy)) return;
     if (voice.listening) voice.cancel();
     setText(''); setBusy(true); setError(''); setActivity('생각하는 중…');
-    setMessages(old => [...old, {role: 'user', text: message}, {role: 'assistant', text: '', cards: []}]);
+    // The files now belong to this message: the list empties, the read text stays on the server for later turns.
+    if (attached.length) files.clear();
+    setMessages(old => [...old, {role: 'user', text: message, ...(attached.length ? {files: attached.map(file => file.name)} : {})}, {role: 'assistant', text: '', cards: []}]);
     const update = (fn: (last: Message) => Message) => setMessages(old => [...old.slice(0, -1), fn(old[old.length - 1])]);
     try {
       // A new conversation carries the hello Berry just showed, so a reply to it reads naturally.
       const hello = !conversation.current && greeting ? [greeting.text, todaySummary].filter(Boolean).join(' / ') : undefined;
-      const response = await fetch('/api/berry/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: message, conversation_id: conversation.current, context: {route: pathname, ...(hello ? {greeting: hello} : {})}})});
+      const response = await fetch('/api/berry/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: message, ...(attached.length ? {attachments: attached.map(file => file.id)} : {}), conversation_id: conversation.current, context: {route: pathname, ...(hello ? {greeting: hello} : {})}})});
       if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({}))).error || '베리가 답하지 못했어요.');
       const reader = response.body.getReader(), decoder = new TextDecoder();
       let buffer = '';
@@ -266,18 +272,21 @@ export default function BerryPanel() {
             {!messages.length && <small className="bp-today-hint"><Sparkles size={11} aria-hidden="true"/>버튼으로 부탁하려면 입력창 옆 ✨이나 메뉴 탭을 눌러 주세요.</small>}
           </div>
           {/* The empty answer placeholder stays hidden until text or a card arrives, so Berry never shows an avatar with nothing beside it. */}
-          {messages.map((message, index) => !message.text && !message.cards?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
+          {messages.map((message, index) => !message.text && !message.cards?.length && !message.files?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
+            {message.files && <ul className="bp-files">{message.files.map((name, at) => <li key={at}><Paperclip size={11}/>{name}</li>)}</ul>}
             {message.text && (() => {const view = withBanners(message.text); return <><p><Bold text={view.text}/></p><Banners links={view.links}/></>;})()}
             {message.cards?.map(card => <Preview key={card.inbox_id} card={card} onDecide={(c, d) => void decide(c, d)}/>)}
           </div>)}
           {activity && <div className="bp-msg is-assistant" role="status"><img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/><p className="bp-thinking"><LoaderCircle className="spin" size={14}/>{activity}</p></div>}
         </div>
-        <div className="bp-input">
+        {status.attach && (files.items.length > 0 || files.notice) && <div className="bp-attached"><AttachChips items={files.items} onRemove={files.remove}/>{files.notice && <small>{files.notice}</small>}</div>}
+        <div className={`bp-input${dropping ? ' att-drop' : ''}`} onDragOver={status.attach ? event => {if (event.dataTransfer.types.includes('Files')) {event.preventDefault(); setDropping(true);}} : undefined} onDragLeave={() => setDropping(false)} onDrop={status.attach ? event => {event.preventDefault(); setDropping(false); if (event.dataTransfer.files.length) files.add(event.dataTransfer.files);} : undefined}>
           <button type="button" className="bp-ability-toggle" aria-label="메뉴 열기" title="메뉴 열기" onClick={() => setTab('menu')}><Sparkles size={17}/></button>
-          <textarea ref={input} value={text} rows={2} maxLength={4000} placeholder={voice.listening ? '듣고 있어요. 말씀하신 뒤 ■를 눌러 주세요' : '베리에게 물어보세요'} aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
+          {status.attach && <AttachButton className="bp-attach" label={`파일 붙이기 (${ACCEPT_HINT})`} disabled={busy || files.full} onFiles={files.add}/>}
+          <textarea ref={input} value={text} rows={2} maxLength={4000} placeholder={voice.listening ? '듣고 있어요. 말씀하신 뒤 ■를 눌러 주세요' : '베리에게 물어보세요'} aria-label="베리에게 보낼 메시지" onChange={e => setText(e.target.value)} onPaste={status.attach ? e => {if (e.clipboardData.files.length) {e.preventDefault(); files.add(e.clipboardData.files);}} : undefined} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); void send();}}}/>
           {voice.supported && <button type="button" className={`bp-mic${voice.listening ? ' is-listening' : ''}`} aria-label={voice.listening ? '음성 입력 멈추기' : '말로 입력하기'} aria-pressed={voice.listening} title={voice.listening ? '음성 입력 멈추기' : '말로 입력하기'} disabled={busy} onClick={voice.toggle}>{voice.listening ? <Square size={15}/> : <Mic size={17}/>}</button>}
-          <button type="button" className="button primary" aria-label="보내기" disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}</button>
+          <button type="button" className="button primary" aria-label="보내기" disabled={busy || files.busy || (!text.trim() && !files.ready.length)} onClick={() => void send()}>{busy ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}</button>
         </div>
         {voice.error && <p className="bp-error" role="alert">{voice.error}</p>}
         {messages.length > 0 && <button type="button" className="bp-new" onClick={newChat}>새 대화</button>}

@@ -9,6 +9,8 @@ import {menuFlags} from '@/modules/berry-connector/classroom-tools';
 import {notebookAvailableFor} from '@/modules/teacher-notebook/server';
 import {recordBerryTurn} from '@/lib/server/ai';
 import {BERRY_DEFAULT_MODEL, meterBerryStream, type BerryTurnResult} from './usage-meter';
+import {attachmentTexts, attachmentsAvailable} from '@/modules/attachments/server';
+import {BERRY_ATTACHMENT_NOTE, BERRY_INLINE_CHARS, attachmentMarker, inlineForBerry} from '@/modules/attachments/policy';
 
 /**
  * Same-origin proxy from the teacher's browser to the Berry brain. The session cookie stays on ourclass; the brain sees
@@ -65,7 +67,7 @@ export async function handleBerry(request: Request, segments: string[]) {
         const data = res.ok ? await res.json() as {connected?: unknown; scopes?: unknown} : null;
         const flags = menuFlags(), notebook = await notebookAvailableFor(ctx.uid, ctx.role).catch(() => false);
         const off = [!flags.cards && 'cards', !notebook && 'notebook', !flags.playground && 'playground'].filter(Boolean);
-        return json({available: true, connected: !!data?.connected, scopes: Array.isArray(data?.scopes) ? data.scopes : undefined, off, name});
+        return json({available: true, connected: !!data?.connected, scopes: Array.isArray(data?.scopes) ? data.scopes : undefined, off, name, attach: attachmentsAvailable()});
       } catch {return json({available: true, connected: false, unreachable: true, name});}
     }
     if (head === 'app' && id === 'logout' && method === 'POST' && bearer) {await endAppSession(request); return json({ok: true});}
@@ -74,13 +76,21 @@ export async function handleBerry(request: Request, segments: string[]) {
     if (head === 'app' && id === 'code' && method === 'POST' && !bearer) {const data = await input(request); return json({code: await issueAppCode(ctx.uid, data.challenge)});}
     if (head === 'connect' && method === 'POST') return relay(call(ctx.uid, '/connections/ourclass/start', {body: {surface}}));
     if (head === 'chat' && method === 'POST') {
-      const data = await input(request), text = typeof data.text === 'string' ? data.text.trim() : '';
-      if (!text || text.length > 4000) throw new ApiError(400, '메시지를 확인해 주세요.');
+      const data = await input(request), typed = typeof data.text === 'string' ? data.text.trim() : '';
+      // Attached files were already read into text (modules/attachments); Berry gets that text, never the file.
+      const attached = Array.isArray(data.attachments) && data.attachments.length && attachmentsAvailable() ? await attachmentTexts(ctx.uid, data.attachments) : [];
+      if ((!typed && !attached.length) || typed.length > 4000) throw new ApiError(400, '메시지를 확인해 주세요.');
+      // The marker stays in the conversation so a later turn can still name the file and read it again.
+      const text = attached.length ? `${(typed || '붙인 파일을 봐 줘.').slice(0, 3600)}\n${attachmentMarker(attached)}`.slice(0, 4000) : typed;
       const given = (data.context ?? {}) as {route?: unknown; greeting?: unknown};
       const route = typeof given.route === 'string' ? given.route.slice(0, 200) : undefined;
       // The panel's first hello of the day, so Berry can pick up a reply to it; a short written line, never teacher data.
       const greeting = typeof given.greeting === 'string' ? given.greeting.slice(0, 300) : undefined;
-      const context = route || greeting ? {...(route ? {route} : {}), ...(greeting ? {greeting} : {})} : undefined;
+      // The brain refuses request bodies over 20,000 characters, and tabs and line breaks double when encoded:
+      // shrink the inline share until the whole request fits. Berry reads the rest with read_attachment.
+      const withFiles = (budget: number) => ({...(route ? {route} : {}), ...(greeting ? {greeting} : {}), attachments: inlineForBerry(attached, budget), attachments_note: BERRY_ATTACHMENT_NOTE});
+      const fitted = attached.length ? [BERRY_INLINE_CHARS, 5000, 3000, 1500, 400].map(withFiles).find(value => JSON.stringify({text, context: value}).length < 18_500) ?? withFiles(0) : null;
+      const context = fitted ?? (route || greeting ? {...(route ? {route} : {}), ...(greeting ? {greeting} : {})} : undefined);
       const startedAt = Date.now();
       const res = await call(ctx.uid, '/chat', {body: {text, surface, conversation_id: typeof data.conversation_id === 'string' && ID.test(data.conversation_id) ? data.conversation_id : undefined, context}, timeout: 58_000})
         .catch(() => null);
