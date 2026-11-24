@@ -10,7 +10,6 @@ import {createCaption} from '../exhibition-caption.js';
 
 /** Frames per gallery besides the main slide. */
 export const OCEAN_PAGE_SIZE = 30;
-const HERO_INTERVAL = 7000;
 const keyActions = {KeyW:'up',ArrowUp:'up',KeyS:'down',ArrowDown:'down',KeyA:'left',ArrowLeft:'left',KeyD:'right',ArrowRight:'right',KeyQ:'turn-left',KeyE:'turn-right'};
 
 /**
@@ -274,9 +273,13 @@ export function createOceanRuntime(options) {
     targetByObject.set(target.mesh, target);
     target.mesh.traverse?.(obj => { targetByObject.set(obj, target); if (obj.isMesh) rayObjects.push(obj); });
   }
-  function advanceHero() {
-    if (stage !== 'gallery' || !spec?.swapHero || artworks.length < 2 || paused()) return;
-    heroIndex = (heroIndex + 1) % artworks.length;
+  // The big screen follows the slideshow controls (ExhibitionScreen), like the classic gallery's art screen.
+  function showHero(index) {
+    if (!artworks.length) return;
+    const nextIndex = ((index % artworks.length) + artworks.length) % artworks.length;
+    if (nextIndex === heroIndex % artworks.length) return;
+    heroIndex = nextIndex;
+    if (stage !== 'gallery' || !spec?.swapHero) { emit(); return; }
     const work = artworks[heroIndex];
     roomArt[0] = work;
     const old = spec.targets.find(target => target.kind === 'art' && target.index === 0);
@@ -321,7 +324,6 @@ export function createOceanRuntime(options) {
       }
       instanceRepeats(stageGroup, [...rayObjects]);
       lighting(resource.ctx); reset();
-      if (stage === 'gallery' && artworks.length > 1) heroTimer = setInterval(advanceHero, HERO_INTERVAL);
       failed = false;
     } catch (error) {
       console.error(error);
@@ -572,6 +574,7 @@ export function createOceanRuntime(options) {
   enter('exterior');
   return {
     enterGallery: () => enter('gallery'),
+    showHero,
     back, reset, setPage: delta => setPage(page + delta),
     activateNearby: () => activate(nearby),
     turn: direction => { leaveOverview(performance.now()); yaw += direction * .25; schedule(); },
