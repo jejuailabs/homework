@@ -10,6 +10,7 @@ import {EXHIBITION_ARTWORK_LIMIT, EXHIBITION_PIXEL_LIMIT, exhibitionStorageLimit
 import {artworkToday} from '../exhibition-metadata';
 import {autoTags} from '../exhibition-tags';
 import {moduleOptions} from '@/modules/artwork-extensions/types';
+import {workTitle} from '../submission-edit';
 import {homeworkSyncTargets, syncDue, syncableUploads, type HomeworkSync} from './homework-sync-policy';
 
 /**
@@ -70,13 +71,13 @@ async function boardPost(assignment: Data, submission: Data, boardId: string) {
     if (previous.exists) {
       // The teacher removed this student's card on purpose; a resubmission does not bring it back.
       if (previous.data()?.deleted) return;
-      tx.update(postRef, {body: submission.text || '', attachments, authorName: person.authorName, source, version: (previous.data()?.version || 1) + 1, updatedAt: stamp, ...(previous.data()?.withdrawnByStudent ? {status: 'published', withdrawnByStudent: FieldValue.delete()} : {})});
+      tx.update(postRef, {title: workTitle(submission, assignment.title), body: submission.text || '', attachments, authorName: person.authorName, source, version: (previous.data()?.version || 1) + 1, updatedAt: stamp, ...(previous.data()?.withdrawnByStudent ? {status: 'published', withdrawnByStudent: FieldValue.delete()} : {})});
       tx.update(boardRef, {updatedAt: stamp});
       return;
     }
     if ((fresh.postCount || 0) >= BOARD_POST_LIMIT) throw new ApiError(409, '참여보드가 가득 찼어요.', 'BOARD_FULL');
     const placement = (fresh.postSequence || 0) % BOARD_POST_LIMIT;
-    tx.create(postRef, {title: assignment.title, body: submission.text || '', attachments, ...person, sourceAnonymous: false, source, sectionId: '', color: fresh.theme, link: '', x: 18 + (placement % 4) * 320, y: 18 + Math.floor(placement / 4) * 600, location: null, poll: null, status: 'published', pinned: false, order: Date.now(), reactionCounts: changedReaction(), commentCount: 0, totalCommentWrites: 0, deleted: false, version: 1, createdAt: stamp, updatedAt: stamp});
+    tx.create(postRef, {title: workTitle(submission, assignment.title), body: submission.text || '', attachments, ...person, sourceAnonymous: false, source, sectionId: '', color: fresh.theme, link: '', x: 18 + (placement % 4) * 320, y: 18 + Math.floor(placement / 4) * 600, location: null, poll: null, status: 'published', pinned: false, order: Date.now(), reactionCounts: changedReaction(), commentCount: 0, totalCommentWrites: 0, deleted: false, version: 1, createdAt: stamp, updatedAt: stamp});
     const first = !(participation.data()?.postCount || participation.data()?.commentCount);
     tx.set(participation.ref, {...person, postCount: (participation.data()?.postCount || 0) + 1, commentCount: participation.data()?.commentCount || 0, updatedAt: stamp});
     tx.update(boardRef, {postCount: (fresh.postCount || 0) + 1, postSequence: (fresh.postSequence || 0) + 1, participantCount: (fresh.participantCount || 0) + (first ? 1 : 0), updatedAt: stamp});
@@ -130,7 +131,7 @@ async function exhibitionArtwork(assignment: Data, submission: Data, exhibitionI
         id: ref.id, uploadId: fileId, exhibitionId, classId: assignment.classId, uploaderUid: room.ownerUid,
         studentId: submission.studentId, studentName: submission.studentName || roster?.name || '', studentNumber: roster?.number || 0,
         // The day the child handed it in, not the day it reached the room.
-        title: assignment.title, description: '', artworkDate: artworkToday(new Date(Date.parse(submission.submittedAt) || Date.now())), artistName: submission.studentName || roster?.name || '', status: 'approved', feedback: '',
+        title: workTitle(submission, assignment.title), description: '', artworkDate: artworkToday(new Date(Date.parse(submission.submittedAt) || Date.now())), artistName: submission.studentName || roster?.name || '', status: 'approved', feedback: '',
         ...image, ...(video ? {mediaType: 'video', videoPath: media.upload.path, videoContentType: media.upload.contentType} : {}),
         source: {kind: 'assignment', assignmentId: assignment.id, submissionId: submission.id, attemptId: submission.attemptId},
         createdAt: previous.data()?.createdAt || stamp, reviewedAt: stamp, commentCount: previous.data()?.commentCount || 0, reactionCounts: previous.data()?.reactionCounts || {colors: 0, idea: 0, story: 0},

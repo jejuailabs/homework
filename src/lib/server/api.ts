@@ -1,7 +1,7 @@
 import 'server-only';
 import {markHomeworkUploadsSubmitted, prepareHomeworkUpload, verifiedHomeworkUploads} from './homework-uploads';
 import {deleteSubmission, editSubmission, restoreSubmission, submissionFingerprint, submissionTrashRef} from './submission-edits';
-import {restorableSubmission} from '../submission-edit';
+import {cleanSubmissionTitle, restorableSubmission, workTitle} from '../submission-edit';
 import {stableReadUrl} from './signed-urls';
 import {canMarkVideoStorageTest} from '../video-storage';
 import {downloadDisposition, extensionOf, friendlyFileName} from '../file-naming';
@@ -75,7 +75,7 @@ async function withFileUrls(submission: Data, title?: unknown): Promise<Data> {
   }
   const uploads = await Promise.all((submission.uploads ?? []).map(async (upload: Data, index: number) => {
     // Saved as 이름_숙제제목(10자); the stored original name stays unchanged.
-    const url = await stableReadUrl(upload.path, {responseDisposition: downloadDisposition(friendlyFileName(submission.studentName, title, extensionOf(upload.fileName, upload.contentType), index + 1, '숙제'))});
+    const url = await stableReadUrl(upload.path, {responseDisposition: downloadDisposition(friendlyFileName(submission.studentName, workTitle(submission, title), extensionOf(upload.fileName, upload.contentType), index + 1, '숙제'))});
     const thumbnailUrl=upload.thumbnailPath?await stableReadUrl(upload.thumbnailPath):undefined;
     return { ...upload, url, ...(thumbnailUrl?{thumbnailUrl}:{}) };
   }));
@@ -405,12 +405,12 @@ async function finalize(request: Request) {
   const input = await body(request);
   const assignmentId = id(input.assignmentId);
   const assignment = await assignmentForStudent(ctx, assignmentId);
-  const answer = text(input.text, '내용', 10000, true);
+  const answer = text(input.text, '내용', 10000, true), title = cleanSubmissionTitle(input.title);
   if (!Array.isArray(input.uploadIds) || input.uploadIds.length > 10 || new Set(input.uploadIds).size !== input.uploadIds.length) throw new ApiError(400, '첨부파일은 최대 10개까지 제출할 수 있어요.');
   const uploadIds = input.uploadIds.map((value: unknown) => id(value));
   submissionContentPolicy(assignment.submissionType, answer, uploadIds.length);
   if(assignment.submissionType==='video')return json({processing:true,videoJob:await createVideoSubmission(ctx,assignment,answer,uploadIds,input.videoStorage)},202);
-  const fingerprint = submissionFingerprint(answer, uploadIds);
+  const fingerprint = submissionFingerprint(answer, uploadIds, title);
   const ref = db().doc(`submissions/${assignmentId}_${ctx.studentId}`), trashRef = submissionTrashRef(assignmentId, ctx.studentId!);
   const previous = await ref.get();
   // A revision is a new attempt even when a student sends the same text.
@@ -428,7 +428,7 @@ async function finalize(request: Request) {
     // Sent work changes through the edit route, which keeps the teacher's check locked.
     if (old && old.status !== 'revision') throw new ApiError(409, '이미 제출한 숙제예요.', 'ALREADY_SUBMITTED');
     if (freshUploads.some(doc => doc.data()?.status !== 'pending')) throw new ApiError(409, '이미 사용된 첨부파일이에요.', 'UPLOAD_USED');
-    const submission = { id: ref.id, assignmentId, classId: ctx.classId, studentId: ctx.studentId, studentName: profile.name, text: answer, uploads, attemptId, attemptNumber: (old?.attemptNumber ?? trashed.data()?.attemptNumber ?? 0) + 1, status: 'submitted', feedback: '', submittedAt: now(), reviewedAt: null, fingerprint, rewardGranted: !!old?.rewardGranted };
+    const submission = { id: ref.id, assignmentId, classId: ctx.classId, studentId: ctx.studentId, studentName: profile.name, text: answer, title, uploads, attemptId, attemptNumber: (old?.attemptNumber ?? trashed.data()?.attemptNumber ?? 0) + 1, status: 'submitted', feedback: '', submittedAt: now(), reviewedAt: null, fingerprint, rewardGranted: !!old?.rewardGranted };
     tx.set(ref, submission);
     tx.create(ref.collection('attempts').doc(attemptId), submission);
     markHomeworkUploadsSubmitted(tx, uploadDocs, uploads, ref.id, assignment.ownerUid);

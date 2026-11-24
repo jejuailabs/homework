@@ -8,7 +8,7 @@ export const HOMEWORK_ARCHIVE_MAX_BYTES = 1.5 * 1024 ** 3;
 export const HOMEWORK_ARCHIVE_MAX_ASSIGNMENTS = 20;
 
 export type ArchiveStudent = {id: string; number?: unknown; name?: unknown};
-export type ArchiveUpload = {id: string; studentId: string; fileName: string; contentType?: string; size: number; current: boolean};
+export type ArchiveUpload = {id: string; studentId: string; fileName: string; contentType?: string; size: number; current: boolean; title?: string};
 
 /** e.g. "받아쓰기 3단원_10-29.zip", dated by when the homework was given (Korean time). */
 export function archiveZipName(title: unknown, openedAt: unknown) {
@@ -28,7 +28,7 @@ export function archiveEntryNames(uploads: ArchiveUpload[], students: ArchiveStu
   const named = sorted.map(upload => {
     const pupil = pupils.get(upload.studentId), key = `${upload.current}:${upload.studentId}`, index = (counts.get(key) ?? 0) + 1;
     counts.set(key, index);
-    const name = friendlyFileName(pupil?.name, title, extensionOf(upload.fileName, upload.contentType), index, '숙제');
+    const name = friendlyFileName(pupil?.name, upload.title || title, extensionOf(upload.fileName, upload.contentType), index, '숙제');
     return {paths: [upload.id], size: upload.size, name: `${upload.current ? '' : '이전 제출/'}${pupil ? `${String(pupil.number ?? '').padStart(2, '0')}_` : ''}${name}`};
   });
   return uniqueNames(named).map(file => ({uploadId: file.paths[0], name: file.name, size: file.size}));
