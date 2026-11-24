@@ -5,6 +5,7 @@
 import {buildOceanExterior} from './exterior.js';
 import {buildRoom} from './room.js';
 import {createPhotoCharacter} from '../space-exhibition/photo-character.js';
+import {loadWalkerModel} from '../exhibition-walker-model.js';
 import {createCaption} from '../exhibition-caption.js';
 
 /** Frames per gallery besides the main slide. */
@@ -14,7 +15,7 @@ const keyActions = {KeyW:'up',ArrowUp:'up',KeyS:'down',ArrowDown:'down',KeyA:'le
 
 /**
  * @param {{T:any, host:HTMLElement, theme:'coral'|'kelp'|'abyss'|'lagoon', data:any, assetUrl:(path:string)=>string,
- *   cat:{url:string, rects:any}, roomTitle?:string,
+ *   cat:{url:string, rects:any}, walkerUrl?:string|null, roomTitle?:string,
  *   artworks:{id:string,title:string,image:string,hero:string,width?:number,height?:number}[], english?:boolean,
  *   isActive:()=>boolean, onState:(state:any)=>void, onSelect:(id:string)=>void, onScreen?:(index:number)=>void, onExit:()=>void}} options
  */
@@ -30,7 +31,7 @@ export function createOceanRuntime(options) {
   const ray = new T.Raycaster(), ndc = new T.Vector2();
   const clock = {then: 0, walk: 0, actionCheck: 0, eDown: 0};
   const introPosition = new T.Vector3(), introRotation = new T.Quaternion();
-  let renderer, scene, camera, player, playerTexture, hemisphere, sun;
+  let renderer, scene, camera, player, playerTexture, hemisphere, sun, walker = null;
   let stage = 'exterior', page = 0, heroIndex = 0, heroTimer = 0;
   let stageGroup = null, spec = null, resource = null, targetByObject = null, rayObjects = [], nearby = null;
   let yaw = 0, tilt = -.08, actorYaw = Math.PI, pointer = null, raf = 0, lastMoving = false;
@@ -90,6 +91,14 @@ export function createOceanRuntime(options) {
     playerTexture.colorSpace = T.SRGBColorSpace;
     player = createPhotoCharacter(T, playerTexture, {kind: 'cat', height: 1.01, rects: cat.rects, blendMs: 60});
     scene.add(player.group);
+    // The visitor's own 3D friend replaces the photo cat once loaded, standing on the cat's contact shadow.
+    host.dataset.walker = options.walkerUrl ? 'loading' : 'builtin';
+    if (options.walkerUrl) loadWalkerModel(T, options.walkerUrl, {height: 1.01, anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy())}).then(model => {
+      if (disposed) { model.dispose(); return; }
+      walker = model; scene.add(model.group);
+      player.group.traverse(obj => { if (obj.isSprite) obj.visible = false; });
+      host.dataset.walker = 'model'; host.dataset.walkerClip = 'rest'; schedule();
+    }).catch(() => { host.dataset.walker = 'builtin'; });
     on(canvas, 'webglcontextlost', event => { event.preventDefault(); failed = true; emit(); });
     on(canvas, 'webglcontextrestored', () => { failed = false; renderer.shadowMap.needsUpdate = true; emit(); schedule(); });
     bindSurface(canvas);
@@ -491,7 +500,8 @@ export function createOceanRuntime(options) {
     adjustCamera(now);
     player.group.position.set(pos.x, .008, pos.y);
     const eyeHeading = Math.atan2(camera.position.x - pos.x, camera.position.z - pos.y);
-    player.update(actorYaw - eyeHeading, clock.walk, moving, now);
+    if (walker) { walker.group.position.copy(player.group.position); walker.group.rotation.y = actorYaw; walker.group.visible = player.group.visible; walker.update(moving, dt); host.dataset.walkerClip = moving ? 'walk' : 'rest'; }
+    else player.update(actorYaw - eyeHeading, clock.walk, moving, now);
     if (now - clock.actionCheck > 140 || !clock.actionCheck || !pressed.size && !stick.x && !stick.y) { clock.actionCheck = now; proximity(); }
     spec.animate?.(now / 1000, camera);
     renderer.render(scene, camera);
@@ -574,6 +584,7 @@ export function createOceanRuntime(options) {
       for (const off of listeners.splice(0)) off();
       if (renderer) {
         playerTexture?.dispose();
+        walker?.dispose();
         player?.group.traverse(obj => { obj.geometry?.dispose(); for (const m of [].concat(obj.material || [])) { m.map?.dispose(); m.dispose(); } });
         renderer.dispose(); renderer.forceContextLoss?.(); renderer.domElement.remove();
       }

@@ -10,7 +10,7 @@ export type PersonalArtwork = ExhibitionArtwork & {
 };
 export type PersonalExhibitionPage = {
   exhibition: PersonalExhibition;
-  student: {id: string; name: string; number: number; className: string};
+  student: {id: string; name: string; number: number; className: string; /** Pet that walks through the 3D room. */ companion?: {pet: string}};
   artworks: PersonalArtwork[];
   hasMore: boolean;
   nextCursor: string | null;

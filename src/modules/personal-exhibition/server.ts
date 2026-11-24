@@ -10,6 +10,8 @@ import {downloadDisposition, friendlyFileName} from '@/lib/file-naming';
 import {artworkToday} from '@/lib/exhibition-metadata';
 import {personalExhibition} from './identity';
 import type {PersonalArtwork, PersonalExhibitionPage} from './types';
+import {companionProfile} from '@/modules/my-space/profile';
+import {walkerPet} from '@/lib/exhibition-walker';
 
 const ROOM_PAGE_SIZE = 10;
 
@@ -19,7 +21,8 @@ export async function readPersonalExhibition(ctx: Context, cursor: string | null
   const scope = createHash('sha256').update(`personal-exhibition:${ctx.uid}:${classId}:${studentId}`).digest('hex');
   const after = exhibitionCursor(cursor, scope);
   const studentRef = db().doc(`classes/${classId}/students/${studentId}`);
-  const [student, cls] = await Promise.all([studentRef.get(), db().doc(`classes/${classId}`).get()]);
+  const [student, cls, space] = await Promise.all([studentRef.get(), db().doc(`classes/${classId}`).get(),
+    process.env.MY_SPACE_DISABLED === 'true' ? null : studentRef.collection('mySpace').doc('room').get().catch(() => null)]);
   if (!student.exists || student.data()?.disabled || student.data()?.authUid !== ctx.uid || !cls.exists) throw new ApiError(403, '학생 정보를 다시 확인해 주세요.', 'FORBIDDEN');
 
   // Existing pupils get the same default room without migrating or copying artworks.
@@ -65,7 +68,8 @@ export async function readPersonalExhibition(ctx: Context, cursor: string | null
   const last = rooms.at(-1);
   const hasMore = result.size > ROOM_PAGE_SIZE;
   return {
-    exhibition, student: {id: studentId, name: student.data()!.name, number: student.data()!.number, className: cls.data()!.name},
+    exhibition, student: {id: studentId, name: student.data()!.name, number: student.data()!.number, className: cls.data()!.name,
+      companion: {pet: walkerPet(space ? companionProfile(student.data()!, space.data())?.pet : null, student.data()!.character)}},
     artworks: batches.flat(), hasMore,
     nextCursor: hasMore && last ? encodeExhibitionCursor(scope, {id: last.id, createdAt: last.data().createdAt}) : null,
   };

@@ -1,5 +1,6 @@
 "use client";
 
+import {walkerModelUrl} from "@/lib/exhibition-walker";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, Eye, Images, LocateFixed, Presentation, X} from "lucide-react";
 import ExhibitionScreen from "./exhibition-screen";
@@ -25,6 +26,8 @@ export type SpaceExhibitionWorldProps = {
   artworks: WorldArtwork[];
   locale?: string;
   paused?: boolean;
+  /** The visitor's pet; without it the photo cat walks. */
+  companion?: {pet: string} | null;
   onSelectArtwork: (id: string) => void;
   onExit: () => void;
 };
@@ -32,6 +35,7 @@ export type SpaceExhibitionWorldProps = {
 /** Space-mode exhibition: the 3D runtime and Three.js load only when a space room opens. */
 export default function SpaceExhibitionWorld(props: SpaceExhibitionWorldProps) {
   const {theme, roomTitle, artworks, locale = "ko", paused = false} = props;
+  const walkerUrl = walkerModelUrl(props.companion?.pet);
   const english = locale.startsWith("en");
   const hostRef = useRef<HTMLDivElement>(null), rootRef = useRef<HTMLElement>(null);
   const runtime = useRef<Runtime | null>(null), callbacks = useRef(props), pausedRef = useRef(paused);
@@ -54,7 +58,7 @@ export default function SpaceExhibitionWorld(props: SpaceExhibitionWorldProps) {
       runtime.current = module.createSpaceRuntime({
         T, host, theme, english,
         images: spaceThemeImages(theme),
-        cat: {url: spaceCatUrl(), rects: catRects},
+        cat: {url: spaceCatUrl(), rects: catRects}, walkerUrl,
         artworks: list.map(([id, title, url, thumbnailUrl, width, height, artist]) => ({id, title, artist, image: thumbnailUrl || url || "", hero: url || thumbnailUrl || "", width, height})),
         isActive: () => {
           if (pausedRef.current) return false;
@@ -68,7 +72,7 @@ export default function SpaceExhibitionWorld(props: SpaceExhibitionWorldProps) {
       }) as Runtime;
     }).catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; runtime.current?.dispose(); runtime.current = null; };
-  }, [theme, english, worksKey]);
+  }, [theme, english, worksKey, walkerUrl]);
 
   const moveStick = useCallback((x: number, y: number) => runtime.current?.setStick(x, y), []);
   const stage = state?.stage || "exterior";
