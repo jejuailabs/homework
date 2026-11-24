@@ -6,6 +6,7 @@ import {ApiError, canManageClass, id} from './policy';
 import {stableReadUrl} from './signed-urls';
 import {isR2Path} from '../video-storage';
 import {r2Delete} from './r2';
+import {cleanSubmissionTitle} from '../submission-edit';
 import {archiveEntryNames, archiveZipName, cleanupState, purgeTime, trashCheck, HOMEWORK_ARCHIVE_MAX_ASSIGNMENTS} from '../homework-archive';
 
 type Data = FirebaseFirestore.DocumentData;
@@ -51,8 +52,10 @@ async function files(task: Owned) {
     uploadsOf(task, 'submitted'), db().collection('submissions').where('assignmentId', '==', task.id).get(), db().collection(`classes/${task.classId}/students`).get(),
   ]);
   const current = new Set(submissions.docs.flatMap(doc => (doc.data().uploads ?? []).map((upload: Data) => upload.id)));
+  // The student's own title names their current files; earlier attempts keep the homework title.
+  const titles = new Map<string, string>(submissions.docs.flatMap(doc => (doc.data().uploads ?? []).map((upload: Data) => [String(upload.id), cleanSubmissionTitle(doc.data().title)] as const)));
   const byId = new Map(stored.map(doc => [doc.id, doc.data()]));
-  const names = archiveEntryNames(stored.map(doc => ({id: doc.id, studentId: String(doc.data().studentId || ''), fileName: String(doc.data().fileName || ''), contentType: String(doc.data().contentType || ''), size: Number(doc.data().size || 0), current: current.has(doc.id)})),
+  const names = archiveEntryNames(stored.map(doc => ({id: doc.id, studentId: String(doc.data().studentId || ''), fileName: String(doc.data().fileName || ''), contentType: String(doc.data().contentType || ''), size: Number(doc.data().size || 0), current: current.has(doc.id), title: titles.get(doc.id) || undefined})),
     students.docs.map(doc => ({id: doc.id, number: doc.data().number, name: doc.data().name})), task.title);
   return {
     id: task.id, title: task.title, zipName: archiveZipName(task.title, task.createdAt),

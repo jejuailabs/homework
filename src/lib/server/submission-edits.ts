@@ -7,7 +7,7 @@ import {ApiError, id, submissionContentPolicy, text} from './policy';
 import {assertAssignmentVisible} from './assignment-visibility-policy';
 import {markHomeworkUploadsSubmitted, verifiedHomeworkUploads} from './homework-uploads';
 import {purgeTime} from '../homework-archive';
-import {editedUploads, restorableSubmission, submissionDeleteBlock, submissionEditBlock, videoJobBusy, type SubmissionChangeBlock} from '../submission-edit';
+import {cleanSubmissionTitle, editedUploads, restorableSubmission, submissionDeleteBlock, submissionEditBlock, videoJobBusy, type SubmissionChangeBlock} from '../submission-edit';
 
 /**
  * A student changing homework they already sent.
@@ -19,7 +19,7 @@ import {editedUploads, restorableSubmission, submissionDeleteBlock, submissionEd
 type Data = FirebaseFirestore.DocumentData;
 type Task = Data & {id: string; submissionType: Parameters<typeof submissionContentPolicy>[0]};
 const now = () => new Date().toISOString();
-export const submissionFingerprint = (answer: string, uploadIds: string[]) => createHash('sha256').update(JSON.stringify({answer, uploadIds})).digest('hex');
+export const submissionFingerprint = (answer: string, uploadIds: string[], title = '') => createHash('sha256').update(JSON.stringify(title ? {answer, uploadIds, title} : {answer, uploadIds})).digest('hex');
 export const submissionTrashRef = (assignmentId: string, studentId: string) => db().doc(`submissionTrash/${assignmentId}_${studentId}`);
 const submissionRef = (assignmentId: string, studentId: string) => db().doc(`submissions/${assignmentId}_${studentId}`);
 
@@ -52,7 +52,7 @@ function trashFiles(tx: FirebaseFirestore.Transaction, docs: FirebaseFirestore.D
 
 export async function editSubmission(ctx: Context, assignment: Task, input: Data) {
   const assignmentId = assignment.id, studentId = ctx.studentId!;
-  const answer = text(input.text, '내용', 10000, true);
+  const answer = text(input.text, '내용', 10000, true), title = cleanSubmissionTitle(input.title);
   if (!Array.isArray(input.keepUploadIds) || !Array.isArray(input.uploadIds) || input.keepUploadIds.length + input.uploadIds.length > 10) throw new ApiError(400, '첨부파일은 최대 10개까지 제출할 수 있어요.');
   const keepIds: string[] = input.keepUploadIds.map((value: unknown) => id(value)), newIds: string[] = input.uploadIds.map((value: unknown) => id(value));
   if (new Set([...keepIds, ...newIds]).size !== keepIds.length + newIds.length) throw new ApiError(400, '같은 파일이 두 번 들어 있어요.');
@@ -60,7 +60,7 @@ export async function editSubmission(ctx: Context, assignment: Task, input: Data
   // A replacement video needs the worker: delete and send again instead.
   if (assignment.submissionType === 'video' && newIds.length) throw new ApiError(400, '영상을 바꾸려면 제출을 지우고 다시 올려 주세요.', 'VIDEO_REPLACE');
   const {uploadDocs, uploads: added} = await verifiedHomeworkUploads(ctx.uid, assignmentId, assignment.submissionType, newIds);
-  const ref = submissionRef(assignmentId, studentId), fingerprint = submissionFingerprint(answer, [...keepIds, ...newIds]);
+  const ref = submissionRef(assignmentId, studentId), fingerprint = submissionFingerprint(answer, [...keepIds, ...newIds], title);
   const attemptId = randomUUID();
   return db().runTransaction(async tx => {
     const [task, oldDoc, fresh] = await Promise.all([tx.get(db().doc(`assignments/${assignmentId}`)), tx.get(ref), Promise.all(uploadDocs.map(doc => tx.get(doc.ref)))]);
@@ -75,7 +75,7 @@ export async function editSubmission(ctx: Context, assignment: Task, input: Data
     if (!plan) throw new ApiError(400, '첨부파일을 다시 확인해 주세요.', 'UPLOAD_INVALID');
     if (fresh.some(doc => doc.data()?.status !== 'pending')) throw new ApiError(409, '이미 사용된 첨부파일이에요.', 'UPLOAD_USED');
     const removed = await Promise.all(uploadRefs(plan.removed).map(upload => tx.get(upload)));
-    const stamp = now(), submission = {...old!, text: answer, uploads: [...plan.kept, ...added], attemptId, attemptNumber: (old!.attemptNumber ?? 1) + 1, fingerprint, editedAt: stamp};
+    const stamp = now(), submission = {...old!, text: answer, title, uploads: [...plan.kept, ...added], attemptId, attemptNumber: (old!.attemptNumber ?? 1) + 1, fingerprint, editedAt: stamp};
     tx.set(ref, submission);
     tx.create(ref.collection('attempts').doc(attemptId), submission);
     markHomeworkUploadsSubmitted(tx, uploadDocs, added, ref.id, assignment.ownerUid);

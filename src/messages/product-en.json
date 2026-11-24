@@ -230,7 +230,8 @@
     "listNoDate": "No date",
     "listNoMatch": "No homework matches.",
     "listPending": "{count} to check",
-    "listDue": "Due {date}"
+    "listDue": "Due {date}",
+    "workName": "Work name from the student"
   },
   "student": {
     "activeTasksTitle": "Homework to do",
@@ -393,7 +394,10 @@
     },
     "videoSubmitAction": "Submit video",
     "videoKeepOpen": "Keep this page open until the upload finishes.",
-    "videoPending": "Processing video"
+    "videoPending": "Processing video",
+    "redoTag": "Please send it again!",
+    "workNameLabel": "Work name (file name)",
+    "workNameHint": "Your teacher's files, boards and exhibitions use this name. Leave it blank to use the homework title."
   },
   "submissionTypes": {
     "text": "Write an answer",

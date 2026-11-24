@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {editedUploads, restorableSubmission, submissionDeleteBlock, submissionEditBlock, videoJobBusy} from './submission-edit';
+import {cleanSubmissionTitle, editedUploads, workTitle, restorableSubmission, submissionDeleteBlock, submissionEditBlock, videoJobBusy} from './submission-edit';
 
 const waiting = {status: 'submitted', attemptId: 'a1'};
 assert.equal(submissionEditBlock(waiting), null);
@@ -34,3 +34,11 @@ const now = Date.parse('2026-11-05T00:00:00.000Z');
 assert.deepEqual(restorableSubmission({restoreUntil: '2026-11-19T00:00:00.000Z', deletedAt: '2026-11-05T00:00:00.000Z', uploads: [{}, {}]}, now), {deletedAt: '2026-11-05T00:00:00.000Z', restoreUntil: '2026-11-19T00:00:00.000Z', fileCount: 2});
 assert.equal(restorableSubmission({restoreUntil: '2026-11-04T00:00:00.000Z'}, now), null);
 assert.equal(restorableSubmission(null, now), null);
+
+// The student's title names the work; blank falls back to the homework title.
+assert.equal(cleanSubmissionTitle('  나의   리코더  연주 '), '나의 리코더 연주');
+assert.equal(cleanSubmissionTitle(42), '');
+assert.equal(cleanSubmissionTitle('가'.repeat(80)).length, 60);
+assert.equal(workTitle({title: '봄 그림'}, '11월23일 미술'), '봄 그림');
+assert.equal(workTitle({title: '   '}, '11월23일 미술'), '11월23일 미술');
+assert.equal(workTitle(null, '11월23일 미술'), '11월23일 미술');

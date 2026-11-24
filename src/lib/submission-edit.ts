@@ -39,3 +39,12 @@ export function restorableSubmission(trash: {restoreUntil?: unknown; deletedAt?:
   if (!Number.isFinite(until) || until <= now) return null;
   return {deletedAt: String(trash?.deletedAt ?? ''), restoreUntil: String(trash?.restoreUntil), fileCount: Array.isArray(trash?.uploads) ? trash.uploads.length : 0};
 }
+
+/** The student's own name for the work. It names the downloaded files and the board / exhibition copies; empty means the homework title. */
+export const SUBMISSION_TITLE_MAX = 60;
+export function cleanSubmissionTitle(value: unknown) {
+  return typeof value === 'string' ? value.normalize('NFC').replace(/\s+/g, ' ').trim().slice(0, SUBMISSION_TITLE_MAX) : '';
+}
+export function workTitle(submission: {title?: unknown} | null | undefined, assignmentTitle: unknown) {
+  return cleanSubmissionTitle(submission?.title) || String(assignmentTitle ?? '');
+}

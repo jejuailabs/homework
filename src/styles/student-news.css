@@ -18,7 +18,13 @@
 .pb-board-cover{position:relative}
 .pb-board-cover .sn-board-tag{position:absolute;top:10px;left:10px;z-index:3}
 
+/* Homework the teacher sent back: a soft yellow card and a bouncing "please send again" sticker. */
+.ws-student .ws-task-card.sr-task-redo{position:relative;border-color:#ffc94d;background:linear-gradient(160deg,#fffbe6,#fff3d1);box-shadow:0 0 0 3px #fff0bf,0 6px 0 #ffd76e}
+.ws-student .sr-redo-tag{display:inline-flex;align-items:center;gap:5px;margin:0 auto 0 10px;padding:5px 12px 5px 9px;border:2px solid #fff;border-radius:999px;background:#ffb72b;color:#5a3500;font-size:13px;font-weight:900;line-height:1.1;box-shadow:0 3px 0 #e39400;animation:sr-wiggle 2.2s ease-in-out infinite;transform-origin:50% 100%}
+.ws-student .sr-redo-tag>span{font-size:15px}
+.ws-student .sn-task-tag+.sr-redo-tag{margin-left:6px}
+@keyframes sr-wiggle{0%,60%,100%{transform:rotate(0) scale(1)}68%{transform:rotate(-6deg) scale(1.06)}76%{transform:rotate(5deg) scale(1.06)}84%{transform:rotate(-3deg)}92%{transform:rotate(2deg)}}
 @keyframes sn-pop{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 @keyframes sn-ring{0%,70%,100%{transform:rotate(0)}75%{transform:rotate(14deg)}80%{transform:rotate(-12deg)}85%{transform:rotate(8deg)}90%{transform:rotate(-5deg)}}
 @media (max-width:640px){.ws-student .sn-news-chips{margin-left:0;width:100%}}
-@media (prefers-reduced-motion:reduce){.sn-new-tag,.ws-student .sn-news-bell,.ws-student .sd-gallery-entry .sn-entry-badge{animation:none}}
+@media (prefers-reduced-motion:reduce){.ws-student .sr-redo-tag,.sn-new-tag,.ws-student .sn-news-bell,.ws-student .sd-gallery-entry .sn-entry-badge{animation:none}}

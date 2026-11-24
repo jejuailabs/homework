@@ -230,7 +230,8 @@
     "listNoDate": "날짜 없음",
     "listNoMatch": "찾는 숙제가 없어요.",
     "listPending": "확인 전 {count}",
-    "listDue": "마감 {date}"
+    "listDue": "마감 {date}",
+    "workName": "학생이 붙인 작품 이름"
   },
   "student": {
     "activeTasksTitle": "해야 할 숙제",
@@ -393,7 +394,10 @@
     },
     "videoSubmitAction": "제출하기",
     "videoKeepOpen": "전송이 끝날 때까지 이 화면을 유지해 주세요.",
-    "videoPending": "영상 처리 중"
+    "videoPending": "영상 처리 중",
+    "redoTag": "다시 제출해 주세요!",
+    "workNameLabel": "작품 이름 (파일 이름)",
+    "workNameHint": "선생님이 받는 파일과 보드·전시에 이 이름이 붙어요. 비워 두면 숙제 이름이 붙어요."
   },
   "submissionTypes": {
     "text": "텍스트 작성",
