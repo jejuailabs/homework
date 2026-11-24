@@ -11,6 +11,8 @@ import WorldJoystick from './world-joystick';
 import { createExhibitionLabelCanvas } from "@/lib/exhibition-label";
 import { courtyardDecor, DECOR_SLICES, DECOR_TILE, decorUrl, galleryDecor, lobbyDecor, nineSlice } from "@/lib/exhibition-decor";
 import {createWhitekneeWorldModel, type WorldCompanion} from '@/lib/whiteknee-world-model';
+import {walkerModelUrl} from '@/lib/exhibition-walker';
+import {loadWalkerModel} from '@/lib/exhibition-walker-model.js';
 import "@/styles/exhibition-world.css";
 
 export type WorldBuilding = { id: string; name: string };
@@ -49,6 +51,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
   const { stage, buildings, buildingName, rooms, artworks, roomTitle, theme = "cozy", locale = "ko", paused = false } = props;
   const english = locale.startsWith("en");
   const companionKey = JSON.stringify(props.companion || null);
+  const walkerUrl = walkerModelUrl(props.companion?.pet);
   const rootRef = useRef<HTMLElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const callbacks = useRef(props);
@@ -607,7 +610,19 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
       const look = JSON.parse(companionKey) as WorldCompanion | null;
       const whiteknee = look?.pet === 'animal-whiteknee' ? createWhitekneeWorldModel(T, look) : null;
       const cat = whiteknee || character("cat", 0.82); scene.add(cat.group);
-      const animatePlayer = (phase: number, moving: boolean) => {
+      // The visitor's own 3D friend replaces the built-in figure once it has loaded; a failed load keeps the figure.
+      let avatar: Three.Object3D = cat.group;
+      let walker: Awaited<ReturnType<typeof loadWalkerModel>> | null = null;
+      root.dataset.walker = walkerUrl ? "loading" : "builtin";
+      if (walkerUrl) loadWalkerModel(T, walkerUrl, { height: 1.45, maxWidth: 1.7, castShadow: true, anisotropy: Math.min(4, renderer.capabilities.getMaxAnisotropy()) }).then(model => {
+        if (disposed) { model.dispose(); return; }
+        model.group.position.copy(avatar.position); model.group.rotation.y = avatar.rotation.y;
+        scene.remove(cat.group); scene.add(model.group);
+        avatar = model.group; walker = model;
+        root.dataset.walker = "model"; root.dataset.walkerClip = "rest"; invalidate();
+      }).catch(() => { if (!disposed) root.dataset.walker = "builtin"; });
+      const animatePlayer = (phase: number, moving: boolean, dt = 0) => {
+        if (walker) { walker.update(moving, dt); root!.dataset.walkerClip = moving ? "walk" : "rest"; return; }
         if (whiteknee) {whiteknee.animate(phase, moving); return;}
         const classic = cat as ReturnType<typeof character>;
         classic.feet.forEach((foot, i) => {foot.position.y = .13 + (moving ? Math.max(0, Math.sin(phase + i * Math.PI)) * .11 : 0);});
@@ -645,10 +660,11 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         const cameraX = player.x - Math.sin(yaw) * follow, cameraZ = player.z + Math.cos(yaw) * follow;
         const portraitCampus = stage === 'campus' && camera.aspect < .85;
         camera.position.set(T.MathUtils.clamp(cameraX, bounds.minX + 0.15, bounds.maxX - 0.15), stage === "campus" ? (portraitCampus ? 5.6 : 3.6) : 2.3, T.MathUtils.clamp(cameraZ, bounds.minZ + 0.15, bounds.maxZ - 0.15));
-        const viewPitch = pitch - (portraitCampus ? .05 : 0) - (whiteknee ? (stage === 'campus' ? .10 : .30) : 0);
+        // A walking friend is worth seeing whole: look a little further down than for the built-in cat.
+        const viewPitch = pitch - (portraitCampus ? .05 : 0) - (whiteknee ? (stage === 'campus' ? .10 : .30) : walkerUrl ? (stage === 'campus' ? .10 : .26) : 0);
         camera.lookAt(camera.position.x + Math.sin(yaw) * 10, camera.position.y + Math.sin(viewPitch) * 10, camera.position.z - Math.cos(yaw) * 10);
-        cat.group.position.copy(player);
-        cat.group.visible = camera.position.distanceTo(new T.Vector3(player.x, 1.1, player.z)) > 1.65;
+        avatar.position.copy(player);
+        avatar.visible = camera.position.distanceTo(new T.Vector3(player.x, 1.1, player.z)) > 1.65;
       }
       const stick={x:0,y:0};
       function canStand(x: number, z: number) {
@@ -670,9 +686,9 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
           const nz = T.MathUtils.clamp(player.z + dz, bounds.minZ, bounds.maxZ);
           if (canStand(nx, player.z)) player.x = nx;
           if (canStand(player.x, nz)) player.z = nz;
-          cat.group.rotation.y = Math.atan2(dx, dz);
+          avatar.rotation.y = Math.atan2(dx, dz);
           gait += dt * 12;
-          animatePlayer(gait, true);
+          animatePlayer(gait, true, dt);
         } else { animatePlayer(gait, false); }
         updateCamera(); renderer.render(scene, camera);
         if (now - lastPositionStamp > 100 || !moving) {
@@ -685,7 +701,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         if (moving) invalidate();
       }
       function invalidate() { if (!frame && active()) frame = requestAnimationFrame(draw); }
-      function reset() { player.copy(initialPlayer); yaw = 0; pitch = stage === "campus" ? -0.08 : -0.045; cat.group.rotation.y = 0; keys.clear();stick.x=stick.y=0; invalidate(); }
+      function reset() { player.copy(initialPlayer); yaw = 0; pitch = stage === "campus" ? -0.08 : -0.045; avatar.rotation.y = 0; keys.clear();stick.x=stick.y=0; invalidate(); }
       controlsRef.current = {
         stick:(x,y)=>{stick.x=pausedRef.current?0:x;stick.y=pausedRef.current?0:y;invalidate();},
         direction: (key, down) => { if (down && !pausedRef.current) keys.add(key); else keys.delete(key); invalidate(); },
@@ -790,7 +806,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
         if (transitionTimer) clearTimeout(transitionTimer);
         resize.disconnect(); intersection.disconnect(); events.forEach(remove => remove());
         controlsRef.current = null;
-        whiteknee?.dispose();
+        whiteknee?.dispose(); walker?.dispose();
         textures.forEach(texture => texture.dispose()); materials.forEach(material => material.dispose()); geometries.forEach(geometry => geometry.dispose());
         renderer.dispose(); renderer.forceContextLoss(); canvas.remove();
       };
@@ -801,7 +817,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
     }
     createWorld().catch(() => { cleanup?.(); if (!disposed) setStatus("fallback"); });
     return () => { disposed = true; cleanup?.(); };
-  }, [data, stage, theme, english, wing, companionKey]);
+  }, [data, stage, theme, english, wing, companionKey, walkerUrl]);
 
   const title = stage === "campus" ? (english ? "Our little exhibition school" : "우리들의 작은 전시학교") : stage === "classroom" ? buildingName || (english ? "Our classroom" : "우리 반 교실") : roomTitle || (english ? "Our exhibition" : "우리들의 전시회");
   const indexTitle = stage === "campus" ? (english ? "Choose a classroom" : "우리 반 찾기") : stage === "classroom" ? (english ? "All exhibitions" : "전시실 모두 보기") : (english ? "All artworks" : "작품 모두 보기");
@@ -809,7 +825,7 @@ export default function ExhibitionWorld(props: ExhibitionWorldProps) {
 
   const roomDateLabel = exhibitionDateLabel(props.roomDate, english ? "en" : "ko", true);
   return <section ref={rootRef} className={`ex-world ex-world--${stage}${paused || screenExpanded ? " ex-world--paused" : ""}`} data-world-stage={stage} data-world-status={status} data-visible-artwork-count={data.artworks.length} data-loaded-artwork-count={loadedArtworkIds.length} data-loaded-artwork-ids={loadedArtworkIds.join(",")} data-total-artwork-count={artworks.length} data-world-wing={wing + 1} aria-label={title}>
-    <div ref={hostRef} className="ex-world-viewport" data-player-pet={props.companion?.pet === 'animal-whiteknee' ? 'animal-whiteknee' : 'friend-cat'} />
+    <div ref={hostRef} className="ex-world-viewport" data-player-pet={props.companion?.pet === 'animal-whiteknee' ? 'animal-whiteknee' : walkerUrl && props.companion ? props.companion.pet : 'friend-cat'} />
     <div className="ex-world-topbar">
       {stage === "campus" ? <span className="ex-world-back" /> : <button type="button" className="ex-world-pill ex-world-back" onClick={props.onExit} aria-label={english ? "Back" : "뒤로"}><ArrowLeft size={17} /><span>{stage === "gallery" ? (english ? "Classroom" : "교실로") : (english ? "Schoolyard" : "학교 앞으로")}</span></button>}
       <div className="ex-world-title"><span><Sparkles size={13} />{stage === "campus" ? "OUR LITTLE SCHOOL" : stage === "classroom" ? "OUR CLASSROOM" : "LITTLE ART GALLERY"}</span><strong>{title}</strong>{stage === "gallery" && roomDateLabel && <time dateTime={props.roomDate}><CalendarDays size={11} aria-hidden="true" />{roomDateLabel}</time>}</div>

@@ -25,6 +25,7 @@ import {artworkAuthorImages} from './artwork-author-policy';
 import {moduleOptions} from '@/modules/artwork-extensions/types';
 import {effectiveOptions} from '@/modules/artwork-extensions/exhibition-adapter';
 import {companionProfile} from '@/modules/my-space/profile';
+import {walkerPet} from '../exhibition-walker';
 import {wardrobeOutfit} from './points-policy';
 import {reconcileHomeworkSync} from './homework-sync';
 import {autoTags, effectiveTags, normalizeTags} from '../exhibition-tags';
@@ -130,17 +131,17 @@ async function list(ctx: Context, request: Request) {
     return { exhibitions, limit: EXHIBITION_LIST_LIMIT, hasMore, nextCursor: hasMore && last ? encodeExhibitionCursor(scope, last) : null };
   };
   if (student) {
-    const [page, profile, cls] = await Promise.all([
+    const [page, profile, cls, room] = await Promise.all([
       readPage(ctx.classId),
       db().doc(`classes/${ctx.classId}/students/${ctx.studentId}`).get(), db().doc(`classes/${ctx.classId}`).get(),
+      // The pet chosen in My Space walks through every room. A failed read keeps the basic friend.
+      process.env.MY_SPACE_DISABLED === 'true' ? null : db().doc(`classes/${ctx.classId}/students/${ctx.studentId}/mySpace/room`).get().catch(() => null),
     ]);
-    const owned = profile.data()?.spaceOwned;
-    // Only Whiteknee owners need a room read for this first 3D companion release.
-    const room = process.env.MY_SPACE_DISABLED !== 'true' && Array.isArray(owned) && owned.includes('animal-whiteknee')
-      ? await db().doc(`classes/${ctx.classId}/students/${ctx.studentId}/mySpace/room`).get() : null;
+    // companionProfile only returns a pet the pupil owns, so a forged room cannot change the walker.
     const selected = room ? companionProfile(profile.data()!, room.data()) : null;
     const worn = wardrobeOutfit(profile.data()?.wardrobeOutfit, profile.data()?.wardrobeOwned);
-    const companion = selected?.pet === 'animal-whiteknee' ? {pet: selected.pet, outfit: selected.outfit, wardrobe: {head: worn.head, face: worn.face, neck: worn.neck}} : null;
+    const companion = selected?.pet === 'animal-whiteknee' ? {pet: selected.pet, outfit: selected.outfit, wardrobe: {head: worn.head, face: worn.face, neck: worn.neck}}
+      : {pet: walkerPet(selected?.pet, profile.data()?.character)};
     const [visits, passports] = await Promise.all([
       db().doc(`exhibitionVisits/${ctx.uid}`).get(),
       page.exhibitions.length ? db().getAll(...page.exhibitions.map(show => passportRef(show.id, ctx.studentId!))) : [],

@@ -18,3 +18,9 @@ await import(dataUrl(compile('./exhibition-upgrade.test.ts').replace("'../exhibi
 const whitekneeWorld = dataUrl(compile('../whiteknee-world-model.ts'));
 await import(dataUrl(compile('../whiteknee-world-model.test.ts').replace("'./whiteknee-world-model'", JSON.stringify(whitekneeWorld)).replace("'three'", JSON.stringify(import.meta.resolve('three')))));
 await import('./run-exhibition-companion-tests.mjs');
+{
+  const characters = dataUrl(compile('../characters.ts'));
+  const storage = dataUrl('export default {ready:false,bucket:"",prefix:"",downloadToken:""};');
+  const walker = dataUrl(compile('../exhibition-walker.ts').replace("'./characters'", JSON.stringify(characters)).replace("'@/data/exhibition-walker-storage.json'", JSON.stringify(storage)));
+  await import(dataUrl(compile('../exhibition-walker.test.ts').replace("'./exhibition-walker'", JSON.stringify(walker))));
+}

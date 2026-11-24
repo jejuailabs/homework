@@ -1,5 +1,6 @@
 "use client";
 
+import {walkerModelUrl} from "@/lib/exhibition-walker";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {ArrowLeft, ChevronLeft, ChevronRight, DoorOpen, Eye, Images, LocateFixed, Presentation, X} from "lucide-react";
 import ExhibitionScreen from "./exhibition-screen";
@@ -27,6 +28,8 @@ export type OceanExhibitionWorldProps = {
   artworks: WorldArtwork[];
   locale?: string;
   paused?: boolean;
+  /** The visitor's pet; without it the photo cat walks. */
+  companion?: {pet: string} | null;
   onSelectArtwork: (id: string) => void;
   onExit: () => void;
 };
@@ -34,6 +37,7 @@ export type OceanExhibitionWorldProps = {
 /** Ocean-mode exhibition: the 3D runtime and Three.js load only when an ocean room opens. Same controls as the space mode. */
 export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
   const {theme, roomTitle, artworks, locale = "ko", paused = false} = props;
+  const walkerUrl = walkerModelUrl(props.companion?.pet);
   const english = locale.startsWith("en");
   const hostRef = useRef<HTMLDivElement>(null), rootRef = useRef<HTMLElement>(null);
   const runtime = useRef<Runtime | null>(null), callbacks = useRef(props), pausedRef = useRef(paused);
@@ -56,7 +60,7 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
       runtime.current = module.createOceanRuntime({
         T, host, theme, english, roomTitle,
         data: oceanData, assetUrl: oceanAssetUrl,
-        cat: {url: spaceCatUrl(), rects: catRects},
+        cat: {url: spaceCatUrl(), rects: catRects}, walkerUrl,
         artworks: list.map(([id, title, url, thumbnailUrl, width, height, artist]) => ({id, title, artist, image: thumbnailUrl || url || "", hero: url || thumbnailUrl || "", width, height})),
         isActive: () => {
           if (pausedRef.current) return false;
@@ -70,7 +74,7 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
       }) as Runtime;
     }).catch(() => { if (!cancelled) setError(true); });
     return () => { cancelled = true; runtime.current?.dispose(); runtime.current = null; };
-  }, [theme, english, worksKey, roomTitle]);
+  }, [theme, english, worksKey, roomTitle, walkerUrl]);
 
   const moveStick = useCallback((x: number, y: number) => runtime.current?.setStick(x, y), []);
   const stage = state?.stage || "exterior";
