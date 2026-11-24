@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import {ArrowRight, ClipboardList, KeyRound, LogIn, Send} from 'lucide-react';
+import {ArrowRight, ClipboardList, KeyRound, LogIn, MessageCircleQuestion, Send} from 'lucide-react';
 
 const steps = [
   {icon: LogIn, title: 'Google로 시작', text: '선생님은 Google 계정으로 로그인해요. 따로 쓰는 가입 양식이 없어요.'},
@@ -13,6 +13,7 @@ export default function StartCorner() {
     <h2>방금 본 것을 우리 반으로</h2>
     <p className="try-note">체험에서 본 전시관, 보말, 작품집은 모두 실제 기능이에요. 준비는 10분이면 됩니다.</p>
     <ol>{steps.map((s, i) => <li key={s.title}><span><s.icon size={20}/></span><div><strong>{i + 1}. {s.title}</strong><p>{s.text}</p></div></li>)}</ol>
+    <Link className="try-real-cta" href="/contact?from=try-start"><MessageCircleQuestion size={24}/><span><strong>바로 정식으로 사용해 보려면 어떻게 하나요?</strong><small>시작 방법 안내 · 학교·학년 단위 도입 · 기타 문의</small></span><ArrowRight size={20}/></Link>
     <div className="try-start-actions"><Link className="button primary" href="/">선생님으로 시작하기<ArrowRight size={16}/></Link><Link className="button soft" href="/blog/manual">사용 설명서 보기</Link></div>
     <p className="try-note">보호자는 가입하지 않아요. 선생님이 켠 전시실 QR로만 관람하고, 링크는 언제든 끌 수 있어요.</p>
   </div>;

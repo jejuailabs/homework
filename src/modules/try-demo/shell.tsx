@@ -2,7 +2,7 @@
 import {useEffect, useState} from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import {ArrowLeft, ArrowRight, Check, LoaderCircle, X} from 'lucide-react';
+import {ArrowLeft, ArrowRight, Check, LoaderCircle, MessageCircleQuestion, X} from 'lucide-react';
 import {corners, DEMO_CLASS, isCorner, type CornerId} from './data';
 import './styles.css';
 
@@ -48,6 +48,7 @@ export default function TryShell({initial}: {initial: CornerId}) {
     <header className="try-bar">
       <div className="try-brand"><img src="/characters/otter-moa.webp" alt=""/><div><strong>모두의 교실 체험</strong><small>{DEMO_CLASS.school} {DEMO_CLASS.name} · 가상 학급</small></div></div>
       <span className="try-badge">체험 중 · 저장되지 않아요</span>
+      <Link className="try-real" href="/contact?from=try-header"><MessageCircleQuestion size={17}/><span>정식으로 쓰려면?</span></Link>
       <Link className="try-close" href="/" aria-label="체험 닫기"><X size={20}/></Link>
     </header>
     <nav className="try-steps" aria-label="체험 코너">{corners.map((c, i) => <button key={c.id} type="button" className={c.id === corner ? 'on' : ''} aria-current={c.id === corner ? 'step' : undefined} onClick={() => setCorner(c.id)}>
@@ -57,7 +58,7 @@ export default function TryShell({initial}: {initial: CornerId}) {
       <View/>
       <footer className="try-next">
         {previous ? <button type="button" className="button soft" onClick={() => setCorner(previous.id)}><ArrowLeft size={16}/>{previous.label}</button> : <span/>}
-        {next ? <button type="button" className="button primary" onClick={() => setCorner(next.id)}>다음: {next.label}<ArrowRight size={16}/></button> : <Link className="button primary" href="/">선생님으로 시작하기<ArrowRight size={16}/></Link>}
+        {next ? <button type="button" className="button primary" onClick={() => setCorner(next.id)}>다음: {next.label}<ArrowRight size={16}/></button> : <Link className="button primary" href="/contact?from=try-end">바로 정식으로 쓰려면?<ArrowRight size={16}/></Link>}
       </footer>
     </div>
   </div>;
