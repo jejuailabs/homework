@@ -80,3 +80,14 @@ button.sx-glass{padding:9px 15px;min-height:42px;font-size:.87rem;font-weight:65
   .sx-view button{min-width:40px;min-height:40px}
   .sx-action{min-height:42px;padding:9px 18px}
 }
+
+/* Slideshow control bar (same controls as the classic gallery), stacked with the room prompts. */
+.sx-world .sx-lower .ex-screen-dock{position:static;left:auto;right:auto;bottom:auto;transform:none;width:440px;max-width:100%}
+@media(max-width:760px),(max-height:520px) and (pointer:coarse){
+ .sx-world .sx-lower .ex-screen-dock{width:auto;max-width:100%;padding:0;border:1px solid #fffdf5c9;border-radius:14px;box-shadow:0 3px 12px #344b3814;background:#fffdf6e8}
+ .sx-world .ex-screen-dock>.ex-screen-mobile-toggle{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 12px;font-size:12px;font-weight:700;border:0;background:transparent;border-radius:13px;color:#486551}
+ .sx-world .ex-screen-dock:not(.is-controls-open)>.ex-screen-brand,.sx-world .ex-screen-dock:not(.is-controls-open)>.ex-screen-buttons,.sx-world .ex-screen-dock:not(.is-controls-open)>input,.sx-world .ex-screen-dock>.ex-screen-brand{display:none}
+ .sx-world .sx-lower .ex-screen-dock.is-controls-open{width:min(330px,calc(100vw - 24px));padding:6px 8px}
+ .sx-world .ex-screen-dock.is-controls-open>.ex-screen-mobile-toggle{width:100%;min-height:36px;padding:5px 8px}
+ .sx-world .ex-screen-dock .ex-screen-buttons{flex-wrap:nowrap;gap:3px}.sx-world .ex-screen-dock .ex-screen-buttons button{flex:0 0 40px;min-height:44px;min-width:40px;padding:7px;font-size:12px}.sx-world .ex-screen-dock .ex-screen-buttons button>span{display:none}
+}

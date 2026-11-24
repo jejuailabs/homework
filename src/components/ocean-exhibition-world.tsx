@@ -15,7 +15,7 @@ import "@/styles/space-exhibition.css";
 type Runtime = {
   enterGallery: () => void; back: () => void; reset: () => void; setPage: (delta: number) => void;
   activateNearby: () => void; turn: (direction: number) => void; setStick: (x: number, y: number) => void;
-  refresh: () => void; dispose: () => void;
+  refresh: () => void; dispose: () => void; showHero: (index: number) => void;
 };
 type RuntimeState = {
   stage: "exterior" | "gallery"; page: number; pageCount: number; loading: boolean; failed: boolean;
@@ -76,6 +76,8 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
     return () => { cancelled = true; runtime.current?.dispose(); runtime.current = null; };
   }, [theme, english, worksKey, roomTitle, walkerUrl]);
 
+  // The slideshow controls drive the room's big screen, as in the classic gallery.
+  const showFrame = useCallback((frame: {index: number}) => runtime.current?.showHero(frame.index), []);
   const moveStick = useCallback((x: number, y: number) => runtime.current?.setStick(x, y), []);
   const stage = state?.stage || "exterior";
   const failed = error || state?.failed;
@@ -93,6 +95,7 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
     </div>
     <WorldJoystick disabled={paused || !state || !!failed} english={english} onMove={moveStick}/>
     <div className={`sx-lower sx-lower--${stage}`}>
+      <ExhibitionScreen artworks={works} english={english} paused={paused || listOpen} dock={stage === "gallery" && !!works.length} monitorOverview={false} onFrame={showFrame} openSignal={screen.signal} startIndex={screen.start} onExpanded={setScreenOpen} onSelectArtwork={props.onSelectArtwork}/>
       {stage === "exterior" && state && !failed && <button type="button" className="sx-action" onClick={() => runtime.current?.enterGallery()}><DoorOpen size={17}/>{english ? "Enter the gallery" : "전시실 들어가기"}</button>}
       {stage === "gallery" && nearbyArt ? <button type="button" className="sx-glass sx-nearby sx-nearby-art" onClick={() => runtime.current?.activateNearby()}><strong>{nearbyArt.title}</strong>{nearbyArtist && nearbyArtist !== nearbyArt.title && <span>{nearbyArtist}</span>}<em>{english ? "Tap to view large" : "눌러서 크게 보기"}</em></button>
         : stage === "gallery" && nearbyText && <button type="button" className="sx-glass sx-nearby" onClick={() => runtime.current?.activateNearby()}>{nearbyText}</button>}
@@ -111,7 +114,6 @@ export default function OceanExhibitionWorld(props: OceanExhibitionWorldProps) {
     {(!state || state.loading) && !failed && <p className="sx-glass sx-status" role="status">{english ? "Opening the ocean gallery…" : "바닷속 전시실을 여는 중…"}</p>}
     {failed && <p className="sx-glass sx-status" role="alert">{english ? "This device cannot show the 3D gallery. Use the grid view instead." : "이 기기에서는 3D 전시를 열 수 없어요. 목록 보기로 감상해 주세요."}</p>}
     {stage === "gallery" && !works.length && state && <p className="sx-glass sx-status">{english ? "No works are on display yet." : "아직 전시된 작품이 없어요."}</p>}
-    <ExhibitionScreen artworks={works} english={english} paused={paused} dock={false} openSignal={screen.signal} startIndex={screen.start} onExpanded={setScreenOpen} onSelectArtwork={props.onSelectArtwork}/>
     {listOpen && <div className="sx-list" role="dialog" aria-modal="true" aria-label={english ? "Works" : "작품 목록"} onKeyDown={event => {if (event.key === "Escape") setListOpen(false);}}>
       <div className="sx-list-head"><h2>{english ? `Works · ${works.length}` : `작품 목록 · ${works.length}점`}</h2><button type="button" autoFocus onClick={() => setListOpen(false)} aria-label={english ? "Close" : "닫기"}><X size={18}/></button></div>
       <div className="sx-list-items">{works.map(work => <button type="button" key={work.id} onClick={() => {setListOpen(false); props.onSelectArtwork(work.id);}}><img src={work.thumbnailUrl || work.url} alt="" loading="lazy"/><span>{work.title}</span><small>{work.artistName || work.studentName || ""}</small></button>)}</div>
