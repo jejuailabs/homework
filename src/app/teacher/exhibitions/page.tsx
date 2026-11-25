@@ -1,5 +1,6 @@
 import ExhibitionWorkspace from '@/components/exhibition-workspace';
+import {VideoPlayOn} from '@/components/artwork-video';
 
 export default function TeacherExhibitionsPage() {
-  return <ExhibitionWorkspace role="teacher"/>;
+  return <VideoPlayOn><ExhibitionWorkspace role="teacher"/></VideoPlayOn>;
 }

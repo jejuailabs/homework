@@ -2,7 +2,8 @@
 
 import {classroomOrder} from "@/lib/exhibition-world-layout";
 import {lockBodyScroll, lockBodyScrollWhen} from '@/lib/body-scroll-lock';
-import {useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
+import {useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode} from "react";
+import ArtworkVideo, {VideoPlayContext} from "@/components/artwork-video";
 import dynamic from "next/dynamic";
 import {usePathname, useRouter} from "next/navigation";
 
@@ -75,9 +76,10 @@ function Dialog({title, children, onClose, busy = false, wide = false}: {title: 
 }
 
 function ArtworkImage({artwork, full = false}: {artwork: ExhibitionArtwork; full?: boolean}) {
-  const [failed, setFailed] = useState(false), t = useTranslations("exhibition");
+  const [failed, setFailed] = useState(false), t = useTranslations("exhibition"), videoPlay = useContext(VideoPlayContext);
   const url = full ? artwork.url : artwork.thumbnailUrl || artwork.url;
   useEffect(() => {setFailed(false);}, [url]);
+  if (full && artwork.videoUrl && videoPlay) return <ArtworkVideo src={artwork.videoUrl} poster={artwork.url} title={artwork.title}/>;
   if (full && artwork.videoUrl) return <video className="ex-artwork-video" src={artwork.videoUrl} poster={artwork.url} controls playsInline preload="metadata" aria-label={artwork.title}/>;
   return failed || !url ? <span className="ex-image-fallback"><Images size={32}/><small>{t("fileUnavailable")}</small></span> : <img src={url} alt={artwork.title} loading={full ? "eager" : "lazy"} onError={() => setFailed(true)}/>;
 }
