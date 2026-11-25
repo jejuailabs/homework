@@ -32,9 +32,9 @@ export const student = (id: string) => students.find(s => s.id === id)!;
 
 export type DemoRoom = {id: string; title: string; description: string; theme: ExhibitionTheme; hall: string; month: string};
 export const rooms: DemoRoom[] = [
-  {id: 'spring', title: '봄 그림전', description: '운동장에서 본 봄을 크레파스로 그렸어요.', theme: 'cozy', hall: '아늑한 전시관', month: '4월'},
+  {id: 'space', title: '내가 꿈꾸는 우주', description: '우주에 간다면 무엇을 만날지 그려 봤어요.', theme: 'saturn', hall: '우주 · 토성 고리 회랑', month: '10월'},
   {id: 'sea', title: '바닷속 친구들', description: '과학 시간에 배운 바다 생물을 상상해서 그렸어요.', theme: 'coral', hall: '바다 · 산호 전시관', month: '6월'},
-  {id: 'space', title: '내가 꿈꾸는 우주', description: '우주에 간다면 무엇을 만날지 그려 봤어요.', theme: 'earth', hall: '우주 · 지구 전시관', month: '10월'},
+  {id: 'spring', title: '봄 그림전', description: '운동장에서 본 봄을 크레파스로 그렸어요.', theme: 'cozy', hall: '아늑한 전시관', month: '4월'},
 ];
 
 export type DemoWork = {id: string; roomId: string; title: string; studentId: string; date: string; story: string};
@@ -67,6 +67,8 @@ export const works: DemoWork[] = [
   work('space-08', '우주 고양이 치즈', 's9', '2026-10-19', '치즈가 우주에 가면 헬멧을 써야 해요.'),
 ];
 export const roomWorks = (roomId: string) => works.filter(w => w.roomId === roomId);
+/** Pictures of the Saturn room, outside and inside, shown before the 3D room loads. */
+export const spaceShots = {outside: demoAsset('shots/space-outside.webp'), inside: demoAsset('shots/space-inside.webp')};
 export const workImage = (id: string, thumb = false) => demoAsset(`art/${id}${thumb ? '-thumb' : ''}.webp`);
 
 export type DemoNote = {from: string; text: string};
@@ -80,8 +82,8 @@ export const guestbook: Record<string, DemoNote[]> = {
   'space-05': [{from: '이슬 선생님', text: '국자자리, 이름을 정말 잘 지었어요.'}],
 };
 
-/** Homework whose submissions hang in a linked exhibition room and board on their own. */
-export const homework = {title: '내가 좋아하는 것 그리기', due: '금요일까지', room: '숙제 전시 · 내가 좋아하는 것', board: '내가 좋아하는 것 이야기'};
+/** Homework whose submissions hang in a linked exhibition room on their own. */
+export const homework = {title: '내가 좋아하는 것 그리기', due: '금요일까지', room: '숙제 전시 · 내가 좋아하는 것'};
 export const homeworkPeers: {workId: string; text: string}[] = [
   {workId: 'spring-07', text: '초코랑 산책하는 게 제일 좋아요.'},
   {workId: 'sea-02', text: '고래는 크고 순해서 좋아요.'},
@@ -91,19 +93,6 @@ export const homeworkPeers: {workId: string; text: string}[] = [
 ];
 export const homeworkPicks = ['spring-09', 'space-08', 'sea-04'];
 export const praises = ['색을 정성껏 칠했네! 참 잘했어요.', '좋아하는 마음이 그림에 다 보여요.', '다음엔 배경도 그려 볼까요?'];
-
-export type BoardNote = {id: string; column: number; from: string; text: string; color: string; hearts: number};
-export const boardColumns = ['알게 된 점', '궁금한 점', '더 해 보고 싶은 것'];
-export const boardColors = ['#fff3b0', '#ffd6e0', '#d3f0dc', '#d6e8ff', '#eadcff'];
-export const boardNotes: BoardNote[] = [
-  {id: 'n1', column: 0, from: '김하늘', text: '고래는 물고기가 아니라 젖을 먹는 동물이래요.', color: '#d6e8ff', hearts: 4},
-  {id: 'n2', column: 0, from: '박서아', text: '문어 다리는 여덟 개! 내 그림은 여섯 개였다.', color: '#ffd6e0', hearts: 6},
-  {id: 'n3', column: 1, from: '최지호', text: '거북은 등딱지를 벗을 수 있나요?', color: '#d3f0dc', hearts: 2},
-  {id: 'n4', column: 1, from: '정유나', text: '해파리는 뼈가 없는데 어떻게 헤엄쳐요?', color: '#eadcff', hearts: 3},
-  {id: 'n5', column: 2, from: '강민준', text: '잠수함 모형을 페트병으로 만들어 보고 싶어요.', color: '#fff3b0', hearts: 5},
-  {id: 'n6', column: 2, from: '윤서연', text: '바닷가에 가서 불가사리를 직접 보고 싶다.', color: '#ffd6e0', hearts: 1},
-  {id: 'n7', column: 0, from: '한지유', text: '상어는 이빨이 빠져도 또 난대요.', color: '#fff3b0', hearts: 3},
-];
 
 export type DemoCard = {word: string; meaning: string; emoji: string};
 export const cardSet = {title: '바다 동물 영어', cards: [
@@ -124,14 +113,13 @@ export const berryTurns: BerryTurn[] = [
     card: {title: '작품 승인', rows: [['전시실', '봄 그림전'], ['대상', '풍선 타고 훨훨, 낮잠 자는 치즈'], ['바뀌는 것', '승인 대기 → 승인 (전시실에 걸림)']], done: '실제로는 두 작품이 전시실에 걸려요. 체험에서는 반영되지 않아요.'}},
 ];
 
-export type CornerId = 'gallery' | 'flow' | 'bomal' | 'board' | 'cards' | 'berry' | 'artbook' | 'start';
+export type CornerId = 'gallery' | 'flow' | 'bomal' | 'cards' | 'berry' | 'artbook' | 'start';
 export const corners: {id: CornerId; label: string; lead: string}[] = [
   {id: 'gallery', label: '전시관', lead: '아이들 작품이 걸리는 3D 전시관'},
-  {id: 'flow', label: '숙제 → 전시', lead: '숙제 하나가 전시실과 보드로 이어져요'},
+  {id: 'flow', label: '숙제 → 전시', lead: '검사한 숙제가 그대로 전시실에 걸려요'},
   {id: 'bomal', label: '보말과 캐릭터', lead: '칭찬 보말로 꾸미는 나의 작은 세상'},
-  {id: 'board', label: '참여보드', lead: '모두의 생각이 한 판에 모여요'},
   {id: 'cards', label: '카드놀이', lead: '단어 카드 짝 맞추기'},
-  {id: 'berry', label: '베리', lead: '말로 시키는 선생님의 AI 비서'},
+  {id: 'berry', label: '부담임 베리', lead: '말로 시키는 우리 반 부담임 AI'},
   {id: 'artbook', label: '작품집', lead: '한 해 작품을 한 권의 PDF로'},
   {id: 'start', label: '시작하기', lead: '우리 반으로 시작하기'},
 ];

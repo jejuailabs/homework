@@ -30,6 +30,8 @@ export type SpaceExhibitionWorldProps = {
   companion?: {pet: string} | null;
   onSelectArtwork: (id: string) => void;
   onExit: () => void;
+  /** Skip the outside view and open inside the room as soon as it loads (login-free tour). */
+  startInside?: boolean;
 };
 
 /** Space-mode exhibition: the 3D runtime and Three.js load only when a space room opens. */
@@ -78,6 +80,11 @@ export default function SpaceExhibitionWorld(props: SpaceExhibitionWorldProps) {
   const showFrame = useCallback((frame: {index: number}) => runtime.current?.showHero(frame.index), []);
   const moveStick = useCallback((x: number, y: number) => runtime.current?.setStick(x, y), []);
   const stage = state?.stage || "exterior";
+  const startedInside = useRef(false);
+  useEffect(() => {
+    if (!props.startInside || startedInside.current || !state || state.failed || state.stage !== "exterior") return;
+    startedInside.current = true; runtime.current?.enterGallery();
+  }, [props.startInside, state]);
   const failed = error || state?.failed;
   // The artwork you stand by: its title and artist, large enough to read at a glance.
   const nearbyArt = state?.nearby?.kind === "art" ? artworks.find(work => work.id === state.nearby?.id) || {title: state.nearby.title || "", artistName: "", studentName: ""} : null;

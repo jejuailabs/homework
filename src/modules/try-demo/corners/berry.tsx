@@ -7,7 +7,7 @@ import {berryTurns, type BerryCard, type BerryTurn} from '../data';
 // A replay of answers recorded for the demo class. No AI and no server is called from here.
 type Line = {who: 'me' | 'berry'; text?: string[]; card?: BerryCard; saved?: boolean};
 export default function BerryCorner() {
-  const [lines, setLines] = useState<Line[]>([{who: 'berry', text: ['안녕하세요, 선생님! 저는 우리 반 일을 챙기는 베리예요.', '아래 버튼을 눌러 물어보세요.']}]);
+  const [lines, setLines] = useState<Line[]>([{who: 'berry', text: ['안녕하세요, 선생님! 저는 우리 반 일을 함께 챙기는 부담임 베리예요.', '아래 버튼을 눌러 물어보세요.']}]);
   const [typing, setTyping] = useState(false), [follow, setFollow] = useState<BerryTurn | null>(null), [asked, setAsked] = useState<string[]>([]);
   const end = useRef<HTMLDivElement>(null), timer = useRef(0);
   useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -25,7 +25,7 @@ export default function BerryCorner() {
   const save = (index: number) => setLines(old => old.map((line, i) => i === index ? {...line, saved: true} : line));
   return <div className="try-berry">
     <section className="try-card">
-      <div className="try-berry-head"><img src={berryAssetUrl('berry-duo-logo')} alt=""/><div><p className="try-role">선생님 화면 · 베리</p><h2>말로 시키는 AI 비서</h2></div></div>
+      <div className="try-berry-head"><img src={berryAssetUrl('berry-duo-logo')} alt=""/><div><p className="try-role">선생님 화면 · 부담임 베리</p><h2>말로 시키는 부담임 AI</h2></div></div>
       <div className="try-chat" aria-live="polite">
         {lines.map((line, i) => <div key={i} className={`try-bubble ${line.who}`}>
           {line.text?.map((t, n) => <p key={n}>{t}</p>)}
@@ -37,7 +37,7 @@ export default function BerryCorner() {
       </div>
       <div className="try-asks">{follow && <button type="button" className="on" disabled={typing} onClick={() => ask(follow)}><Send size={13}/>{follow.ask}</button>}
         {berryTurns.map(turn => <button key={turn.ask} type="button" disabled={typing} className={asked.includes(turn.ask) ? 'asked' : ''} onClick={() => ask(turn)}>{turn.ask}</button>)}</div>
-      <p className="try-note">체험에서는 미리 받아 둔 답변을 보여 드려요. 실제 베리는 선생님 반의 숙제·전시·보드·일정을 읽고 답하며, 학생 이름은 가명으로만 다루고, 바꾸는 일은 확인 카드에서 선생님이 눌러야 반영돼요.</p>
+      <p className="try-note">체험에서는 미리 받아 둔 답변을 보여 드려요. 실제 부담임 베리는 선생님 반의 숙제·전시·보드·일정을 읽고 답하며, 학생 이름은 가명으로만 다루고, 바꾸는 일은 확인 카드에서 선생님이 눌러야 반영돼요.</p>
     </section>
   </div>;
 }

@@ -11,12 +11,12 @@ export const inquirySourceLabels: Record<InquirySource, string> = {
   other: '직접 방문·기타',
 };
 
-export const inquiryTopics = ['start', 'school', 'other'] as const;
+/** The visitor picks one of two send buttons: ask to use it, or just ask a question. */
+export const inquiryTopics = ['start', 'other'] as const;
 export type InquiryTopic = typeof inquiryTopics[number];
 export const inquiryTopicLabels: Record<InquiryTopic, string> = {
-  start: '우리 반에서 정식으로 쓰고 싶어요',
-  school: '학년·학교 단위로 쓰고 싶어요',
-  other: '기타 문의',
+  start: '사용 요청',
+  other: '문의',
 };
 
 export const inquiryStatuses = ['new', 'contacted', 'done'] as const;
@@ -48,7 +48,7 @@ export function validateInquiry(input: Record<string, unknown>): {ok: true; valu
   if (school.length > inquiryLimits.school) return {ok: false, error: `학교 이름은 ${inquiryLimits.school}자까지 적을 수 있어요.`};
   if (!(inquiryTopics as readonly unknown[]).includes(input.topic)) return {ok: false, error: '문의 종류를 골라 주세요.'};
   if (message.length > inquiryLimits.message) return {ok: false, error: `문의 내용은 ${inquiryLimits.message}자까지 적을 수 있어요.`};
-  if (input.topic === 'other' && !message) return {ok: false, error: '기타 문의는 내용을 적어 주세요.'};
+  if (input.topic === 'other' && !message) return {ok: false, error: '문의하실 내용을 적어 주세요.'};
   if (input.consent !== true) return {ok: false, error: '개인정보 수집·이용에 동의해 주세요.'};
   return {ok: true, value: {name, email, phone, school, topic: input.topic as InquiryTopic, message, source: sourceOf(input.source)}};
 }
