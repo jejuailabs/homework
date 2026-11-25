@@ -3,6 +3,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {ListTodo, LoaderCircle, Pencil, Plus, Trash2} from 'lucide-react';
 import type {NotebookTodo} from './types';
 import './styles.css';
+import VoiceButton from '@/modules/attachments/voice-button';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const seoulDate = () => new Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Seoul'}).format(new Date());
@@ -52,7 +53,7 @@ export default function Todos({date, onChanged}: {date: string; onChanged?: (tod
   return <section className="nb-card nb-todos" aria-label="할 일">
     <h3><ListTodo size={18}/>할 일{open.length > 0 && <small>{open.length}개 남음</small>}</h3>
     <form className="nb-todo-add" onSubmit={add}>
-      <input aria-label="새 할 일" placeholder="할 일을 적어 주세요" value={text} maxLength={200} onChange={e => setText(e.target.value)}/>
+      <input aria-label="새 할 일" placeholder="할 일을 적어 주세요" value={text} maxLength={200} onChange={e => setText(e.target.value)}/><VoiceButton value={text} onChange={value => setText(value.slice(0, 200))}/>
       <input type="date" aria-label="기한(선택)" value={due} onChange={e => setDue(e.target.value)}/>
       <button className="button primary" disabled={busy || !text.trim()}><Plus size={16}/>추가</button>
     </form>

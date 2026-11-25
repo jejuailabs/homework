@@ -9,14 +9,24 @@ import {accessConfig, afterFailure, blockedFor, entryInput, minutesLabel, monthR
 import {notebookKeys, openBody, openEnvelope, sealBody, sealEnvelope} from './vault';
 import {logWorkspaceEvent} from '@/modules/teacher-workspace/event-log';
 import {workspaceOpenFor} from '@/modules/teacher-workspace/server';
-import {NOTEBOOK_TAGS, type NotebookAccessConfig, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStudentRef, type NotebookTag, type NotebookTodo} from './types';
+import {attachmentTexts} from '@/modules/attachments/server';
+import {NOTEBOOK_TAGS, type NotebookAccessConfig, type NotebookDaySummary, type NotebookEntry, type NotebookFile, type NotebookRosterClass, type NotebookStudentRef, type NotebookTag, type NotebookTodo} from './types';
 
 const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, length: number, options: {N: number; r: number; p: number}) => Promise<Buffer>;
 const SCRYPT = {N: 16384, r: 8, p: 1};
 const hashPassword = async (password: string, salt: Buffer) => (await scryptAsync(password.normalize('NFC'), salt, 32, SCRYPT)).toString('base64url');
 
 type Input = Record<string, unknown>;
-type Stored = {date: string; body: unknown; students: NotebookStudentRef[]; studentKeys: string[]; classIds: string[]; tags: NotebookTag[]; sensitive: boolean; length: number; createdAt: string; updatedAt: string; source?: string; pending?: boolean};
+type Stored = {date: string; body: unknown; students: NotebookStudentRef[]; studentKeys: string[]; classIds: string[]; tags: NotebookTag[]; sensitive: boolean; length: number; createdAt: string; updatedAt: string; source?: string; pending?: boolean; files?: NotebookFile[]};
+const MAX_ENTRY_FILES = 5;
+/** Files named in a save: only the teacher's own finished attachments. Undefined leaves the record's files as they are. */
+async function entryFiles(uid: string, value: unknown): Promise<NotebookFile[] | undefined> {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_ENTRY_FILES || !value.every(id => typeof id === 'string' && /^[A-Za-z0-9]{12,40}$/.test(id))) throw new NotebookError(`파일은 기록 하나에 ${MAX_ENTRY_FILES}개까지 붙일 수 있어요.`);
+  if (!value.length) return [];
+  try {return (await attachmentTexts(uid, value, MAX_ENTRY_FILES)).map(file => ({id: file.id, name: file.name}));}
+  catch (error) {throw new NotebookError(error instanceof Error ? error.message : '붙인 파일을 확인해 주세요.');}
+}
 const UNLOCK_COOKIE = '__notebook_unlock', COOKIE_PATH = '/api/teacher-notebook';
 const json = (value: unknown, status = 200) => NextResponse.json(value, {status, headers: {'Cache-Control': 'private, no-store'}});
 const now = () => new Date().toISOString();
@@ -82,7 +92,7 @@ async function assertOwnStudents(uid: string, refs: NotebookStudentRef[]) {
 }
 function publicEntry(uid: string, doc: FirebaseFirestore.DocumentSnapshot): NotebookEntry {
   const data = doc.data() as Stored, body = openBody(data.body, uid, doc.id);
-  return {id: doc.id, date: data.date, body: body ?? '(이 기록을 열지 못했어요.)', students: data.students ?? [], tags: (data.tags ?? []).filter(tag => NOTEBOOK_TAGS.includes(tag)), sensitive: !!data.sensitive, createdAt: data.createdAt, updatedAt: data.updatedAt, ...(data.pending ? {pending: true} : {}), ...(data.source === 'chat' ? {source: 'chat' as const} : {})};
+  return {id: doc.id, date: data.date, body: body ?? '(이 기록을 열지 못했어요.)', students: data.students ?? [], tags: (data.tags ?? []).filter(tag => NOTEBOOK_TAGS.includes(tag)), sensitive: !!data.sensitive, createdAt: data.createdAt, updatedAt: data.updatedAt, ...(data.pending ? {pending: true} : {}), ...(data.source === 'chat' ? {source: 'chat' as const} : {}), ...(Array.isArray(data.files) && data.files.length ? {files: data.files} : {})};
 }
 function stored(uid: string, entryId: string, value: ReturnType<typeof entryInput>, createdAt: string): Stored {
   return {date: value.date, body: sealBody(value.body, uid, entryId), students: value.students, studentKeys: value.students.map(studentKey), classIds: [...new Set(value.students.map(ref => ref.classId))], tags: value.tags, sensitive: value.sensitive, length: value.body.length, createdAt, updatedAt: now()};
@@ -109,11 +119,11 @@ async function day(uid: string, value: unknown) {
   return {date, entries: snap.docs.map(doc => publicEntry(uid, doc)).sort((a, b) => a.createdAt.localeCompare(b.createdAt))};
 }
 async function create(uid: string, data: Input) {
-  const value = entryInput(data);
+  const value = entryInput(data), files = await entryFiles(uid, data.attachmentIds);
   await assertOwnStudents(uid, value.students);
   const ref = entries(uid).doc(), at = now();
   await notebook(uid).set({updatedAt: at}, {merge: true});
-  await ref.create(stored(uid, ref.id, value, at));
+  await ref.create({...stored(uid, ref.id, value, at), ...(files?.length ? {files} : {})});
   await audit(uid, 'entry.create', ref.id, {date: value.date, students: value.students.length, sensitive: value.sensitive});
   return {entry: publicEntry(uid, await ref.get())};
 }
@@ -140,8 +150,8 @@ async function update(uid: string, entryId: string, data: Input) {
   if (!previous.exists) throw new NotebookError('기록을 찾을 수 없어요.', 404, 'NOT_FOUND');
   await assertOwnStudents(uid, value.students);
   // Editing a Berry record keeps its "베리" mark; saving it in the notebook also counts as confirming it.
-  const old = previous.data() as Stored;
-  await ref.set({...stored(uid, ref.id, value, old.createdAt), ...(old.source === 'chat' ? {source: 'chat', pending: false} : {})});
+  const old = previous.data() as Stored, files = await entryFiles(uid, data.attachmentIds) ?? old.files ?? [];
+  await ref.set({...stored(uid, ref.id, value, old.createdAt), ...(old.source === 'chat' ? {source: 'chat', pending: false} : {}), ...(files.length ? {files} : {})});
   await audit(uid, 'entry.update', ref.id, {date: value.date, students: value.students.length, sensitive: value.sensitive});
   return {entry: publicEntry(uid, await ref.get())};
 }
