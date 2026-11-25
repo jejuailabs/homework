@@ -5,8 +5,11 @@ import {GoogleAuthProvider, reauthenticateWithPopup} from 'firebase/auth';
 import {ChevronLeft, ChevronRight, Download, FileText, History, KeyRound, LoaderCircle, Lock, Pencil, Printer, ShieldCheck, Trash2, UserPlus, X} from 'lucide-react';
 import {auth} from '@/lib/firebase-client';
 import WorkspaceNav from '@/modules/teacher-workspace/nav';
+import {AttachButton, AttachChips, attachmentsStatus, useAttachments} from '@/modules/attachments/client';
+import {ACCEPT_HINT, attachmentLink} from '@/modules/attachments/policy';
+import VoiceButton from '@/modules/attachments/voice-button';
 import {findMentions, mentionQuery, studentKey} from './mentions';
-import {NOTEBOOK_TAG_LABELS, NOTEBOOK_TAGS, SENSITIVE_TAGS, type NotebookAuditEvent, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStatus, type NotebookStudentRef, type NotebookTag} from './types';
+import {NOTEBOOK_TAG_LABELS, NOTEBOOK_TAGS, SENSITIVE_TAGS, type NotebookAuditEvent, type NotebookDaySummary, type NotebookEntry, type NotebookFile, type NotebookRosterClass, type NotebookStatus, type NotebookStudentRef, type NotebookTag} from './types';
 import './styles.css';
 
 const IDLE_MS = 15 * 60_000, WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -30,7 +33,7 @@ function monthCells(month: string) {
 }
 const longDate = (date: string) => {const d = new Date(`${date}T00:00:00Z`); return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WEEKDAYS[d.getUTCDay()]})`;};
 
-type Draft = {id: string | null; body: string; students: NotebookStudentRef[]; tags: NotebookTag[]; sensitive: boolean};
+type Draft = {id: string | null; body: string; students: NotebookStudentRef[]; tags: NotebookTag[]; sensitive: boolean; files?: NotebookFile[]};
 const emptyDraft = (): Draft => ({id: null, body: '', students: [], tags: [], sensitive: false});
 
 /**
@@ -89,6 +92,10 @@ function Unlock({hasPassword, startReset, onUnlocked}: {hasPassword: boolean; st
 
 function Composer({date, roster, names, draft, setDraft, onSaved, onLocked}: {date: string; roster: NotebookRosterClass[]; names: Map<string, string>; draft: Draft; setDraft: (d: Draft) => void; onSaved: () => void; onLocked: () => void}) {
   const area = useRef<HTMLTextAreaElement>(null), [caret, setCaret] = useState(0), [saving, setSaving] = useState(false), [error, setError] = useState('');
+  const files = useAttachments(5), [canAttach, setCanAttach] = useState(false), kept = draft.files ?? [];
+  useEffect(() => {void attachmentsStatus().then(setCanAttach);}, []);
+  // Files picked for one record never follow the teacher into another one.
+  useEffect(() => {files.clear();}, [draft.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const query = mentionQuery(draft.body, caret);
   const flat = useMemo(() => roster.flatMap(cls => cls.students.map(s => ({...s, classId: cls.id, className: cls.name}))), [roster]);
   const suggestions = query ? flat.filter(s => s.name.startsWith(query.query)).slice(0, 8) : [];
@@ -110,9 +117,9 @@ function Composer({date, roster, names, draft, setDraft, onSaved, onLocked}: {da
   async function save() {
     setSaving(true); setError('');
     try {
-      const body = {date, body: draft.body, students: draft.students, tags: draft.tags, sensitive: draft.sensitive || forcedSensitive};
+      const body = {date, body: draft.body, students: draft.students, tags: draft.tags, sensitive: draft.sensitive || forcedSensitive, attachmentIds: [...kept.map(file => file.id), ...files.ready.map(file => file.id)]};
       await call(draft.id ? `entries/${draft.id}` : 'entries', {body});
-      setDraft(emptyDraft()); onSaved();
+      files.clear(); setDraft(emptyDraft()); onSaved();
     } catch (e) {if (e instanceof LockedError) onLocked(); else setError((e as Error).message);} finally {setSaving(false);}
   }
   return <div className="nb-composer">
@@ -131,10 +138,15 @@ function Composer({date, roster, names, draft, setDraft, onSaved, onLocked}: {da
     <details className="nb-picker"><summary>명단에서 고르기</summary>{roster.map(cls => <fieldset key={cls.id}><legend>{cls.name}</legend><div>{cls.students.map(s => {const ref = {classId: cls.id, studentId: s.id}; return <label key={s.id}><input type="checkbox" checked={selected.has(studentKey(ref))} onChange={() => toggle(ref)}/>{s.number}. {s.name}</label>;})}</div></fieldset>)}{roster.length === 0 && <p className="nb-muted">아직 우리 반 명단이 없어요.</p>}</details>
     <div className="nb-tags" role="group" aria-label="분류">{NOTEBOOK_TAGS.map(tag => <button type="button" key={tag} aria-pressed={draft.tags.includes(tag)} className={SENSITIVE_TAGS.includes(tag) ? 'is-sensitive' : ''} onClick={() => toggleTag(tag)}>{NOTEBOOK_TAG_LABELS[tag]}</button>)}</div>
     <label className="nb-check"><input type="checkbox" checked={draft.sensitive || forcedSensitive} disabled={forcedSensitive} onChange={e => setDraft({...draft, sensitive: e.target.checked})}/>민감 기록 <small>{forcedSensitive ? '상담·건강·가정 기록은 항상 민감 기록이에요.' : '리포트·인계에서 기본으로 빠져요.'}</small></label>
+    {kept.length > 0 && <ul className="att-files">{kept.map(file => <li key={file.id}><a href={attachmentLink(file.id)}>{file.name}</a><button type="button" className="nb-unpin" aria-label={`${file.name} 빼기`} onClick={() => setDraft({...draft, files: kept.filter(item => item.id !== file.id)})}>×</button></li>)}</ul>}
+    <AttachChips items={files.items} onRemove={files.remove}/>
+    {files.notice && <p className="nb-muted">{files.notice}</p>}
     {error && <p className="nb-error" role="alert">{error}</p>}
     <div className="nb-actions">
+      <VoiceButton value={draft.body} onChange={body => setDraft({...draft, body})} disabled={saving}/>
+      {canAttach && <AttachButton label={`파일 붙이기 (${ACCEPT_HINT})`} disabled={saving || kept.length + files.items.length >= 5} onFiles={files.add}/>}
       {draft.id && <button type="button" className="button soft" onClick={() => setDraft(emptyDraft())}>취소</button>}
-      <button type="button" className="button primary" disabled={saving || !draft.body.trim()} onClick={save}>{saving && <LoaderCircle className="spin" size={16}/>}{draft.id ? '고친 내용 저장' : '기록 저장'}</button>
+      <button type="button" className="button primary" disabled={saving || files.busy || !draft.body.trim()} onClick={save}>{saving && <LoaderCircle className="spin" size={16}/>}{draft.id ? '고친 내용 저장' : '기록 저장'}</button>
     </div>
   </div>;
 }
@@ -262,7 +274,8 @@ export default function TeacherNotebook() {
               {entry.pending ? <span className="nb-berry"><img src="/berry/raspberry-64.webp" alt="" width="16" height="16"/>베리 제안 <button onClick={() => accept(entry)}>확정</button></span>
                 : entry.source === 'chat' && <span className="nb-berry"><img src="/berry/raspberry-64.webp" alt="" width="16" height="16"/>베리가 기록</span>}
               <p>{entry.body}</p>
-              <div className="nb-entry-actions"><button className="icon-button" aria-label="고치기" onClick={() => setDraft({id: entry.id, body: entry.body, students: entry.students, tags: entry.tags, sensitive: entry.sensitive})}><Pencil size={15}/></button><button className="icon-button" aria-label="삭제" onClick={() => remove(entry)}><Trash2 size={15}/></button></div>
+              {entry.files && entry.files.length > 0 && <ul className="att-files">{entry.files.map(file => <li key={file.id}><a href={attachmentLink(file.id)}>{file.name}</a></li>)}</ul>}
+              <div className="nb-entry-actions"><button className="icon-button" aria-label="고치기" onClick={() => setDraft({id: entry.id, body: entry.body, students: entry.students, tags: entry.tags, sensitive: entry.sensitive, files: entry.files})}><Pencil size={15}/></button><button className="icon-button" aria-label="삭제" onClick={() => remove(entry)}><Trash2 size={15}/></button></div>
             </li>)}</ul>}
         </section>
       </div>

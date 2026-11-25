@@ -4,7 +4,9 @@ export const NOTEBOOK_TAG_LABELS: Record<NotebookTag, string> = {learning: 'í•™ì
 /** Entries with these tags are always sensitive: excluded from reports, handoff and MCP unless chosen. */
 export const SENSITIVE_TAGS: readonly NotebookTag[] = ['counsel', 'health', 'family'];
 export type NotebookStudentRef = {classId: string; studentId: string};
-export type NotebookEntry = {id: string; date: string; body: string; students: NotebookStudentRef[]; tags: NotebookTag[]; sensitive: boolean; createdAt: string; updatedAt: string; pending?: boolean; source?: 'chat'};
+export type NotebookEntry = {id: string; date: string; body: string; students: NotebookStudentRef[]; tags: NotebookTag[]; sensitive: boolean; createdAt: string; updatedAt: string; pending?: boolean; source?: 'chat'; files?: NotebookFile[]};
+/** A teacher attachment tied to a record: the original stays in Storage and downloads through /api/attachments/{id}/download. */
+export type NotebookFile = {id: string; name: string};
 export type NotebookDaySummary = {entries: number; students: number; sensitive: number; todos?: number};
 export type NotebookTodo = {id: string; text: string; due: string | null; done: boolean; createdAt: string};
 export type NotebookRosterStudent = {id: string; name: string; number: number};

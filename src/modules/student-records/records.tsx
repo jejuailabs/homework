@@ -5,6 +5,7 @@ import {Check, Download, LoaderCircle, NotebookPen} from 'lucide-react';
 import WorkspaceNav from '@/modules/teacher-workspace/nav';
 import {recordsCsv} from './policy';
 import {RECORD_KIND_LABELS, type RecordKind, type StudentRecords} from './types';
+import StudentLog from '@/modules/student-log/log';
 import './styles.css';
 
 type ClassRow = {id: string; name: string; year: number};
@@ -25,6 +26,9 @@ function readMoved(classId: string): string[] {
 export default function StudentRecordsView() {
   const [classes, setClasses] = useState<ClassRow[]>([]), [classId, setClassId] = useState(''), [from, setFrom] = useState(''), [to, setTo] = useState('');
   const [data, setData] = useState<StudentRecords | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [tab, setTab] = useState<'comments' | 'log'>('comments');
+  useEffect(() => {if (location.hash === '#log') setTab('log');}, []);
+  const pick = (next: 'comments' | 'log') => {setTab(next); history.replaceState(null, '', next === 'log' ? '#log' : location.pathname);};
   const [kinds, setKinds] = useState<RecordKind[]>(KINDS), [open, setOpen] = useState<string[]>([]), [moved, setMoved] = useState<string[]>([]);
   useEffect(() => {
     let alive = true;
@@ -56,9 +60,17 @@ export default function StudentRecordsView() {
   return <main className="srec">
     <WorkspaceNav current="records"/>
     <header>
-      <p className="page-kicker">STUDENT RECORDS</p><h1 className="page-title">학생별 모아 보기</h1>
-      <p className="page-description">숙제 검사 때 남긴 말씀, 작품 한마디, 보말을 주며 적은 까닭을 학생별로 모았어요. 학기말에 생활기록부를 쓸 때 꺼내 보세요.</p></header>
-    <section className="srec-bar">
+      <p className="page-kicker">STUDENT RECORDS</p><h1 className="page-title">학생별 기록</h1>
+      <p className="page-description">{tab === 'log' ? '학생에게 있었던 일을 그때그때 글·말·파일로 쌓아 두고, 원할 때 평어로 정리해요.' : '숙제 검사 때 남긴 말씀, 작품 한마디, 보말을 주며 적은 까닭을 학생별로 모았어요. 학기말에 생활기록부를 쓸 때 꺼내 보세요.'}</p></header>
+    <div className="srec-tabs" role="tablist" aria-label="학생별 기록 종류">
+      <button type="button" role="tab" aria-selected={tab === 'comments'} onClick={() => pick('comments')}>교사 코멘트</button>
+      <button type="button" role="tab" aria-selected={tab === 'log'} onClick={() => pick('log')}>행동발달 누가기록</button>
+    </div>
+    {tab === 'log' && <>
+      {classes.length > 1 && <section className="srec-bar"><label>학급<select value={classId} onChange={e => setClassId(e.target.value)}>{classes.map(c => <option key={c.id} value={c.id}>{c.year ? `${c.year} ` : ''}{c.name}</option>)}</select></label></section>}
+      <StudentLog classes={classes} classId={classId}/>
+    </>}
+    {tab === 'comments' && <><section className="srec-bar">
       {classes.length > 1 && <label>학급<select value={classId} onChange={e => setClassId(e.target.value)}>{classes.map(c => <option key={c.id} value={c.id}>{c.year ? `${c.year} ` : ''}{c.name}</option>)}</select></label>}
       <label>시작일<input type="date" value={from || data?.from || ''} onChange={e => setFrom(e.target.value)}/></label>
       <label>종료일<input type="date" value={to || data?.to || ''} onChange={e => setTo(e.target.value)}/></label>
@@ -80,6 +92,7 @@ export default function StudentRecordsView() {
         </li>;
       })}</ul>
       <p className="srec-note"><NotebookPen size={14}/>직접 적은 관찰 기록은 <Link href="/teacher/me/notebook">교무수첩</Link>의 종합 리포트에서 따로 받을 수 있어요. 민감한 기록은 여기에 섞지 않아요.</p>
+    </>}
     </>}
   </main>;
 }

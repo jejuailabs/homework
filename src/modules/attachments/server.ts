@@ -8,7 +8,7 @@ import {AiError, completedAiText, providerFailure, readBoundedJson} from '@/lib/
 import {ApiError} from '@/lib/server/policy';
 import {documentText} from './documents';
 import {
-  AttachError, LESSON_INSTRUCTIONS, LESSON_SCHEMA, MAX_PER_MESSAGE, PREVIEW_CHARS, READ_INSTRUCTIONS, TEXT_MAX, TIMETABLE_INSTRUCTIONS, TIMETABLE_SCHEMA,
+  AttachError, STORE_ONLY_NOTE, LESSON_INSTRUCTIONS, LESSON_SCHEMA, MAX_PER_MESSAGE, PREVIEW_CHARS, READ_INSTRUCTIONS, TEXT_MAX, TIMETABLE_INSTRUCTIONS, TIMETABLE_SCHEMA,
   assertContent, attachmentInput, attachmentLink, clip, extensionOf, lessonDraft, sizeLimit, tidy, timetableDraft, type AttachKind, type AttachStatus, type AttachmentView,
 } from './policy';
 
@@ -45,6 +45,23 @@ async function openAi(path: string, init: RequestInit, timeout: number, failure:
   return response;
 }
 const responses = (body: object, failure: string) => openAi('responses', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({model: model(), service_tier: 'default', store: false, reasoning: {effort: 'none'}, ...body})}, 100_000, failure);
+
+/**
+ * One metered model answer for other teacher modules (평어, 공문). `format` asks for strict JSON; `nonce` lets the
+ * same material be asked again (a teacher pressing "다시 정리").
+ */
+export async function teacherAiText(uid: string, tool: string, instructions: string, material: string, options: {maxTokens?: number; format?: {name: string; schema: object}; nonce?: string} = {}) {
+  return runMeteredAi(uid, tool, model(), hash(JSON.stringify([tool, instructions, material, options.nonce ?? ''])), async observe => {
+    const response = await responses({
+      max_output_tokens: options.maxTokens ?? 2000, instructions,
+      ...(options.format ? {text: {format: {type: 'json_schema', name: options.format.name, strict: true, schema: options.format.schema}}} : {}),
+      input: [{role: 'user', content: [{type: 'input_text', text: material}]}],
+    }, '정리하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    const payload = await readBoundedJson(response, 512 * 1024);
+    observe(payload, {serviceTier: 'default'});
+    return completedAiText(payload);
+  });
+}
 
 /** Photo or PDF → text, by the model. */
 async function seeText(uid: string, doc: Doc, bytes: Uint8Array) {
@@ -102,11 +119,17 @@ async function read(uid: string, id: string) {
   const {ref, doc} = await owned(uid, id);
   if (doc.status === 'read') return view(ref.id, doc);
   if (!doc.stored) throw new ApiError(409, '파일을 다시 올려 주세요.', 'ATTACH_GONE');
+  // The original is kept whether or not it could be read: the teacher can still download it.
+  const done = async (patch: Partial<Doc>) => {const next = {...doc, ...patch, readAt: new Date().toISOString()}; await ref.set(next); return view(ref.id, next);};
+  if (doc.kind === 'file') {
+    // Nothing to read: only confirm that the upload arrived.
+    const [exists] = await bucket().file(doc.path).exists().catch(() => [false]);
+    if (!exists) throw new ApiError(409, '파일이 아직 다 올라가지 않았어요. 잠시 뒤 다시 눌러 주세요.', 'ATTACH_NOT_UPLOADED');
+    return done({status: 'read', text: STORE_ONLY_NOTE, fullChars: STORE_ONLY_NOTE.length, error: null});
+  }
   let bytes: Uint8Array;
   try {const [data] = await bucket().file(doc.path).download(); bytes = new Uint8Array(data);}
   catch {throw new ApiError(409, '파일이 아직 다 올라가지 않았어요. 잠시 뒤 다시 눌러 주세요.', 'ATTACH_NOT_UPLOADED');}
-  // The original is kept whether or not it could be read: the teacher can still download it.
-  const done = async (patch: Partial<Doc>) => {const next = {...doc, ...patch, readAt: new Date().toISOString()}; await ref.set(next); return view(ref.id, next);};
   try {
     if (bytes.length > sizeLimit(doc.kind)) throw new AttachError('파일이 너무 커요.');
     assertContent(doc.kind, bytes);

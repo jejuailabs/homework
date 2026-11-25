@@ -3,6 +3,7 @@ import {useEffect, useState, type ComponentType, type ReactNode} from "react";
 import {useTranslations} from "next-intl";
 import {CheckCircle2, FileText, LoaderCircle, X} from "lucide-react";
 import {classMetadataFetch} from "@/lib/class-metadata-cache";
+import VoiceButton from "@/modules/attachments/voice-button";
 
 export type BulkReviewRow = {studentId: string; name: string; number: number; attemptId: string; text: string; uploads: {id: string; fileName: string; contentType: string; url?: string; thumbnailUrl?: string}[]; avatar: ReactNode};
 export type BulkReviewResult = {studentId: string; ok: boolean; code?: string};
@@ -38,7 +39,7 @@ export default function HomeworkBulkReview({assignmentId, rows, Modal, onRemove,
   }
   return <Modal title={t("teacher.bulkTitle", {count: rows.length})} onClose={onClose} busy={busy} drawer>
     <p className="ws-small">{t("teacher.bulkHint")}</p>
-    <div className="ws-bulk-shared"><label className="ws-field"><span>{t("teacher.bulkSharedLabel")}</span><textarea rows={2} maxLength={5000} value={shared} placeholder={t("teacher.feedbackPlaceholder")} onChange={event => setShared(event.target.value)} disabled={busy}/></label><div className="ws-row"><button type="button" className="ws-button ws-button-light" disabled={busy || !shared.trim()} onClick={fillEmpty}>{t("teacher.bulkFillEmpty")}</button><button type="button" className="ws-button ws-button-light" disabled={busy || !shared.trim()} onClick={replaceAll}>{t("teacher.bulkReplaceAll")}</button></div></div>
+    <div className="ws-bulk-shared"><label className="ws-field"><span>{t("teacher.bulkSharedLabel")}</span><textarea rows={2} maxLength={5000} value={shared} placeholder={t("teacher.feedbackPlaceholder")} onChange={event => setShared(event.target.value)} disabled={busy}/></label><VoiceButton value={shared} onChange={setShared} disabled={busy}/><div className="ws-row"><button type="button" className="ws-button ws-button-light" disabled={busy || !shared.trim()} onClick={fillEmpty}>{t("teacher.bulkFillEmpty")}</button><button type="button" className="ws-button ws-button-light" disabled={busy || !shared.trim()} onClick={replaceAll}>{t("teacher.bulkReplaceAll")}</button></div></div>
     <ol className="ws-bulk-list">{rows.map(row => {const image = row.uploads.find(upload => upload.contentType.startsWith("image/")), file = row.uploads[0]; return <li key={row.studentId} className="ws-bulk-row">
       <div className="ws-bulk-who">{row.avatar}<span><small>{t("teacher.studentNumber", {number: row.number})}</small><strong>{row.name}</strong></span><button type="button" className="ws-icon-btn" disabled={busy} aria-label={t("teacher.bulkRemove", {name: row.name})} onClick={() => onRemove(row.studentId)}><X size={16}/></button></div>
       <div className="ws-bulk-preview">{image?.url ? <a href={image.url} target="_blank" rel="noopener noreferrer"><img src={image.thumbnailUrl || image.url} alt={image.fileName} loading="lazy"/></a> : file?.url ? <a className="ws-bulk-file" href={file.url} target="_blank" rel="noopener noreferrer"><FileText size={16}/>{file.fileName}</a> : null}{row.text ? <p>{row.text}</p> : !file && <p className="ws-small">{t("teacher.noText")}</p>}</div>
