@@ -6,12 +6,12 @@ import {fileURLToPath} from 'node:url';
 // Uploads the login-free demo's sample pictures and sample artbook to Firebase Storage.
 // Images never ship through the Vercel deploy.
 //   node scripts/try-demo/upload-assets.mjs --source <assets dir> --env <path to .env.local> [--only shots] [--upload]
-// <assets dir> holds art/*.webp (make-art.mjs), artbook/* (make-artbook.mjs) and shots/*.webp (3D room screenshots).
+// <assets dir> holds art/*.webp (make-art.mjs), artbook/* (make-artbook.mjs) shots/*.webp (3D room screenshots) and video/* (screen recordings).
 // --only <folder> sends just that folder with the existing token. Without --upload it only lists.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const releasePath = resolve(root, 'src/data/try-demo-storage.json');
 const PREFIX = 'try-demo/v1';
-const TYPES = {webp: 'image/webp', pdf: 'application/pdf'};
+const TYPES = {webp: 'image/webp', pdf: 'application/pdf', mp4: 'video/mp4'};
 
 const args = process.argv.slice(2);
 const option = name => {const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined;};
@@ -20,10 +20,10 @@ if (!source) throw new Error('Pass --source <assets dir>.');
 
 const files = [];
 for (const folder of only ? [only] : ['art', 'artbook']) {
-  if (!['art', 'artbook', 'shots'].includes(folder)) throw new Error(`Unknown folder: ${folder}`);
+  if (!['art', 'artbook', 'shots', 'video'].includes(folder)) throw new Error(`Unknown folder: ${folder}`);
   for (const name of (await readdir(resolve(source, folder))).sort()) {
     const type = TYPES[name.split('.').pop()];
-    if (!type || !/^[a-z0-9-]+\.(webp|pdf)$/.test(name)) throw new Error(`Unexpected file: ${folder}/${name}`);
+    if (!type || !/^[a-z0-9-]+\.(webp|pdf|mp4)$/.test(name)) throw new Error(`Unexpected file: ${folder}/${name}`);
     files.push({remote: `${PREFIX}/${folder}/${name}`, type, bytes: await readFile(resolve(source, folder, name))});
   }
 }

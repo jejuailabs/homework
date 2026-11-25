@@ -100,18 +100,34 @@ export const cardSet = {title: '바다 동물 영어', cards: [
   {word: 'shark', meaning: '상어', emoji: '🦈'}, {word: 'crab', meaning: '게', emoji: '🦀'}, {word: 'fish', meaning: '물고기', emoji: '🐟'},
 ] as DemoCard[]};
 
-/** Answers recorded for the demo class. The real Berry reads the teacher's own class; nothing here calls an AI. */
-export type BerryCard = {title: string; rows: [string, string][]; done: string};
-export type BerryTurn = {ask: string; answer: string[]; card?: BerryCard; follow?: BerryTurn};
-export const berryTurns: BerryTurn[] = [
-  {ask: '지금 챙길 것 알려 줘', answer: ['오늘 챙기실 것은 네 가지예요.', '· 검사 기다리는 숙제 3건 (내가 좋아하는 것 그리기)', '· 승인 기다리는 작품 2점 (봄 그림전)', '· 오늘 마감 숙제 1개 (독서 감상문)', '· 내일 15:00 학년 협의회']},
-  {ask: '독서 감상문 안 낸 학생 알려 줘', answer: ['아직 3명이 내지 않았어요: 학생 04, 학생 08, 학생 10.', '이름은 가명으로만 다뤄요. 안내 문구를 만들어 드릴까요?'],
-    follow: {ask: '응, 다정하게 써 줘', answer: ['이렇게 써 보면 어떨까요?', '"금요일까지 감상문을 올려 주면 선생님이 꼭 읽어 볼게요. 한 줄이어도 괜찮아요!"']}},
-  {ask: '내일 3시 학년 협의회 일정 넣어 줘', answer: ['이렇게 넣을게요. 저장 전에 확인해 주세요.'],
-    card: {title: '일정 추가', rows: [['제목', '학년 협의회'], ['때', '내일 15:00 ~ 16:00'], ['종류', '회의']], done: '실제로는 선생님 달력에 들어가요. 체험에서는 저장되지 않아요.'}},
-  {ask: '봄 그림전 승인 대기 작품 모두 승인해 줘', answer: ['승인 대기 작품 2점을 찾았어요. 바꾸기 전에 확인해 주세요.'],
-    card: {title: '작품 승인', rows: [['전시실', '봄 그림전'], ['대상', '풍선 타고 훨훨, 낮잠 자는 치즈'], ['바뀌는 것', '승인 대기 → 승인 (전시실에 걸림)']], done: '실제로는 두 작품이 전시실에 걸려요. 체험에서는 반영되지 않아요.'}},
-];
+/** Berry corner: two recorded requests. The real Berry reads the teacher's own class; nothing here calls an AI. */
+export const berryDemo = {
+  give: {
+    ask: '오늘 숙제 좀 내 줘',
+    thinking: ['이번 주 수업 내용을 살펴보는 중', '지난 숙제와 겹치지 않게 고르는 중', '숙제 초안을 만드는 중'],
+    answer: ['이번 주 미술 시간에 배운 "상상해서 그리기"로 숙제를 준비했어요.', '내용을 확인하고 내 주세요.'],
+    button: '숙제 초안 열기',
+    draft: {title: '내가 가 보고 싶은 우주', body: '우주에 간다면 무엇을 만나고 싶나요? 상상해서 그리고, 한 줄로 소개해 주세요.', due: '금요일 오후 6시까지', kind: '사진 (그림을 찍어서 올리기)', room: '우주 전시실 · 내가 꿈꾸는 우주', to: '3학년 2반 10명'},
+    done: '숙제를 냈어요. 학생 10명 화면에 바로 보여요. 검사하면 우주 전시실에 저절로 걸려요.',
+  },
+  check: {
+    ask: '숙제 검사해 줘',
+    thinking: ['제출한 숙제를 모으는 중', '한 명씩 그림과 소개 글을 읽는 중', '칭찬 한마디를 준비하는 중'],
+    answer: ['"내가 가 보고 싶은 우주" 제출 6건 중 검사 안 한 숙제가 6건이에요.', '한 명씩 칭찬 한마디도 미리 적어 두었어요.'],
+    button: '검사 화면 열기',
+    items: [
+      {workId: 'space-01', note: '로켓 불꽃 색이 정말 멋져요!'},
+      {workId: 'space-02', note: '토성 고리 미끄럼틀, 상상력이 최고예요.'},
+      {workId: 'space-03', note: '헬멧 속 웃는 얼굴이 보기 좋아요.'},
+      {workId: 'space-04', note: '외계인과 친구가 되는 마음이 따뜻해요.'},
+      {workId: 'space-05', note: '국자자리, 이름을 정말 잘 지었어요.'},
+      {workId: 'space-08', note: '치즈 헬멧까지 꼼꼼하게 그렸네요.'},
+    ],
+    done: '6건 모두 "참 잘했어요"로 검사했어요. 작품은 우주 전시실에 저절로 걸렸어요.',
+  },
+};
+/** Screen recording of the same two requests, played on the left of the corner. */
+export const berryVideo = {src: demoAsset('video/berry-demo.mp4'), poster: demoAsset('video/berry-demo.webp')};
 
 export type CornerId = 'gallery' | 'flow' | 'bomal' | 'cards' | 'berry' | 'artbook' | 'start';
 export const corners: {id: CornerId; label: string; lead: string}[] = [
