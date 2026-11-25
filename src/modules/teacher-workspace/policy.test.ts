@@ -144,9 +144,18 @@ assert.ok(exported.startsWith('﻿'));
 assert.ok(exported.includes(`"'=HYPERLINK(""x"")"`), 'formulas are neutralized');
 assert.equal(eventSummary('item.created'), '업무 항목 추가 1건');
 assert.equal(eventSummary('calendar.imported', 20), '일정 가져오기 20건');
-assert.equal(workspaceAllowed('teacher'), true);
-assert.equal(workspaceAllowed('student'), false);
-assert.equal(workspaceAllowed('admin', 'true'), false, 'kill switch wins');
+const viewer = (role: string, email: string | null = 't@example.com', viewedBy?: string) => ({uid: 'Uid1', email, role, viewedBy});
+assert.equal(workspaceAllowed(viewer('teacher')), false, 'hidden from teachers until they are listed');
+assert.equal(workspaceAllowed(viewer('teacher'), {allow: ' T@Example.com ,other@example.com'}), true, 'listed by email');
+assert.equal(workspaceAllowed(viewer('teacher', null), {allow: 'uid1'}), true, 'listed by account id');
+assert.equal(workspaceAllowed(viewer('teacher', null), {allow: 't@example.com'}), false);
+assert.equal(workspaceAllowed(viewer('admin')), true);
+assert.equal(workspaceAllowed(viewer('superadmin')), true);
+assert.equal(workspaceAllowed(viewer('teacher', null, 'adminUid')), true, 'an administrator viewing as a teacher');
+assert.equal(workspaceAllowed(viewer('teacher'), {mode: 'all'}), true);
+assert.equal(workspaceAllowed(viewer('admin'), {mode: 'off'}), false);
+assert.equal(workspaceAllowed(viewer('student'), {mode: 'all'}), false);
+assert.equal(workspaceAllowed(viewer('admin'), {killSwitch: 'true', mode: 'all'}), false, 'kill switch wins');
 console.log('teacher workspace policy tests passed');
 
 // The list form Berry writes ("월1 국어, 월2 수학") used to be mistaken for a weekday header row and saved an empty week.

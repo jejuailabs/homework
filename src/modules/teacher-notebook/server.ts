@@ -8,6 +8,7 @@ import {ApiError} from '@/lib/server/policy';
 import {accessConfig, afterFailure, blockedFor, entryInput, minutesLabel, monthRange, notebookAllowed, notebookDate, NotebookError, MAX_REPORT_ENTRIES, passwordInput, passwordLock, recentAuthentication, reportRange, studentKey, todoInput, unlockToken, verifyUnlock, UNLOCK_SECONDS} from './policy';
 import {notebookKeys, openBody, openEnvelope, sealBody, sealEnvelope} from './vault';
 import {logWorkspaceEvent} from '@/modules/teacher-workspace/event-log';
+import {workspaceOpenFor} from '@/modules/teacher-workspace/server';
 import {NOTEBOOK_TAGS, type NotebookAccessConfig, type NotebookDaySummary, type NotebookEntry, type NotebookRosterClass, type NotebookStudentRef, type NotebookTag, type NotebookTodo} from './types';
 
 const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, length: number, options: {N: number; r: number; p: number}) => Promise<Buffer>;
@@ -55,7 +56,7 @@ async function audit(uid: string, action: string, target: string | null = null, 
 export async function notebookAvailableFor(uid: string, role: string) {return notebookAllowed(await access(), uid, role, process.env.TEACHER_NOTEBOOK_DISABLED);}
 async function teacher(request: Request) {
   const ctx = await getContext(request);
-  if (!notebookAllowed(await access(), ctx.uid, ctx.role, process.env.TEACHER_NOTEBOOK_DISABLED)) throw new NotebookError('교무수첩을 아직 사용할 수 없어요.', 403, 'NOTEBOOK_NOT_ENABLED');
+  if (!workspaceOpenFor(ctx) || !notebookAllowed(await access(), ctx.uid, ctx.role, process.env.TEACHER_NOTEBOOK_DISABLED)) throw new NotebookError('교무수첩을 아직 사용할 수 없어요.', 403, 'NOTEBOOK_NOT_ENABLED');
   return ctx;
 }
 function unlocked(request: Request, ctx: Context) {
@@ -256,7 +257,7 @@ export async function handleNotebook(request: Request, segments: string[]) {
     if (method !== 'GET') assertOrigin(request);
     if (path === 'admin/access') return await adminAccess(request, await getContext(request));
     if (path === 'status' && method === 'GET') {
-      const ctx = await getContext(request), available = notebookAllowed(await access(), ctx.uid, ctx.role, process.env.TEACHER_NOTEBOOK_DISABLED);
+      const ctx = await getContext(request), available = workspaceOpenFor(ctx) && notebookAllowed(await access(), ctx.uid, ctx.role, process.env.TEACHER_NOTEBOOK_DISABLED);
       let expires: number | null = null, hasPassword = false;
       if (available) {
         try {expires = verifyUnlock(notebookKeys().unlock, cookie(request, UNLOCK_COOKIE), ctx.uid, seconds());} catch {}
