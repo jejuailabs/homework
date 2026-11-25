@@ -2,16 +2,16 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {withBanners} from './links';
 import {usePathname} from 'next/navigation';
-import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, Mic, Paperclip, PencilLine, PlugZap, Send, Sparkles, Square, StickyNote, TriangleAlert, X} from 'lucide-react';
+import {ArrowUpRight, Check, ChevronRight, ClipboardList, Download, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, Mic, Paperclip, PencilLine, PlugZap, Send, Sparkles, Square, StickyNote, TriangleAlert, X} from 'lucide-react';
 import {abilityGroups, firstBlank, lackingFor, missingPermissions, type Ability} from './abilities';
 import {useVoiceInput} from './voice';
 import {pickGreeting, remember, seoul, type Greeting, type GreetingHistory} from './greetings';
 import {AttachButton, AttachChips, useAttachments} from '@/modules/attachments/client';
-import {ACCEPT_HINT, MAX_PER_MESSAGE} from '@/modules/attachments/policy';
+import {ACCEPT_HINT, MAX_PER_MESSAGE, attachmentLink} from '@/modules/attachments/policy';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
-type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]; files?: string[]};
+type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]; files?: {id: string; name: string}[]};
 type InboxItem = {id: string; kind: string; rule: string | null; title_generic: string; payload: Record<string, unknown>; status: string; created_at: string};
 const TOOL_LABELS: Record<string, string> = {
   add_calendar_event: '일정 추가', add_lesson_log: '수업 일지 추가', add_work_item: '업무 항목 추가', add_notebook_entry: '교무수첩에 기록할까요?', create_assignment: '숙제방 열기', create_exhibition: '전시실 열기', create_board: '참여보드 열기', approve_artworks: '작품 승인', approve_posts: '게시물 공개', publish_review: '복습 배포', get_signals: '현황 확인', get_catalog: '메뉴 살펴보기', get_storage: '저장 공간 확인', list_exhibitions: '전시실 확인', search_exhibitions: '전시 보관함 찾기', list_boards: '보드 확인', get_moderation_queue: '승인 대기 확인', get_quiz_status: '퀴즈 확인', get_review_status: '복습 확인', get_playground_status: '말놀이터 확인', get_points: '보말 확인', list_card_sets: '카드 확인', find_base_vocab: '기본 어휘 찾기', list_class_tools: '수업 도구 확인', list_neighborhood_packs: '동네 탐험 자료 찾기', get_neighborhood_pack: '동네 탐험 자료 열기',
@@ -52,6 +52,7 @@ async function api<T>(path: string, body?: object): Promise<T> {
 }
 const shown = (value: unknown) => Array.isArray(value) ? value.join(', ') : value === null || value === undefined || value === '' ? null : typeof value === 'boolean' ? (value ? '예' : '아니요') : String(value);
 function bannerKind(href: string) {
+  if (href.startsWith('/api/attachments/')) return {icon: Download, label: '원본 내려받기'};
   if (href.includes('archive=1')) return {icon: Images, label: '전시 보관함에서 보기'};
   if (href.startsWith('/teacher/exhibitions')) return {icon: Images, label: '전시실 열기'};
   if (href.startsWith('/teacher/homework')) return {icon: ClipboardList, label: href.includes('assignmentId=') ? '숙제 열기' : '숙제 메뉴 열기'};
@@ -193,7 +194,7 @@ export default function BerryPanel() {
     setText(''); setBusy(true); setError(''); setActivity('생각하는 중…');
     // The files now belong to this message: the list empties, the read text stays on the server for later turns.
     if (attached.length) files.clear();
-    setMessages(old => [...old, {role: 'user', text: message, ...(attached.length ? {files: attached.map(file => file.name)} : {})}, {role: 'assistant', text: '', cards: []}]);
+    setMessages(old => [...old, {role: 'user', text: message, ...(attached.length ? {files: attached.map(file => ({id: file.id, name: file.name}))} : {})}, {role: 'assistant', text: '', cards: []}]);
     const update = (fn: (last: Message) => Message) => setMessages(old => [...old.slice(0, -1), fn(old[old.length - 1])]);
     try {
       // A new conversation carries the hello Berry just showed, so a reply to it reads naturally.
@@ -274,7 +275,7 @@ export default function BerryPanel() {
           {/* The empty answer placeholder stays hidden until text or a card arrives, so Berry never shows an avatar with nothing beside it. */}
           {messages.map((message, index) => !message.text && !message.cards?.length && !message.files?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
-            {message.files && <ul className="bp-files">{message.files.map((name, at) => <li key={at}><Paperclip size={11}/>{name}</li>)}</ul>}
+            {message.files && <ul className="bp-files">{message.files.map(file => <li key={file.id}><a href={attachmentLink(file.id)} title="원본 내려받기"><Paperclip size={11}/>{file.name}</a></li>)}</ul>}
             {message.text && (() => {const view = withBanners(message.text); return <><p><Bold text={view.text}/></p><Banners links={view.links}/></>;})()}
             {message.cards?.map(card => <Preview key={card.inbox_id} card={card} onDecide={(c, d) => void decide(c, d)}/>)}
           </div>)}

@@ -1,7 +1,7 @@
 'use client';
 import {useCallback, useEffect, useState, type CSSProperties} from 'react';
 import {ChevronLeft, ChevronRight, ClipboardPaste, Clock3, FileUp, LoaderCircle, NotebookPen, Pencil, Printer, X} from 'lucide-react';
-import {AttachButton, attachmentsStatus, draftFrom, removeAttachment, uploadAttachment} from '@/modules/attachments/client';
+import {AttachButton, attachmentsStatus, draftFrom, uploadAttachment} from '@/modules/attachments/client';
 import {ACCEPT_HINT, MAX_PER_MESSAGE} from '@/modules/attachments/policy';
 import {call, message, seoulToday, shortDate} from './api';
 import {addDays, weekDates, weekKeyOf} from './shared';
@@ -94,7 +94,7 @@ export function TimetableTab({onLessons}: {onLessons: () => void}) {
       setEditing(Object.fromEntries(draft.slots.map(slot => [`${slot.day}:${slot.period}`, cellText(slot)])));
       setUnsure(new Set(draft.unsure.map(slot => `${slot.day}:${slot.period}`)));
       setFromFile(draft.note || ' ');
-    } catch (e) {setError(message(e));} finally {setReading(''); ids.forEach(id => void removeAttachment(id));}
+    } catch (e) {setError(message(e));} finally {setReading('');}
   }
   function print() {
     const root = document.documentElement, done = () => {root.classList.remove('wsp-printing'); window.removeEventListener('afterprint', done);};
