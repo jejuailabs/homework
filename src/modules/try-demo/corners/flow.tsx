@@ -6,13 +6,16 @@ import {homework, homeworkPeers, homeworkPicks, praises, students, works, workIm
 
 // One homework, three screens: the student hands it in, the teacher checks it, and it is already
 // hanging in the linked room and board. The visitor's picture never leaves this browser tab.
-const Scene = dynamic(() => import('@/components/exhibition-world'), {ssr: false});
+// The real Saturn room opens straight inside, so the moment of "it's already hanging" is the room itself.
+const SpaceScene = dynamic(() => import('@/components/space-exhibition-world'), {ssr: false});
+const has3d = () => {try {const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl'));} catch {return false;}};
 const peers = homeworkPeers.map(p => {const w = works.find(x => x.id === p.workId)!; return {id: w.id, title: w.title, artist: students.find(s => s.id === w.studentId)!.name, text: p.text, url: workImage(w.id), thumb: workImage(w.id, true)};});
-const STEPS = ['학생이 제출', '선생님이 검사', '전시실과 보드에'];
+const STEPS = ['학생이 제출', '선생님이 검사', '전시실에 걸림'];
 
 export default function FlowCorner() {
   const [step, setStep] = useState(0), [pick, setPick] = useState(homeworkPicks[0]), [own, setOwn] = useState(''), [text, setText] = useState('');
-  const [praise, setPraise] = useState(praises[0]), [scene, setScene] = useState(false);
+  const [praise, setPraise] = useState(praises[0]), [scene, setScene] = useState(true);
+  useEffect(() => {if (!has3d()) setScene(false);}, []);
   const file = useRef<HTMLInputElement>(null);
   // A chosen photo is shown from memory only and released when the corner closes.
   useEffect(() => () => {if (own) URL.revokeObjectURL(own);}, [own]);
@@ -23,7 +26,7 @@ export default function FlowCorner() {
     if (chosen && chosen.type.startsWith('image/')) setOwn(URL.createObjectURL(chosen));
     event.target.value = '';
   };
-  const restart = () => {setScene(false); setStep(0); setText(''); setOwn(''); setPraise(praises[0]);};
+  const restart = () => {setScene(has3d()); setStep(0); setText(''); setOwn(''); setPraise(praises[0]);};
 
   return <div className="try-flow">
     <ol className="try-flow-steps">{STEPS.map((label, i) => <li key={label} className={i === step ? 'on' : i < step ? 'done' : ''}><span>{i < step ? <Check size={13}/> : i + 1}</span>{label}</li>)}</ol>
@@ -31,7 +34,7 @@ export default function FlowCorner() {
     {step === 0 && <section className="try-card">
       <p className="try-role">학생 화면</p>
       <h2>{homework.title}</h2>
-      <p className="try-note">{homework.due} · 사진으로 제출 · 낸 그림은 우리 반 전시실과 보드에 걸려요</p>
+      <p className="try-note">{homework.due} · 사진으로 제출 · 낸 그림은 우리 반 전시실에 걸려요</p>
       <div className="try-picks">{homeworkPicks.map(id => <button key={id} type="button" className={!own && pick === id ? 'on' : ''} aria-pressed={!own && pick === id} onClick={() => {setOwn(''); setPick(id);}}><img src={workImage(id, true)} alt={works.find(w => w.id === id)!.title}/></button>)}
         <button type="button" className={own ? 'on try-pick-own' : 'try-pick-own'} aria-pressed={!!own} onClick={() => file.current?.click()}>{own ? <img src={own} alt="내가 고른 사진"/> : <><ImagePlus size={24}/><small>내 사진 고르기</small></>}</button>
         <input ref={file} type="file" accept="image/*" hidden onChange={choose}/>
@@ -51,17 +54,13 @@ export default function FlowCorner() {
     </section>}
 
     {step === 2 && <>
-      <p className="try-flash"><Sparkles size={15}/>검사하는 순간, 전시실과 보드에 자동으로 걸렸어요. 선생님이 따로 옮기지 않았어요.</p>
-      <div className="try-flow-result">
+      <p className="try-flash"><Sparkles size={15}/>검사하는 순간, 전시실에 자동으로 걸렸어요. 선생님이 따로 옮기지 않았어요.</p>
+      <div className="try-flow-result try-flow-solo">
         <section className="try-card">
           <p className="try-role">전시실</p><h2>{homework.room}</h2>
-          {scene ? <div className="try-flow-scene"><Scene stage="gallery" buildings={[]} rooms={[]} onEnterBuilding={() => {}} onEnterRoom={() => {}} theme="forest" roomTitle={homework.room} artworks={all.map(s => ({id: s.id, title: s.title, url: s.url, thumbnailUrl: s.thumb, artistName: s.artist}))} paused={false} onSelectArtwork={() => {}} onExit={() => setScene(false)} locale="ko"/></div>
+          {scene ? <div className="try-flow-scene"><SpaceScene theme="saturn" startInside roomTitle={homework.room} artworks={all.map(s => ({id: s.id, title: s.title, url: s.url, thumbnailUrl: s.thumb, artistName: s.artist}))} paused={false} onSelectArtwork={() => {}} onExit={() => setScene(false)} locale="ko"/></div>
             : <div className="try-wall">{all.map((s, i) => <figure key={s.id} className={i === 0 ? 'new' : ''}><img src={s.thumb} alt={s.title}/><figcaption>{s.artist}{i === 0 && <em>방금 걸렸어요</em>}</figcaption></figure>)}</div>}
           <button type="button" className="button soft" onClick={() => setScene(!scene)}><Images size={16}/>{scene ? '액자 목록으로' : '3D 전시실로 보기'}</button>
-        </section>
-        <section className="try-card">
-          <p className="try-role">참여보드</p><h2>{homework.board}</h2>
-          <div className="try-notes">{all.map((s, i) => <article key={s.id} style={{background: ['#fff3b0', '#ffd6e0', '#d3f0dc', '#d6e8ff', '#eadcff', '#fff3b0'][i]}} className={i === 0 ? 'new' : ''}><img src={s.thumb} alt=""/><p>{s.text}</p><small>{s.artist}</small></article>)}</div>
           <p className="try-note">선생님 말씀: &quot;{praise}&quot;</p>
         </section>
       </div>

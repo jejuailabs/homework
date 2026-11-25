@@ -210,3 +210,23 @@
 .try-real-cta small{opacity:.92;font-size:13px}
 .try-real-cta:hover{filter:brightness(1.05)}
 @media(max-width:860px){.try-badge{display:none}.try-real{padding:0 12px;font-size:13px}.try-real-cta{padding:16px}.try-real-cta strong{font-size:15px}}
+/* Gallery corner: show the room itself first, then one big way in. */
+.try-stage{position:relative;border-radius:24px;overflow:hidden;background:#0b0b14;color:#fff;box-shadow:0 18px 40px #0b0b1430}
+.try-shots{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.try-shots figure{position:relative;margin:0;aspect-ratio:1080/694;overflow:hidden}
+.try-shots img{width:100%;height:100%;object-fit:cover;display:block}
+.try-shots figcaption{position:absolute;left:12px;top:12px;background:#000a;backdrop-filter:blur(6px);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700}
+.try-stage-plain{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;filter:saturate(1.05)}
+.try-stage-plain img{width:100%;aspect-ratio:4/3;object-fit:cover;display:block}
+.try-stage-copy{display:grid;justify-items:center;text-align:center;gap:6px;padding:22px 20px 26px;background:linear-gradient(180deg,#14121f,#0b0b14)}
+.try-stage-copy p{margin:0;color:#f2c97a;font-weight:800;font-size:13px;letter-spacing:.2px}
+.try-stage-copy h2{margin:0;font-size:26px;letter-spacing:-.4px}
+.try-stage-copy span{color:#d7d3e6}
+.try-stage-copy small{color:#a9a4bd;font-size:12px}
+.try-enter{display:inline-flex;align-items:center;gap:10px;margin:10px 0 4px;min-height:58px;padding:0 30px;border:0;border-radius:999px;font:inherit;font-size:18px;font-weight:800;color:#2b1a05;background:linear-gradient(135deg,#ffd98a,#f2a54a);box-shadow:0 0 0 6px #f2a54a26,0 12px 30px #f2a54a55;cursor:pointer;animation:try-enter-glow 2.4s ease-in-out infinite}
+.try-enter:hover{filter:brightness(1.06)}
+@keyframes try-enter-glow{0%,100%{box-shadow:0 0 0 6px #f2a54a26,0 12px 30px #f2a54a55}50%{box-shadow:0 0 0 10px #f2a54a1a,0 12px 38px #f2a54a88}}
+@media(prefers-reduced-motion:reduce){.try-enter{animation:none}}
+@media(max-width:700px){.try-shots{grid-template-columns:1fr}.try-stage-plain{grid-template-columns:1fr 1fr}.try-stage-plain img:nth-child(3){display:none}.try-stage-copy h2{font-size:22px}.try-enter{width:100%;justify-content:center}}
+.try-flow-result.try-flow-solo{grid-template-columns:1fr}
+.try-flow-solo .try-flow-scene{min-height:0;height:min(68vh,620px)}

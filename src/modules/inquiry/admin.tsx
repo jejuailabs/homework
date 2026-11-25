@@ -49,7 +49,7 @@ export default function AdminInquiries({revision = 0}: {revision?: number}) {
       <caption style={{textAlign: 'left', fontWeight: 700, padding: '6px 0'}}>받은 문의 (최근 100건)</caption>
       <thead><tr><th>받은 시각</th><th>종류</th><th>보낸 사람</th><th>내용</th><th>누른 곳</th><th>메일</th><th>상태</th></tr></thead>
       <tbody>{data.items.length ? data.items.map(i => <tr key={i.id}>
-        <td>{date(i.createdAt)}</td><td>{inquiryTopicLabels[i.topic]}</td>
+        <td>{date(i.createdAt)}</td><td>{inquiryTopicLabels[i.topic] || i.topic}</td>
         <td><strong>{i.name}</strong><br/><a href={'mailto:' + i.email}>{i.email}</a>{i.phone && <><br/>{i.phone}</>}{i.school && <><br/>{i.school}</>}</td>
         <td className="iq-msg">{i.message || '-'}</td><td>{inquirySourceLabels[i.source]}</td>
         <td>{i.mail === 'sent' ? '보냄' : i.mail === 'off' ? '꺼짐' : '실패'}</td>

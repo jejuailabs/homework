@@ -5,8 +5,9 @@ import {fileURLToPath} from 'node:url';
 
 // Uploads the login-free demo's sample pictures and sample artbook to Firebase Storage.
 // Images never ship through the Vercel deploy.
-//   node scripts/try-demo/upload-assets.mjs --source <assets dir> --env <path to .env.local> [--upload]
-// <assets dir> holds art/*.webp (make-art.mjs) and artbook/* (make-artbook.mjs). Without --upload it only lists.
+//   node scripts/try-demo/upload-assets.mjs --source <assets dir> --env <path to .env.local> [--only shots] [--upload]
+// <assets dir> holds art/*.webp (make-art.mjs), artbook/* (make-artbook.mjs) and shots/*.webp (3D room screenshots).
+// --only <folder> sends just that folder with the existing token. Without --upload it only lists.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const releasePath = resolve(root, 'src/data/try-demo-storage.json');
 const PREFIX = 'try-demo/v1';
@@ -14,18 +15,19 @@ const TYPES = {webp: 'image/webp', pdf: 'application/pdf'};
 
 const args = process.argv.slice(2);
 const option = name => {const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined;};
-const source = option('--source'), envPath = option('--env'), upload = args.includes('--upload');
+const source = option('--source'), envPath = option('--env'), only = option('--only'), upload = args.includes('--upload');
 if (!source) throw new Error('Pass --source <assets dir>.');
 
 const files = [];
-for (const folder of ['art', 'artbook']) {
+for (const folder of only ? [only] : ['art', 'artbook']) {
+  if (!['art', 'artbook', 'shots'].includes(folder)) throw new Error(`Unknown folder: ${folder}`);
   for (const name of (await readdir(resolve(source, folder))).sort()) {
     const type = TYPES[name.split('.').pop()];
     if (!type || !/^[a-z0-9-]+\.(webp|pdf)$/.test(name)) throw new Error(`Unexpected file: ${folder}/${name}`);
     files.push({remote: `${PREFIX}/${folder}/${name}`, type, bytes: await readFile(resolve(source, folder, name))});
   }
 }
-if (files.filter(f => f.remote.includes('/art/')).length !== 50) throw new Error('Expected 25 pictures and 25 thumbnails in art/.');
+if (!only && files.filter(f => f.remote.includes('/art/')).length !== 50) throw new Error('Expected 25 pictures and 25 thumbnails in art/.');
 const total = files.reduce((sum, file) => sum + file.bytes.length, 0);
 console.log(`${files.length} files, ${(total / 1048576).toFixed(1)} MB -> ${PREFIX}`);
 if (!upload) process.exit(0);

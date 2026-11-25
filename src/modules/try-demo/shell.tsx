@@ -16,7 +16,6 @@ const views = {
   gallery: dynamic(() => import('./corners/gallery'), {ssr: false, loading}),
   flow: dynamic(() => import('./corners/flow'), {ssr: false, loading}),
   bomal: dynamic(() => import('./corners/bomal'), {ssr: false, loading}),
-  board: dynamic(() => import('./corners/board'), {ssr: false, loading}),
   cards: dynamic(() => import('./corners/cards'), {ssr: false, loading}),
   berry: dynamic(() => import('./corners/berry'), {ssr: false, loading}),
   artbook: dynamic(() => import('./corners/artbook'), {ssr: false, loading}),
