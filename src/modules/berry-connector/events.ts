@@ -2,7 +2,7 @@ import 'server-only';
 import {db} from '@/lib/server/admin';
 import {bearer, cors, disabled, errorResponse, json} from './oauth';
 import {readWorkspaceLog} from '@/modules/teacher-workspace/event-log';
-import {BerryError, boundedInt, deriveEvents, mergeEvents, type AssignmentSummary} from './policy';
+import {BerryError, boundedInt, deriveCalendarDeadlines, deriveEvents, mergeEvents, type AssignmentSummary, type CalendarDeadline} from './policy';
 import type {BerryEvent} from './types';
 
 /**
@@ -23,8 +23,11 @@ export async function handleEvents(request: Request) {
       const data = doc.data();
       return {id: doc.id, classId: String(data.classId ?? ''), title: String(data.title ?? ''), dueAt: typeof data.dueAt === 'string' ? data.dueAt : null, createdAt: typeof data.createdAt === 'string' ? data.createdAt : new Date(0).toISOString(), targetCount: Number(data.targetCount) || 0, submittedCount: Number(data.submittedCount) || 0, reviewedCount: Number(data.reviewedCount) || 0, visibility: typeof data.visibility === 'string' ? data.visibility : undefined};
     });
+    // Calendar deadlines still ahead (official documents and anything the teacher marked as a deadline). A failed read costs only these.
+    const ahead = await db().collection('teacherWorkspaces').doc(ctx.uid).collection('calendar').where('kind', '==', 'deadline').limit(300).get().catch(() => null);
+    const calendarDeadlines: CalendarDeadline[] = (ahead?.docs ?? []).filter(doc => !doc.data().pending).map(doc => ({id: doc.id, title: String(doc.data().title ?? ''), start: String(doc.data().start ?? ''), end: typeof doc.data().end === 'string' ? doc.data().end : null, createdAt: String(doc.data().createdAt ?? '')}));
     const now = new Date().toISOString(), log = await readWorkspaceLog(ctx.uid, since, limit);
-    let events: BerryEvent[] = mergeEvents(log.events.map(({sensitive: _, ...event}) => ({...event, source: 'log' as const})), deriveEvents(summaries, since, now, soonHours));
+    let events: BerryEvent[] = mergeEvents(log.events.map(({sensitive: _, ...event}) => ({...event, source: 'log' as const})), [...deriveEvents(summaries, since, now, soonHours), ...deriveCalendarDeadlines(calendarDeadlines, since, now, soonHours)]);
     // Log lines past the fetched page are unknown yet: stop there so the cursor cannot skip them.
     if (log.hasMore && log.lastAt) events = events.filter(event => event.at <= log.lastAt!);
     const page = events.slice(0, limit);

@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
   assert.equal(submissionTimes(students, ['a'], [{studentId: 'a', status: 'submitted', submittedAt: '2026-11-19T05:00:00.000Z'}], null)[0].late, false, 'no deadline, never late');
 }
 import {createHash} from 'node:crypto';
-import {trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, canonicalJson, checkedByDefault, clientRegistration, confirmationProblem, connectorAllowed, deriveEvents, givenName, maskNames, mergeEvents, parseScopes, payloadHash, toolAllowed, CONFIRM_SECONDS, protectedResourceMetadata, redirectWith, scopesWithin, seoulTime, studentLabel, submissionTimes, validRedirectUri, verifyPkce} from './policy';
+import {deriveCalendarDeadlines, trustedRedirectHost, accessConfig, accessDays, alias, authorizationServerMetadata, authorizeRequest, canonicalJson, checkedByDefault, clientRegistration, confirmationProblem, connectorAllowed, deriveEvents, givenName, maskNames, mergeEvents, parseScopes, payloadHash, toolAllowed, CONFIRM_SECONDS, protectedResourceMetadata, redirectWith, scopesWithin, seoulTime, studentLabel, submissionTimes, validRedirectUri, verifyPkce} from './policy';
 
 assert.deepEqual(accessConfig(undefined), {mode: 'off', teacherUids: []});
 assert.deepEqual(accessConfig({mode: 'allowlist', teacherUids: ['t1', 'bad/uid', 7]}), {mode: 'allowlist', teacherUids: ['t1']});
@@ -150,3 +150,9 @@ assert.equal(maskNames('민준이가 서연이랑 민준호에게 줬어요', na
 assert.equal(maskNames('민수 결과 결석 Alex Kim', named), '학생 05 결과 결석 학생 07', 'a compound surname leaves its given name; a one-syllable given name stays');
 assert.deepEqual(['김민준', '남궁민수', '이하은별', '김결', 'Alex', '김a준'].map(givenName), ['민준', '민수', '하은별', null, null, null], 'given names of Hangul names of three or four syllables');
 console.log('berry-connector policy tests passed');
+
+// Calendar deadlines (official documents) join the homework deadline reminder: once inside the window, never after the due time.
+const cal = [{id: 'c1', title: '[공문] 신청서 제출', start: '2026-11-04T15:00:00.000Z', end: '2026-11-05T15:00:00.000Z', createdAt: '2026-11-01T00:00:00.000Z'}, {id: 'c2', title: '먼 마감', start: '2026-12-20T15:00:00.000Z', end: null, createdAt: '2026-11-01T00:00:00.000Z'}, {id: 'c3', title: '지난 마감', start: '2026-10-01T15:00:00.000Z', end: null, createdAt: '2026-09-01T00:00:00.000Z'}];
+const soonCal = deriveCalendarDeadlines(cal, null, '2026-11-04T00:00:00.000Z');
+assert.deepEqual(soonCal.map(e => [e.id, e.type, e.assignmentId, e.at]), [['soon:calendar:c1', 'deadline.soon', 'calendar:c1', '2026-11-03T15:00:00.000Z']]);
+assert.equal(deriveCalendarDeadlines(cal, '2026-11-03T16:00:00.000Z', '2026-11-04T00:00:00.000Z').length, 0, 'the cursor does not repeat it');
