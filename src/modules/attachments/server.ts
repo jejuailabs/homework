@@ -8,18 +8,21 @@ import {AiError, completedAiText, providerFailure, readBoundedJson} from '@/lib/
 import {ApiError} from '@/lib/server/policy';
 import {documentText} from './documents';
 import {
-  AttachError, KEEP_FILES, LESSON_INSTRUCTIONS, LESSON_SCHEMA, MAX_PER_MESSAGE, PREVIEW_CHARS, READ_INSTRUCTIONS, TEXT_MAX, TIMETABLE_INSTRUCTIONS, TIMETABLE_SCHEMA,
-  assertContent, attachmentInput, clip, extensionOf, lessonDraft, sizeLimit, tidy, timetableDraft, type AttachKind, type AttachStatus, type AttachmentView,
+  AttachError, LESSON_INSTRUCTIONS, LESSON_SCHEMA, MAX_PER_MESSAGE, PREVIEW_CHARS, READ_INSTRUCTIONS, TEXT_MAX, TIMETABLE_INSTRUCTIONS, TIMETABLE_SCHEMA,
+  assertContent, attachmentInput, attachmentLink, clip, extensionOf, lessonDraft, sizeLimit, tidy, timetableDraft, type AttachKind, type AttachStatus, type AttachmentView,
 } from './policy';
 
 /**
  * Teacher attachments (Berry, timetable, lesson log). The browser uploads straight to Storage with a signed URL, so
- * no file body passes through Vercel. Reading turns the file into text once, keeps the text and deletes the original.
+ * no file body passes through Vercel. Reading turns the file into text once. The original STAYS in Storage (owner's
+ * rule, 2026-11-25): the text is only the context Berry answers from, a long document is read again from the original
+ * when Berry needs more than the kept text, and the teacher can download the original through a short-lived link.
+ * Nothing here deletes a finished file by itself; only the teacher's own remove does.
  */
-type Doc = {name: string; kind: AttachKind; size: number; path: string; status: AttachStatus; stored: boolean; text: string; error: string | null; createdAt: string; readAt?: string};
+type Doc = {name: string; kind: AttachKind; size: number; path: string; status: AttachStatus; stored: boolean; text: string; fullChars?: number; error: string | null; createdAt: string; readAt?: string};
 const json = (value: unknown, status = 200) => NextResponse.json(value, {status, headers: {'Cache-Control': 'private, no-store'}});
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
-const ID = /^[A-Za-z0-9]{12,40}$/, UPLOAD_WINDOW = 15 * 60_000, STALE_MS = 60 * 60_000, MATERIAL_MAX = 20_000;
+const ID = /^[A-Za-z0-9]{12,40}$/, UPLOAD_WINDOW = 15 * 60_000, STALE_MS = 60 * 60_000, DOWNLOAD_WINDOW = 5 * 60_000, MATERIAL_MAX = 20_000;
 const files = (uid: string) => db().collection('teacherAttachments').doc(uid).collection('files');
 const pathOf = (uid: string, id: string) => `teacher-attachments/${uid}/${id}`;
 const model = () => process.env.ATTACH_AI_MODEL?.trim() || process.env.OPENAI_MODEL?.trim() || 'gpt-6-luna';
@@ -55,7 +58,7 @@ async function seeText(uid: string, doc: Doc, bytes: Uint8Array) {
   });
 }
 const AUDIO_TYPES: Record<string, string> = {m4a: 'audio/mp4', mp4: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav', webm: 'audio/webm', ogg: 'audio/ogg'};
-/** Recording → text. The original is never kept after this. */
+/** Recording → text. */
 async function hearText(uid: string, doc: Doc, bytes: Uint8Array) {
   const extension = extensionOf(doc.name), name = transcribeModel();
   return runMeteredAi(uid, 'attachment-audio', name, hash(bytes), async observe => {
@@ -71,13 +74,14 @@ async function hearText(uid: string, doc: Doc, bytes: Uint8Array) {
   });
 }
 
-/** Keeps the newest files and drops originals that were never read (a closed tab, a failed upload). */
+/** Closes uploads that never finished (a closed tab, a lost connection). Finished files are never touched. */
 async function prune(uid: string) {
-  const snap = await files(uid).orderBy('createdAt', 'desc').limit(KEEP_FILES + 20).get(), cutoff = new Date(Date.now() - STALE_MS).toISOString();
-  await Promise.all(snap.docs.map(async (doc, index) => {
+  const snap = await files(uid).where('status', '==', 'uploading').limit(50).get(), cutoff = new Date(Date.now() - STALE_MS).toISOString();
+  await Promise.all(snap.docs.map(async doc => {
     const data = doc.data() as Doc;
-    if (index >= KEEP_FILES - 1) {if (data.stored) await remove(data.path); await doc.ref.delete();}
-    else if (data.stored && data.createdAt < cutoff) {await remove(data.path); await doc.ref.update({stored: false, ...(data.status === 'uploading' ? {status: 'failed', error: '올리기가 끝나지 않았어요. 다시 올려 주세요.'} : {})});}
+    if (data.createdAt >= cutoff) return;
+    await remove(data.path);
+    await doc.ref.update({stored: false, status: 'failed', error: '올리기가 끝나지 않았어요. 다시 올려 주세요.'});
   }));
 }
 async function create(uid: string, input: Record<string, unknown>) {
@@ -101,15 +105,16 @@ async function read(uid: string, id: string) {
   let bytes: Uint8Array;
   try {const [data] = await bucket().file(doc.path).download(); bytes = new Uint8Array(data);}
   catch {throw new ApiError(409, '파일이 아직 다 올라가지 않았어요. 잠시 뒤 다시 눌러 주세요.', 'ATTACH_NOT_UPLOADED');}
-  const done = async (patch: Partial<Doc>) => {const next = {...doc, ...patch, stored: false, readAt: new Date().toISOString()}; await remove(doc.path); await ref.set(next); return view(ref.id, next);};
+  // The original is kept whether or not it could be read: the teacher can still download it.
+  const done = async (patch: Partial<Doc>) => {const next = {...doc, ...patch, readAt: new Date().toISOString()}; await ref.set(next); return view(ref.id, next);};
   try {
     if (bytes.length > sizeLimit(doc.kind)) throw new AttachError('파일이 너무 커요.');
     assertContent(doc.kind, bytes);
     const text = documentText(doc.kind, bytes) ?? tidy(doc.kind === 'audio' ? await hearText(uid, doc, bytes) : await seeText(uid, doc, bytes));
     if (!text) throw new AttachError('파일에서 읽을 글이 없었어요.');
-    return done({status: 'read', text: clip(text), error: null});
+    return done({status: 'read', text: clip(text), fullChars: text.length, error: null});
   } catch (error) {
-    // A busy or unreachable model keeps the original so the same file can be read again without a new upload.
+    // A busy or unreachable model leaves the file unread so the same upload can be read again.
     if (error instanceof AiError && error.status >= 500) throw error;
     return done({status: 'failed', text: '', error: error instanceof AttachError || error instanceof ApiError ? error.message : '파일을 읽지 못했어요. 다른 형식으로 저장해 다시 올려 주세요.'});
   }
@@ -133,12 +138,26 @@ export async function attachmentTexts(uid: string, ids: unknown, max = MAX_PER_M
 export async function attachmentPage(uid: string, id: unknown, offset: number, size: number) {
   const {ref, doc} = await owned(uid, typeof id === 'string' ? id : '');
   if (doc.status !== 'read') throw new ApiError(400, doc.error ?? '아직 읽지 못한 파일이에요.', 'ATTACH_NOT_READY');
-  const start = Math.min(Math.max(0, offset), doc.text.length), text = doc.text.slice(start, start + size);
-  return {attachment_id: ref.id, name: doc.name, total_chars: doc.text.length, offset: start, text, next_offset: start + text.length < doc.text.length ? start + text.length : null};
+  // The kept text stops at TEXT_MAX. Past that, a document the server reads by itself is read again from the original.
+  const longer = doc.stored && (doc.fullChars ?? 0) > doc.text.length, beyond = longer && offset + size >= doc.text.length;
+  let source = doc.text;
+  if (beyond) {
+    try {const [data] = await bucket().file(doc.path).download(); source = documentText(doc.kind, new Uint8Array(data)) ?? doc.text;} catch {source = doc.text;}
+  }
+  const total = beyond || !longer ? source.length : doc.fullChars!;
+  const start = Math.min(Math.max(0, offset), source.length), text = source.slice(start, start + size), end = start + text.length;
+  return {attachment_id: ref.id, name: doc.name, total_chars: total, offset: start, text, next_offset: end < total ? end : null, original_link: doc.stored ? attachmentLink(ref.id) : null};
 }
-export async function recentAttachments(uid: string, limit = 10) {
+/** A short-lived address of the original file, for its owner only. */
+async function downloadUrl(uid: string, id: string) {
+  const {doc} = await owned(uid, id);
+  if (!doc.stored || doc.status === 'uploading') throw new ApiError(410, '이 파일은 원본이 남아 있지 않아요. 다시 올려 주세요.', 'ATTACH_GONE');
+  const [url] = await bucket().file(doc.path).getSignedUrl({version: 'v4', action: 'read', expires: Date.now() + DOWNLOAD_WINDOW, responseDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(doc.name)}`});
+  return url;
+}
+export async function recentAttachments(uid: string, limit = 30) {
   const snap = await files(uid).orderBy('createdAt', 'desc').limit(limit).get();
-  return snap.docs.map(doc => view(doc.id, doc.data() as Doc)).filter(file => file.status === 'read').map(file => ({attachment_id: file.id, name: file.name, kind: file.kind, chars: file.chars, uploaded_at: file.createdAt}));
+  return snap.docs.map(doc => ({file: view(doc.id, doc.data() as Doc), stored: (doc.data() as Doc).stored})).filter(({file}) => file.status === 'read').map(({file, stored}) => ({attachment_id: file.id, name: file.name, kind: file.kind, chars: file.chars, uploaded_at: file.createdAt, original_link: stored ? attachmentLink(file.id) : null}));
 }
 
 /** Timetable cells or lesson log lines from attachments and/or typed text. Nothing is saved here. */
@@ -175,6 +194,7 @@ export async function handleAttachments(request: Request, segments: string[]) {
     if (method !== 'GET') assertOrigin(request);
     const ctx = await requireTeacher(request), available = attachmentsAvailable();
     if (head === 'status' && method === 'GET') return json({available});
+    if (method === 'GET' && head && action === 'download') return NextResponse.redirect(await downloadUrl(ctx.uid, head), {status: 302, headers: {'Cache-Control': 'private, no-store'}});
     if (!available) throw new ApiError(503, '파일 읽기를 지금은 쓸 수 없어요.', 'ATTACH_UNAVAILABLE');
     if (method === 'POST' && !head) return json(await create(ctx.uid, await body(request)), 201);
     if (method === 'POST' && head === 'draft' && !action) return json(await draft(ctx.uid, await body(request)));

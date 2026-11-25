@@ -2,7 +2,7 @@
 import {useCallback, useEffect, useState} from 'react';
 import {FileUp, LoaderCircle, Mic, Sparkles, Square, Trash2, X} from 'lucide-react';
 import {useHomeworkRecorder} from '@/components/homework-recorder';
-import {AttachButton, AttachChips, attachmentsStatus, draftFrom, removeAttachment, useAttachments} from '@/modules/attachments/client';
+import {AttachButton, AttachChips, attachmentsStatus, draftFrom, useAttachments} from '@/modules/attachments/client';
 import {ACCEPT_HINT, MAX_PER_MESSAGE, type LessonDraft} from '@/modules/attachments/policy';
 import {BerryPending, call, message, seoulToday, shortDate} from './api';
 import {addDays} from './shared';
@@ -34,7 +34,7 @@ function LessonComposer({date, onSaved, onClose}: {date: string; onSaved: () => 
     try {
       const day = (await call<{days: LessonDay[]}>(`lessons?from=${date}&to=${date}`)).days[0];
       await call(`lessons/${date}`, {body: {entries: [...(day?.entries ?? []), ...rows!.filter(row => row.subject.trim()).map(row => ({...row, subject: row.subject.trim()}))]}});
-      files.ready.forEach(file => void removeAttachment(file.id)); files.clear();
+      files.clear();
       await onSaved(); onClose();
     } catch (e) {setError(message(e));} finally {setBusy('');}
   }
