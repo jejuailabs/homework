@@ -183,6 +183,12 @@ export async function recentAttachments(uid: string, limit = 30) {
   return snap.docs.map(doc => ({file: view(doc.id, doc.data() as Doc), stored: (doc.data() as Doc).stored})).filter(({file}) => file.status === 'read').map(({file, stored}) => ({attachment_id: file.id, name: file.name, kind: file.kind, chars: file.chars, uploaded_at: file.createdAt, original_link: stored ? attachmentLink(file.id) : null}));
 }
 
+/** Every file the teacher has handed over (Berry chat, notebook, student notes, official documents), newest first. */
+async function library(uid: string) {
+  const snap = await files(uid).orderBy('createdAt', 'desc').limit(500).get();
+  return {files: snap.docs.map(doc => ({doc: doc.data() as Doc, id: doc.id})).filter(({doc}) => doc.stored && doc.status !== 'uploading').map(({doc, id}) => ({...view(id, doc), preview: doc.text === STORE_ONLY_NOTE ? '' : doc.text.slice(0, PREVIEW_CHARS)}))};
+}
+
 /** Timetable cells or lesson log lines from attachments and/or typed text. Nothing is saved here. */
 async function draft(uid: string, input: Record<string, unknown>) {
   const purpose = input.purpose === 'timetable' || input.purpose === 'lesson' ? input.purpose : null;
@@ -217,6 +223,7 @@ export async function handleAttachments(request: Request, segments: string[]) {
     if (method !== 'GET') assertOrigin(request);
     const ctx = await requireTeacher(request), available = attachmentsAvailable();
     if (head === 'status' && method === 'GET') return json({available});
+    if (!head && method === 'GET') return json(await library(ctx.uid));
     if (method === 'GET' && head && action === 'download') return NextResponse.redirect(await downloadUrl(ctx.uid, head), {status: 302, headers: {'Cache-Control': 'private, no-store'}});
     if (!available) throw new ApiError(503, '파일 읽기를 지금은 쓸 수 없어요.', 'ATTACH_UNAVAILABLE');
     if (method === 'POST' && !head) return json(await create(ctx.uid, await body(request)), 201);

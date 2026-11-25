@@ -104,6 +104,7 @@ await import('../../modules/lesson-review/run-tests.mjs');
 await import('../../modules/inquiry/run-tests.mjs');
 await import('../../modules/teacher-notebook/run-tests.mjs');
 await import('../../modules/student-log/run-tests.mjs');
+await import('../../modules/official-docs/run-tests.mjs');
 await import('../../modules/teacher-workspace/run-tests.mjs');
 await import('../../modules/sketchbook/run-tests.mjs');
 await import('../../modules/speech-studio/run-tests.mjs');
