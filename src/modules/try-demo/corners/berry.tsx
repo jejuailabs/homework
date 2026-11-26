@@ -1,119 +1,88 @@
 'use client';
 import {useEffect, useRef, useState} from 'react';
-import {Check, ClipboardCheck, FilePlus2, LoaderCircle, PlayCircle, Send, X} from 'lucide-react';
+import {Check, LoaderCircle, Send, ShieldCheck, X} from 'lucide-react';
 import {berryAssetUrl} from '@/lib/berry-brand';
-import {berryDemo, berryVideo, student, workImage, works} from '../data';
+import {tryBerryExamples, tryBerryGreeting} from '@/modules/try-live/config';
 
-// Left: a screen recording of the two requests. Right: the same two requests to press yourself.
-// Everything is a replay prepared for the demo class. No AI and no server is called from here.
-type Flow = 'give' | 'check';
-type Line = {who: 'me' | 'berry'; text: string[]; open?: Flow; done?: boolean};
-const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
+// The real Berry, talking as the tour's demo teacher through /api/try. Save buttons on cards really save into the
+// demo class, which is put back to its starting state every night.
+type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
+type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]};
+const TOOL_TITLES: Record<string, string> = {create_assignment: '숙제 내기', approve_artworks: '작품 승인', add_calendar_event: '일정 추가', create_exhibition: '전시실 열기', create_board: '참여보드 열기', add_notebook_entry: '교무수첩 기록', add_lesson_log: '수업 일지', add_work_item: '업무 항목', publish_review: '복습 배포', approve_posts: '글 승인', manage_homework: '숙제 관리', manage_exhibition: '전시실 관리'};
+const ACTIVITY: Record<string, string> = {list_assignments: '숙제를 살펴보는 중', get_review_queue: '검사할 숙제를 모으는 중', get_missing_submissions: '안 낸 학생을 확인하는 중', get_roster: '명단을 확인하는 중', list_classes: '학급을 확인하는 중', get_signals: '오늘 챙길 것을 모으는 중', open_menu: '메뉴를 여는 중', load_tools: '필요한 도구를 고르는 중'};
+const LABELS: Record<string, string> = {title: '제목', description: '설명', body: '내용', due_at: '마감', submission_type: '제출 방식', class_name: '학급', date: '날짜', start: '시작', end: '끝', students: '학생', note: '메모', theme: '테마', link_exhibition: '전시관 연동'};
+const show = (value: unknown) => Array.isArray(value) ? value.map(v => typeof v === 'object' && v ? Object.values(v).join(' ') : String(v)).join(', ') : typeof value === 'object' && value ? JSON.stringify(value) : String(value);
 
 export default function BerryCorner() {
-  const [lines, setLines] = useState<Line[]>([{who: 'berry', text: ['안녕하세요, 선생님! 저는 우리 반 일을 함께 챙기는 부담임 베리예요.', '아래 버튼을 눌러 말을 걸어 보세요.']}]);
-  const [thinking, setThinking] = useState(''), [modal, setModal] = useState<Flow | null>(null), [finished, setFinished] = useState<Flow[]>([]);
-  const busy = useRef(false), alive = useRef(true), end = useRef<HTMLDivElement>(null);
-  useEffect(() => () => {alive.current = false;}, []);
-  useEffect(() => {end.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});}, [lines, thinking]);
+  const [messages, setMessages] = useState<Message[]>([{role: 'assistant', text: tryBerryGreeting}]);
+  const [input, setInput] = useState(''), [busy, setBusy] = useState(false), [activity, setActivity] = useState(''), [error, setError] = useState('');
+  const conversation = useRef<string | undefined>(undefined), end = useRef<HTMLDivElement>(null);
+  useEffect(() => {end.current?.scrollIntoView({block: 'nearest', behavior: 'smooth'});}, [messages, activity]);
 
-  async function ask(flow: Flow) {
-    if (busy.current) return;
-    busy.current = true;
-    const script = berryDemo[flow];
-    setLines(old => [...old, {who: 'me', text: [script.ask]}]);
-    for (const step of script.thinking) {if (!alive.current) return; setThinking(step); await wait(850);}
-    if (!alive.current) return;
-    setThinking('');
-    setLines(old => [...old, {who: 'berry', text: script.answer, open: flow}]);
-    busy.current = false;
+  async function send(raw: string) {
+    const text = raw.trim(); if (!text || busy) return;
+    setBusy(true); setError(''); setInput(''); setActivity('우리 반 자료를 찾는 중');
+    setMessages(old => [...old, {role: 'user', text}, {role: 'assistant', text: '', cards: []}]);
+    const update = (fn: (last: Message) => Message) => setMessages(old => [...old.slice(0, -1), fn(old[old.length - 1])]);
+    try {
+      const response = await fetch('/api/try/berry/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, conversation_id: conversation.current})});
+      if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({}))).error || '베리가 답하지 못했어요.');
+      const reader = response.body.getReader(), decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        const events = buffer.split(/\r?\n\r?\n/); buffer = events.pop() ?? '';
+        for (const block of events) {
+          const event = /^event: ?(.*)$/m.exec(block)?.[1]?.trim(), payload = block.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
+          let data: Record<string, unknown> = {};
+          try {data = JSON.parse(payload || '{}');} catch {}
+          if (event === 'conversation' && typeof data.conversation_id === 'string') conversation.current = data.conversation_id;
+          if (event === 'status') setActivity(ACTIVITY[String(data.tool)] ?? '확인하는 중');
+          if (event === 'card') update(last => ({...last, cards: [...(last.cards ?? []), {inbox_id: String(data.inbox_id), tool: String(data.tool), preview: (data.preview ?? null) as Record<string, unknown> | null, state: 'open'}]}));
+          if (event === 'message') update(last => ({...last, text: String(data.text ?? '')}));
+          if (event === 'error') throw new Error(String(data.message ?? '답을 만들지 못했어요.'));
+        }
+      }
+    } catch (e) {
+      setError((e as Error).message);
+      setMessages(old => old[old.length - 1]?.role === 'assistant' && !old[old.length - 1].text && !old[old.length - 1].cards?.length ? old.slice(0, -1) : old);
+    } finally {setBusy(false); setActivity('');}
   }
-  function complete(flow: Flow) {
-    setModal(null); setFinished(old => [...old, flow]);
-    setLines(old => [...old.map(line => line.open === flow ? {...line, done: true} : line), {who: 'berry', text: [berryDemo[flow].done]}]);
+  async function decide(card: Card, action: 'approve' | 'reject') {
+    const patch = (p: Partial<Card>) => setMessages(old => old.map(m => m.cards?.some(c => c.inbox_id === card.inbox_id) ? {...m, cards: m.cards.map(c => c.inbox_id === card.inbox_id ? {...c, ...p} : c)} : m));
+    patch({state: 'saving'});
+    try {
+      const response = await fetch(`/api/try/berry/inbox/${card.inbox_id}/${action}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'});
+      if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || '처리하지 못했어요.');
+      patch({state: action === 'approve' ? 'saved' : 'rejected'});
+    } catch (e) {patch({state: 'error', note: (e as Error).message});}
   }
 
-  return <div className="try-berry try-berry-split">
-    <section className="try-card try-berry-video">
-      <p className="try-role"><PlayCircle size={14}/>체험 영상</p>
-      <h2>이렇게 말하면, 이렇게 해 줘요</h2>
-      <video src={berryVideo.src} poster={berryVideo.poster} autoPlay muted loop playsInline controls preload="metadata" aria-label="부담임 베리에게 숙제 내기와 숙제 검사를 맡기는 화면 영상"/>
-      <ol className="try-berry-steps"><li><b>“오늘 숙제 좀 내 줘”</b> → 초안을 열고 저장하면 숙제가 나가요.</li><li><b>“숙제 검사해 줘”</b> → 칭찬 한마디까지 준비된 검사 화면이 열려요.</li></ol>
-    </section>
-
-    <section className="try-card try-berry-live">
-      <div className="try-berry-head"><img src={berryAssetUrl('berry-duo-logo')} alt=""/><div><p className="try-role">직접 해 보기 · 부담임 베리</p><h2>말로 시키는 부담임 AI</h2></div></div>
+  return <div className="try-berry-live">
+    <section className="try-card">
+      <div className="try-berry-head"><img src={berryAssetUrl('berry-duo-logo')} alt=""/><div><p className="try-role">부담임 베리 · 실제 AI</p><h2>우리 반 자료로만 답하는 부담임 챗봇</h2></div></div>
+      <p className="try-berry-safe"><ShieldCheck size={16}/>체험 학급(가상 학생 10명)의 자료로 답해요. 저장하면 실제로 반영되고, 체험 학급은 매일 밤 처음으로 돌아가요.</p>
       <div className="try-chat" aria-live="polite">
-        {lines.map((line, i) => <div key={i} className={`try-bubble ${line.who}`}>
-          {line.text.map((t, n) => <p key={n}>{t}</p>)}
-          {line.open && (line.done
-            ? <p className="try-confirm-done"><Check size={14}/>{line.open === 'give' ? '숙제를 냈어요' : '검사를 마쳤어요'}</p>
-            : <button type="button" className="try-berry-action" onClick={() => setModal(line.open!)}>{line.open === 'give' ? <FilePlus2 size={17}/> : <ClipboardCheck size={17}/>}{berryDemo[line.open].button}</button>)}
-        </div>)}
-        {thinking && <div className="try-bubble berry try-thinking" role="status"><LoaderCircle className="spin" size={15}/>{thinking}…</div>}
+        {messages.map((m, i) => (m.text || m.cards?.length) ? <div key={i} className={`try-bubble ${m.role === 'user' ? 'me' : 'berry'}`}>
+          {m.text.split('\n').filter(Boolean).map((t, n) => <p key={n}>{t}</p>)}
+          {m.cards?.map(card => <div key={card.inbox_id} className="try-confirm"><strong>{TOOL_TITLES[card.tool] ?? '확인 카드'}</strong>
+            {card.preview && <dl>{Object.entries(card.preview).filter(([, v]) => v !== null && v !== '' && v !== undefined).slice(0, 8).map(([k, v]) => <div key={k}><dt>{LABELS[k] ?? k}</dt><dd>{show(v)}</dd></div>)}</dl>}
+            {card.state === 'saved' ? <p className="try-confirm-done"><Check size={14}/>저장했어요. 체험 학급에 반영됐어요.</p>
+              : card.state === 'rejected' ? <p className="try-note">취소했어요.</p>
+              : <div className="try-confirm-actions"><button type="button" className="button primary" disabled={card.state === 'saving'} onClick={() => void decide(card, 'approve')}>{card.state === 'saving' ? <LoaderCircle className="spin" size={15}/> : <Check size={15}/>}저장</button><button type="button" className="button soft" disabled={card.state === 'saving'} onClick={() => void decide(card, 'reject')}><X size={15}/>취소</button>{card.note && <span className="try-note">{card.note}</span>}</div>}
+          </div>)}
+        </div> : null)}
+        {activity && <div className="try-bubble berry try-thinking" role="status"><LoaderCircle className="spin" size={15}/>{activity}…</div>}
         <div ref={end}/>
       </div>
-      <div className="try-asks try-asks-big">
-        {(['give', 'check'] as Flow[]).map(flow => <button key={flow} type="button" className={finished.includes(flow) ? 'asked' : 'on'} disabled={!!thinking || !!modal} onClick={() => void ask(flow)}><Send size={15}/>{berryDemo[flow].ask}</button>)}
-      </div>
-      <p className="try-note">체험에서는 미리 받아 둔 답변을 보여 드려요. 실제 부담임 베리는 선생님 반의 숙제·전시·일정을 읽고 답하며, 학생 이름은 가명으로만 AI에 전달하고, 저장은 선생님이 눌러야 반영돼요.</p>
+      {error && <p className="try-error" role="alert">{error}</p>}
+      <div className="try-asks try-asks-big">{tryBerryExamples.map(q => <button key={q} type="button" disabled={busy} onClick={() => void send(q)}>{q}</button>)}</div>
+      <form className="try-berry-form" onSubmit={e => {e.preventDefault(); void send(input);}}>
+        <input value={input} maxLength={300} placeholder="아무거나 물어보세요" aria-label="베리에게 보낼 말" onChange={e => setInput(e.target.value)}/>
+        <button type="submit" className="button primary" disabled={busy || !input.trim()}>{busy ? <LoaderCircle className="spin" size={16}/> : <Send size={16}/>}보내기</button>
+      </form>
     </section>
-
-    {modal === 'give' && <GiveModal onClose={() => setModal(null)} onDone={() => complete('give')}/>}
-    {modal === 'check' && <CheckModal onClose={() => setModal(null)} onDone={() => complete('check')}/>}
   </div>;
-}
-
-function Modal({title, onClose, children}: {title: string; onClose: () => void; children: React.ReactNode}) {
-  const box = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    box.current?.querySelector<HTMLElement>('button, input, textarea')?.focus();
-    const onKey = (event: KeyboardEvent) => {if (event.key === 'Escape') onClose();};
-    document.addEventListener('keydown', onKey);
-    return () => {document.removeEventListener('keydown', onKey); previous?.focus();};
-  }, [onClose]);
-  return <div className="try-modal-backdrop" onClick={onClose}><section ref={box} className="try-modal" role="dialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}>
-    <header><h3>{title}</h3><button type="button" className="try-modal-x" aria-label="닫기" onClick={onClose}><X size={18}/></button></header>
-    {children}
-  </section></div>;
-}
-
-function useSaving(onDone: () => void) {
-  const [saving, setSaving] = useState(false);
-  const save = () => {if (saving) return; setSaving(true); window.setTimeout(onDone, 1100);};
-  return [saving, save] as const;
-}
-
-function GiveModal({onClose, onDone}: {onClose: () => void; onDone: () => void}) {
-  const draft = berryDemo.give.draft, [saving, save] = useSaving(onDone);
-  const [title, setTitle] = useState(draft.title), [body, setBody] = useState(draft.body);
-  return <Modal title="숙제 내기 · 베리가 만든 초안" onClose={onClose}>
-    <p className="try-modal-lead">베리가 채워 둔 내용이에요. 고칠 곳만 고치고 저장하세요.</p>
-    <label className="try-modal-field">제목<input value={title} maxLength={40} onChange={e => setTitle(e.target.value)}/></label>
-    <label className="try-modal-field">설명<textarea rows={3} value={body} maxLength={200} onChange={e => setBody(e.target.value)}/></label>
-    <dl className="try-modal-rows">
-      <div><dt>마감</dt><dd>{draft.due}</dd></div>
-      <div><dt>제출 방식</dt><dd>{draft.kind}</dd></div>
-      <div><dt>전시관 연동</dt><dd><span className="try-on">켜짐</span>{draft.room}</dd></div>
-      <div><dt>받는 학생</dt><dd>{draft.to}</dd></div>
-    </dl>
-    <footer><button type="button" className="button soft" onClick={onClose}>취소</button><button type="button" className="button primary" disabled={saving || !title.trim()} onClick={save}>{saving ? <><LoaderCircle className="spin" size={16}/>숙제 내는 중</> : <><Check size={16}/>저장하고 숙제 내기</>}</button></footer>
-    <p className="try-note">체험에서는 실제로 저장되지 않아요.</p>
-  </Modal>;
-}
-
-function CheckModal({onClose, onDone}: {onClose: () => void; onDone: () => void}) {
-  const items = berryDemo.check.items.map(item => {const work = works.find(w => w.id === item.workId)!; return {...item, title: work.title, name: student(work.studentId).name, thumb: workImage(work.id, true)};});
-  const [notes, setNotes] = useState(() => items.map(item => item.note)), [saving, save] = useSaving(onDone);
-  return <Modal title="숙제 검사 · 내가 가 보고 싶은 우주" onClose={onClose}>
-    <p className="try-modal-lead">베리가 칭찬 한마디를 미리 적어 두었어요. 고칠 곳만 고치고 한 번에 검사하세요.</p>
-    <div className="try-check-grid">{items.map((item, i) => <article key={item.workId}>
-      <img src={item.thumb} alt={item.title}/>
-      <div><strong>{item.name}</strong><small>{item.title}</small>
-        <input aria-label={`${item.name} 칭찬 한마디`} value={notes[i]} maxLength={60} onChange={e => setNotes(old => old.map((n, k) => k === i ? e.target.value : n))}/></div>
-    </article>)}</div>
-    <footer><button type="button" className="button soft" onClick={onClose}>취소</button><button type="button" className="button primary" disabled={saving} onClick={save}>{saving ? <><LoaderCircle className="spin" size={16}/>검사하는 중</> : <><Check size={16}/>모두 “참 잘했어요”로 검사</>}</button></footer>
-    <p className="try-note">체험에서는 실제로 저장되지 않아요.</p>
-  </Modal>;
 }

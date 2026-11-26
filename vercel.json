@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/upload-cleanup",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/try-demo-reset",
+      "schedule": "0 15 * * *"
     }
   ]
 }
