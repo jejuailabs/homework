@@ -34,7 +34,7 @@ export type DemoRoom = {id: string; title: string; description: string; theme: E
 export const rooms: DemoRoom[] = [
   {id: 'space', title: '내가 꿈꾸는 우주', description: '우주에 간다면 무엇을 만날지 그려 봤어요.', theme: 'saturn', hall: '우주 · 토성 고리 회랑', month: '10월'},
   {id: 'sea', title: '바닷속 친구들', description: '과학 시간에 배운 바다 생물을 상상해서 그렸어요.', theme: 'coral', hall: '바다 · 산호 전시관', month: '6월'},
-  {id: 'spring', title: '봄 그림전', description: '운동장에서 본 봄을 크레파스로 그렸어요.', theme: 'cozy', hall: '아늑한 전시관', month: '4월'},
+  {id: 'forest', title: '태권도 띠 발표 자료', description: '3학년 친구들이 직접 만든 발표 자료예요. 작품마다 아이 목소리 도슨트가 있어요.', theme: 'forest', hall: '초록 숲 전시관', month: '11월'},
 ];
 
 export type DemoWork = {id: string; roomId: string; title: string; studentId: string; date: string; story: string};
@@ -67,8 +67,6 @@ export const works: DemoWork[] = [
   work('space-08', '우주 고양이 치즈', 's9', '2026-10-19', '치즈가 우주에 가면 헬멧을 써야 해요.'),
 ];
 export const roomWorks = (roomId: string) => works.filter(w => w.roomId === roomId);
-/** Pictures of the Saturn room, outside and inside, shown before the 3D room loads. */
-export const spaceShots = {outside: demoAsset('shots/space-outside.webp'), inside: demoAsset('shots/space-inside.webp')};
 export const workImage = (id: string, thumb = false) => demoAsset(`art/${id}${thumb ? '-thumb' : ''}.webp`);
 
 export type DemoNote = {from: string; text: string};
@@ -100,43 +98,12 @@ export const cardSet = {title: '바다 동물 영어', cards: [
   {word: 'shark', meaning: '상어', emoji: '🦈'}, {word: 'crab', meaning: '게', emoji: '🦀'}, {word: 'fish', meaning: '물고기', emoji: '🐟'},
 ] as DemoCard[]};
 
-/** Berry corner: two recorded requests. The real Berry reads the teacher's own class; nothing here calls an AI. */
-export const berryDemo = {
-  give: {
-    ask: '오늘 숙제 좀 내 줘',
-    thinking: ['이번 주 수업 내용을 살펴보는 중', '지난 숙제와 겹치지 않게 고르는 중', '숙제 초안을 만드는 중'],
-    answer: ['이번 주 미술 시간에 배운 "상상해서 그리기"로 숙제를 준비했어요.', '내용을 확인하고 내 주세요.'],
-    button: '숙제 초안 열기',
-    draft: {title: '내가 가 보고 싶은 우주', body: '우주에 간다면 무엇을 만나고 싶나요? 상상해서 그리고, 한 줄로 소개해 주세요.', due: '금요일 오후 6시까지', kind: '사진 (그림을 찍어서 올리기)', room: '우주 전시실 · 내가 꿈꾸는 우주', to: '3학년 2반 10명'},
-    done: '숙제를 냈어요. 학생 10명 화면에 바로 보여요. 검사하면 우주 전시실에 저절로 걸려요.',
-  },
-  check: {
-    ask: '숙제 검사해 줘',
-    thinking: ['제출한 숙제를 모으는 중', '한 명씩 그림과 소개 글을 읽는 중', '칭찬 한마디를 준비하는 중'],
-    answer: ['"내가 가 보고 싶은 우주" 제출 6건 중 검사 안 한 숙제가 6건이에요.', '한 명씩 칭찬 한마디도 미리 적어 두었어요.'],
-    button: '검사 화면 열기',
-    items: [
-      {workId: 'space-01', note: '로켓 불꽃 색이 정말 멋져요!'},
-      {workId: 'space-02', note: '토성 고리 미끄럼틀, 상상력이 최고예요.'},
-      {workId: 'space-03', note: '헬멧 속 웃는 얼굴이 보기 좋아요.'},
-      {workId: 'space-04', note: '외계인과 친구가 되는 마음이 따뜻해요.'},
-      {workId: 'space-05', note: '국자자리, 이름을 정말 잘 지었어요.'},
-      {workId: 'space-08', note: '치즈 헬멧까지 꼼꼼하게 그렸네요.'},
-    ],
-    done: '6건 모두 "참 잘했어요"로 검사했어요. 작품은 우주 전시실에 저절로 걸렸어요.',
-  },
-};
-/** Screen recording of the same two requests, played on the left of the corner. */
-export const berryVideo = {src: demoAsset('video/berry-demo.mp4'), poster: demoAsset('video/berry-demo.webp')};
-
-export type CornerId = 'gallery' | 'flow' | 'bomal' | 'cards' | 'berry' | 'artbook' | 'start';
-export const corners: {id: CornerId; label: string; lead: string}[] = [
-  {id: 'gallery', label: '전시관', lead: '아이들 작품이 걸리는 3D 전시관'},
-  {id: 'flow', label: '숙제 → 전시', lead: '검사한 숙제가 그대로 전시실에 걸려요'},
-  {id: 'bomal', label: '보말과 캐릭터', lead: '칭찬 보말로 꾸미는 나의 작은 세상'},
-  {id: 'cards', label: '카드놀이', lead: '단어 카드 짝 맞추기'},
-  {id: 'berry', label: '부담임 베리', lead: '말로 시키는 우리 반 부담임 AI'},
-  {id: 'artbook', label: '작품집', lead: '한 해 작품을 한 권의 PDF로'},
-  {id: 'start', label: '시작하기', lead: '우리 반으로 시작하기'},
+export type CornerId = 'gallery' | 'docent' | 'berry' | 'review';
+/** The four things the tour lets you try. Each is a real screen, not a slideshow. */
+export const corners: {id: CornerId; label: string; lead: string; text: string}[] = [
+  {id: 'gallery', label: '3D 전시실', lead: '아이들 작품이 걸린 전시관을 걸어 들어가요', text: '우주·바다·숲 전시관 중 하나를 골라 입구부터 걸어 들어가요.'},
+  {id: 'docent', label: '아이 목소리 도슨트', lead: '작품을 만든 아이가 직접 설명해요', text: '3학년 친구의 실제 목소리로 작품 설명을 듣고, 궁금한 걸 물어봐요.'},
+  {id: 'berry', label: '부담임 베리', lead: '우리 반 자료로만 답하는 부담임 챗봇', text: '숙제 내기·검사를 말로 시키고, 무엇이든 물어봐요.'},
+  {id: 'review', label: '맞춤 평어', lead: '성장 기록으로 쓰는 평어 초안', text: '숙제·작품·말씀·기록을 모아 그 아이만의 평어를 만들어요.'},
 ];
 export const isCorner = (value: unknown): value is CornerId => corners.some(c => c.id === value);

@@ -11,7 +11,7 @@ import {fileURLToPath} from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const releasePath = resolve(root, 'src/data/try-demo-storage.json');
 const PREFIX = 'try-demo/v1';
-const TYPES = {webp: 'image/webp', pdf: 'application/pdf', mp4: 'video/mp4'};
+const TYPES = {webp: 'image/webp', pdf: 'application/pdf', mp4: 'video/mp4', m4a: 'audio/mp4'};
 
 const args = process.argv.slice(2);
 const option = name => {const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined;};
@@ -20,10 +20,10 @@ if (!source) throw new Error('Pass --source <assets dir>.');
 
 const files = [];
 for (const folder of only ? [only] : ['art', 'artbook']) {
-  if (!['art', 'artbook', 'shots', 'video'].includes(folder)) throw new Error(`Unknown folder: ${folder}`);
+  if (!['art', 'artbook', 'shots', 'video', 'docent'].includes(folder)) throw new Error(`Unknown folder: ${folder}`);
   for (const name of (await readdir(resolve(source, folder))).sort()) {
     const type = TYPES[name.split('.').pop()];
-    if (!type || !/^[a-z0-9-]+\.(webp|pdf|mp4)$/.test(name)) throw new Error(`Unexpected file: ${folder}/${name}`);
+    if (!type || !/^[a-z0-9-]+\.(webp|pdf|mp4|m4a)$/.test(name)) throw new Error(`Unexpected file: ${folder}/${name}`);
     files.push({remote: `${PREFIX}/${folder}/${name}`, type, bytes: await readFile(resolve(source, folder, name))});
   }
 }

@@ -16,5 +16,5 @@ export const metadata: Metadata = {
 export default async function TryPage({searchParams}: {searchParams: Promise<{go?: string | string[]}>}) {
   if (process.env.TRY_DEMO_DISABLED === 'true' || !demoAssetsReady) notFound();
   const {go} = await searchParams, corner = Array.isArray(go) ? go[0] : go;
-  return <TryShell initial={isCorner(corner) ? corner : 'gallery'}/>;
+  return <TryShell initial={isCorner(corner) ? corner : null}/>;
 }
