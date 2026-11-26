@@ -1,6 +1,5 @@
 import 'server-only';
-import {getAuth} from 'firebase-admin/auth';
-import {db} from '@/lib/server/admin';
+import {auth as adminAuth, db} from '@/lib/server/admin';
 import {students, works, rooms} from '@/modules/try-demo/data';
 import {docentItems} from '@/modules/try-demo/docent';
 import {tryDemoClassId, tryDemoUid} from './server-config';
@@ -20,7 +19,7 @@ const kst = (now: number, daysFromToday: number, hour: number, minute = 0) => {
 const nextFriday = (now: number) => {const weekday = new Date(now + 9 * 3600_000).getUTCDay(); return (5 - weekday + 7) % 7 || 7;};
 
 async function ensureTeacher() {
-  const uid = tryDemoUid(), auth = getAuth();
+  const uid = tryDemoUid(), auth = adminAuth();
   try {await auth.getUser(uid);}
   catch {await auth.createUser({uid, displayName: '체험 선생님', email: 'try-demo@ourclass.co.kr', emailVerified: true, disabled: false});}
   await db().doc(`users/${uid}`).set({uid, role: 'teacher', displayName: '체험 선생님', email: 'try-demo@ourclass.co.kr', disabled: false, tryDemo: true}, {merge: true});
