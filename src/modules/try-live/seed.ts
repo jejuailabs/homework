@@ -56,7 +56,10 @@ export async function resetTryDemo(now = Date.now()) {
     batch.set(db().doc(`assignments/${hw.id}`), {classId, className: '햇살초 3학년 2반 (체험)', ownerUid: uid, title: hw.title, description: hw.description, submissionType: hw.submissionType, dueAt: hw.dueAt, targetStudentIds: students.map(s => s.id), targetCount: students.length, createdAt: kst(now, -4, 9), materials: [], submittedCount: hw.from.length, reviewedCount: reviewed, visibility: 'visible', visibilityVersion: 1, tryDemo: true});
     hw.from.forEach((studentId, i) => {
       const s = students.find(x => x.id === studentId)!;
-      batch.set(db().doc(`submissions/${hw.id}_${studentId}`), {id: `${hw.id}_${studentId}`, assignmentId: hw.id, classId, studentId, studentName: s.name, text: hw.submissionType === 'text' ? '책 속 주인공이 친구를 도와주는 장면이 가장 기억에 남았어요.' : '', title: hw.title, uploads: [], attemptId: 'a1', attemptNumber: 1, status: hw.status, feedback: hw.status === 'done' ? '발표 자료를 정성껏 만들었어요.' : '', submittedAt: kst(now, -1, 16, 10 + i * 7), reviewedAt: hw.status === 'done' ? kst(now, -2, 15) : null, fingerprint: `${hw.id}-${studentId}`, rewardGranted: hw.status === 'done', tryDemo: true});
+      const submission = {id: `${hw.id}_${studentId}`, assignmentId: hw.id, classId, studentId, studentName: s.name, text: hw.submissionType === 'text' ? '책 속 주인공이 친구를 도와주는 장면이 가장 기억에 남았어요.' : '', title: hw.title, uploads: [], attemptId: 'a1', attemptNumber: 1, status: hw.status, feedback: hw.status === 'done' ? '발표 자료를 정성껏 만들었어요.' : '', submittedAt: kst(now, -1, 16, 10 + i * 7), reviewedAt: hw.status === 'done' ? kst(now, -2, 15) : null, fingerprint: `${hw.id}-${studentId}`, rewardGranted: hw.status === 'done', tryDemo: true};
+      // Real submissions keep each attempt too; reviewing updates both, so the tour's copies need it as well.
+      batch.set(db().doc(`submissions/${hw.id}_${studentId}`), submission);
+      batch.set(db().doc(`submissions/${hw.id}_${studentId}/attempts/a1`), submission);
     });
   }
 
