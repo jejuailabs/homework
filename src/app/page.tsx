@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   robots: {index: true, follow: true},
 };
 
-export default function LoginPage() {
-  return <><LoginScreen/><LandingSections/></>;
+// ?start=teacher (the tour's "바로 내 교실 써 보기") opens on the teacher tab, one Google button away from a classroom.
+export default async function LoginPage({searchParams}: {searchParams: Promise<{start?: string | string[]}>}) {
+  const {start} = await searchParams;
+  return <><LoginScreen defaultTab={start === 'teacher' ? 'teacher' : 'student'}/><LandingSections/></>;
 }
