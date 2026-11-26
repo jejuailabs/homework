@@ -18,21 +18,28 @@ const kst = (now: number, daysFromToday: number, hour: number, minute = 0) => {
 };
 const nextFriday = (now: number) => {const weekday = new Date(now + 9 * 3600_000).getUTCDay(); return (5 - weekday + 7) % 7 || 7;};
 
+/** The demo teacher is a real Google-linked teacher account kept only for the tour (TRY_DEMO_TEACHER_UID). It must exist. */
 async function ensureTeacher() {
-  const uid = tryDemoUid(), auth = adminAuth();
-  try {await auth.getUser(uid);}
-  catch {await auth.createUser({uid, displayName: '체험 선생님', email: 'try-demo@ourclass.co.kr', emailVerified: true, disabled: false});}
-  await db().doc(`users/${uid}`).set({uid, role: 'teacher', displayName: '체험 선생님', email: 'try-demo@ourclass.co.kr', disabled: false, tryDemo: true}, {merge: true});
+  const uid = tryDemoUid();
+  const user = await adminAuth().getUser(uid);
+  if (!user.providerData.some(p => p.providerId === 'google.com')) throw new Error('The tour teacher must be a Google-linked teacher account.');
+  await db().doc(`users/${uid}`).set({role: 'teacher', tryDemo: true}, {merge: true});
   return uid;
 }
 
+/** Everything this teacher owns is tour material: other classes (and their submissions) go too. */
 async function clearOwned(uid: string, classId: string) {
+  const classes = await db().collection('classes').where('ownerUid', '==', uid).get();
+  const classIds = [...new Set([classId, ...classes.docs.map(doc => doc.id)])];
   for (const name of OWNED) {
     const docs = await db().collection(name).where('ownerUid', '==', uid).get();
     for (const doc of docs.docs) await db().recursiveDelete(doc.ref);
   }
-  const subs = await db().collection('submissions').where('classId', '==', classId).get();
-  for (const doc of subs.docs) await db().recursiveDelete(doc.ref);
+  for (const id of classIds) {
+    const subs = await db().collection('submissions').where('classId', '==', id).get();
+    for (const doc of subs.docs) await db().recursiveDelete(doc.ref);
+  }
+  for (const doc of classes.docs) if (doc.id !== classId) await db().recursiveDelete(doc.ref);
   for (const path of [`teacherWorkspaces/${uid}`, `teacherNotebooks/${uid}`]) await db().recursiveDelete(db().doc(path));
 }
 
