@@ -3,11 +3,12 @@ import {useEffect, useRef, useState} from 'react';
 import {Check, LoaderCircle, Send, ShieldCheck, X} from 'lucide-react';
 import {berryAssetUrl} from '@/lib/berry-brand';
 import {tryBerryExamples, tryBerryGreeting} from '@/modules/try-live/config';
+import {BerryFormCard, readBerryForm, type BerryForm} from '@/modules/berry-panel/form-card';
 
 // The real Berry, talking as the tour's demo teacher through /api/try. Save buttons on cards really save into the
 // demo class, which is put back to its starting state every night.
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
-type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]};
+type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]; form?: BerryForm; formSent?: boolean};
 const TOOL_TITLES: Record<string, string> = {create_assignment: '숙제 내기', approve_artworks: '작품 승인', add_calendar_event: '일정 추가', create_exhibition: '전시실 열기', create_board: '참여보드 열기', add_notebook_entry: '교무수첩 기록', add_lesson_log: '수업 일지', add_work_item: '업무 항목', publish_review: '복습 배포', approve_posts: '글 승인', manage_homework: '숙제 관리', manage_exhibition: '전시실 관리'};
 const ACTIVITY: Record<string, string> = {list_assignments: '숙제를 살펴보는 중', get_review_queue: '검사할 숙제를 모으는 중', get_missing_submissions: '안 낸 학생을 확인하는 중', get_roster: '명단을 확인하는 중', list_classes: '학급을 확인하는 중', get_signals: '오늘 챙길 것을 모으는 중', open_menu: '메뉴를 여는 중', load_tools: '필요한 도구를 고르는 중'};
 const LABELS: Record<string, string> = {title: '제목', description: '설명', body: '내용', due_at: '마감', submission_type: '제출 방식', class_name: '학급', date: '날짜', start: '시작', end: '끝', students: '학생', note: '메모', theme: '테마', link_exhibition: '전시관 연동'};
@@ -42,6 +43,7 @@ export default function BerryCorner() {
           try {data = JSON.parse(payload || '{}');} catch {}
           if (event === 'conversation' && typeof data.conversation_id === 'string') conversation.current = data.conversation_id;
           if (event === 'status') setActivity(ACTIVITY[String(data.tool)] ?? '확인하는 중');
+          if (event === 'form') {const form = readBerryForm(data); if (form) update(last => ({...last, form}));}
           if (event === 'card') update(last => ({...last, cards: [...(last.cards ?? []), {inbox_id: String(data.inbox_id), tool: String(data.tool), preview: (data.preview ?? null) as Record<string, unknown> | null, state: 'open'}]}));
           if (event === 'message') update(last => ({...last, text: String(data.text ?? '')}));
           if (event === 'error') throw new Error(String(data.message ?? '답을 만들지 못했어요.'));
@@ -67,8 +69,9 @@ export default function BerryCorner() {
       <div className="try-berry-head"><img src={berryAssetUrl('berry-duo-logo')} alt=""/><div><p className="try-role">부담임 베리 · 실제 AI</p><h2>우리 반 자료로만 답하는 부담임 챗봇</h2></div></div>
       <p className="try-berry-safe"><ShieldCheck size={16}/>체험 학급(가상 학생 10명)의 자료로 답해요. 저장하면 실제로 반영되고, 체험 학급은 매일 밤 처음으로 돌아가요.</p>
       <div className="try-chat" aria-live="polite">
-        {messages.map((m, i) => (m.text || m.cards?.length) ? <div key={i} className={`try-bubble ${m.role === 'user' ? 'me' : 'berry'}`}>
+        {messages.map((m, i) => (m.text || m.cards?.length || m.form) ? <div key={i} className={`try-bubble ${m.role === 'user' ? 'me' : 'berry'}`}>
           {plain(m.text).split('\n').filter(Boolean).map((t, n) => <p key={n}>{t}</p>)}
+          {m.form && <BerryFormCard form={m.form} disabled={busy} sent={m.formSent} onSubmit={answer => {setMessages(old => old.map((x, k) => k === i ? {...x, formSent: true} : x)); void send(answer);}}/>}
           {m.cards?.map(card => <div key={card.inbox_id} className="try-confirm"><strong>{TOOL_TITLES[card.tool] ?? '확인 카드'}</strong>
             {card.preview && <dl>{Object.entries(card.preview).filter(([, v]) => v !== null && v !== '' && v !== undefined).slice(0, 8).map(([k, v]) => <div key={k}><dt>{LABELS[k] ?? k}</dt><dd>{show(v)}</dd></div>)}</dl>}
             {card.state === 'saved' ? <p className="try-confirm-done"><Check size={14}/>저장했어요. 체험 학급에 반영됐어요.</p>
