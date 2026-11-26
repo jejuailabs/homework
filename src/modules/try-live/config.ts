@@ -1,6 +1,7 @@
 // Live login-free tour: who the demo teacher is and how much one visitor may ask. Pure values, safe to import anywhere.
 
-export const TRY_DEMO_UID_DEFAULT = 'try-demo-teacher';
+/** The tour's teacher: a Google-linked account kept only for the tour (its data is reset every night). */
+export const TRY_DEMO_UID_DEFAULT = 'P51iV4m9VCY00405ohU9nttLPNl2';
 export const TRY_DEMO_CLASS_DEFAULT = 'try-demo-class';
 
 /** Per-visitor (by IP hash) and whole-site caps. The AI cost of one Berry turn or docent answer stays inside these. */
