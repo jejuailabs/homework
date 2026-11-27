@@ -71,6 +71,16 @@ function Banners({links}: {links: {label: string; href: string}[]}) {
   </a>)}</div>;
 }
 const clock = (iso: string) => {const d = new Date(Date.parse(iso) + 9 * 3_600_000); return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;};
+/** Server previews carry UTC instants (…T06:00:00.000Z); teachers read them as Seoul time. All-day ends are exclusive midnights, so they show the day before. */
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+const previewValue = (key: string, value: unknown, allDay: boolean) => {
+  if (key === 'changes' && Array.isArray(value)) return value.join('\n');
+  if ((key === 'start' || key === 'end' || key === 'due_at') && typeof value === 'string' && INSTANT.test(value)) {
+    if (!allDay) return clock(value);
+    return clock(new Date(Date.parse(value) - (key === 'end' ? 1 : 0)).toISOString()).split(' ')[0];
+  }
+  return shown(value);
+};
 
 function Preview({card, onDecide}: {card: Card; onDecide: (card: Card, decision: 'approve' | 'reject') => void}) {
   const [armed, setArmed] = useState(false);
@@ -81,7 +91,7 @@ function Preview({card, onDecide}: {card: Card; onDecide: (card: Card, decision:
   return <div className={`bp-card is-${card.state}${danger ? ' is-danger' : ''}`}>
     <strong>{TOOL_LABELS[card.tool] ?? card.tool}</strong>
     {danger && <p className="bp-danger"><TriangleAlert size={14}/>{danger}</p>}
-    <dl>{rows.map(([key, value]) => <div key={key}><dt>{PREVIEW_LABELS[key]}</dt><dd>{key === 'changes' && Array.isArray(value) ? value.join('\n') : shown(value)}</dd></div>)}</dl>
+    <dl>{rows.map(([key, value]) => <div key={key}><dt>{PREVIEW_LABELS[key]}</dt><dd>{previewValue(key, value, card.preview?.all_day === true)}</dd></div>)}</dl>
     {card.state === 'open' || card.state === 'saving' ? <div className="bp-card-actions">
       <button type="button" className="button soft" disabled={card.state === 'saving'} onClick={() => {setArmed(false); onDecide(card, 'reject');}}>취소</button>
       <button type="button" className={`button primary${armed ? ' is-armed' : ''}`} disabled={card.state === 'saving'} onClick={approve}>{card.state === 'saving' ? <LoaderCircle className="spin" size={14}/> : danger ? <TriangleAlert size={14}/> : <Check size={14}/>}{armed ? '한 번 더 누르면 실행' : danger ? '실행' : card.tool === 'add_notebook_entry' ? '기록' : '저장'}</button>
