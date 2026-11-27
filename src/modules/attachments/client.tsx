@@ -79,7 +79,7 @@ export function AttachButton({onFiles, disabled, className = 'att-button', label
   const input = useRef<HTMLInputElement>(null);
   const change = (event: ChangeEvent<HTMLInputElement>) => {const files = event.target.files; if (files?.length) onFiles(files); event.target.value = '';};
   return <>
-    <input ref={input} type="file" accept={ACCEPT} multiple={multiple} hidden onChange={change}/>
+    <input ref={input} type="file" accept={ACCEPT || undefined} multiple={multiple} hidden onChange={change}/>
     <button type="button" className={className} aria-label={label} title={label} disabled={disabled} onClick={() => input.current?.click()}>{children ?? <Paperclip size={17}/>}</button>
   </>;
 }

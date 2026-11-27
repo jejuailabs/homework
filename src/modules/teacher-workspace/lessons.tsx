@@ -2,12 +2,13 @@
 import {useCallback, useEffect, useState} from 'react';
 import {FileUp, LoaderCircle, Mic, Sparkles, Square, Trash2, X} from 'lucide-react';
 import {useHomeworkRecorder} from '@/components/homework-recorder';
-import {AttachButton, AttachChips, attachmentsStatus, draftFrom, removeAttachment, useAttachments} from '@/modules/attachments/client';
+import {AttachButton, AttachChips, attachmentsStatus, draftFrom, useAttachments} from '@/modules/attachments/client';
 import {ACCEPT_HINT, MAX_PER_MESSAGE, type LessonDraft} from '@/modules/attachments/policy';
 import {BerryPending, call, message, seoulToday, shortDate} from './api';
 import {addDays} from './shared';
 import {LESSON_PREFILL} from './timetable';
 import type {LessonDay} from './types';
+import VoiceButton from '@/modules/attachments/voice-button';
 
 type Row = LessonDraft['entries'][number];
 const clockOf = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
@@ -34,7 +35,7 @@ function LessonComposer({date, onSaved, onClose}: {date: string; onSaved: () => 
     try {
       const day = (await call<{days: LessonDay[]}>(`lessons?from=${date}&to=${date}`)).days[0];
       await call(`lessons/${date}`, {body: {entries: [...(day?.entries ?? []), ...rows!.filter(row => row.subject.trim()).map(row => ({...row, subject: row.subject.trim()}))]}});
-      files.ready.forEach(file => void removeAttachment(file.id)); files.clear();
+      files.clear();
       await onSaved(); onClose();
     } catch (e) {setError(message(e));} finally {setBusy('');}
   }
@@ -43,7 +44,7 @@ function LessonComposer({date, onSaved, onClose}: {date: string; onSaved: () => 
     <div className="wsp-row"><h3><Sparkles size={16}/>{shortDate(date)} 일지 정리해서 쓰기</h3><button type="button" className="icon-button" onClick={onClose} aria-label="닫기"><X size={18}/></button></div>
     {!rows ? <>
       <p className="wsp-muted">하루 수업을 편하게 적거나, 판서 사진·학습지·지도안 파일을 붙이거나, 짧게 말로 남겨 주세요. 교시·과목·단원·메모 줄로 정리해 드려요.</p>
-      <textarea value={text} rows={5} maxLength={8000} placeholder={'예) 1교시 국어는 비유 표현 찾기 했고 모둠 발표까지 마침. 3교시 수학 분수의 나눗셈 2차시, 익힘책은 숙제로…'} aria-label="수업 내용" onChange={e => setText(e.target.value)}/>
+      <textarea value={text} rows={5} maxLength={8000} placeholder={'예) 1교시 국어는 비유 표현 찾기 했고 모둠 발표까지 마침. 3교시 수학 분수의 나눗셈 2차시, 익힘책은 숙제로…'} aria-label="수업 내용" onChange={e => setText(e.target.value)}/><VoiceButton value={text} onChange={setText}/>
       <AttachChips items={files.items} onRemove={files.remove}/>
       {files.notice && <p className="wsp-muted">{files.notice}</p>}
       {recorder.failed && <p className="wsp-error" role="alert">마이크를 쓸 수 없어요. 브라우저의 마이크 권한을 확인해 주세요.</p>}
@@ -92,6 +93,7 @@ export function LessonsTab() {
   return <section className="wsp-panel">
     <div className="wsp-card wsp-lesson-input">
       <input type="date" value={date} max={addDays(today, 7)} onChange={e => setDate(e.target.value)} aria-label="날짜"/>
+      <VoiceButton value={line} onChange={value => setLine(value.slice(0, 640))}/>
       <input value={line} maxLength={640} placeholder="3교시 국어 [2단원] 비유 표현 찾기" aria-label="수업 일지 한 줄" autoFocus={!!line} onChange={e => setLine(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.nativeEvent.isComposing && line.trim()) void add();}}/>
       <button type="button" className="button primary" disabled={busy || !line.trim()} onClick={() => void add()}>{busy ? <LoaderCircle className="spin" size={16}/> : '기록'}</button>
     </div>

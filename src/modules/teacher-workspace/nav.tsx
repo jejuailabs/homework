@@ -1,7 +1,7 @@
 'use client';
 import {useEffect, useState} from 'react';
 import Link from 'next/link';
-import {BookUser, CalendarDays, ClipboardList, FolderTree, LayoutDashboard, Lock, NotebookPen, Table} from 'lucide-react';
+import {BookUser, CalendarDays, ClipboardList, FileStack, FolderTree, LayoutDashboard, Lock, NotebookPen, Paperclip, Table} from 'lucide-react';
 import './styles.css';
 
 /** Sections inside the workspace page. They switch in place and are addressed by #hash from other pages. */
@@ -13,7 +13,7 @@ export const WORKSPACE_TABS = [
   {id: 'folders', label: '업무 폴더', icon: FolderTree},
 ] as const;
 export type WorkspaceTab = typeof WORKSPACE_TABS[number]['id'];
-export type WorkspaceSection = WorkspaceTab | 'notebook' | 'records';
+export type WorkspaceSection = WorkspaceTab | 'notebook' | 'records' | 'documents' | 'files';
 const HOME = '/teacher/me/workspace';
 
 let notebookKnown: boolean | undefined;
@@ -33,5 +33,7 @@ export default function WorkspaceNav({current, onPick}: {current: WorkspaceSecti
       : <Link key={id} href={id === 'home' ? HOME : `${HOME}#${id}`}><Icon size={16}/>{label}</Link>)}
     {notebook && <Link href="/teacher/me/notebook" aria-current={current === 'notebook' ? 'page' : undefined} className={current === 'notebook' ? 'is-active' : ''}><BookUser size={16}/>교무수첩<Lock size={12} aria-label="비밀번호로 잠김"/></Link>}
     <Link href="/teacher/me/records" aria-current={current === 'records' ? 'page' : undefined} className={current === 'records' ? 'is-active' : ''}><ClipboardList size={16}/>학생별 기록</Link>
+    <Link href="/teacher/me/documents" aria-current={current === 'documents' ? 'page' : undefined} className={current === 'documents' ? 'is-active' : ''}><FileStack size={16}/>공문처리</Link>
+    <Link href="/teacher/me/files" aria-current={current === 'files' ? 'page' : undefined} className={current === 'files' ? 'is-active' : ''}><Paperclip size={16}/>자료함</Link>
   </nav>;
 }

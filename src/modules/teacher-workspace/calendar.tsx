@@ -4,6 +4,7 @@ import {ChevronLeft, ChevronRight, LoaderCircle, Pencil, Plus, Trash2, Upload, X
 import {BerryPending, call, message, seoulTime, seoulToday, shortDate} from './api';
 import {addDays, weekDates, weekKeyOf} from './shared';
 import {CALENDAR_KINDS, CALENDAR_KIND_LABELS, type CalendarEvent, type CalendarKind} from './types';
+import VoiceButton from '@/modules/attachments/voice-button';
 
 type Draft = {id: string | null; title: string; kind: CalendarKind; allDay: boolean; startDate: string; startTime: string; endDate: string; endTime: string};
 const draftFor = (date: string): Draft => ({id: null, title: '', kind: 'school', allDay: true, startDate: date, startTime: '09:00', endDate: date, endTime: '10:00'});
@@ -102,7 +103,7 @@ export function CalendarTab() {
     {draft && <div className="wsp-dialog" role="dialog" aria-modal="true" aria-label="일정"><div className="wsp-dialog-card">
       <div className="wsp-row"><h3>{draft.id ? '일정 고치기' : '새 일정'}</h3><button type="button" className="icon-button" onClick={() => setDraft(null)} aria-label="닫기"><X size={18}/></button></div>
       <div className="wsp-form">
-        <label>제목<input value={draft.title} maxLength={120} onChange={e => setDraft({...draft, title: e.target.value})} autoFocus/></label>
+        <label>제목<input value={draft.title} maxLength={120} onChange={e => setDraft({...draft, title: e.target.value})} autoFocus/></label><VoiceButton value={draft.title} onChange={title => setDraft({...draft, title: title.slice(0, 120)})}/>
         <label>종류<select value={draft.kind} onChange={e => setDraft({...draft, kind: e.target.value as CalendarKind})}>{CALENDAR_KINDS.map(kind => <option key={kind} value={kind}>{CALENDAR_KIND_LABELS[kind]}</option>)}</select></label>
         <label className="wsp-check"><input type="checkbox" checked={draft.allDay} onChange={e => setDraft({...draft, allDay: e.target.checked})}/>하루 종일</label>
         <div className="wsp-pair"><label>시작<input type="date" value={draft.startDate} onChange={e => setDraft({...draft, startDate: e.target.value, endDate: e.target.value > draft.endDate ? e.target.value : draft.endDate})}/></label>{!draft.allDay && <label>시각<input type="time" value={draft.startTime} onChange={e => setDraft({...draft, startTime: e.target.value})}/></label>}</div>

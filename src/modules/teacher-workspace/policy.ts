@@ -8,8 +8,23 @@ export const MAX_CHECKLIST = 50, MAX_FOLDER_DEPTH = 4, MAX_FOLDERS = 300, MAX_ST
 const DAY = 86_400_000, SEOUL_OFFSET = 9 * 3_600_000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/, ID = /^[A-Za-z0-9_-]{1,200}$/;
 
-/** Students and the kill switch: the workspace is for teachers only and can be stopped without deleting data. */
-export const workspaceAllowed = (role: string, killSwitch?: string) => killSwitch !== 'true' && role !== 'student';
+export type WorkspaceViewer = {uid: string; email?: string | null; role: string; viewedBy?: string};
+export type WorkspaceGate = {killSwitch?: string; mode?: string; allow?: string};
+/**
+ * Who may open 업무 공간 (and the notebook and student records under it).
+ * Students never, and the kill switch stops everyone without deleting data.
+ * mode: off (no one) / allowlist (default: administrators and listed teachers) / all (every teacher).
+ * allow: comma-separated teacher emails or account ids for the allowlist stage.
+ */
+export function workspaceAllowed(viewer: WorkspaceViewer, gate: WorkspaceGate = {}) {
+  if (gate.killSwitch === 'true' || viewer.role === 'student') return false;
+  const mode = (gate.mode || 'allowlist').trim().toLowerCase();
+  if (mode === 'off') return false;
+  if (mode === 'all') return true;
+  if (viewer.role === 'admin' || viewer.role === 'superadmin' || viewer.viewedBy) return true;
+  const allow = (gate.allow || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean);
+  return allow.includes(viewer.uid.toLowerCase()) || (!!viewer.email && allow.includes(viewer.email.toLowerCase()));
+}
 export const safeId = (value: unknown, label = '항목') => {
   if (typeof value !== 'string' || !ID.test(value)) throw new WorkspaceError(`${label}을(를) 확인해 주세요.`);
   return value;

@@ -13,4 +13,8 @@ test('teacher page links leave the sentence and become banners, however the mode
 test('outside links and plain sentences are left alone', () => {
   assert.deepEqual(withBanners('[밖](https://example.com/teacher/x) 그대로'), {text: '[밖](https://example.com/teacher/x) 그대로', links: []});
   assert.deepEqual(withBanners('숙제 3개가 있어요.'), {text: '숙제 3개가 있어요.', links: []});
+  // The teacher's own attachment download is the one address outside /teacher that becomes a banner.
+  assert.deepEqual(withBanners('원본은 여기 있어요. [시간표.hwpx](/api/attachments/AbCdEf123456789012/download)'), {text: '원본은 여기 있어요. 시간표.hwpx', links: [{label: '시간표.hwpx', href: '/api/attachments/AbCdEf123456789012/download'}]});
+  assert.deepEqual(withBanners('[x](/api/attachments/AbCdEf123456789012/delete)').links, []);
+  assert.deepEqual(withBanners('[x](/api/berry/chat)').links, []);
 });

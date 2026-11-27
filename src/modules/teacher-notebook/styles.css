@@ -51,3 +51,6 @@ a.mp-card:hover{border-color:var(--accent)}
 .nb-todo-done{margin-top:10px;font-size:13px;color:var(--muted)}.nb-todo-done summary{cursor:pointer;padding:4px 0}
 .nb-todo-dot{position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:#e67e22}.nb-day.is-selected .nb-todo-dot{background:#fff}
 @media(max-width:900px){.nb-side{max-width:460px;width:100%}}
+
+.nb-unpin{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 4px;min-height:0}
+.nb-actions .att-voice{margin-right:auto}.nb-actions .att-voice+.att-button{margin-left:-4px;margin-right:auto}.nb-actions .att-voice:has(+.att-button){margin-right:0}

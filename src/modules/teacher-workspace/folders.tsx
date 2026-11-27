@@ -5,6 +5,7 @@ import {sendUpload} from '@/lib/upload-transfer';
 import {BerryPending, call, message} from './api';
 import {WORKSPACE_FILE_BYTES, workspaceFileMime} from './shared';
 import {FOLDER_KINDS, FOLDER_KIND_LABELS, ITEM_TYPES, ITEM_TYPE_LABELS, type ChecklistItem, type FolderKind, type ItemType, type WorkFolder, type WorkItem, type WorkItemSummary} from './types';
+import VoiceButton from '@/modules/attachments/voice-button';
 
 type ItemDraft = {id: string | null; folderId: string; type: ItemType; title: string; body: string; url: string; checklist: ChecklistItem[]; dueAt: string; tags: string; sensitive: boolean};
 const TYPE_ICONS = {note: StickyNote, file: Paperclip, checklist: ListChecks, link: LinkIcon};
@@ -37,7 +38,7 @@ function ItemEditor({draft, setDraft, folders, onClose, onSaved}: {draft: ItemDr
         {draft.checklist.map((row, index) => <div key={index} className="wsp-check-row"><input type="checkbox" checked={row.done} aria-label="완료" onChange={e => setDraft({...draft, checklist: draft.checklist.map((r, i) => i === index ? {...r, done: e.target.checked} : r)})}/><input value={row.text} maxLength={200} aria-label="체크리스트 항목" onChange={e => setDraft({...draft, checklist: draft.checklist.map((r, i) => i === index ? {...r, text: e.target.value} : r)})}/><button type="button" className="icon-button" aria-label="줄 지우기" onClick={() => setDraft({...draft, checklist: draft.checklist.filter((_, i) => i !== index)})}><X size={14}/></button></div>)}
         <button type="button" className="button soft" onClick={() => setDraft({...draft, checklist: [...draft.checklist, {text: '', done: false}]})} disabled={draft.checklist.length >= 50}><Plus size={14}/>줄 추가</button>
       </div>}
-      <label>내용<textarea value={draft.body} maxLength={8000} rows={5} onChange={e => setDraft({...draft, body: e.target.value})}/></label>
+      <label>내용<textarea value={draft.body} maxLength={8000} rows={5} onChange={e => setDraft({...draft, body: e.target.value})}/></label><VoiceButton value={draft.body} onChange={body => setDraft({...draft, body})}/>
       <div className="wsp-pair"><label>기한<input type="date" value={draft.dueAt} onChange={e => setDraft({...draft, dueAt: e.target.value})}/></label><label>태그<input value={draft.tags} placeholder="쉼표로 구분" onChange={e => setDraft({...draft, tags: e.target.value})}/></label></div>
       <label className="wsp-check"><input type="checkbox" checked={draft.sensitive} onChange={e => setDraft({...draft, sensitive: e.target.checked})}/>민감 항목 <small>외부 연결·알림·내보내기 기본값에서 빠져요.</small></label>
       {draft.type === 'file' && !draft.id && <p className="wsp-muted">저장한 뒤 목록에서 파일을 올려요.</p>}

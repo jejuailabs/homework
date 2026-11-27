@@ -1,23 +1,24 @@
 'use client';
+import {BerryFormCard, readBerryForm, type BerryForm} from './form-card';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {withBanners} from './links';
 import {usePathname} from 'next/navigation';
-import {ArrowUpRight, Check, ChevronRight, ClipboardList, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, Mic, Paperclip, PencilLine, PlugZap, Send, Sparkles, Square, StickyNote, TriangleAlert, X} from 'lucide-react';
+import {ArrowUpRight, Check, ChevronRight, ClipboardList, Download, Images, Inbox, LayoutGrid, LoaderCircle, Lock, MessageCircle, Mic, Paperclip, PencilLine, PlugZap, Send, Sparkles, Square, StickyNote, TriangleAlert, X} from 'lucide-react';
 import {abilityGroups, firstBlank, lackingFor, missingPermissions, type Ability} from './abilities';
 import {useVoiceInput} from './voice';
 import {pickGreeting, remember, seoul, type Greeting, type GreetingHistory} from './greetings';
 import {AttachButton, AttachChips, useAttachments} from '@/modules/attachments/client';
-import {ACCEPT_HINT, MAX_PER_MESSAGE} from '@/modules/attachments/policy';
+import {ACCEPT_HINT, MAX_PER_MESSAGE, attachmentLink} from '@/modules/attachments/policy';
 import './styles.css';
 
 type Card = {inbox_id: string; tool: string; preview: Record<string, unknown> | null; state: 'open' | 'saving' | 'saved' | 'rejected' | 'error'; note?: string};
-type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]; files?: string[]};
+type Message = {role: 'user' | 'assistant'; text: string; cards?: Card[]; files?: {id: string; name: string}[]; form?: BerryForm; formSent?: boolean};
 type InboxItem = {id: string; kind: string; rule: string | null; title_generic: string; payload: Record<string, unknown>; status: string; created_at: string};
 const TOOL_LABELS: Record<string, string> = {
   add_calendar_event: '일정 추가', add_lesson_log: '수업 일지 추가', add_work_item: '업무 항목 추가', add_notebook_entry: '교무수첩에 기록할까요?', create_assignment: '숙제방 열기', create_exhibition: '전시실 열기', create_board: '참여보드 열기', approve_artworks: '작품 승인', approve_posts: '게시물 공개', publish_review: '복습 배포', get_signals: '현황 확인', get_catalog: '메뉴 살펴보기', get_storage: '저장 공간 확인', list_exhibitions: '전시실 확인', search_exhibitions: '전시 보관함 찾기', list_boards: '보드 확인', get_moderation_queue: '승인 대기 확인', get_quiz_status: '퀴즈 확인', get_review_status: '복습 확인', get_playground_status: '말놀이터 확인', get_points: '보말 확인', list_card_sets: '카드 확인', find_base_vocab: '기본 어휘 찾기', list_class_tools: '수업 도구 확인', list_neighborhood_packs: '동네 탐험 자료 찾기', get_neighborhood_pack: '동네 탐험 자료 열기',
   get_calendar: '일정 확인', get_timetable: '시간표 확인', read_attachment: '붙인 파일 읽기', list_attachments: '붙인 파일 확인', get_lesson_log: '수업 일지 확인', search_workspace: '업무 폴더 찾기', get_work_item: '업무 항목 열기',
   list_classes: '학급 확인', get_roster: '명단 확인', list_assignments: '숙제 확인', get_missing_submissions: '미제출 확인', get_submission_times: '제출 시간 확인', get_review_queue: '검사 대기 확인',
-  list_deadlines: '마감 확인', search_notebook: '교무수첩 찾기', set_reminder: '알림 예약', list_schedule: '알림 확인', remember: '기억하기', forget: '기억 지우기',
+  list_deadlines: '마감 확인', list_official_docs: '공문 확인', search_notebook: '교무수첩 찾기', set_reminder: '알림 예약', list_schedule: '알림 확인', remember: '기억하기', forget: '기억 지우기',
   manage_homework: '숙제 관리', manage_exhibition: '전시실 관리', manage_board: '참여보드 관리', manage_quiz: '퀴즈 관리', manage_review: '복습 관리', manage_playground: '말놀이터 관리', manage_points: '보말', manage_cards: '카드 배부', manage_class_tools: '수업 도구', manage_class: '학급 관리', manage_workspace: '업무 공간 관리',
 };
 const PREVIEW_LABELS: Record<string, string> = {title: '제목', date: '날짜', start: '시작', end: '끝', kind: '종류', subject: '과목', period: '교시', unit: '단원', note: '메모', body: '내용', type: '종류', due_at: '기한', tags: '태그', students: '학생', checklist: '체크리스트', url: '링크', class: '학급', submission: '제출 방식', sync_exhibition: '전시실 연동', sync_board: '보드 연동', exhibition: '전시실', board: '보드', count: '개수', target: '대상', action: '할 일', changes: '바꿀 내용', reason: '사유', amount: '점수'};
@@ -52,6 +53,7 @@ async function api<T>(path: string, body?: object): Promise<T> {
 }
 const shown = (value: unknown) => Array.isArray(value) ? value.join(', ') : value === null || value === undefined || value === '' ? null : typeof value === 'boolean' ? (value ? '예' : '아니요') : String(value);
 function bannerKind(href: string) {
+  if (href.startsWith('/api/attachments/')) return {icon: Download, label: '원본 내려받기'};
   if (href.includes('archive=1')) return {icon: Images, label: '전시 보관함에서 보기'};
   if (href.startsWith('/teacher/exhibitions')) return {icon: Images, label: '전시실 열기'};
   if (href.startsWith('/teacher/homework')) return {icon: ClipboardList, label: href.includes('assignmentId=') ? '숙제 열기' : '숙제 메뉴 열기'};
@@ -203,8 +205,11 @@ export default function BerryPanel() {
     setText(''); setBusy(true); setError(''); setActivity('생각하는 중…');
     // The files now belong to this message: the list empties, the read text stays on the server for later turns.
     if (attached.length) files.clear();
-    setMessages(old => [...old, {role: 'user', text: message, ...(attached.length ? {files: attached.map(file => file.name)} : {})}, {role: 'assistant', text: '', cards: []}]);
+    setMessages(old => [...old, {role: 'user', text: message, ...(attached.length ? {files: attached.map(file => ({id: file.id, name: file.name}))} : {})}, {role: 'assistant', text: '', cards: []}]);
     const update = (fn: (last: Message) => Message) => setMessages(old => [...old.slice(0, -1), fn(old[old.length - 1])]);
+    // A file that reads like an official document is also filed under 공문처리 (summary, deadlines on the calendar).
+    const filed: Promise<{title: string; deadlines: unknown[]}[]> = attached.length ? fetch('/api/official-docs/detect', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({attachmentIds: attached.map(file => file.id)})}).then(r => r.ok ? r.json() : null).then(data => Array.isArray(data?.registered) ? data.registered : []).catch(() => []) : Promise.resolve([]);
+    void filed.then(list => {if (list.length) setMessages(old => [...old, {role: 'assistant', text: `${list.map(doc => `「${doc.title}」`).join(', ')} 공문을 공문처리에 정리해 뒀어요.${list.some(doc => doc.deadlines.length) ? ` 마감 ${list.reduce((sum, doc) => sum + doc.deadlines.length, 0)}건은 달력에 넣었고, 날짜가 다가오면 알려 드릴게요.` : ''} [공문처리 열기](/teacher/me/documents)`}]);});
     try {
       // A new conversation carries the hello Berry just showed, so a reply to it reads naturally.
       const hello = !conversation.current && greeting ? [greeting.text, todaySummary].filter(Boolean).join(' / ') : undefined;
@@ -224,6 +229,7 @@ export default function BerryPanel() {
           try {data = JSON.parse(raw || '{}');} catch {}
           if (event === 'conversation' && typeof data.conversation_id === 'string') {conversation.current = data.conversation_id; try {sessionStorage.setItem(CONVERSATION, data.conversation_id);} catch {}}
           if (event === 'status') setActivity(`${TOOL_LABELS[String(data.tool)] ?? '확인'} 중…`);
+          if (event === 'form') {const form = readBerryForm(data); if (form) update(last => ({...last, form}));}
           if (event === 'card') update(last => ({...last, cards: [...(last.cards ?? []), {inbox_id: String(data.inbox_id), tool: String(data.tool), preview: (data.preview ?? null) as Record<string, unknown> | null, state: 'open'}]}));
           if (event === 'message') update(last => ({...last, text: String(data.text ?? '')}));
           if (event === 'error') throw new Error(String(data.message ?? '답을 만들지 못했어요.'));
@@ -282,11 +288,12 @@ export default function BerryPanel() {
             {!messages.length && <small className="bp-today-hint"><Sparkles size={11} aria-hidden="true"/>버튼으로 부탁하려면 입력창 옆 ✨이나 메뉴 탭을 눌러 주세요.</small>}
           </div>
           {/* The empty answer placeholder stays hidden until text or a card arrives, so Berry never shows an avatar with nothing beside it. */}
-          {messages.map((message, index) => !message.text && !message.cards?.length && !message.files?.length ? null : <div key={index} className={`bp-msg is-${message.role}`}>
+          {messages.map((message, index) => !message.text && !message.cards?.length && !message.files?.length && !message.form ? null : <div key={index} className={`bp-msg is-${message.role}`}>
             {message.role === 'assistant' && <img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/>}
-            {message.files && <ul className="bp-files">{message.files.map((name, at) => <li key={at}><Paperclip size={11}/>{name}</li>)}</ul>}
+            {message.files && <ul className="bp-files">{message.files.map(file => <li key={file.id}><a href={attachmentLink(file.id)} title="원본 내려받기"><Paperclip size={11}/>{file.name}</a></li>)}</ul>}
             {message.text && (() => {const view = withBanners(message.text); return <><p><Bold text={view.text}/></p><Banners links={view.links}/></>;})()}
             {message.cards?.map(card => <Preview key={card.inbox_id} card={card} onDecide={(c, d) => void decide(c, d)}/>)}
+            {message.form && <BerryFormCard form={message.form} disabled={busy} sent={message.formSent} onSubmit={answer => {setMessages(old => old.map((m, i) => i === index ? {...m, formSent: true} : m)); void send(answer);}}/>}
           </div>)}
           {activity && <div className="bp-msg is-assistant" role="status"><img className="bp-avatar" src="/berry/raspberry-64.webp" alt="" width="26" height="26"/><p className="bp-thinking"><LoaderCircle className="spin" size={14}/>{activity}</p></div>}
         </div>

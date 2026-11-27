@@ -1,9 +1,10 @@
 /**
- * Berry's [이름](/teacher/…) links become banners under the answer; only ourclass teacher pages, never outside links.
+ * Berry's [이름](/teacher/…) links become banners under the answer; only ourclass teacher pages and the teacher's own
+ * attachment downloads, never outside links.
  * The model sometimes pads the address with spaces or writes it bare, so every /teacher address is lifted out of
  * the sentence: a teacher should never read a raw address.
  */
-const PATH = String.raw`\/teacher(?:[/?][^\s)\]]{0,400})?`;
+const PATH = String.raw`\/(?:api\/attachments\/[A-Za-z0-9]{12,40}\/download|teacher(?:[/?][^\s)\]]{0,400})?)`;
 const BANNER_LINK = new RegExp(String.raw`\[([^\]\n]{1,120})\]\(\s*(${PATH})\s*\)`, 'g');
 const BARE_LINK = new RegExp(String.raw`[(\[<]?\s*(?<![\w/.])(${PATH})\s*[)\]>]?`, 'g');
 export type BannerLink = {label: string; href: string};

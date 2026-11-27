@@ -49,9 +49,12 @@ async function input(request: Request, maxBytes = 40_000): Promise<Input> {
   throw new WorkspaceError('입력 내용을 확인해 주세요.');
 }
 export const workspaceDisabled = () => process.env.TEACHER_WORKSPACE_DISABLED === 'true';
+/** The one gate for the workspace menu and everything under it (notebook, student records). */
+export const workspaceOpenFor = (ctx: {uid: string; email?: string | null; role: string; viewedBy?: string}) =>
+  workspaceAllowed(ctx, {killSwitch: process.env.TEACHER_WORKSPACE_DISABLED, mode: process.env.TEACHER_WORKSPACE_MODE, allow: process.env.TEACHER_WORKSPACE_ALLOW});
 async function teacher(request: Request) {
   const ctx = await getContext(request);
-  if (!workspaceAllowed(ctx.role, process.env.TEACHER_WORKSPACE_DISABLED)) throw new WorkspaceError('업무 공간을 사용할 수 없어요.', 403, 'WORKSPACE_DISABLED');
+  if (!workspaceOpenFor(ctx)) throw new WorkspaceError('업무 공간을 사용할 수 없어요.', 403, 'WORKSPACE_DISABLED');
   return ctx;
 }
 const created = new Set<string>();
@@ -482,7 +485,7 @@ export async function handleWorkspace(request: Request, segments: string[]) {
     if (method !== 'GET') assertOrigin(request);
     if (head === 'status' && segments.length === 1 && method === 'GET') {
       const ctx = await getContext(request);
-      return json({available: workspaceAllowed(ctx.role, process.env.TEACHER_WORKSPACE_DISABLED)});
+      return json({available: workspaceOpenFor(ctx)});
     }
     const {uid} = await teacher(request), params = new URL(request.url).searchParams;
     if (head === 'calendar') {

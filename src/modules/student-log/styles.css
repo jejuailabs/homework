@@ -1,0 +1,44 @@
+.srec-tabs{display:flex;gap:6px;border-bottom:1px solid var(--border);padding:0}
+.srec-tabs button{padding:10px 16px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);font:inherit;font-weight:700;cursor:pointer;margin-bottom:-1px}
+.srec-tabs button[aria-selected=true]{color:var(--text);border-bottom-color:var(--accent)}
+.srec-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
+.slog{display:grid;gap:14px}
+.slog-grid{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;align-items:start}
+.slog-students{display:grid;gap:4px;max-height:72vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:8px}
+.slog-students button{display:flex;align-items:center;gap:8px;padding:9px 10px;border:0;border-radius:11px;background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer;min-height:42px}
+.slog-students button:hover{background:var(--accent-soft)}
+.slog-students button.is-on{background:var(--accent-soft);font-weight:700}
+.slog-students b{min-width:22px;color:var(--muted);font-weight:600;font-size:13px}
+.slog-students strong{flex:1;font-weight:inherit}
+.slog-students small{background:var(--accent);color:#fff;border-radius:999px;padding:1px 8px;font-size:11px}
+.slog-empty{margin:0;padding:28px 20px}
+.slog-panel{display:grid;gap:14px;min-width:0}
+.slog-panel h2{margin:0;font-size:20px}
+.slog-compose,.slog-summary{display:grid;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:14px 16px}
+.slog-compose-top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+.slog-compose-top>label{display:grid;gap:5px;font-size:12px;color:var(--muted)}
+.slog-compose-top input[type=date]{border:1px solid var(--border);border-radius:11px;padding:8px 10px;background:var(--surface);color:var(--text);font:inherit}
+.slog-kinds{display:flex;flex-wrap:wrap;gap:6px}
+.slog-kind{padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);font:inherit;font-size:13px;cursor:pointer}
+.slog-kind.is-on{color:#fff;border-color:transparent}
+.slog-kind.praise.is-on{background:#2f8f5b}.slog-kind.growth.is-on{background:#2f6fb3}.slog-kind.concern.is-on{background:#b5651d}.slog-kind.note.is-on{background:#6b6f76}
+span.slog-kind{cursor:default;padding:3px 10px;font-size:12px}
+.slog textarea{width:100%;border:1px solid var(--border);border-radius:12px;padding:11px 12px;background:var(--surface);color:var(--text);font:inherit;line-height:1.6;resize:vertical}
+.slog-compose-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.slog-count{margin-left:auto;font-size:12px;color:var(--muted)}
+.slog-hint{margin:0;font-size:12.5px;color:var(--muted)}
+.slog-unpin{border:0;background:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 4px}
+.att-files li{display:inline-flex;align-items:center}
+.slog-summary-head{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start;justify-content:space-between}
+.slog-summary-head h3{margin:0 0 3px;font-size:16px}.slog-summary-head p{margin:0;font-size:13px;color:var(--muted);max-width:460px}
+.slog-summary-foot{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.slog-summary-foot small{flex:1 1 220px;color:var(--muted);font-size:12px}
+.slog-list-title{margin:6px 0 0;font-size:15px}
+.slog-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.slog-list>li{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:11px 14px}
+.slog-list p{margin:6px 0 0;white-space:pre-wrap;line-height:1.6}
+.slog-entry-head{display:flex;align-items:center;gap:8px}
+.slog-entry-head time{font-size:13px;color:var(--muted)}
+.slog-entry-head button{border:0;background:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
+.slog-entry-head button:first-of-type{margin-left:auto}
+.slog-entry-head button:hover{background:var(--accent-soft);color:var(--text)}
+@media(max-width:760px){.slog-grid{grid-template-columns:1fr}.slog-students{display:flex;overflow-x:auto;max-height:none}.slog-students button{flex:0 0 auto}}

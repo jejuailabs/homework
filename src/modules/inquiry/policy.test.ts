@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import {dayKey, inquiryMail, isBot, sourceOf, validateInquiry} from './policy';
+
+const base = {name: ' 김 선생 ', email: 'Teacher@School.kr ', phone: '', school: '', topic: 'start', message: '', consent: true, source: 'try-header'};
+const ok = validateInquiry(base);
+assert.ok(ok.ok);
+if (ok.ok) {assert.equal(ok.value.name, '김 선생'); assert.equal(ok.value.email, 'teacher@school.kr'); assert.equal(ok.value.source, 'try-header');}
+assert.deepEqual(validateInquiry({...base, name: ''}), {ok: false, error: '이름을 적어 주세요.'});
+assert.equal(validateInquiry({...base, email: 'not-mail'}).ok, false);
+assert.equal(validateInquiry({...base, email: 'a@b'}).ok, false);
+assert.equal(validateInquiry({...base, phone: '010-1234-5678'}).ok, true);
+assert.equal(validateInquiry({...base, phone: 'call me'}).ok, false);
+assert.equal(validateInquiry({...base, consent: false}).ok, false);
+assert.equal(validateInquiry({...base, consent: 'true'}).ok, false, 'consent must be a real boolean');
+assert.equal(validateInquiry({...base, topic: 'free-money'}).ok, false);
+assert.equal(validateInquiry({...base, topic: 'school'}).ok, false, 'no grade/school tier exists');
+assert.equal(validateInquiry({...base, topic: 'other'}).ok, false, 'other needs a message');
+assert.equal(validateInquiry({...base, topic: 'other', message: '언제부터 쓸 수 있나요?'}).ok, true);
+assert.equal(validateInquiry({...base, message: 'x'.repeat(2001)}).ok, false);
+const weird = validateInquiry({...base, source: 'evil.key'});
+assert.ok(weird.ok && weird.value.source === 'other');
+assert.equal(sourceOf(undefined), 'other');
+assert.equal(sourceOf('landing'), 'landing');
+assert.equal(sourceOf('__proto__'), 'other');
+assert.equal(isBot({website: 'http://spam'}), true);
+assert.equal(isBot({website: ''}), false);
+assert.equal(isBot({}), false);
+assert.equal(dayKey(Date.UTC(2026, 10, 24, 16, 0)), '2026-11-25', 'Korea day starts at 15:00 UTC');
+const mail = inquiryMail({name: '<b>해커</b>', email: 'a@b.kr', phone: '', school: '', topic: 'other', message: '<script>x</script>', source: 'landing'}, '2026-11-24T00:00:00.000Z');
+assert.ok(!mail.html.includes('<script>') && mail.html.includes('&lt;script&gt;') && !mail.html.includes('<b>해커'));
+assert.ok(!/[\r\n]/.test(mail.subject));
+console.log('inquiry policy tests passed');

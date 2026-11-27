@@ -178,6 +178,22 @@ export function deriveEvents(assignments: AssignmentSummary[], since: string | n
   }
   return events.filter(event => Date.parse(event.at) > sinceMs && Date.parse(event.at) <= nowMs).sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 }
+export type CalendarDeadline = {id: string; title: string; start: string; end: string | null; createdAt: string};
+/**
+ * Deadlines the teacher keeps on the workspace calendar (kind "deadline": official documents, anything typed in) join
+ * the same "deadline.soon" fact as homework, so the brain's 마감 임박 rule reminds about them without knowing the source.
+ * The id slot the brain de-duplicates on carries "calendar:<event id>".
+ */
+export function deriveCalendarDeadlines(items: CalendarDeadline[], since: string | null, now: string, soonHours = 48): BerryDerivedEvent[] {
+  const events: BerryDerivedEvent[] = [], nowMs = Date.parse(now), sinceMs = since ? Date.parse(since) : Number.NEGATIVE_INFINITY;
+  for (const item of items) {
+    const dueMs = Date.parse(item.end || item.start), createdMs = Date.parse(item.createdAt);
+    if (!Number.isFinite(dueMs) || dueMs <= nowMs) continue;
+    const soonMs = Math.max(dueMs - soonHours * 3_600_000, Number.isFinite(createdMs) ? createdMs : 0);
+    if (soonMs <= nowMs && soonMs > sinceMs) events.push({id: `soon:calendar:${item.id}`, type: 'deadline.soon', source: 'derived', at: new Date(soonMs).toISOString(), classId: '', assignmentId: `calendar:${item.id}`, title: item.title, data: {dueAt: new Date(dueMs).toISOString(), missing: null, origin: 'calendar'}});
+  }
+  return events;
+}
 /** One feed from the write-side log and the derived assignment facts, ordered by time; ids never collide (log ids start with "log:"). */
 export const mergeEvents = (log: BerryEvent[], derived: BerryEvent[]) => [...log, ...derived].sort((a, b) => a.at.localeCompare(b.at) || a.id.localeCompare(b.id));
 

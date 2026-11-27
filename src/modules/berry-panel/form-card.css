@@ -1,0 +1,21 @@
+/* Berry's ask-with-a-form card (panel and tour). */
+.bf-card{display:grid;gap:10px;margin-top:8px;padding:14px;border-radius:14px;background:#fff;border:1.5px solid #cfe3d5;box-shadow:0 6px 16px #39796012}
+.bf-card.is-sent{opacity:.75}
+.bf-title{font-size:15px;color:#285a46}
+.bf-field{display:grid;gap:6px}
+.bf-label{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#4b6157}
+.bf-label b{font-size:11px;color:#b94141}
+.bf-field input,.bf-field textarea{font:inherit;font-size:14px;padding:9px 11px;border:1px solid #dbe5dd;border-radius:10px;background:#fbfcfb;color:#22362e;width:100%;box-sizing:border-box}
+.bf-field input:focus,.bf-field textarea:focus{outline:2px solid #397960;outline-offset:1px}
+.bf-choices{display:flex;flex-wrap:wrap;gap:6px}
+.bf-choices button{border:1.5px solid #dbe5dd;border-radius:999px;padding:7px 13px;background:#fff;font:inherit;font-size:13px;font-weight:700;color:#4b6157;cursor:pointer}
+.bf-choices button.on{border-color:#397960;background:#397960;color:#fff}
+.bf-toggle{display:inline-flex;align-items:center;gap:8px;justify-self:start;border:1.5px solid #dbe5dd;border-radius:999px;padding:5px 12px 5px 5px;background:#fff;font:inherit;font-size:13px;font-weight:700;color:#4b6157;cursor:pointer}
+.bf-toggle i{width:34px;height:20px;border-radius:999px;background:#dbe5dd;position:relative;transition:background .15s}
+.bf-toggle i::after{content:'';position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .15s}
+.bf-toggle.on{border-color:#397960;color:#285a46}
+.bf-toggle.on i{background:#397960}
+.bf-toggle.on i::after{transform:translateX(14px)}
+.bf-submit{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;border:0;border-radius:12px;background:#397960;color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.bf-submit:disabled{opacity:.5;cursor:default}
+.bf-sent{display:flex;align-items:center;gap:5px;margin:0;color:#285a46;font-weight:700;font-size:13px}
